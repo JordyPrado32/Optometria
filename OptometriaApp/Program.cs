@@ -198,6 +198,11 @@ app.MapPost("/auth/login", async (
         seguridad.recovery_password_expires_at = null;
     }
 
+    if (HasPasswordExpired(usuarioDb.ultimo_cambio_password, DateTime.Now))
+    {
+        seguridad.must_change_password = true;
+    }
+
     seguridad.updated_at = DateTime.Now;
     await dbContext.SaveChangesAsync();
 
@@ -776,6 +781,21 @@ static bool IsValidEmail(string email)
     {
         return false;
     }
+}
+
+const int PasswordMaxAgeDays = 90;
+
+static bool HasPasswordExpired(DateOnly? ultimoCambioPassword, DateTime now)
+{
+    if (!ultimoCambioPassword.HasValue)
+    {
+        return true;
+    }
+
+    var fechaLimite = ultimoCambioPassword.Value.AddDays(PasswordMaxAgeDays);
+    var fechaActual = DateOnly.FromDateTime(now);
+
+    return fechaActual >= fechaLimite;
 }
 
 static string? ValidatePassword(string password, string usuario, string nombres, string apellidos, string email)
