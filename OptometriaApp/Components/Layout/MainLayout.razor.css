@@ -1,0 +1,116 @@
+.app-shell {
+    min-height: 100vh;
+}
+
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: 1.4rem 0 0;
+}
+
+.app-frame {
+    width: min(1320px, calc(100% - 2.4rem));
+    margin: 0 auto;
+}
+
+.app-header-frame {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1rem 1.2rem;
+    border: 2px solid rgba(60, 52, 46, 0.92);
+    border-radius: 2rem;
+    background: rgba(255, 250, 244, 0.9);
+    box-shadow: 0 24px 70px rgba(127, 105, 81, 0.18);
+    backdrop-filter: blur(12px);
+}
+
+.app-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    text-decoration: none;
+    color: var(--color-ink);
+}
+
+.app-brand-mark {
+    width: 2.9rem;
+    height: 2.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--color-apricot) 0%, var(--color-rose) 52%, var(--color-sage) 100%);
+    color: #fff;
+    font-weight: 900;
+    font-size: 1.15rem;
+    box-shadow: 0 12px 30px rgba(127, 105, 81, 0.2);
+}
+
+.app-brand-copy {
+    display: grid;
+    line-height: 1.05;
+}
+
+.app-brand-copy strong {
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+}
+
+.app-brand-copy small {
+    font-size: 0.78rem;
+    color: rgba(60, 52, 46, 0.72);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+}
+
+.app-main {
+    padding: 1.4rem 0 2.2rem;
+}
+
+.app-stage {
+    min-height: calc(100vh - 8rem);
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: #fff8ef;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(127, 105, 81, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+@media (max-width: 900px) {
+    .app-header {
+        padding-top: 1rem;
+    }
+
+    .app-frame {
+        width: min(100% - 1rem, 1320px);
+    }
+
+    .app-header-frame {
+        align-items: flex-start;
+        flex-direction: column;
+        border-radius: 1.5rem;
+    }
+
+    .app-main {
+        padding-top: 1rem;
+    }
+}

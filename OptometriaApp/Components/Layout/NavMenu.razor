@@ -1,0 +1,56 @@
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MenuAccessService MenuAccessService
+
+<div class="app-nav-shell">
+    <button type="button" class="app-nav-toggle" @onclick="ToggleMenu" aria-label="Abrir menu">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <nav class="app-nav @(menuOpen ? "is-open" : string.Empty)">
+        <div class="app-nav-links">
+            @foreach (var menu in menus)
+            {
+                <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    @menu.Nombre
+                </NavLink>
+            }
+        </div>
+
+        <div class="app-account-chip">
+            <div class="app-account-copy">
+                <span>@RoleName</span>
+                <strong>@UserName</strong>
+            </div>
+
+            <a class="app-account-link" href="/auth/logout">Salir</a>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private readonly List<AppMenuItem> menus = [];
+    private bool menuOpen;
+    private string UserName { get; set; } = "Cuenta";
+    private string RoleName { get; set; } = "Sesion";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        UserName = user.Identity?.Name ?? "Cuenta";
+        RoleName = user.FindFirst(ClaimTypes.Role)?.Value ?? "Sesion";
+
+        var roleIdValue = user.FindFirst("RoleId")?.Value;
+        int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
+
+        menus.AddRange(await MenuAccessService.GetMenusForRoleAsync(roleId));
+    }
+
+    private void ToggleMenu()
+    {
+        menuOpen = !menuOpen;
+    }
+}

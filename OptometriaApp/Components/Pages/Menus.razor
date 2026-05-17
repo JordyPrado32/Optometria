@@ -1,0 +1,217 @@
+@page "/menus"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Menus</PageTitle>
+
+@if (!isAdmin)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de menus</h1>
+            <p>Solo el rol administrador puede crear o actualizar menus.</p>
+        </div>
+    </section>
+}
+else if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando menus...</h1>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Navegacion</span>
+                <h1>Menus del sistema</h1>
+                <p>Controla el nombre, la ruta, el orden y el estado de cada modulo que luego se asigna por rol.</p>
+            </div>
+
+            <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewMenu">Nuevo menu</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <div class="management-grid">
+            <aside class="management-card management-list-card">
+                <div class="management-card-header">
+                    <h2>Menus</h2>
+                    <span>@menus.Count items</span>
+                </div>
+
+                <div class="management-list">
+                    @foreach (var menu in menus.OrderBy(m => m.orden).ThenBy(m => m.nombre))
+                    {
+                        <button type="button"
+                                class="management-list-item @(selectedMenuId == menu.id_menu ? "is-active" : string.Empty)"
+                                @onclick="() => SelectMenu(menu.id_menu)">
+                            <strong>@menu.nombre</strong>
+                            <span>@menu.ruta</span>
+                        </button>
+                    }
+                </div>
+            </aside>
+
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Editor de menu</h2>
+                    <span>@(selectedMenuId > 0 ? $"Menu #{selectedMenuId}" : "Nuevo")</span>
+                </div>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="menuName">Nombre</label>
+                        <input id="menuName" class="form-control" @bind="menuName" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="menuRoute">Ruta</label>
+                        <input id="menuRoute" class="form-control" @bind="menuRoute" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="menuIcon">Icono</label>
+                        <input id="menuIcon" class="form-control" @bind="menuIcon" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="menuOrder">Orden</label>
+                        <input id="menuOrder" type="number" class="form-control" @bind="menuOrder" />
+                    </div>
+                </div>
+
+                <label class="auth-check">
+                    <input type="checkbox" @bind="menuActive" />
+                    <span>Menu activo y visible para asignacion</span>
+                </label>
+
+                <div class="management-actions">
+                    <button type="button" class="btn btn-primary" @onclick="SaveMenuAsync">Guardar menu</button>
+                </div>
+            </section>
+        </div>
+    </section>
+}
+
+@code {
+    private List<tbl_menu_app> menus = [];
+    private bool isAdmin;
+    private bool isLoading = true;
+    private int selectedMenuId;
+    private string menuName = string.Empty;
+    private string menuRoute = string.Empty;
+    private string? menuIcon;
+    private int menuOrder;
+    private bool menuActive = true;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isAdmin = authState.User.FindFirst("RoleId")?.Value == "1";
+
+        if (!isAdmin)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveMenuId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        menus = await dbContext.tbl_menu_apps
+            .AsNoTracking()
+            .OrderBy(m => m.orden)
+            .ThenBy(m => m.nombre)
+            .ToListAsync();
+
+        selectedMenuId = preserveMenuId ?? menus.FirstOrDefault()?.id_menu ?? 0;
+        BuildEditor();
+        isLoading = false;
+    }
+
+    private void PrepareNewMenu()
+    {
+        selectedMenuId = 0;
+        menuName = string.Empty;
+        menuRoute = string.Empty;
+        menuIcon = string.Empty;
+        menuOrder = menus.Count + 1;
+        menuActive = true;
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void SelectMenu(int menuId)
+    {
+        selectedMenuId = menuId;
+        BuildEditor();
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void BuildEditor()
+    {
+        var selectedMenu = menus.FirstOrDefault(m => m.id_menu == selectedMenuId);
+        menuName = selectedMenu?.nombre ?? string.Empty;
+        menuRoute = selectedMenu?.ruta ?? string.Empty;
+        menuIcon = selectedMenu?.icono ?? string.Empty;
+        menuOrder = selectedMenu?.orden ?? (menus.Count + 1);
+        menuActive = selectedMenu?.activo ?? true;
+    }
+
+    private async Task SaveMenuAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(menuName) || string.IsNullOrWhiteSpace(menuRoute))
+        {
+            errorMessage = "Completa al menos el nombre y la ruta del menu.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_menu_app menuEntity;
+
+        if (selectedMenuId > 0)
+        {
+            menuEntity = await dbContext.tbl_menu_apps.FirstAsync(m => m.id_menu == selectedMenuId);
+        }
+        else
+        {
+            menuEntity = new tbl_menu_app();
+            dbContext.tbl_menu_apps.Add(menuEntity);
+        }
+
+        menuEntity.nombre = menuName.Trim();
+        menuEntity.ruta = menuRoute.Trim();
+        menuEntity.icono = string.IsNullOrWhiteSpace(menuIcon) ? null : menuIcon.Trim();
+        menuEntity.orden = menuOrder;
+        menuEntity.activo = menuActive;
+
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El menu se guardo correctamente.";
+        await LoadAsync(menuEntity.id_menu);
+    }
+}

@@ -1,0 +1,306 @@
+@page "/roles"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Roles</PageTitle>
+
+@if (!isAdmin)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de roles</h1>
+            <p>Solo el rol administrador puede editar roles, menus y permisos.</p>
+        </div>
+    </section>
+}
+else if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando roles...</h1>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Administracion</span>
+                <h1>Roles y permisos</h1>
+                <p>Selecciona un rol, edita su descripcion y define exactamente que menus puede ver o administrar.</p>
+            </div>
+
+            <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewRole">Nuevo rol</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <div class="management-grid">
+            <aside class="management-card management-list-card">
+                <div class="management-card-header">
+                    <h2>Roles</h2>
+                    <span>@roles.Count roles</span>
+                </div>
+
+                <div class="management-list">
+                    @foreach (var role in roles)
+                    {
+                        <button type="button"
+                                class="management-list-item @(selectedRoleId == role.id_rol ? "is-active" : string.Empty)"
+                                @onclick="() => SelectRole(role.id_rol)">
+                            <strong>@role.nombre</strong>
+                            <span>@(string.IsNullOrWhiteSpace(role.descripcion) ? "Sin descripcion" : role.descripcion)</span>
+                        </button>
+                    }
+                </div>
+            </aside>
+
+            <div class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Detalle del rol</h2>
+                        <span>@(selectedRoleId > 0 ? $"Rol #{selectedRoleId}" : "Nuevo")</span>
+                    </div>
+
+                    <div class="management-form-grid">
+                        <div>
+                            <label class="form-label" for="roleName">Nombre</label>
+                            <input id="roleName" class="form-control" @bind="roleName" />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="roleDescription">Descripcion</label>
+                            <input id="roleDescription" class="form-control" @bind="roleDescription" />
+                        </div>
+                    </div>
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Permisos por menu</h2>
+                        <span>@permissionRows.Count menus</span>
+                    </div>
+
+                    <div class="management-table-wrap">
+                        <table class="management-table">
+                            <thead>
+                                <tr>
+                                    <th>Menu</th>
+                                    <th>Ruta</th>
+                                    <th>Ver</th>
+                                    <th>Crear</th>
+                                    <th>Editar</th>
+                                    <th>Eliminar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in permissionRows)
+                                {
+                                    <tr>
+                                        <td>@row.Nombre</td>
+                                        <td><code>@row.Ruta</code></td>
+                                        <td><input type="checkbox" @bind="row.PuedeVer" /></td>
+                                        <td><input type="checkbox" @bind="row.PuedeCrear" /></td>
+                                        <td><input type="checkbox" @bind="row.PuedeEditar" /></td>
+                                        <td><input type="checkbox" @bind="row.PuedeEliminar" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="management-actions">
+                        <button type="button" class="btn btn-primary" @onclick="SaveRoleAsync">Guardar rol y permisos</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private List<tbl_rol> roles = [];
+    private List<tbl_menu_app> menus = [];
+    private List<tbl_rol_menu_permiso> permissions = [];
+    private List<PermissionEditorRow> permissionRows = [];
+    private bool isAdmin;
+    private bool isLoading = true;
+    private int selectedRoleId;
+    private string roleName = string.Empty;
+    private string roleDescription = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isAdmin = authState.User.FindFirst("RoleId")?.Value == "1";
+
+        if (!isAdmin)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveRoleId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+        roles = await dbContext.tbl_rols
+            .AsNoTracking()
+            .OrderBy(r => r.id_rol)
+            .ToListAsync();
+
+        menus = await dbContext.tbl_menu_apps
+            .AsNoTracking()
+            .OrderBy(m => m.orden)
+            .ThenBy(m => m.nombre)
+            .ToListAsync();
+
+        permissions = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .ToListAsync();
+
+        selectedRoleId = preserveRoleId ?? roles.FirstOrDefault()?.id_rol ?? 0;
+        BuildEditor();
+        isLoading = false;
+    }
+
+    private void PrepareNewRole()
+    {
+        selectedRoleId = 0;
+        roleName = string.Empty;
+        roleDescription = string.Empty;
+        permissionRows = menus
+            .Select(menu => new PermissionEditorRow
+            {
+                IdMenu = menu.id_menu,
+                Nombre = menu.nombre,
+                Ruta = menu.ruta
+            })
+            .ToList();
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void SelectRole(int roleId)
+    {
+        selectedRoleId = roleId;
+        BuildEditor();
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void BuildEditor()
+    {
+        var selectedRole = roles.FirstOrDefault(r => r.id_rol == selectedRoleId);
+        roleName = selectedRole?.nombre ?? string.Empty;
+        roleDescription = selectedRole?.descripcion ?? string.Empty;
+
+        permissionRows = menus
+            .Select(menu =>
+            {
+                var existingPermission = permissions.FirstOrDefault(p => p.id_rol == selectedRoleId && p.id_menu == menu.id_menu);
+                return new PermissionEditorRow
+                {
+                    IdMenu = menu.id_menu,
+                    Nombre = menu.nombre,
+                    Ruta = menu.ruta,
+                    PuedeVer = existingPermission?.puede_ver ?? false,
+                    PuedeCrear = existingPermission?.puede_crear ?? false,
+                    PuedeEditar = existingPermission?.puede_editar ?? false,
+                    PuedeEliminar = existingPermission?.puede_eliminar ?? false
+                };
+            })
+            .ToList();
+    }
+
+    private async Task SaveRoleAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(roleName))
+        {
+            errorMessage = "Ingresa un nombre para el rol.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_rol roleEntity;
+
+        if (selectedRoleId > 0)
+        {
+            roleEntity = await dbContext.tbl_rols.FirstAsync(r => r.id_rol == selectedRoleId);
+            roleEntity.nombre = roleName.Trim();
+            roleEntity.descripcion = string.IsNullOrWhiteSpace(roleDescription) ? null : roleDescription.Trim();
+        }
+        else
+        {
+            roleEntity = new tbl_rol
+            {
+                nombre = roleName.Trim(),
+                descripcion = string.IsNullOrWhiteSpace(roleDescription) ? null : roleDescription.Trim()
+            };
+
+            dbContext.tbl_rols.Add(roleEntity);
+            await dbContext.SaveChangesAsync();
+            selectedRoleId = roleEntity.id_rol;
+        }
+
+        var existingPermissions = await dbContext.tbl_rol_menu_permisos
+            .Where(p => p.id_rol == roleEntity.id_rol)
+            .ToListAsync();
+
+        foreach (var row in permissionRows)
+        {
+            var permission = existingPermissions.FirstOrDefault(p => p.id_menu == row.IdMenu);
+            if (permission is null)
+            {
+                permission = new tbl_rol_menu_permiso
+                {
+                    id_rol = roleEntity.id_rol,
+                    id_menu = row.IdMenu
+                };
+
+                dbContext.tbl_rol_menu_permisos.Add(permission);
+            }
+
+            permission.puede_ver = row.PuedeVer;
+            permission.puede_crear = row.PuedeCrear;
+            permission.puede_editar = row.PuedeEditar;
+            permission.puede_eliminar = row.PuedeEliminar;
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El rol y sus permisos se guardaron correctamente.";
+        await LoadAsync(roleEntity.id_rol);
+    }
+
+    private sealed class PermissionEditorRow
+    {
+        public int IdMenu { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Ruta { get; set; } = string.Empty;
+        public bool PuedeVer { get; set; }
+        public bool PuedeCrear { get; set; }
+        public bool PuedeEditar { get; set; }
+        public bool PuedeEliminar { get; set; }
+    }
+}

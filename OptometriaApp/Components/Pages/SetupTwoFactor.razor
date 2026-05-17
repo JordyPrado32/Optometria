@@ -1,0 +1,148 @@
+@page "/setup-2fa"
+@attribute [Authorize(Policy = "TwoFactorSetup")]
+@layout AuthLayout
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject OpticaDbContext DbContext
+@inject AuthenticatorService AuthenticatorService
+@inject IOptions<SecuritySettings> SecurityOptions
+
+<PageTitle>Configurar 2FA</PageTitle>
+
+<div class="auth-shell">
+    <section class="auth-panel auth-panel-brand">
+        <div class="brand-badge">Google Authenticator</div>
+        <h1>Activa tu autenticacion de 2 pasos</h1>
+        <p>
+            Escanea el codigo QR con Google Authenticator y luego ingresa
+            el codigo de 6 digitos para terminar la configuracion.
+        </p>
+    </section>
+
+    <section class="auth-panel auth-panel-form">
+        <div class="auth-card auth-card-wide">
+            <div class="auth-heading">
+                <span class="eyebrow">Primer ingreso</span>
+                <h2>Configurar 2 factores</h2>
+                <p>Esta configuracion se pedira una sola vez. Luego se validara en cada acceso.</p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <div class="alert alert-danger" role="alert">@Error</div>
+            }
+
+            @if (loading)
+            {
+                <p>Cargando configuracion de 2 factores...</p>
+            }
+            else if (!string.IsNullOrWhiteSpace(QrCodeDataUri))
+            {
+                <div class="totp-setup-grid">
+                    <div class="totp-qr-card">
+                        <img class="totp-qr" src="@QrCodeDataUri" alt="Codigo QR para Google Authenticator" />
+                    </div>
+
+                    <div class="totp-instructions">
+                        <h3>Paso a paso</h3>
+                        <ol class="totp-steps">
+                            <li>Abre Google Authenticator en tu telefono.</li>
+                            <li>Escanea el QR o escribe la clave manual.</li>
+                            <li>Ingresa el codigo actual de 6 digitos para confirmar.</li>
+                        </ol>
+
+                        <div class="manual-key-card">
+                            <span class="manual-key-label">Clave manual</span>
+                            <code>@ManualEntryKey</code>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="post" action="/auth/setup-2fa/confirm" class="auth-form totp-form">
+                    <div>
+                        <label class="form-label" for="code">Codigo de Google Authenticator</label>
+                        <input id="code" name="code" class="form-control auth-code-input" inputmode="numeric" maxlength="6" placeholder="123456" required />
+                    </div>
+
+                    <button type="submit" class="btn btn-primary auth-submit">Activar autenticacion de 2 factores</button>
+                </form>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    private bool loading = true;
+    private string? QrCodeDataUri;
+    private string? ManualEntryKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var stage = user.FindFirst("AuthStage")?.Value;
+
+        if (stage == "TwoFactorPending")
+        {
+            NavigationManager.NavigateTo("/verify-2fa");
+            return;
+        }
+
+        var rawUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(rawUserId, out var userId))
+        {
+            NavigationManager.NavigateTo("/?error=Tu+sesion+expiró");
+            return;
+        }
+
+        var usuario = await DbContext.tbl_usuarios
+            .Include(u => u.tbl_usuario_seguridad)
+            .FirstOrDefaultAsync(u => u.id_usuario == userId);
+
+        if (usuario is null)
+        {
+            NavigationManager.NavigateTo("/?error=No+se+encontro+el+usuario");
+            return;
+        }
+
+        var seguridad = usuario.tbl_usuario_seguridad;
+        if (seguridad is null)
+        {
+            seguridad = new tbl_usuario_seguridad
+            {
+                id_usuario = usuario.id_usuario,
+                created_at = DateTime.Now,
+                updated_at = DateTime.Now
+            };
+
+            DbContext.tbl_usuario_seguridad.Add(seguridad);
+            await DbContext.SaveChangesAsync();
+        }
+
+        if (seguridad.two_factor_enabled && stage == "FullAccess")
+        {
+            var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+            NavigationManager.NavigateTo(forcePasswordChange ? "/change-password" : "/dashboard");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(seguridad.authenticator_secret))
+        {
+            seguridad.authenticator_secret = AuthenticatorService.GenerateSecret();
+            seguridad.updated_at = DateTime.Now;
+            await DbContext.SaveChangesAsync();
+        }
+
+        QrCodeDataUri = AuthenticatorService.BuildQrCodeDataUri(
+            SecurityOptions.Value.TotpIssuer,
+            usuario.email ?? usuario.usuario,
+            seguridad.authenticator_secret);
+
+        ManualEntryKey = AuthenticatorService.BuildManualEntryKey(seguridad.authenticator_secret);
+        loading = false;
+    }
+}

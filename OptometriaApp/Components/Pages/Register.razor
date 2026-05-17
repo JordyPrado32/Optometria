@@ -1,0 +1,150 @@
+@page "/register"
+@layout AuthLayout
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Registro</PageTitle>
+
+<div class="auth-shell">
+    <section class="auth-panel auth-panel-brand">
+        <div class="brand-badge">Nuevo acceso</div>
+        <h1>Crea un usuario con correo y 2FA obligatorio</h1>
+        <p>
+            El correo ahora es obligatorio porque la recuperacion de acceso envia una clave temporal
+            y el primer ingreso quedara listo para configurar Google Authenticator.
+        </p>
+    </section>
+
+    <section class="auth-panel auth-panel-form">
+        <div class="auth-card">
+            <div class="auth-heading">
+                <span class="eyebrow">Registro</span>
+                <h2>Crear cuenta</h2>
+                <p>Despues del registro entraras directo a la configuracion de 2 factores.</p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <div class="alert alert-danger" role="alert">@Error</div>
+            }
+
+            <div class="password-policy">
+                <strong>Politica de contrasena</strong>
+                <p>Minimo 12 caracteres, mayuscula, minuscula, numero, simbolo, sin espacios y sin usar partes del usuario, nombre o correo.</p>
+            </div>
+
+            <form method="post" action="/auth/register" class="auth-form">
+                <div class="auth-grid">
+                    <div>
+                        <label class="form-label" for="nombres">Nombres</label>
+                        <input id="nombres" name="nombres" class="form-control" required />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="apellidos">Apellidos</label>
+                        <input id="apellidos" name="apellidos" class="form-control" required />
+                    </div>
+                </div>
+
+                <div class="auth-grid">
+                    <div>
+                        <label class="form-label" for="email">Correo</label>
+                        <input id="email" name="email" type="email" class="form-control" required />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="telefono">Telefono</label>
+                        <input id="telefono" name="telefono" class="form-control" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label" for="usuario">Usuario</label>
+                    <input id="usuario" name="usuario" class="form-control" required />
+                </div>
+
+                <div class="auth-grid">
+                    <div>
+                        <label class="form-label" for="password">Contrasena</label>
+                        <div class="password-field">
+                            <input id="password" name="password" type="@(showPassword ? "text" : "password")" class="form-control" required />
+                            <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
+                                @(showPassword ? "Ocultar" : "Mostrar")
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="confirmPassword">Confirmar contrasena</label>
+                        <div class="password-field">
+                            <input id="confirmPassword" name="confirmPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" required />
+                            <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
+                                @(showConfirmPassword ? "Ocultar" : "Mostrar")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <label class="auth-check">
+                    <input id="acceptedTerms" name="acceptedTerms" type="checkbox" value="true" required />
+                    <span>Acepto los terminos y condiciones de uso del sistema</span>
+                </label>
+
+                <button type="submit" class="btn btn-primary auth-submit">Registrar usuario</button>
+            </form>
+
+            <div class="auth-footer">
+                <span>Ya tienes cuenta?</span>
+                <a href="/">Volver al login</a>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    private bool showPassword;
+    private bool showConfirmPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            NavigateByStage(authState.User);
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private void ToggleConfirmPasswordVisibility()
+    {
+        showConfirmPassword = !showConfirmPassword;
+    }
+
+    private void NavigateByStage(ClaimsPrincipal user)
+    {
+        var stage = user.FindFirst("AuthStage")?.Value;
+        var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+
+        if (stage == "TwoFactorPending")
+        {
+            NavigationManager.NavigateTo("/verify-2fa");
+            return;
+        }
+
+        if (stage == "TwoFactorSetupRequired")
+        {
+            NavigationManager.NavigateTo("/setup-2fa");
+            return;
+        }
+
+        NavigationManager.NavigateTo(forcePasswordChange ? "/change-password" : "/dashboard");
+    }
+}

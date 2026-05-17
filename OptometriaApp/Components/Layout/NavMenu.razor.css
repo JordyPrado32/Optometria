@@ -1,0 +1,150 @@
+.app-nav-shell {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.app-nav-toggle {
+    display: none;
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid rgba(127, 105, 81, 0.2);
+    border-radius: 999px;
+    background: rgba(244, 240, 228, 0.78);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.app-nav-toggle span {
+    width: 1.2rem;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--color-taupe-deep);
+}
+
+.app-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.15rem;
+}
+
+.app-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.app-nav-link {
+    padding: 0.82rem 1rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(60, 52, 46, 0.76);
+    transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.app-nav-link.active {
+    background: var(--color-taupe);
+    color: #fff9f1;
+    box-shadow: 0 16px 24px rgba(127, 105, 81, 0.18);
+}
+
+.app-nav-link:hover {
+    color: var(--color-taupe-deep);
+    background: rgba(236, 204, 197, 0.44);
+    transform: translateY(-1px);
+}
+
+.app-account-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.45rem 0.5rem 0.45rem 0.95rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(127, 105, 81, 0.96) 0%, rgba(95, 77, 62, 0.94) 100%);
+    color: #fff9f1;
+}
+
+.app-account-copy {
+    display: grid;
+    line-height: 1.05;
+}
+
+.app-account-copy span {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    opacity: 0.7;
+}
+
+.app-account-copy strong {
+    font-size: 0.92rem;
+}
+
+.app-account-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+    padding: 0.2rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 249, 241, 0.12);
+    color: #fff9f1;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.app-account-link:hover {
+    background: rgba(255, 249, 241, 0.2);
+}
+
+@media (max-width: 900px) {
+    .app-nav-shell {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .app-nav-toggle {
+        display: inline-flex;
+    }
+
+    .app-nav {
+        position: absolute;
+        top: calc(100% + 0.75rem);
+        right: 0;
+        left: 0;
+        display: none;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1rem;
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        border-radius: 1.5rem;
+        background: rgba(255, 250, 244, 0.98);
+        box-shadow: 0 22px 40px rgba(127, 105, 81, 0.16);
+    }
+
+    .app-nav.is-open {
+        display: flex;
+    }
+
+    .app-nav-links {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .app-nav-link {
+        padding: 0.9rem 1rem;
+        border-radius: 1rem;
+    }
+
+    .app-account-chip {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

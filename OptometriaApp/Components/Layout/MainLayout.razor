@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="app-header">
+        <div class="app-frame app-header-frame">
+            <a class="app-brand" href="/dashboard">
+                <span class="app-brand-mark">O</span>
+                <span class="app-brand-copy">
+                    <strong>Modelo Estrella</strong>
+                    <small>Optica segura y elegante</small>
+                </span>
+            </a>
+
+            <NavMenu />
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div class="app-frame">
+            <article class="app-stage">
+                @Body
+            </article>
+        </div>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">X</span>
+</div>

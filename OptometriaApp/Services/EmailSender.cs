@@ -1,0 +1,62 @@
+using System.Net;
+using System.Net.Mail;
+using Microsoft.Extensions.Options;
+using OptometriaApp.Configuration;
+
+namespace OptometriaApp.Services;
+
+public sealed class EmailSender
+{
+    private readonly SmtpSettings settings;
+
+    public EmailSender(IOptions<SmtpSettings> options)
+    {
+        settings = options.Value;
+    }
+
+    public bool IsConfigured()
+    {
+        return !string.IsNullOrWhiteSpace(settings.Host)
+            && settings.Port > 0
+            && !string.IsNullOrWhiteSpace(settings.FromAddress)
+            && !string.IsNullOrWhiteSpace(settings.UserName)
+            && !string.IsNullOrWhiteSpace(settings.Password);
+    }
+
+    public async Task SendTemporaryPasswordAsync(string destinationEmail, string destinationName, string temporaryPassword, int minutesValid, CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured())
+        {
+            throw new InvalidOperationException("SMTP no configurado. Completa la seccion Smtp en appsettings.json.");
+        }
+
+        using var message = new MailMessage
+        {
+            From = new MailAddress(settings.FromAddress, settings.FromName),
+            Subject = "Recuperacion de acceso - clave temporal",
+            Body = $"""
+Hola {destinationName},
+
+Tu clave temporal para ingresar al sistema es:
+
+{temporaryPassword}
+
+Esta clave vencera en {minutesValid} minutos. Despues de usarla, el sistema te pedira cambiar tu contrasena.
+
+Si no solicitaste este acceso, ignora este correo y avisa al administrador.
+""",
+            IsBodyHtml = false
+        };
+
+        message.To.Add(destinationEmail);
+
+        using var client = new SmtpClient(settings.Host, settings.Port)
+        {
+            EnableSsl = settings.EnableSsl,
+            Credentials = new NetworkCredential(settings.UserName, settings.Password)
+        };
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await client.SendMailAsync(message);
+    }
+}

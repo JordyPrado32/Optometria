@@ -1,0 +1,114 @@
+@page "/dashboard"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject MenuAccessService MenuAccessService
+
+<PageTitle>Dashboard</PageTitle>
+
+@if (user is null)
+{
+    <section class="workspace-shell">
+        <div class="workspace-card">
+            <h1>Cargando panel...</h1>
+        </div>
+    </section>
+}
+else
+{
+    <section class="workspace-shell">
+        <div class="workspace-hero">
+            <div class="workspace-info-card">
+                <span class="eyebrow">Sesion activa</span>
+                <h1>@FullName</h1>
+                <p>
+                    Ya ingresaste con autenticacion completa, bloqueo por intentos fallidos y verificacion en dos pasos.
+                    Desde aqui puedes moverte solo por los modulos permitidos para tu rol.
+                </p>
+
+                <div class="workspace-meta">
+                    <div>
+                        <span>Usuario</span>
+                        <strong>@UserName</strong>
+                    </div>
+                    <div>
+                        <span>Rol</span>
+                        <strong>@RoleName</strong>
+                    </div>
+                    <div>
+                        <span>Correo</span>
+                        <strong>@(Email ?? "No registrado")</strong>
+                    </div>
+                </div>
+
+                <div class="workspace-actions">
+                    <a class="btn btn-primary" href="/register">Registrar usuario</a>
+                    <a class="btn btn-outline-primary" href="/setup-2fa">Seguridad</a>
+                </div>
+            </div>
+
+            <div class="workspace-spotlight">
+                <div class="workspace-spotlight-shape"></div>
+                <div class="workspace-spotlight-copy">
+                    <span class="eyebrow">Vision precisa</span>
+                    <h2>Gestiona tu optica con una experiencia mas limpia, rapida y segura.</h2>
+                    <p>Menus por rol, recuperacion con clave temporal y dashboard editorial para que el sistema se sienta mas premium.</p>
+                </div>
+                <div class="workspace-spotlight-outline">OPTICA</div>
+            </div>
+        </div>
+
+        <section class="workspace-module-section">
+            <div class="management-card-header">
+                <h2>Modulos disponibles</h2>
+                <span>@availableMenus.Count accesos</span>
+            </div>
+
+            <div class="workspace-module-grid">
+                @foreach (var menu in availableMenus.Where(m => m.Ruta != "/dashboard"))
+                {
+                    <a class="workspace-module-card" href="@menu.Ruta">
+                        <span class="eyebrow">Modulo</span>
+                        <strong>@menu.Nombre</strong>
+                        <p>@GetModuleDescription(menu.Ruta)</p>
+                    </a>
+                }
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    private ClaimsPrincipal? user;
+    private List<AppMenuItem> availableMenus = [];
+    private string FullName => user?.FindFirst("NombreCompleto")?.Value ?? "Usuario";
+    private string UserName => user?.Identity?.Name ?? string.Empty;
+    private string RoleName => user?.FindFirst(ClaimTypes.Role)?.Value ?? "Sin rol";
+    private string? Email => user?.FindFirst(ClaimTypes.Email)?.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var forcePasswordChange = string.Equals(authState.User.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+        if (forcePasswordChange)
+        {
+            NavigationManager.NavigateTo("/change-password");
+            return;
+        }
+
+        user = authState.User;
+        var roleIdValue = user.FindFirst("RoleId")?.Value;
+        int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
+        availableMenus = await MenuAccessService.GetMenusForRoleAsync(roleId);
+    }
+
+    private static string GetModuleDescription(string route) => route switch
+    {
+        "/register" => "Alta de usuarios con correo, rol base y 2FA obligatorio.",
+        "/setup-2fa" => "Configuracion y validacion de Google Authenticator.",
+        "/roles" => "Permisos por rol para ver, crear, editar o eliminar.",
+        "/menus" => "Catalogo de menus visibles y su orden de navegacion.",
+        _ => "Acceso disponible segun los permisos del rol actual."
+    };
+}
