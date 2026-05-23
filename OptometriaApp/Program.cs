@@ -75,8 +75,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+app.UseStatusCodePagesWithReExecute("/StatusCode/{0}"); app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
@@ -242,6 +241,7 @@ app.MapPost("/auth/register", async (
     var acceptedTerms = IsChecked(form["acceptedTerms"]);
     var usuarioNormalizado = NormalizeValue(usuario);
     var emailNormalizado = NormalizeValue(email);
+    var avatar_url = form["avatar_url"].ToString().Trim();
 
     if (string.IsNullOrWhiteSpace(nombres) ||
         string.IsNullOrWhiteSpace(apellidos) ||
@@ -303,7 +303,8 @@ app.MapPost("/auth/register", async (
         bloqueado = false,
         intentos_fallidos = 0,
         fecha_creacion = DateTime.Now,
-        ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Now)
+        ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Now),
+        avatar_url = string.IsNullOrWhiteSpace(avatar_url) ? null : avatar_url,
     };
 
     nuevoUsuario.password_hash = passwordHasher.HashPassword(nuevoUsuario, password);

@@ -31,6 +31,8 @@ public partial class tbl_usuario
 
     public DateTime? fecha_creacion { get; set; }
 
+    public string? avatar_url { get; set; }
+
     public virtual tbl_rol id_rolNavigation { get; set; } = null!;
 
     public virtual ICollection<tbl_abono> tbl_abonos { get; set; } = new List<tbl_abono>();
@@ -52,4 +54,6 @@ public partial class tbl_usuario
     public virtual ICollection<tbl_sesion> tbl_sesions { get; set; } = new List<tbl_sesion>();
 
     public virtual ICollection<tbl_venta> tbl_venta { get; set; } = new List<tbl_venta>();
+
+    
 }
