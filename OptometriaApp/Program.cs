@@ -120,14 +120,14 @@ app.MapPost("/auth/login", async (
         return Results.LocalRedirect("/?error=Tu+cuenta+esta+inactiva");
     }
 
-    var passwordResult = passwordHasher.VerifyHashedPassword(usuarioDb, usuarioDb.password_hash, password);
+    var passwordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, password);
     var temporaryPasswordResult = PasswordVerificationResult.Failed;
 
     if (!string.IsNullOrWhiteSpace(seguridad.recovery_password_hash) &&
         seguridad.recovery_password_expires_at.HasValue &&
         seguridad.recovery_password_expires_at.Value >= DateTime.Now)
     {
-        temporaryPasswordResult = passwordHasher.VerifyHashedPassword(usuarioDb, seguridad.recovery_password_hash, password);
+        temporaryPasswordResult = VerifyPassword(passwordHasher, usuarioDb, seguridad.recovery_password_hash, password);
     }
 
     if (usuarioDb.bloqueado == true)
@@ -629,7 +629,7 @@ app.MapPost("/auth/profile", async (
             return Results.LocalRedirect("/profile?error=Completa+los+campos+actual%2C+nueva+y+confirmacion+de+contrasena");
         }
 
-        var currentPasswordResult = passwordHasher.VerifyHashedPassword(usuarioDb, usuarioDb.password_hash, currentPassword);
+        var currentPasswordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, currentPassword);
         if (currentPasswordResult == PasswordVerificationResult.Failed)
         {
             return Results.LocalRedirect("/profile?error=La+contrasena+actual+no+coincide");
@@ -893,6 +893,29 @@ static int? GetUserId(ClaimsPrincipal user)
 {
     var rawUserId = user.FindFirstValue(ClaimTypes.NameIdentifier);
     return int.TryParse(rawUserId, out var userId) ? userId : null;
+}
+
+static PasswordVerificationResult VerifyPassword(
+    IPasswordHasher<tbl_usuario> passwordHasher,
+    tbl_usuario usuario,
+    string? storedPassword,
+    string providedPassword)
+{
+    if (string.IsNullOrWhiteSpace(storedPassword) || string.IsNullOrEmpty(providedPassword))
+    {
+        return PasswordVerificationResult.Failed;
+    }
+
+    try
+    {
+        return passwordHasher.VerifyHashedPassword(usuario, storedPassword, providedPassword);
+    }
+    catch (FormatException)
+    {
+        return string.Equals(storedPassword, providedPassword, StringComparison.Ordinal)
+            ? PasswordVerificationResult.SuccessRehashNeeded
+            : PasswordVerificationResult.Failed;
+    }
 }
 
 static AuthenticationProperties BuildAuthenticationProperties(bool rememberMe)
