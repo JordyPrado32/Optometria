@@ -14,6 +14,7 @@ Act as a local autonomous coding agent.
 - Open a pull request when finished.
 - You optimize codexs token usage, but you do not sacrifice code quality for it.
 - If you run out of credits, stop working.
+- Si necesitas crear algo en la base de datos genera un scrip SQL y pídelo al usuario para que lo ejecute o si puedes hacerlo con EF Core hazlo, pero nunca borres tablas sin autorizacion.
 
 ## Before coding
 - Read the issue carefully.

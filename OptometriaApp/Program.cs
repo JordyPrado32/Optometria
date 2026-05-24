@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
+using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -68,6 +69,7 @@ var app = builder.Build();
 
 await EnsureSecuritySchemaAsync(app);
 await EnsureNavigationSchemaAsync(app);
+await EnsureUserProfileSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -118,14 +120,14 @@ app.MapPost("/auth/login", async (
         return Results.LocalRedirect("/?error=Tu+cuenta+esta+inactiva");
     }
 
-    var passwordResult = passwordHasher.VerifyHashedPassword(usuarioDb, usuarioDb.password_hash, password);
+    var passwordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, password);
     var temporaryPasswordResult = PasswordVerificationResult.Failed;
 
     if (!string.IsNullOrWhiteSpace(seguridad.recovery_password_hash) &&
         seguridad.recovery_password_expires_at.HasValue &&
         seguridad.recovery_password_expires_at.Value >= DateTime.Now)
     {
-        temporaryPasswordResult = passwordHasher.VerifyHashedPassword(usuarioDb, seguridad.recovery_password_hash, password);
+        temporaryPasswordResult = VerifyPassword(passwordHasher, usuarioDb, seguridad.recovery_password_hash, password);
     }
 
     if (usuarioDb.bloqueado == true)
@@ -537,6 +539,123 @@ app.MapPost("/auth/change-password", async (
     return Results.LocalRedirect("/dashboard");
 }).DisableAntiforgery();
 
+app.MapPost("/auth/profile", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext,
+    IPasswordHasher<tbl_usuario> passwordHasher) =>
+{
+    var userId = GetUserId(httpContext.User);
+    if (userId is null)
+    {
+        return Results.LocalRedirect("/?error=Tu+sesion+expiro");
+    }
+
+    var usuarioDb = await dbContext.tbl_usuarios
+        .AsTracking()
+        .Include(u => u.id_rolNavigation)
+        .Include(u => u.tbl_usuario_seguridad)
+        .FirstOrDefaultAsync(u => u.id_usuario == userId.Value);
+
+    if (usuarioDb is null)
+    {
+        return Results.LocalRedirect("/?error=No+se+encontro+el+usuario");
+    }
+
+    var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
+    var form = await httpContext.Request.ReadFormAsync();
+
+    var nombres = form["nombres"].ToString().Trim();
+    var apellidos = form["apellidos"].ToString().Trim();
+    var telefono = form["telefono"].ToString().Trim();
+    var avatarUrl = form["avatar_url"].ToString().Trim();
+    var fechaNacimientoRaw = form["fechaNacimiento"].ToString().Trim();
+
+    var currentPassword = form["currentPassword"].ToString();
+    var newPassword = form["newPassword"].ToString();
+    var confirmNewPassword = form["confirmNewPassword"].ToString();
+
+    if (string.IsNullOrWhiteSpace(nombres) ||
+        string.IsNullOrWhiteSpace(apellidos) ||
+        string.IsNullOrWhiteSpace(usuarioDb.usuario))
+    {
+        return Results.LocalRedirect("/profile?error=Completa+los+campos+obligatorios+del+perfil");
+    }
+
+    DateOnly? fechaNacimiento = null;
+    if (!string.IsNullOrWhiteSpace(fechaNacimientoRaw))
+    {
+        if (!DateOnly.TryParseExact(fechaNacimientoRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedFechaNacimiento))
+        {
+            return Results.LocalRedirect("/profile?error=La+fecha+de+nacimiento+no+es+valida");
+        }
+
+        fechaNacimiento = parsedFechaNacimiento;
+    }
+
+    if (!string.IsNullOrWhiteSpace(avatarUrl) && !IsValidAvatarFileName(avatarUrl))
+    {
+        return Results.LocalRedirect("/profile?error=El+avatar+seleccionado+no+es+valido");
+    }
+
+    usuarioDb.nombres = nombres;
+    usuarioDb.apellidos = apellidos;
+    usuarioDb.telefono = string.IsNullOrWhiteSpace(telefono) ? null : telefono;
+    usuarioDb.avatar_url = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl;
+    usuarioDb.fecha_nacimiento = fechaNacimiento;
+
+    var hasCurrentPassword = !string.IsNullOrWhiteSpace(currentPassword);
+    var hasNewPassword = !string.IsNullOrWhiteSpace(newPassword);
+    var hasConfirmNewPassword = !string.IsNullOrWhiteSpace(confirmNewPassword);
+
+    var wantsPasswordChange = hasNewPassword || hasConfirmNewPassword;
+
+    if (wantsPasswordChange)
+    {
+        if (!hasCurrentPassword || !hasNewPassword || !hasConfirmNewPassword)
+        {
+            return Results.LocalRedirect("/profile?error=Completa+los+campos+actual%2C+nueva+y+confirmacion+de+contrasena");
+        }
+
+        var currentPasswordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, currentPassword);
+        if (currentPasswordResult == PasswordVerificationResult.Failed)
+        {
+            return Results.LocalRedirect("/profile?error=La+contrasena+actual+no+coincide");
+        }
+
+        if (newPassword != confirmNewPassword)
+        {
+            return Results.LocalRedirect("/profile?error=La+nueva+contrasena+y+su+confirmacion+no+coinciden");
+        }
+
+        if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal))
+        {
+            return Results.LocalRedirect("/profile?error=La+nueva+contrasena+debe+ser+diferente+a+la+actual");
+        }
+
+        var passwordValidationError = ValidatePassword(newPassword, usuarioDb.usuario, nombres, apellidos, usuarioDb.email ?? string.Empty);
+        if (passwordValidationError is not null)
+        {
+            return Results.LocalRedirect($"/profile?error={Uri.EscapeDataString(passwordValidationError)}");
+        }
+
+        usuarioDb.password_hash = passwordHasher.HashPassword(usuarioDb, newPassword);
+        usuarioDb.ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Now);
+        seguridad.must_change_password = false;
+        seguridad.recovery_password_hash = null;
+        seguridad.recovery_password_expires_at = null;
+    }
+
+    seguridad.updated_at = DateTime.Now;
+    await dbContext.SaveChangesAsync();
+
+    await httpContext.SignInAsync(
+        CookieAuthenticationDefaults.AuthenticationScheme,
+        BuildPrincipal(usuarioDb, AuthStages.FullAccess, false, IsRemembered(httpContext.User)),
+        BuildAuthenticationProperties(IsRemembered(httpContext.User)));
+
+    return Results.LocalRedirect("/profile?message=Perfil+actualizado");
+}).DisableAntiforgery();
+
 app.MapGet("/auth/logout", async (HttpContext httpContext) =>
 {
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -621,10 +740,11 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
         (
             VALUES
                 ('Dashboard', '/dashboard', 'dashboard', 1, 1),
-                ('Registrar usuario', '/register', 'user-plus', 2, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 3, 1),
-                ('Roles', '/roles', 'roles', 4, 1),
-                ('Menus', '/menus', 'menu', 5, 1)
+                ('Mi perfil', '/profile', 'user', 2, 1),
+                ('Registrar usuario', '/register', 'user-plus', 3, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 4, 1),
+                ('Roles', '/roles', 'roles', 5, 1),
+                ('Menus', '/menus', 'menu', 6, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -671,7 +791,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/setup-2fa') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
                     CAST(0 AS BIT) AS puede_crear,
                     CAST(0 AS BIT) AS puede_editar,
                     CAST(0 AS BIT) AS puede_eliminar
@@ -688,6 +808,21 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
                 VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
         END;
+        """);
+}
+
+static async Task EnsureUserProfileSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF COL_LENGTH('dbo.tbl_usuario', 'fecha_nacimiento') IS NULL
+        BEGIN
+            ALTER TABLE dbo.tbl_usuario
+            ADD fecha_nacimiento DATE NULL;
+        END
         """);
 }
 
@@ -745,6 +880,44 @@ static int? GetUserId(ClaimsPrincipal user)
 {
     var rawUserId = user.FindFirstValue(ClaimTypes.NameIdentifier);
     return int.TryParse(rawUserId, out var userId) ? userId : null;
+}
+
+static PasswordVerificationResult VerifyPassword(
+    IPasswordHasher<tbl_usuario> passwordHasher,
+    tbl_usuario usuario,
+    string? storedPassword,
+    string providedPassword)
+{
+    if (string.IsNullOrWhiteSpace(storedPassword) || string.IsNullOrEmpty(providedPassword))
+    {
+        return PasswordVerificationResult.Failed;
+    }
+
+    try
+    {
+        return passwordHasher.VerifyHashedPassword(usuario, storedPassword, providedPassword);
+    }
+    catch (FormatException)
+    {
+        if (LooksLikeBcryptHash(storedPassword))
+        {
+            return BCrypt.Net.BCrypt.Verify(providedPassword, storedPassword)
+                ? PasswordVerificationResult.SuccessRehashNeeded
+                : PasswordVerificationResult.Failed;
+        }
+
+        return string.Equals(storedPassword, providedPassword, StringComparison.Ordinal)
+            ? PasswordVerificationResult.SuccessRehashNeeded
+            : PasswordVerificationResult.Failed;
+    }
+}
+
+static bool LooksLikeBcryptHash(string storedPassword)
+{
+    return storedPassword.StartsWith("$2a$", StringComparison.Ordinal) ||
+           storedPassword.StartsWith("$2b$", StringComparison.Ordinal) ||
+           storedPassword.StartsWith("$2x$", StringComparison.Ordinal) ||
+           storedPassword.StartsWith("$2y$", StringComparison.Ordinal);
 }
 
 static AuthenticationProperties BuildAuthenticationProperties(bool rememberMe)
@@ -852,6 +1025,17 @@ static string? ValidatePassword(string password, string usuario, string nombres,
     }
 
     return null;
+}
+
+static bool IsValidAvatarFileName(string avatarFileName)
+{
+    var normalizedAvatar = avatarFileName.Trim().ToLowerInvariant();
+    var validPrefixes = new[] { "l", "m", "n", "p", "r", "s", "t", "u", "v", "w" };
+    var validSuffixes = new[] { "sin_lentes", "con_lentes" };
+
+    return validPrefixes.Any(prefix =>
+        validSuffixes.Any(suffix =>
+            normalizedAvatar == $"{prefix}_{suffix}.png"));
 }
 
 static class AuthStages

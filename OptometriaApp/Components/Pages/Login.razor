@@ -66,7 +66,7 @@
 
             <div class="auth-footer auth-footer-stack">
                 <a href="/forgot-password">Olvide mi contrasena</a>
-                <a href="/Register">Crear usuario</a>
+                <a href="/register">Crear usuario</a>
             </div>
         </div>
     </section>
@@ -80,14 +80,28 @@
     public string? Message { get; set; }
 
     private bool showPassword;
+    private bool shouldRedirectAuthenticatedUser;
+    private ClaimsPrincipal? authenticatedUser;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
         {
-            NavigateByStage(authState.User);
+            authenticatedUser = authState.User;
+            shouldRedirectAuthenticatedUser = true;
         }
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && shouldRedirectAuthenticatedUser && authenticatedUser is not null)
+        {
+            shouldRedirectAuthenticatedUser = false;
+            NavigateByStage(authenticatedUser);
+        }
+
+        return Task.CompletedTask;
     }
 
     private void TogglePasswordVisibility()
@@ -100,15 +114,8 @@
         var stage = user.FindFirst("AuthStage")?.Value;
         var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
 
-        if (stage == "TwoFactorPending")
+        if (stage == "TwoFactorPending" || stage == "TwoFactorSetupRequired")
         {
-            NavigationManager.NavigateTo("/verify-2fa");
-            return;
-        }
-
-        if (stage == "TwoFactorSetupRequired")
-        {
-            NavigationManager.NavigateTo("/setup-2fa");
             return;
         }
 

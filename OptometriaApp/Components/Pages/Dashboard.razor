@@ -43,6 +43,7 @@ else
                 </div>
 
                 <div class="workspace-actions">
+                    <a class="btn btn-primary" href="/profile">Mi perfil</a>
                     <a class="btn btn-primary" href="/register">Registrar usuario</a>
                     <a class="btn btn-outline-primary" href="/setup-2fa">Seguridad</a>
                 </div>
@@ -105,6 +106,7 @@ else
 
     private static string GetModuleDescription(string route) => route switch
     {
+        "/profile" => "Gestiona tus datos personales, avatar y cambio de contrasena segura.",
         "/register" => "Alta de usuarios con correo, rol base y 2FA obligatorio.",
         "/setup-2fa" => "Configuracion y validacion de Google Authenticator.",
         "/roles" => "Permisos por rol para ver, crear, editar o eliminar.",

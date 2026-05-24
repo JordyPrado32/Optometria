@@ -15,6 +15,8 @@ public partial class tbl_usuario
 
     public string? email { get; set; }
 
+    public DateOnly? fecha_nacimiento { get; set; }
+
     public string usuario { get; set; } = null!;
 
     public string password_hash { get; set; } = null!;

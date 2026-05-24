@@ -32,30 +32,36 @@ public sealed class EmailBackgroundQueue : BackgroundService, IEmailBackgroundQu
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var workItem in channel.Reader.ReadAllAsync(stoppingToken))
+        try
         {
-            try
+            await foreach (var workItem in channel.Reader.ReadAllAsync(stoppingToken))
             {
-                using var scope = scopeFactory.CreateScope();
-                var sender = scope.ServiceProvider.GetRequiredService<EmailSender>();
-
-                if (!sender.IsConfigured())
+                try
                 {
-                    logger.LogWarning("SMTP no configurado. Se omitio el envio del correo temporal a {Email}.", workItem.DestinationEmail);
-                    continue;
-                }
+                    using var scope = scopeFactory.CreateScope();
+                    var sender = scope.ServiceProvider.GetRequiredService<EmailSender>();
 
-                await sender.SendTemporaryPasswordAsync(
-                    workItem.DestinationEmail,
-                    workItem.DestinationName,
-                    workItem.TemporaryPassword,
-                    workItem.MinutesValid,
-                    stoppingToken);
+                    if (!sender.IsConfigured())
+                    {
+                        logger.LogWarning("SMTP no configurado. Se omitio el envio del correo temporal a {Email}.", workItem.DestinationEmail);
+                        continue;
+                    }
+
+                    await sender.SendTemporaryPasswordAsync(
+                        workItem.DestinationEmail,
+                        workItem.DestinationName,
+                        workItem.TemporaryPassword,
+                        workItem.MinutesValid,
+                        stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error enviando correo temporal a {Email}.", workItem.DestinationEmail);
+                }
             }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error enviando correo temporal a {Email}.", workItem.DestinationEmail);
-            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
         }
     }
 
