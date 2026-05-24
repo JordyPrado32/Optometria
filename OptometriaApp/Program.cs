@@ -912,10 +912,25 @@ static PasswordVerificationResult VerifyPassword(
     }
     catch (FormatException)
     {
+        if (LooksLikeBcryptHash(storedPassword))
+        {
+            return BCrypt.Net.BCrypt.Verify(providedPassword, storedPassword)
+                ? PasswordVerificationResult.SuccessRehashNeeded
+                : PasswordVerificationResult.Failed;
+        }
+
         return string.Equals(storedPassword, providedPassword, StringComparison.Ordinal)
             ? PasswordVerificationResult.SuccessRehashNeeded
             : PasswordVerificationResult.Failed;
     }
+}
+
+static bool LooksLikeBcryptHash(string storedPassword)
+{
+    return storedPassword.StartsWith("$2a$", StringComparison.Ordinal) ||
+           storedPassword.StartsWith("$2b$", StringComparison.Ordinal) ||
+           storedPassword.StartsWith("$2x$", StringComparison.Ordinal) ||
+           storedPassword.StartsWith("$2y$", StringComparison.Ordinal);
 }
 
 static AuthenticationProperties BuildAuthenticationProperties(bool rememberMe)
