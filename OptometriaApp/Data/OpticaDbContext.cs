@@ -669,6 +669,7 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.email)
                 .HasMaxLength(150)
                 .IsUnicode(false);
+            entity.Property(e => e.fecha_nacimiento).HasColumnType("date");
             entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.intentos_fallidos).HasDefaultValue(0);
             entity.Property(e => e.nombres)
