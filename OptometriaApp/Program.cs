@@ -566,7 +566,6 @@ app.MapPost("/auth/profile", async (
 
     var nombres = form["nombres"].ToString().Trim();
     var apellidos = form["apellidos"].ToString().Trim();
-    var usuario = form["usuario"].ToString().Trim();
     var telefono = form["telefono"].ToString().Trim();
     var avatarUrl = form["avatar_url"].ToString().Trim();
     var fechaNacimientoRaw = form["fechaNacimiento"].ToString().Trim();
@@ -577,7 +576,7 @@ app.MapPost("/auth/profile", async (
 
     if (string.IsNullOrWhiteSpace(nombres) ||
         string.IsNullOrWhiteSpace(apellidos) ||
-        string.IsNullOrWhiteSpace(usuario))
+        string.IsNullOrWhiteSpace(usuarioDb.usuario))
     {
         return Results.LocalRedirect("/profile?error=Completa+los+campos+obligatorios+del+perfil");
     }
@@ -593,16 +592,6 @@ app.MapPost("/auth/profile", async (
         fechaNacimiento = parsedFechaNacimiento;
     }
 
-    var usuarioNormalizado = NormalizeValue(usuario);
-    var usuarioYaExiste = await dbContext.tbl_usuarios.AnyAsync(u =>
-        u.id_usuario != usuarioDb.id_usuario &&
-        u.usuario.ToLower() == usuarioNormalizado);
-
-    if (usuarioYaExiste)
-    {
-        return Results.LocalRedirect("/profile?error=El+nombre+de+usuario+ya+esta+registrado");
-    }
-
     if (!string.IsNullOrWhiteSpace(avatarUrl) && !IsValidAvatarFileName(avatarUrl))
     {
         return Results.LocalRedirect("/profile?error=El+avatar+seleccionado+no+es+valido");
@@ -610,7 +599,6 @@ app.MapPost("/auth/profile", async (
 
     usuarioDb.nombres = nombres;
     usuarioDb.apellidos = apellidos;
-    usuarioDb.usuario = usuario;
     usuarioDb.telefono = string.IsNullOrWhiteSpace(telefono) ? null : telefono;
     usuarioDb.avatar_url = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl;
     usuarioDb.fecha_nacimiento = fechaNacimiento;
@@ -645,7 +633,7 @@ app.MapPost("/auth/profile", async (
             return Results.LocalRedirect("/profile?error=La+nueva+contrasena+debe+ser+diferente+a+la+actual");
         }
 
-        var passwordValidationError = ValidatePassword(newPassword, usuario, nombres, apellidos, usuarioDb.email ?? string.Empty);
+        var passwordValidationError = ValidatePassword(newPassword, usuarioDb.usuario, nombres, apellidos, usuarioDb.email ?? string.Empty);
         if (passwordValidationError is not null)
         {
             return Results.LocalRedirect($"/profile?error={Uri.EscapeDataString(passwordValidationError)}");

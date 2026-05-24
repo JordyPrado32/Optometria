@@ -101,7 +101,8 @@ else
                     <div class="auth-grid">
                         <div>
                             <label class="form-label" for="usuario">Usuario</label>
-                            <input id="usuario" name="usuario" class="form-control" value="@profile.usuario" required />
+                            <input id="usuario" name="usuario" class="form-control profile-readonly-input" value="@profile.usuario" readonly />
+                            <small class="profile-readonly-hint">El nombre de usuario no se puede modificar.</small>
                         </div>
 
                         <div>
@@ -216,6 +217,11 @@ else
                     </div>
                 </div>
             </div>
+
+            <div class="profile-avatar-modal-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseAvatarPicker">Cancelar</button>
+                <button type="button" class="btn btn-primary" @onclick="ConfirmAvatarSelection">Confirmar avatar</button>
+            </div>
         </div>
     </div>
 }
@@ -285,6 +291,12 @@ else
         showAvatarPicker = false;
     }
 
+    private void ConfirmAvatarSelection()
+    {
+        avatarTouched = true;
+        showAvatarPicker = false;
+    }
+
     private void SelectCategory(string category)
     {
         activeCategory = category;
@@ -297,13 +309,11 @@ else
     private void SelectCharacter(string avatar)
     {
         selectedCharacter = avatar;
-        avatarTouched = true;
     }
 
     private void SelectLenses(string value)
     {
         avatarLenses = value;
-        avatarTouched = true;
     }
 
     private void ToggleCurrentPasswordVisibility()
