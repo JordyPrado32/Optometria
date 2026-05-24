@@ -21,4 +21,10 @@
     <None Remove="artifacts\**;obj\Release\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include=".agent\prompt.md" />
+    <None Include=".agent\tasks.md" />
+    <None Include=".agent\templates\issue.md" />
+  </ItemGroup>
+
 </Project>
