@@ -603,16 +603,15 @@ app.MapPost("/auth/profile", async (
     usuarioDb.avatar_url = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl;
     usuarioDb.fecha_nacimiento = fechaNacimiento;
 
-    var wantsPasswordChange =
-        !string.IsNullOrWhiteSpace(currentPassword) ||
-        !string.IsNullOrWhiteSpace(newPassword) ||
-        !string.IsNullOrWhiteSpace(confirmNewPassword);
+    var hasCurrentPassword = !string.IsNullOrWhiteSpace(currentPassword);
+    var hasNewPassword = !string.IsNullOrWhiteSpace(newPassword);
+    var hasConfirmNewPassword = !string.IsNullOrWhiteSpace(confirmNewPassword);
+
+    var wantsPasswordChange = hasNewPassword || hasConfirmNewPassword;
 
     if (wantsPasswordChange)
     {
-        if (string.IsNullOrWhiteSpace(currentPassword) ||
-            string.IsNullOrWhiteSpace(newPassword) ||
-            string.IsNullOrWhiteSpace(confirmNewPassword))
+        if (!hasCurrentPassword || !hasNewPassword || !hasConfirmNewPassword)
         {
             return Results.LocalRedirect("/profile?error=Completa+los+campos+actual%2C+nueva+y+confirmacion+de+contrasena");
         }

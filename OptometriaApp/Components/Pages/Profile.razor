@@ -83,7 +83,7 @@ else
                     <div class="alert alert-success" role="alert">@Message</div>
                 }
 
-                <form method="post" action="/auth/profile" class="auth-form">
+                <form method="post" action="/auth/profile" class="auth-form" autocomplete="off">
                     <input type="hidden" name="avatar_url" value="@AvatarFormValue" />
 
                     <div class="auth-grid">
@@ -133,7 +133,7 @@ else
                             <div>
                                 <label class="form-label" for="currentPassword">Contrasena actual</label>
                                 <div class="password-field">
-                                    <input id="currentPassword" name="currentPassword" type="@(showCurrentPassword ? "text" : "password")" class="form-control" />
+                                    <input id="currentPassword" name="currentPassword" type="@(showCurrentPassword ? "text" : "password")" class="form-control" autocomplete="new-password" />
                                     <button type="button" class="password-toggle" @onclick="ToggleCurrentPasswordVisibility">
                                         @(showCurrentPassword ? "Ocultar" : "Mostrar")
                                     </button>
@@ -143,7 +143,7 @@ else
                             <div>
                                 <label class="form-label" for="newPassword">Nueva contrasena</label>
                                 <div class="password-field">
-                                    <input id="newPassword" name="newPassword" type="@(showNewPassword ? "text" : "password")" class="form-control" />
+                                    <input id="newPassword" name="newPassword" type="@(showNewPassword ? "text" : "password")" class="form-control" autocomplete="new-password" />
                                     <button type="button" class="password-toggle" @onclick="ToggleNewPasswordVisibility">
                                         @(showNewPassword ? "Ocultar" : "Mostrar")
                                     </button>
@@ -154,7 +154,7 @@ else
                         <div>
                             <label class="form-label" for="confirmNewPassword">Confirmar nueva contrasena</label>
                             <div class="password-field">
-                                <input id="confirmNewPassword" name="confirmNewPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" />
+                                <input id="confirmNewPassword" name="confirmNewPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" autocomplete="new-password" />
                                 <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
                                     @(showConfirmPassword ? "Ocultar" : "Mostrar")
                                 </button>
@@ -183,9 +183,9 @@ else
 
             <div class="profile-avatar-modal-body">
                 <div class="profile-avatar-preview-card">
-                    <img src="@AvatarPreviewPath" alt="Avatar seleccionado" />
+                    <img src="@AvatarSelectionPreviewPath" alt="Avatar seleccionado" />
                     <strong>Vista previa</strong>
-                    <span>@AvatarPreviewFile</span>
+                    <span>@AvatarSelectionPreviewFile</span>
                 </div>
 
                 <div class="profile-avatar-controls">
@@ -250,9 +250,12 @@ else
     private string FullName => $"{profile?.nombres} {profile?.apellidos}".Trim();
     private string RoleName => profile?.id_rolNavigation?.nombre ?? "Sin rol";
     private string SelectedAvatarFile => $"{selectedCharacter}_{avatarLenses}.png";
-    private string AvatarPreviewFile => string.IsNullOrWhiteSpace(AvatarFormValue) ? "l_sin_lentes.png" : AvatarFormValue;
+    private string CurrentAvatarFile => string.IsNullOrWhiteSpace(profile?.avatar_url) ? "l_sin_lentes.png" : System.IO.Path.GetFileName(profile.avatar_url);
+    private string AvatarPreviewFile => avatarTouched ? SelectedAvatarFile : CurrentAvatarFile;
     private string AvatarPreviewPath => $"/images/avatars/{AvatarPreviewFile}";
-    private string AvatarFormValue => !string.IsNullOrWhiteSpace(profile?.avatar_url) || avatarTouched ? SelectedAvatarFile : string.Empty;
+    private string AvatarSelectionPreviewFile => SelectedAvatarFile;
+    private string AvatarSelectionPreviewPath => $"/images/avatars/{AvatarSelectionPreviewFile}";
+    private string AvatarFormValue => avatarTouched ? SelectedAvatarFile : (string.IsNullOrWhiteSpace(profile?.avatar_url) ? string.Empty : CurrentAvatarFile);
     private string BirthDateValue => profile?.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty;
     private IReadOnlyList<string> CurrentAvatars => activeCategory == "mujeres" ? womenAvatars : menAvatars;
 
