@@ -48,25 +48,28 @@ public sealed class AuthenticatorService
             return false;
         }
 
+        var normalizedSecret = NormalizeSecret(secret);
         var normalizedCode = new string(code.Where(char.IsDigit).ToArray());
-        if (normalizedCode.Length != 6)
+        if (normalizedSecret.Length == 0 || normalizedCode.Length != 6)
         {
             return false;
         }
 
-        var totp = new Totp(Base32Encoding.ToBytes(secret));
-        return totp.VerifyTotp(normalizedCode, out _, new VerificationWindow(previous: 1, future: 1));
+        var totp = new Totp(Base32Encoding.ToBytes(normalizedSecret));
+        return totp.VerifyTotp(normalizedCode, out _, new VerificationWindow(previous: 2, future: 2));
     }
 
     public string BuildManualEntryKey(string secret)
     {
-        return string.Join(" ", Enumerable.Range(0, (secret.Length + 3) / 4)
-            .Select(index => secret.Substring(index * 4, Math.Min(4, secret.Length - index * 4))));
+        var normalizedSecret = NormalizeSecret(secret);
+        return string.Join(" ", Enumerable.Range(0, (normalizedSecret.Length + 3) / 4)
+            .Select(index => normalizedSecret.Substring(index * 4, Math.Min(4, normalizedSecret.Length - index * 4))));
     }
 
     public string BuildQrCodeDataUri(string issuer, string accountName, string secret)
     {
-        var otpAuthUrl = $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(accountName)}?secret={secret}&issuer={Uri.EscapeDataString(issuer)}&digits=6";
+        var normalizedSecret = NormalizeSecret(secret);
+        var otpAuthUrl = $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(accountName)}?secret={normalizedSecret}&issuer={Uri.EscapeDataString(issuer)}&digits=6";
 
         using var qrGenerator = new QRCodeGenerator();
         using var qrCodeData = qrGenerator.CreateQrCode(otpAuthUrl, QRCodeGenerator.ECCLevel.Q);
@@ -74,5 +77,13 @@ public sealed class AuthenticatorService
         var bytes = qrCode.GetGraphic(20);
 
         return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+    }
+
+    private static string NormalizeSecret(string secret)
+    {
+        return new string(secret
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToUpperInvariant)
+            .ToArray());
     }
 }

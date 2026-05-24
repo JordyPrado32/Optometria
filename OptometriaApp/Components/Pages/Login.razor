@@ -114,15 +114,8 @@
         var stage = user.FindFirst("AuthStage")?.Value;
         var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
 
-        if (stage == "TwoFactorPending")
+        if (stage == "TwoFactorPending" || stage == "TwoFactorSetupRequired")
         {
-            NavigationManager.NavigateTo("/verify-2fa");
-            return;
-        }
-
-        if (stage == "TwoFactorSetupRequired")
-        {
-            NavigationManager.NavigateTo("/setup-2fa");
             return;
         }
 
