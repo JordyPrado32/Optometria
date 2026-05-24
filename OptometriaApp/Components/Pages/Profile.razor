@@ -3,7 +3,6 @@
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
-@inject NavigationManager NavigationManager
 
 <PageTitle>Mi perfil</PageTitle>
 
@@ -258,7 +257,7 @@ else
 
         if (authState.User.Identity?.IsAuthenticated != true || !int.TryParse(userIdValue, out var userId))
         {
-            NavigationManager.NavigateTo("/");
+            isLoading = false;
             return;
         }
 
