@@ -1,0 +1,985 @@
+@page "/users"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Net.Mail
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Identity
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject IPasswordHasher<tbl_usuario> PasswordHasher
+@inject AuthenticatorService AuthenticatorService
+@inject EmailSender EmailSender
+@inject IEmailBackgroundQueue EmailQueue
+@inject IOptions<SecuritySettings> SecurityOptions
+@inject NavigationManager NavigationManager
+
+<PageTitle>Usuarios</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando usuarios...</h1>
+        </div>
+    </section>
+}
+else if (!canViewUsers)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de usuarios</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Administracion</span>
+                <h1>Usuarios</h1>
+                <p>Consulta, crea y administra cuentas con control por permisos, clave temporal por correo y exportacion a CSV.</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewUser">Nuevo usuario</button>
+                }
+
+                <button type="button" class="btn btn-primary" @onclick="ExportUsers">Exportar CSV</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredUsers.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="userSearch">Buscador</label>
+                    <input id="userSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, correo o telefono" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="roleFilter">Rol</label>
+                    <select id="roleFilter" class="form-select" @bind="selectedRoleFilter">
+                        <option value="">Todos</option>
+                        @foreach (var role in roles)
+                        {
+                            <option value="@role.id_rol.ToString()">@role.nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="statusFilter">Estado</label>
+                    <select id="statusFilter" class="form-select" @bind="selectedStatusFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                        <option value="blocked">Bloqueados</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="passwordFilter">Clave</label>
+                    <select id="passwordFilter" class="form-select" @bind="selectedPasswordFilter">
+                        <option value="all">Todas</option>
+                        <option value="current">Vigente</option>
+                        <option value="expired">Vencida</option>
+                        <option value="mustchange">Cambio obligatorio</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <div class="management-grid">
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Listado</h2>
+                    <span>@users.Count usuarios</span>
+                </div>
+
+                <div class="management-table-wrap">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Nombre</th>
+                                <th>Rol</th>
+                                <th>Correo</th>
+                                <th>Estado</th>
+                                <th>Clave</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (FilteredUsers.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="7">No hay usuarios que coincidan con los filtros actuales.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var user in FilteredUsers)
+                                {
+                                    <tr class="@(selectedUserId == user.id_usuario && !isCreatingNewUser ? "is-active" : string.Empty)">
+                                        <td>@user.usuario</td>
+                                        <td>@($"{user.nombres} {user.apellidos}")</td>
+                                        <td>@user.id_rolNavigation.nombre</td>
+                                        <td>@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo" : user.email)</td>
+                                        <td>@GetStatusLabel(user)</td>
+                                        <td>@GetPasswordStatusLabel(user)</td>
+                                        <td>
+                                            <div class="workspace-actions">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => ViewUser(user.id_usuario)">Ver</button>
+                                                @if (permissions.CanEdit)
+                                                {
+                                                    <button type="button" class="btn btn-primary btn-sm" @onclick="() => EditUser(user.id_usuario)">Editar</button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>@EditorTitle</h2>
+                    <span>@EditorSubtitle</span>
+                </div>
+
+                @if (editor is null)
+                {
+                    <p>Selecciona un usuario para ver su informacion o crea uno nuevo.</p>
+                }
+                else
+                {
+                    <div class="management-form-grid">
+                        <div>
+                            <label class="form-label" for="editRole">Rol</label>
+                            <select id="editRole" class="form-select" @bind="editor.IdRol" disabled="@(!CanModifyEditor)">
+                                @foreach (var role in roles)
+                                {
+                                    <option value="@role.id_rol">@role.nombre</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editStatus">Activo</label>
+                            <input id="editStatus" class="form-control" value="@(editor.Activo ? "Si" : "No")" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editUserName">Usuario</label>
+                            <input id="editUserName" class="form-control" @bind="editor.Usuario" readonly="@(!CanModifyEditor)" />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editEmail">Correo</label>
+                            <input id="editEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editNames">Nombres</label>
+                            <input id="editNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editLastNames">Apellidos</label>
+                            <input id="editLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editPhone">Telefono</label>
+                            <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" />
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="editBirthDate">Fecha de nacimiento</label>
+                            <input id="editBirthDate"
+                                   type="date"
+                                   class="form-control"
+                                   value="@editor.FechaNacimiento"
+                                   @onchange="OnBirthDateChanged"
+                                   readonly="@(!CanModifyEditor)" />
+                        </div>
+                    </div>
+
+                    @if (isCreatingNewUser)
+                    {
+                        <div class="auth-grid">
+                            <div>
+                                <label class="form-label" for="newPassword">Contrasena inicial</label>
+                                <input id="newPassword" type="password" class="form-control" @bind="editor.Password" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="confirmNewPassword">Confirmar contrasena</label>
+                                <input id="confirmNewPassword" type="password" class="form-control" @bind="editor.ConfirmPassword" />
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label">Rol actual</label>
+                                <input class="form-control" value="@editor.RoleName" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Ultimo cambio de clave</label>
+                                <input class="form-control" value="@editor.UltimoCambioPassword" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Fecha de creacion</label>
+                                <input class="form-control" value="@editor.FechaCreacion" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Estado de clave</label>
+                                <input class="form-control" value="@editor.PasswordStatusLabel" readonly />
+                            </div>
+                        </div>
+                    }
+
+                    <div class="workspace-actions">
+                        @if (CanModifyEditor)
+                        {
+                            <button type="button" class="btn btn-primary" @onclick="SaveUserAsync">Guardar</button>
+                        }
+
+                        @if (!isCreatingNewUser && permissions.CanEdit)
+                        {
+                            <button type="button" class="btn btn-outline-primary" @onclick="ResetPasswordAsync">Enviar clave temporal</button>
+                        }
+
+                        @if (!isCreatingNewUser && permissions.CanDelete)
+                        {
+                            <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
+                                @(editor.Activo ? "Desactivar usuario" : "Reactivar usuario")
+                            </button>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_usuario> users = [];
+    private List<tbl_rol> roles = [];
+    private UserEditorModel? editor;
+    private ModulePermissions permissions = new();
+    private bool isLoading = true;
+    private bool canViewUsers;
+    private bool isCreatingNewUser;
+    private int selectedUserId;
+    private int currentUserId;
+    private int currentRoleId;
+    private string searchTerm = string.Empty;
+    private string selectedRoleFilter = string.Empty;
+    private string selectedStatusFilter = "all";
+    private string selectedPasswordFilter = "all";
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private List<tbl_usuario> FilteredUsers => users
+        .Where(MatchesFilters)
+        .OrderBy(u => u.apellidos)
+        .ThenBy(u => u.nombres)
+        .ToList();
+
+    private string EditorTitle => isCreatingNewUser ? "Nuevo usuario" : "Detalle del usuario";
+    private string EditorSubtitle => isCreatingNewUser ? "Alta administrativa" : (selectedUserId > 0 ? $"Usuario #{selectedUserId}" : "Vista");
+    private bool CanModifyEditor => isCreatingNewUser ? permissions.CanCreate : permissions.CanEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveSelectedUserId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewUsers = permissions.CanView;
+
+        if (!canViewUsers)
+        {
+            isLoading = false;
+            return;
+        }
+
+        roles = await dbContext.tbl_rols
+            .AsNoTracking()
+            .OrderBy(r => r.nombre)
+            .ToListAsync();
+
+        var loadedUsers = await dbContext.tbl_usuarios
+            .AsNoTracking()
+            .Include(u => u.id_rolNavigation)
+            .Include(u => u.tbl_usuario_seguridad)
+            .ToListAsync();
+
+        users.Clear();
+        users.AddRange(loadedUsers);
+
+        if (isCreatingNewUser)
+        {
+            editor ??= BuildNewEditor();
+        }
+        else
+        {
+            selectedUserId = preserveSelectedUserId ?? selectedUserId;
+            if (selectedUserId == 0)
+            {
+                selectedUserId = users.FirstOrDefault()?.id_usuario ?? 0;
+            }
+
+            ViewUser(selectedUserId);
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNewUser()
+    {
+        if (!permissions.CanCreate)
+        {
+            return;
+        }
+
+        isCreatingNewUser = true;
+        selectedUserId = 0;
+        editor = BuildNewEditor();
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void ViewUser(int userId)
+    {
+        isCreatingNewUser = false;
+        selectedUserId = userId;
+        editor = BuildEditor(users.FirstOrDefault(u => u.id_usuario == userId));
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void EditUser(int userId)
+    {
+        if (!permissions.CanEdit)
+        {
+            return;
+        }
+
+        ViewUser(userId);
+    }
+
+    private async Task SaveUserAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (editor is null)
+        {
+            errorMessage = "Selecciona o crea un usuario antes de guardar.";
+            return;
+        }
+
+        if (!ValidateEditor())
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+        var normalizedUserName = editor.Usuario.Trim().ToLowerInvariant();
+        var normalizedEmail = editor.Email.Trim().ToLowerInvariant();
+
+        var userNameInUse = await dbContext.tbl_usuarios
+            .AnyAsync(u => u.id_usuario != editor.IdUsuario && u.usuario.ToLower() == normalizedUserName);
+
+        if (userNameInUse)
+        {
+            errorMessage = "El nombre de usuario ya esta registrado.";
+            return;
+        }
+
+        var emailInUse = await dbContext.tbl_usuarios
+            .AnyAsync(u => u.id_usuario != editor.IdUsuario && u.email != null && u.email.ToLower() == normalizedEmail);
+
+        if (emailInUse)
+        {
+            errorMessage = "El correo electronico ya esta registrado.";
+            return;
+        }
+
+        if (isCreatingNewUser)
+        {
+            if (!permissions.CanCreate)
+            {
+                errorMessage = "Tu rol no tiene permiso para crear usuarios.";
+                return;
+            }
+
+            var passwordValidationError = ValidatePasswordForAdmin(editor.Password, editor.Usuario, editor.Nombres, editor.Apellidos, editor.Email);
+            if (passwordValidationError is not null)
+            {
+                errorMessage = passwordValidationError;
+                return;
+            }
+
+            var newUser = new tbl_usuario
+            {
+                id_rol = editor.IdRol,
+                nombres = editor.Nombres.Trim(),
+                apellidos = editor.Apellidos.Trim(),
+                email = editor.Email.Trim(),
+                usuario = editor.Usuario.Trim(),
+                telefono = string.IsNullOrWhiteSpace(editor.Telefono) ? null : editor.Telefono.Trim(),
+                fecha_nacimiento = ParseBirthDate(editor.FechaNacimiento),
+                activo = true,
+                bloqueado = false,
+                intentos_fallidos = 0,
+                fecha_creacion = DateTime.Now,
+                ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Now)
+            };
+
+            newUser.password_hash = PasswordHasher.HashPassword(newUser, editor.Password);
+
+            dbContext.tbl_usuarios.Add(newUser);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.tbl_usuario_seguridad.Add(new tbl_usuario_seguridad
+            {
+                id_usuario = newUser.id_usuario,
+                two_factor_enabled = false,
+                must_change_password = false,
+                created_at = DateTime.Now,
+                updated_at = DateTime.Now
+            });
+
+            await dbContext.SaveChangesAsync();
+
+            statusMessage = "El usuario se creo correctamente.";
+            isCreatingNewUser = false;
+            await LoadAsync(newUser.id_usuario);
+            return;
+        }
+
+        if (!permissions.CanEdit)
+        {
+            errorMessage = "Tu rol no tiene permiso para editar usuarios.";
+            return;
+        }
+
+        var userEntity = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+        if (userEntity is null)
+        {
+            errorMessage = "No se encontro el usuario seleccionado.";
+            return;
+        }
+
+        userEntity.id_rol = editor.IdRol;
+        userEntity.usuario = editor.Usuario.Trim();
+        userEntity.email = editor.Email.Trim();
+        userEntity.nombres = editor.Nombres.Trim();
+        userEntity.apellidos = editor.Apellidos.Trim();
+        userEntity.telefono = string.IsNullOrWhiteSpace(editor.Telefono) ? null : editor.Telefono.Trim();
+        userEntity.fecha_nacimiento = ParseBirthDate(editor.FechaNacimiento);
+
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "La informacion del usuario se guardo correctamente.";
+        await LoadAsync(userEntity.id_usuario);
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!permissions.CanEdit || editor is null || editor.IdUsuario <= 0)
+        {
+            return;
+        }
+
+        if (!EmailSender.IsConfigured())
+        {
+            errorMessage = "SMTP no configurado. Completa la seccion Smtp en appsettings.json.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userEntity = await dbContext.tbl_usuarios
+            .Include(u => u.tbl_usuario_seguridad)
+            .FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+
+        if (userEntity is null)
+        {
+            errorMessage = "No se encontro el usuario seleccionado.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(userEntity.email))
+        {
+            errorMessage = "El usuario no tiene un correo registrado para enviar la clave temporal.";
+            return;
+        }
+
+        var security = userEntity.tbl_usuario_seguridad ?? new tbl_usuario_seguridad
+        {
+            id_usuario = userEntity.id_usuario,
+            created_at = DateTime.Now
+        };
+
+        if (userEntity.tbl_usuario_seguridad is null)
+        {
+            dbContext.tbl_usuario_seguridad.Add(security);
+            userEntity.tbl_usuario_seguridad = security;
+        }
+
+        var temporaryPassword = AuthenticatorService.GenerateTemporaryPassword();
+        var minutesValid = Math.Max(5, SecurityOptions.Value.TemporaryPasswordMinutesValid);
+
+        security.recovery_password_hash = PasswordHasher.HashPassword(userEntity, temporaryPassword);
+        security.recovery_password_expires_at = DateTime.Now.AddMinutes(minutesValid);
+        security.must_change_password = true;
+        security.updated_at = DateTime.Now;
+        userEntity.bloqueado = false;
+        userEntity.intentos_fallidos = 0;
+
+        await dbContext.SaveChangesAsync();
+
+        await EmailQueue.QueueTemporaryPasswordEmailAsync(
+            userEntity.email,
+            $"{userEntity.nombres} {userEntity.apellidos}".Trim(),
+            temporaryPassword,
+            minutesValid);
+
+        statusMessage = "Se envio una clave temporal al correo del usuario.";
+        await LoadAsync(userEntity.id_usuario);
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!permissions.CanDelete || editor is null || editor.IdUsuario <= 0)
+        {
+            return;
+        }
+
+        if (editor.IdUsuario == currentUserId && editor.Activo)
+        {
+            errorMessage = "No puedes desactivar tu propio usuario.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userEntity = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+        if (userEntity is null)
+        {
+            errorMessage = "No se encontro el usuario seleccionado.";
+            return;
+        }
+
+        userEntity.activo = !(userEntity.activo ?? false);
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = userEntity.activo == true
+            ? "El usuario fue reactivado correctamente."
+            : "El usuario fue desactivado correctamente.";
+
+        await LoadAsync(userEntity.id_usuario);
+    }
+
+    private void ExportUsers()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedRoleFilter))
+        {
+            query.Add($"roleId={Uri.EscapeDataString(selectedRoleFilter)}");
+        }
+
+        if (!string.Equals(selectedStatusFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        if (!string.Equals(selectedPasswordFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query.Add($"passwordState={Uri.EscapeDataString(selectedPasswordFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/users.csv"
+            : $"/exports/users.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedRoleFilter = string.Empty;
+        selectedStatusFilter = "all";
+        selectedPasswordFilter = "all";
+    }
+
+    private void OnBirthDateChanged(ChangeEventArgs args)
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.FechaNacimiento = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private bool MatchesFilters(tbl_usuario user)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var normalizedSearch = searchTerm.Trim().ToLowerInvariant();
+            var fullName = $"{user.nombres} {user.apellidos}".ToLowerInvariant();
+            var matchesSearch =
+                user.usuario.ToLowerInvariant().Contains(normalizedSearch) ||
+                fullName.Contains(normalizedSearch) ||
+                (user.email?.ToLowerInvariant().Contains(normalizedSearch) ?? false) ||
+                (user.telefono?.ToLowerInvariant().Contains(normalizedSearch) ?? false);
+
+            if (!matchesSearch)
+            {
+                return false;
+            }
+        }
+
+        if (int.TryParse(selectedRoleFilter, out var roleId) && user.id_rol != roleId)
+        {
+            return false;
+        }
+
+        if (selectedStatusFilter == "active" && user.activo != true)
+        {
+            return false;
+        }
+
+        if (selectedStatusFilter == "inactive" && user.activo == true)
+        {
+            return false;
+        }
+
+        if (selectedStatusFilter == "blocked" && user.bloqueado != true)
+        {
+            return false;
+        }
+
+        if (selectedPasswordFilter == "expired" && !IsPasswordExpired(user))
+        {
+            return false;
+        }
+
+        if (selectedPasswordFilter == "current" && IsPasswordExpired(user))
+        {
+            return false;
+        }
+
+        if (selectedPasswordFilter == "mustchange" && user.tbl_usuario_seguridad?.must_change_password != true)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidateEditor()
+    {
+        if (editor is null)
+        {
+            errorMessage = "No hay un usuario seleccionado.";
+            return false;
+        }
+
+        if (editor.IdRol <= 0)
+        {
+            errorMessage = "Selecciona un rol valido para el usuario.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.Usuario) ||
+            string.IsNullOrWhiteSpace(editor.Email) ||
+            string.IsNullOrWhiteSpace(editor.Nombres) ||
+            string.IsNullOrWhiteSpace(editor.Apellidos))
+        {
+            errorMessage = "Completa usuario, correo, nombres y apellidos.";
+            return false;
+        }
+
+        if (!IsValidEmail(editor.Email))
+        {
+            errorMessage = "Ingresa un correo electronico valido.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) &&
+            !DateOnly.TryParse(editor.FechaNacimiento, out _))
+        {
+            errorMessage = "La fecha de nacimiento no es valida.";
+            return false;
+        }
+
+        if (isCreatingNewUser)
+        {
+            if (string.IsNullOrWhiteSpace(editor.Password))
+            {
+                errorMessage = "Define una contrasena inicial.";
+                return false;
+            }
+
+            if (editor.Password != editor.ConfirmPassword)
+            {
+                errorMessage = "La contrasena inicial y su confirmacion no coinciden.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private UserEditorModel BuildNewEditor()
+    {
+        return new UserEditorModel
+        {
+            IdRol = roles.FirstOrDefault()?.id_rol ?? 0,
+            Activo = true
+        };
+    }
+
+    private static UserEditorModel? BuildEditor(tbl_usuario? user)
+    {
+        if (user is null)
+        {
+            return null;
+        }
+
+        return new UserEditorModel
+        {
+            IdUsuario = user.id_usuario,
+            IdRol = user.id_rol,
+            RoleName = user.id_rolNavigation?.nombre ?? string.Empty,
+            Usuario = user.usuario,
+            Email = user.email ?? string.Empty,
+            Nombres = user.nombres,
+            Apellidos = user.apellidos,
+            Telefono = user.telefono ?? string.Empty,
+            FechaNacimiento = user.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty,
+            Activo = user.activo == true,
+            UltimoCambioPassword = user.ultimo_cambio_password?.ToString("yyyy-MM-dd") ?? "Sin registro",
+            FechaCreacion = user.fecha_creacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin registro",
+            PasswordStatusLabel = GetPasswordStatusLabel(user)
+        };
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/users"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        if (permission is null)
+        {
+            return new ModulePermissions();
+        }
+
+        return new ModulePermissions
+        {
+            CanView = permission.puede_ver,
+            CanCreate = permission.puede_crear,
+            CanEdit = permission.puede_editar,
+            CanDelete = permission.puede_eliminar
+        };
+    }
+
+    private static bool IsPasswordExpired(tbl_usuario user)
+    {
+        if (!user.ultimo_cambio_password.HasValue)
+        {
+            return true;
+        }
+
+        return DateOnly.FromDateTime(DateTime.Now) >= user.ultimo_cambio_password.Value.AddDays(90);
+    }
+
+    private static string GetStatusLabel(tbl_usuario user)
+    {
+        if (user.bloqueado == true)
+        {
+            return "Bloqueado";
+        }
+
+        return user.activo == true ? "Activo" : "Inactivo";
+    }
+
+    private static string GetPasswordStatusLabel(tbl_usuario user)
+    {
+        if (user.tbl_usuario_seguridad?.must_change_password == true)
+        {
+            return "Cambio obligatorio";
+        }
+
+        return IsPasswordExpired(user) ? "Vencida" : "Vigente";
+    }
+
+    private static DateOnly? ParseBirthDate(string? rawBirthDate)
+    {
+        return DateOnly.TryParse(rawBirthDate, out var birthDate) ? birthDate : null;
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        try
+        {
+            _ = new MailAddress(email);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string? ValidatePasswordForAdmin(string password, string userName, string names, string lastNames, string email)
+    {
+        if (password.Length < 12)
+        {
+            return "La contrasena debe tener al menos 12 caracteres.";
+        }
+
+        if (!Regex.IsMatch(password, "[A-Z]"))
+        {
+            return "La contrasena debe incluir al menos una letra mayuscula.";
+        }
+
+        if (!Regex.IsMatch(password, "[a-z]"))
+        {
+            return "La contrasena debe incluir al menos una letra minuscula.";
+        }
+
+        if (!Regex.IsMatch(password, "[0-9]"))
+        {
+            return "La contrasena debe incluir al menos un numero.";
+        }
+
+        if (!Regex.IsMatch(password, "[^a-zA-Z0-9\\s]"))
+        {
+            return "La contrasena debe incluir al menos un caracter especial.";
+        }
+
+        if (password.Any(char.IsWhiteSpace))
+        {
+            return "La contrasena no debe contener espacios.";
+        }
+
+        var loweredPassword = password.ToLowerInvariant();
+        var forbiddenFragments = new[]
+        {
+            userName,
+            names,
+            lastNames,
+            email.Contains('@') ? email[..email.IndexOf('@')] : email
+        }
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Select(value => value.Trim().ToLowerInvariant())
+        .Where(value => value.Length >= 3);
+
+        foreach (var fragment in forbiddenFragments)
+        {
+            if (loweredPassword.Contains(fragment))
+            {
+                return "La contrasena no debe contener partes del usuario, nombre o correo.";
+            }
+        }
+
+        return null;
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class UserEditorModel
+    {
+        public int IdUsuario { get; set; }
+        public int IdRol { get; set; }
+        public string RoleName { get; set; } = string.Empty;
+        public string Usuario { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Nombres { get; set; } = string.Empty;
+        public string Apellidos { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string FechaNacimiento { get; set; } = string.Empty;
+        public bool Activo { get; set; }
+        public string UltimoCambioPassword { get; set; } = string.Empty;
+        public string FechaCreacion { get; set; } = string.Empty;
+        public string PasswordStatusLabel { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

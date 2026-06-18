@@ -1,5 +1,6 @@
 using System.Net.Mail;
 using System.Security.Claims;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
@@ -653,6 +654,107 @@ app.MapGet("/auth/logout", async (HttpContext httpContext) =>
     return Results.LocalRedirect("/?message=Sesion+cerrada");
 });
 
+app.MapGet("/exports/users.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    if (!int.TryParse(roleIdValue, out var roleId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewUsers = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/users"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewUsers)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+    var passwordState = httpContext.Request.Query["passwordState"].ToString().Trim().ToLowerInvariant();
+    var roleFilterRaw = httpContext.Request.Query["roleId"].ToString().Trim();
+    int? roleFilter = int.TryParse(roleFilterRaw, out var parsedRoleFilter) ? parsedRoleFilter : null;
+
+    var usersQuery = dbContext.tbl_usuarios
+        .AsNoTracking()
+        .Include(u => u.id_rolNavigation)
+        .Include(u => u.tbl_usuario_seguridad)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        usersQuery = usersQuery.Where(u =>
+            u.usuario.ToLower().Contains(loweredSearch) ||
+            u.nombres.ToLower().Contains(loweredSearch) ||
+            u.apellidos.ToLower().Contains(loweredSearch) ||
+            (u.email != null && u.email.ToLower().Contains(loweredSearch)) ||
+            (u.telefono != null && u.telefono.ToLower().Contains(loweredSearch)));
+    }
+
+    if (roleFilter.HasValue)
+    {
+        usersQuery = usersQuery.Where(u => u.id_rol == roleFilter.Value);
+    }
+
+    usersQuery = status switch
+    {
+        "active" => usersQuery.Where(u => u.activo == true),
+        "inactive" => usersQuery.Where(u => u.activo != true),
+        "blocked" => usersQuery.Where(u => u.bloqueado == true),
+        _ => usersQuery
+    };
+
+    var users = await usersQuery
+        .OrderBy(u => u.apellidos)
+        .ThenBy(u => u.nombres)
+        .ToListAsync();
+
+    users = passwordState switch
+    {
+        "expired" => users.Where(u => u.ultimo_cambio_password == null || DateOnly.FromDateTime(DateTime.Now) >= u.ultimo_cambio_password.Value.AddDays(90)).ToList(),
+        "mustchange" => users.Where(u => u.tbl_usuario_seguridad != null && u.tbl_usuario_seguridad.must_change_password).ToList(),
+        "current" => users.Where(u => u.ultimo_cambio_password != null && DateOnly.FromDateTime(DateTime.Now) < u.ultimo_cambio_password.Value.AddDays(90)).ToList(),
+        _ => users
+    };
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Usuario,Nombres,Apellidos,Correo,Telefono,FechaNacimiento,Rol,Activo,Bloqueado,DebeCambiarClave,UltimoCambioPassword,FechaCreacion");
+
+    foreach (var user in users)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(user.id_usuario.ToString()),
+            EscapeCsv(user.usuario),
+            EscapeCsv(user.nombres),
+            EscapeCsv(user.apellidos),
+            EscapeCsv(user.email),
+            EscapeCsv(user.telefono),
+            EscapeCsv(user.fecha_nacimiento?.ToString("yyyy-MM-dd")),
+            EscapeCsv(user.id_rolNavigation?.nombre),
+            EscapeCsv(user.activo == true ? "Activo" : "Inactivo"),
+            EscapeCsv(user.bloqueado == true ? "Si" : "No"),
+            EscapeCsv(user.tbl_usuario_seguridad?.must_change_password == true ? "Si" : "No"),
+            EscapeCsv(user.ultimo_cambio_password?.ToString("yyyy-MM-dd")),
+            EscapeCsv(user.fecha_creacion?.ToString("yyyy-MM-dd HH:mm:ss"))));
+    }
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"usuarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -735,7 +837,8 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Registrar usuario', '/register', 'user-plus', 3, 1),
                 ('Seguridad', '/setup-2fa', 'shield', 4, 1),
                 ('Roles', '/roles', 'roles', 5, 1),
-                ('Menus', '/menus', 'menu', 6, 1)
+                ('Menus', '/menus', 'menu', 6, 1),
+                ('Usuarios', '/users', 'users', 7, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -946,6 +1049,17 @@ static bool IsValidEmail(string email)
     {
         return false;
     }
+}
+
+static string EscapeCsv(string? value)
+{
+    if (string.IsNullOrEmpty(value))
+    {
+        return string.Empty;
+    }
+
+    var escapedValue = value.Replace("\"", "\"\"");
+    return $"\"{escapedValue}\"";
 }
 
 const int PasswordMaxAgeDays = 90;
