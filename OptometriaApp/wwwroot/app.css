@@ -558,6 +558,66 @@ h1:focus {
     accent-color: var(--color-sage);
 }
 
+.user-explorer-item {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.user-explorer-head,
+.user-explorer-copy,
+.user-explorer-meta {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.user-explorer-meta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+.user-explorer-meta span {
+    margin-top: 0;
+    padding: 0.35rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(236, 204, 197, 0.28);
+    color: var(--color-taupe-deep);
+    font-size: 0.72rem;
+    text-align: center;
+}
+
+.user-summary-grid,
+.user-audit-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.user-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.user-audit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.user-summary-card {
+    padding: 1rem;
+    border: 1px solid rgba(127, 105, 81, 0.12);
+    border-radius: 1.1rem;
+    background: rgba(244, 240, 228, 0.78);
+}
+
+.user-summary-card strong {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--color-taupe-deep);
+    font-size: 1rem;
+}
+
+.user-summary-card p {
+    margin: 0.35rem 0 0;
+    color: rgba(95, 77, 62, 0.76);
+}
+
 .profile-hero-card {
     display: flex;
     justify-content: space-between;
@@ -774,7 +834,10 @@ h1:focus {
 
     .auth-grid,
     .management-form-grid,
-    .workspace-meta {
+    .workspace-meta,
+    .user-summary-grid,
+    .user-audit-grid,
+    .user-explorer-meta {
         grid-template-columns: 1fr;
     }
 
@@ -948,7 +1011,10 @@ code {
 
     .auth-grid,
     .dashboard-grid,
-    .totp-setup-grid {
+    .totp-setup-grid,
+    .user-summary-grid,
+    .user-audit-grid,
+    .user-explorer-meta {
         grid-template-columns: 1fr;
     }
 

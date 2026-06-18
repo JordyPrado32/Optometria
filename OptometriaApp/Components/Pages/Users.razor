@@ -113,144 +113,193 @@ else
         </section>
 
         <div class="management-grid">
-            <section class="management-card">
+            <aside class="management-card management-list-card">
                 <div class="management-card-header">
-                    <h2>Listado</h2>
-                    <span>@users.Count usuarios</span>
+                    <h2>Explorador</h2>
+                    <span>@FilteredUsers.Count visibles</span>
                 </div>
 
-                <div class="management-table-wrap">
-                    <table class="management-table">
-                        <thead>
-                            <tr>
-                                <th>Usuario</th>
-                                <th>Nombre</th>
-                                <th>Rol</th>
-                                <th>Correo</th>
-                                <th>Estado</th>
-                                <th>Clave</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (FilteredUsers.Count == 0)
-                            {
-                                <tr>
-                                    <td colspan="7">No hay usuarios que coincidan con los filtros actuales.</td>
-                                </tr>
-                            }
-                            else
-                            {
-                                @foreach (var user in FilteredUsers)
-                                {
-                                    <tr class="@(selectedUserId == user.id_usuario && !isCreatingNewUser ? "is-active" : string.Empty)">
-                                        <td>@user.usuario</td>
-                                        <td>@($"{user.nombres} {user.apellidos}")</td>
-                                        <td>@user.id_rolNavigation.nombre</td>
-                                        <td>@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo" : user.email)</td>
-                                        <td>@GetStatusLabel(user)</td>
-                                        <td>@GetPasswordStatusLabel(user)</td>
-                                        <td>
-                                            <div class="workspace-actions">
-                                                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => ViewUser(user.id_usuario)">Ver</button>
-                                                @if (permissions.CanEdit)
-                                                {
-                                                    <button type="button" class="btn btn-primary btn-sm" @onclick="() => EditUser(user.id_usuario)">Editar</button>
-                                                }
-                                            </div>
-                                        </td>
-                                    </tr>
-                                }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="management-card">
-                <div class="management-card-header">
-                    <h2>@EditorTitle</h2>
-                    <span>@EditorSubtitle</span>
-                </div>
-
-                @if (editor is null)
-                {
-                    <p>Selecciona un usuario para ver su informacion o crea uno nuevo.</p>
-                }
-                else
-                {
-                    <div class="management-form-grid">
-                        <div>
-                            <label class="form-label" for="editRole">Rol</label>
-                            <select id="editRole" class="form-select" @bind="editor.IdRol" disabled="@(!CanModifyEditor)">
-                                @foreach (var role in roles)
-                                {
-                                    <option value="@role.id_rol">@role.nombre</option>
-                                }
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editStatus">Activo</label>
-                            <input id="editStatus" class="form-control" value="@(editor.Activo ? "Si" : "No")" readonly />
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editUserName">Usuario</label>
-                            <input id="editUserName" class="form-control" @bind="editor.Usuario" readonly="@(!CanModifyEditor)" />
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editEmail">Correo</label>
-                            <input id="editEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" />
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editNames">Nombres</label>
-                            <input id="editNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" />
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editLastNames">Apellidos</label>
-                            <input id="editLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" />
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editPhone">Telefono</label>
-                            <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" />
-                        </div>
-
-                        <div>
-                            <label class="form-label" for="editBirthDate">Fecha de nacimiento</label>
-                            <input id="editBirthDate"
-                                   type="date"
-                                   class="form-control"
-                                   value="@editor.FechaNacimiento"
-                                   @onchange="OnBirthDateChanged"
-                                   readonly="@(!CanModifyEditor)" />
-                        </div>
-                    </div>
-
-                    @if (isCreatingNewUser)
+                <div class="management-list">
+                    @if (FilteredUsers.Count == 0)
                     {
-                        <div class="auth-grid">
-                            <div>
-                                <label class="form-label" for="newPassword">Contrasena inicial</label>
-                                <input id="newPassword" type="password" class="form-control" @bind="editor.Password" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="confirmNewPassword">Confirmar contrasena</label>
-                                <input id="confirmNewPassword" type="password" class="form-control" @bind="editor.ConfirmPassword" />
-                            </div>
-                        </div>
+                        <p>No hay usuarios que coincidan con los filtros actuales.</p>
                     }
                     else
                     {
+                        @foreach (var user in FilteredUsers)
+                        {
+                            <button type="button"
+                                    class="management-list-item user-explorer-item @(selectedUserId == user.id_usuario && !isCreatingNewUser ? "is-active" : string.Empty)"
+                                    @onclick="() => SelectUserAsync(user.id_usuario)">
+                                <div class="user-explorer-head">
+                                    <strong>@($"{user.nombres} {user.apellidos}")</strong>
+                                    <span>@user.usuario</span>
+                                </div>
+                                <div class="user-explorer-meta">
+                                    <span>@user.id_rolNavigation.nombre</span>
+                                    <span>@GetStatusLabel(user)</span>
+                                    <span>@GetPasswordStatusLabel(user)</span>
+                                </div>
+                                <div class="user-explorer-copy">
+                                    <span>@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo" : user.email)</span>
+                                    <span>@(string.IsNullOrWhiteSpace(user.telefono) ? "Sin telefono" : user.telefono)</span>
+                                </div>
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <div class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Resumen operativo</h2>
+                        <span>@EditorSubtitle</span>
+                    </div>
+
+                    @if (editor is null)
+                    {
+                        <p>Selecciona un usuario para ver su informacion o crea uno nuevo.</p>
+                    }
+                    else
+                    {
+                        <div class="user-summary-grid">
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Identidad</span>
+                                <strong>@(isCreatingNewUser ? "Nuevo usuario" : $"{editor.Nombres} {editor.Apellidos}")</strong>
+                                <p>@editor.Usuario</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Rol y estado</span>
+                                <strong>@(isCreatingNewUser ? roles.FirstOrDefault(r => r.id_rol == editor.IdRol)?.nombre ?? "Sin rol" : editor.RoleName)</strong>
+                                <p>@(editor.Activo ? "Cuenta activa" : "Cuenta inactiva")</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Seguridad</span>
+                                <strong>@editor.PasswordStatusLabel</strong>
+                                <p>@(isCreatingNewUser ? "Define la clave inicial." : "Gestiona restablecimiento o desactivacion.")</p>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>@EditorTitle</h2>
+                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
+                    </div>
+
+                    @if (editor is not null)
+                    {
                         <div class="management-form-grid">
                             <div>
-                                <label class="form-label">Rol actual</label>
-                                <input class="form-control" value="@editor.RoleName" readonly />
+                                <label class="form-label" for="editNames">Nombres</label>
+                                <input id="editNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="editLastNames">Apellidos</label>
+                                <input id="editLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="editUserName">Usuario</label>
+                                <input id="editUserName" class="form-control" @bind="editor.Usuario" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="editEmail">Correo</label>
+                                <input id="editEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="editPhone">Telefono</label>
+                                <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="editBirthDate">Fecha de nacimiento</label>
+                                <input id="editBirthDate"
+                                       type="date"
+                                       class="form-control"
+                                       value="@editor.FechaNacimiento"
+                                       @onchange="OnBirthDateChanged"
+                                       readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="editRole">Rol</label>
+                                <select id="editRole" class="form-select" @bind="editor.IdRol" disabled="@(!CanModifyEditor)">
+                                    @foreach (var role in roles)
+                                    {
+                                        <option value="@role.id_rol">@role.nombre</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Estado actual</label>
+                                <input class="form-control" value="@GetEditorStatusText()" readonly />
+                            </div>
+                        </div>
+
+                        @if (isCreatingNewUser)
+                        {
+                            <div class="profile-password-section">
+                                <div class="management-card-header">
+                                    <h2>Credenciales iniciales</h2>
+                                    <span>Alta</span>
+                                </div>
+
+                                <div class="auth-grid">
+                                    <div>
+                                        <label class="form-label" for="newPassword">Contrasena inicial</label>
+                                        <input id="newPassword" type="password" class="form-control" @bind="editor.Password" />
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label" for="confirmNewPassword">Confirmar contrasena</label>
+                                        <input id="confirmNewPassword" type="password" class="form-control" @bind="editor.ConfirmPassword" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="workspace-actions">
+                            @if (CanModifyEditor)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SaveUserAsync">Guardar cambios</button>
+                            }
+
+                            @if (!isCreatingNewUser && permissions.CanEdit)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick="ResetPasswordAsync">Enviar clave temporal</button>
+                            }
+
+                            @if (!isCreatingNewUser && permissions.CanDelete)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
+                                    @(editor.Activo ? "Desactivar usuario" : "Reactivar usuario")
+                                </button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                @if (editor is not null && !isCreatingNewUser)
+                {
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Ficha de control</h2>
+                            <span>Solo lectura</span>
+                        </div>
+
+                        <div class="user-audit-grid">
+                            <div>
+                                <label class="form-label">Fecha de creacion</label>
+                                <input class="form-control" value="@editor.FechaCreacion" readonly />
                             </div>
 
                             <div>
@@ -259,37 +308,44 @@ else
                             </div>
 
                             <div>
-                                <label class="form-label">Fecha de creacion</label>
-                                <input class="form-control" value="@editor.FechaCreacion" readonly />
-                            </div>
-
-                            <div>
                                 <label class="form-label">Estado de clave</label>
                                 <input class="form-control" value="@editor.PasswordStatusLabel" readonly />
                             </div>
+
+                            <div>
+                                <label class="form-label">Id interno</label>
+                                <input class="form-control" value="@editor.IdUsuario" readonly />
+                            </div>
                         </div>
-                    }
+                    </section>
 
-                    <div class="workspace-actions">
-                        @if (CanModifyEditor)
-                        {
-                            <button type="button" class="btn btn-primary" @onclick="SaveUserAsync">Guardar</button>
-                        }
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Auditoria</h2>
+                            <span>@auditEntries.Count eventos</span>
+                        </div>
 
-                        @if (!isCreatingNewUser && permissions.CanEdit)
+                        @if (auditEntries.Count == 0)
                         {
-                            <button type="button" class="btn btn-outline-primary" @onclick="ResetPasswordAsync">Enviar clave temporal</button>
+                            <p>No hay eventos registrados para este usuario en este modulo.</p>
                         }
-
-                        @if (!isCreatingNewUser && permissions.CanDelete)
+                        else
                         {
-                            <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
-                                @(editor.Activo ? "Desactivar usuario" : "Reactivar usuario")
-                            </button>
+                            <div class="management-list">
+                                @foreach (var auditEntry in auditEntries)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@auditEntry.accion</strong>
+                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                        <span>@GetAuditActorLabel(auditEntry)</span>
+                                        <span>@auditEntry.detalle</span>
+                                    </article>
+                                }
+                            </div>
                         }
-                    </div>
+                    </section>
                 }
-            </section>
+            </div>
         </div>
     </section>
 }
@@ -297,6 +353,7 @@ else
 @code {
     private readonly List<tbl_usuario> users = [];
     private List<tbl_rol> roles = [];
+    private List<tbl_log_auditoria> auditEntries = [];
     private UserEditorModel? editor;
     private ModulePermissions permissions = new();
     private bool isLoading = true;
@@ -361,6 +418,7 @@ else
         if (isCreatingNewUser)
         {
             editor ??= BuildNewEditor();
+            auditEntries = [];
         }
         else
         {
@@ -370,7 +428,7 @@ else
                 selectedUserId = users.FirstOrDefault()?.id_usuario ?? 0;
             }
 
-            ViewUser(selectedUserId);
+            await SelectUserAsync(selectedUserId);
         }
 
         isLoading = false;
@@ -386,15 +444,17 @@ else
         isCreatingNewUser = true;
         selectedUserId = 0;
         editor = BuildNewEditor();
+        auditEntries = [];
         statusMessage = null;
         errorMessage = null;
     }
 
-    private void ViewUser(int userId)
+    private async Task SelectUserAsync(int userId)
     {
         isCreatingNewUser = false;
         selectedUserId = userId;
         editor = BuildEditor(users.FirstOrDefault(u => u.id_usuario == userId));
+        await LoadAuditEntriesAsync(userId);
         statusMessage = null;
         errorMessage = null;
     }
@@ -406,7 +466,7 @@ else
             return;
         }
 
-        ViewUser(userId);
+        _ = SelectUserAsync(userId);
     }
 
     private async Task SaveUserAsync()
@@ -493,6 +553,11 @@ else
                 updated_at = DateTime.Now
             });
 
+            WriteAudit(
+                dbContext,
+                "Crear usuario",
+                $"UsuarioId={newUser.id_usuario}; Usuario={newUser.usuario}; RolId={newUser.id_rol}; Correo={newUser.email}");
+
             await dbContext.SaveChangesAsync();
 
             statusMessage = "El usuario se creo correctamente.";
@@ -521,6 +586,11 @@ else
         userEntity.apellidos = editor.Apellidos.Trim();
         userEntity.telefono = string.IsNullOrWhiteSpace(editor.Telefono) ? null : editor.Telefono.Trim();
         userEntity.fecha_nacimiento = ParseBirthDate(editor.FechaNacimiento);
+
+        WriteAudit(
+            dbContext,
+            "Editar usuario",
+            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; RolId={userEntity.id_rol}; Correo={userEntity.email}");
 
         await dbContext.SaveChangesAsync();
 
@@ -583,6 +653,11 @@ else
         userEntity.bloqueado = false;
         userEntity.intentos_fallidos = 0;
 
+        WriteAudit(
+            dbContext,
+            "Resetear clave",
+            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; Metodo=Clave temporal por correo");
+
         await dbContext.SaveChangesAsync();
 
         await EmailQueue.QueueTemporaryPasswordEmailAsync(
@@ -620,6 +695,10 @@ else
         }
 
         userEntity.activo = !(userEntity.activo ?? false);
+        WriteAudit(
+            dbContext,
+            userEntity.activo == true ? "Reactivar usuario" : "Desactivar usuario",
+            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; Activo={(userEntity.activo == true ? "Si" : "No")}");
         await dbContext.SaveChangesAsync();
 
         statusMessage = userEntity.activo == true
@@ -660,12 +739,43 @@ else
         NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
 
+    private async Task LoadAuditEntriesAsync(int userId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userToken = $"UsuarioId={userId};";
+
+        auditEntries = await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.modulo == "Usuarios" && a.detalle != null && a.detalle.Contains(userToken))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync();
+    }
+
     private void ClearFilters()
     {
         searchTerm = string.Empty;
         selectedRoleFilter = string.Empty;
         selectedStatusFilter = "all";
         selectedPasswordFilter = "all";
+    }
+
+    private string GetEditorStatusText()
+    {
+        if (editor is null)
+        {
+            return string.Empty;
+        }
+
+        if (!editor.Activo)
+        {
+            return "Inactivo";
+        }
+
+        return editor.PasswordStatusLabel == "Cambio obligatorio"
+            ? "Activo con cambio de clave pendiente"
+            : "Activo";
     }
 
     private void OnBirthDateChanged(ChangeEventArgs args)
@@ -883,6 +993,13 @@ else
         return IsPasswordExpired(user) ? "Vencida" : "Vigente";
     }
 
+    private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)
+    {
+        return auditEntry.id_usuarioNavigation is null
+            ? "Responsable: Sistema"
+            : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
     private static DateOnly? ParseBirthDate(string? rawBirthDate)
     {
         return DateOnly.TryParse(rawBirthDate, out var birthDate) ? birthDate : null;
@@ -954,6 +1071,18 @@ else
         }
 
         return null;
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Usuarios",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
     }
 
     private sealed class ModulePermissions

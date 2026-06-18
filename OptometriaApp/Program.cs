@@ -72,6 +72,7 @@ var app = builder.Build();
 await EnsureSecuritySchemaAsync(app);
 await EnsureNavigationSchemaAsync(app);
 await EnsureUserProfileSchemaAsync(app);
+await EnsureAuditSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -749,6 +750,17 @@ app.MapGet("/exports/users.csv", async (
             EscapeCsv(user.fecha_creacion?.ToString("yyyy-MM-dd HH:mm:ss"))));
     }
 
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = roleId > 0 ? int.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorUserId) ? actorUserId : null : null,
+        accion = "Exportar CSV",
+        modulo = "Usuarios",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|passwordState:{passwordState}|roleId:{roleFilterRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
     return Results.File(
         Encoding.UTF8.GetBytes(csvBuilder.ToString()),
         "text/csv; charset=utf-8",
@@ -916,6 +928,30 @@ static async Task EnsureUserProfileSchemaAsync(WebApplication app)
         BEGIN
             ALTER TABLE dbo.tbl_usuario
             ADD fecha_nacimiento DATE NULL;
+        END
+        """);
+}
+
+static async Task EnsureAuditSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.tbl_log_auditoria', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_log_auditoria
+            (
+                id_log_auditoria INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_usuario INT NULL,
+                accion VARCHAR(100) NULL,
+                modulo VARCHAR(100) NULL,
+                fecha DATETIME NOT NULL CONSTRAINT DF_tbl_log_auditoria_fecha DEFAULT (GETDATE()),
+                detalle VARCHAR(MAX) NULL,
+                CONSTRAINT FK_tbl_log_auditoria_tbl_usuario
+                    FOREIGN KEY (id_usuario) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
         END
         """);
 }
