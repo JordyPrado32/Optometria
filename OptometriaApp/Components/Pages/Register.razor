@@ -266,13 +266,7 @@
 
     private void NavigateByStage(ClaimsPrincipal user)
     {
-        var stage = user.FindFirst("AuthStage")?.Value;
         var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
-
-        if (stage == "TwoFactorPending" || stage == "TwoFactorSetupRequired")
-        {
-            return;
-        }
 
         NavigationManager.NavigateTo(forcePasswordChange ? "/change-password" : "/dashboard");
     }

@@ -6,6 +6,8 @@ namespace OptometriaApp.Services;
 
 public sealed class AuthenticatorService
 {
+    private static readonly VerificationWindow TotpVerificationWindow = new(previous: 4, future: 4);
+
     public string GenerateSecret()
     {
         return Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
@@ -55,8 +57,15 @@ public sealed class AuthenticatorService
             return false;
         }
 
-        var totp = new Totp(Base32Encoding.ToBytes(normalizedSecret));
-        return totp.VerifyTotp(normalizedCode, out _, new VerificationWindow(previous: 2, future: 2));
+        try
+        {
+            var totp = new Totp(Base32Encoding.ToBytes(normalizedSecret));
+            return totp.VerifyTotp(normalizedCode, out _, TotpVerificationWindow);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     public string BuildManualEntryKey(string secret)

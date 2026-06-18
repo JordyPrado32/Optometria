@@ -28,11 +28,12 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("FullAccess", policy =>
-        policy.RequireClaim(AuthClaimTypes.AuthStage, AuthStages.FullAccess));
+        policy.RequireAssertion(context =>
+            !string.IsNullOrWhiteSpace(context.User.FindFirstValue(AuthClaimTypes.AuthStage))));
 
     options.AddPolicy("OperationalAccess", policy =>
         policy.RequireAssertion(context =>
-            context.User.HasClaim(AuthClaimTypes.AuthStage, AuthStages.FullAccess) &&
+            !string.IsNullOrWhiteSpace(context.User.FindFirstValue(AuthClaimTypes.AuthStage)) &&
             !string.Equals(context.User.FindFirstValue(AuthClaimTypes.ForcePasswordChange), bool.TrueString, StringComparison.OrdinalIgnoreCase)));
 
     options.AddPolicy("TwoFactorSetup", policy =>
@@ -209,22 +210,12 @@ app.MapPost("/auth/login", async (
 
     var forcePasswordChange = seguridad.must_change_password;
 
-    if (seguridad.two_factor_enabled && !string.IsNullOrWhiteSpace(seguridad.authenticator_secret))
-    {
-        await httpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            BuildPrincipal(usuarioDb, AuthStages.TwoFactorPending, forcePasswordChange, rememberMe),
-            BuildAuthenticationProperties(rememberMe));
-
-        return Results.LocalRedirect("/verify-2fa");
-    }
-
     await httpContext.SignInAsync(
         CookieAuthenticationDefaults.AuthenticationScheme,
-        BuildPrincipal(usuarioDb, AuthStages.TwoFactorSetupRequired, forcePasswordChange, rememberMe),
+        BuildPrincipal(usuarioDb, AuthStages.FullAccess, forcePasswordChange, rememberMe),
         BuildAuthenticationProperties(rememberMe));
 
-    return Results.LocalRedirect("/setup-2fa");
+    return Results.LocalRedirect(forcePasswordChange ? "/change-password" : "/dashboard");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/register", async (
@@ -331,10 +322,10 @@ app.MapPost("/auth/register", async (
 
     await httpContext.SignInAsync(
         CookieAuthenticationDefaults.AuthenticationScheme,
-        BuildPrincipal(nuevoUsuario, AuthStages.TwoFactorSetupRequired, false, false),
+        BuildPrincipal(nuevoUsuario, AuthStages.FullAccess, false, false),
         BuildAuthenticationProperties(false));
 
-    return Results.LocalRedirect("/setup-2fa");
+    return Results.LocalRedirect("/dashboard");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/forgot-password", async (
