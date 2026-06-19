@@ -2,33 +2,39 @@
     min-height: 100vh;
 }
 
-.app-header {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    padding: 1.4rem 0 0;
-}
-
 .app-frame {
     width: min(1320px, calc(100% - 2.4rem));
     margin: 0 auto;
 }
 
-.app-header-frame {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.5rem;
-    padding: 1rem 1.2rem;
-    border: 2px solid rgba(60, 52, 46, 0.92);
+.app-dashboard-frame {
+    display: grid;
+    grid-template-columns: 290px minmax(0, 1fr);
+    gap: 1.4rem;
+    padding: 1.4rem 0;
+}
+
+.app-sidebar {
+    position: sticky;
+    top: 1.4rem;
+    height: calc(100vh - 2.8rem);
+    display: grid;
+    align-content: start;
+    gap: 1.2rem;
+    padding: 1.35rem;
+    border: 1px solid rgba(127, 105, 81, 0.14);
     border-radius: 2rem;
-    background: rgba(255, 250, 244, 0.9);
-    box-shadow: 0 24px 70px rgba(127, 105, 81, 0.18);
-    backdrop-filter: blur(12px);
+    background: rgba(255, 250, 244, 0.86);
+    box-shadow: 0 24px 70px rgba(127, 105, 81, 0.12);
+    backdrop-filter: blur(14px);
+}
+
+.app-content {
+    min-width: 0;
 }
 
 .app-brand {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 0.9rem;
     text-decoration: none;
@@ -66,12 +72,38 @@
     letter-spacing: 0.16em;
 }
 
+.app-header {
+    margin-bottom: 1rem;
+}
+
+.app-header-frame {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.2rem;
+    border: 1px solid rgba(127, 105, 81, 0.14);
+    border-radius: 1.5rem;
+    background: rgba(255, 250, 244, 0.82);
+    box-shadow: 0 16px 40px rgba(127, 105, 81, 0.08);
+}
+
+.app-header-copy {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.app-header-copy strong {
+    color: var(--color-taupe-deep);
+    font-size: 1.05rem;
+}
+
 .app-main {
-    padding: 1.4rem 0 2.2rem;
+    padding-bottom: 2.2rem;
 }
 
 .app-stage {
-    min-height: calc(100vh - 8rem);
+    min-height: calc(100vh - 6rem);
 }
 
 #blazor-error-ui {
@@ -96,21 +128,18 @@
 }
 
 @media (max-width: 900px) {
-    .app-header {
-        padding-top: 1rem;
-    }
-
     .app-frame {
         width: min(100% - 1rem, 1320px);
     }
 
-    .app-header-frame {
-        align-items: flex-start;
-        flex-direction: column;
-        border-radius: 1.5rem;
+    .app-dashboard-frame {
+        grid-template-columns: 1fr;
+        padding-top: 1rem;
     }
 
-    .app-main {
-        padding-top: 1rem;
+    .app-sidebar {
+        position: static;
+        height: auto;
+        border-radius: 1.5rem;
     }
 }

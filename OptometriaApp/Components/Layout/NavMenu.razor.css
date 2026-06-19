@@ -1,7 +1,8 @@
 .app-nav-shell {
-    display: flex;
-    align-items: center;
+    position: relative;
+    display: grid;
     gap: 1rem;
+    width: 100%;
 }
 
 .app-nav-toggle {
@@ -25,34 +26,74 @@
 }
 
 .app-nav {
-    display: flex;
-    align-items: center;
-    gap: 1.15rem;
+    display: grid;
+    gap: 1rem;
+    width: 100%;
 }
 
 .app-nav-links {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    flex-wrap: wrap;
+    display: grid;
+    gap: 0.55rem;
+    width: 100%;
 }
 
 .app-nav-link {
-    padding: 0.82rem 1rem;
-    border-radius: 999px;
+    display: grid;
+    grid-template-columns: 2.4rem 1fr;
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border-radius: 1.15rem;
     text-decoration: none;
-    font-size: 0.84rem;
+    font-size: 0.9rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
     color: rgba(60, 52, 46, 0.76);
-    transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+    transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    border: 1px solid rgba(127, 105, 81, 0.1);
+    background: rgba(244, 240, 228, 0.55);
+}
+
+.app-nav-link-mark {
+    width: 2.4rem;
+    height: 2.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.9rem;
+    background: rgba(127, 105, 81, 0.1);
+    color: var(--color-taupe-deep);
+    font-size: 0.88rem;
+    font-weight: 800;
+}
+
+.app-nav-link-copy {
+    display: grid;
+    line-height: 1.1;
+}
+
+.app-nav-link-copy strong {
+    font-size: 0.92rem;
+    color: inherit;
+}
+
+.app-nav-link-copy small {
+    font-size: 0.74rem;
+    color: rgba(60, 52, 46, 0.58);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
 }
 
 .app-nav-link.active {
+    background: linear-gradient(135deg, rgba(93, 161, 129, 0.18) 0%, rgba(236, 204, 197, 0.58) 100%);
+    color: var(--color-taupe-deep);
+    border-color: rgba(93, 161, 129, 0.35);
+    box-shadow: 0 16px 24px rgba(127, 105, 81, 0.1);
+}
+
+.app-nav-link.active .app-nav-link-mark {
     background: var(--color-taupe);
     color: #fff9f1;
-    box-shadow: 0 16px 24px rgba(127, 105, 81, 0.18);
 }
 
 .app-nav-link:hover {
@@ -62,11 +103,11 @@
 }
 
 .app-account-chip {
-    display: inline-flex;
-    align-items: center;
+    display: grid;
     gap: 0.9rem;
-    padding: 0.45rem 0.5rem 0.45rem 0.95rem;
-    border-radius: 999px;
+    width: 100%;
+    padding: 1rem;
+    border-radius: 1.3rem;
     background: linear-gradient(135deg, rgba(127, 105, 81, 0.96) 0%, rgba(95, 77, 62, 0.94) 100%);
     color: #fff9f1;
 }
@@ -91,9 +132,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     padding: 0.2rem 0.9rem;
-    border-radius: 999px;
+    border-radius: 0.95rem;
     background: rgba(255, 249, 241, 0.12);
     color: #fff9f1;
     text-decoration: none;
@@ -107,44 +148,47 @@
 @media (max-width: 900px) {
     .app-nav-shell {
         width: 100%;
-        justify-content: flex-end;
+    }
+
+    .app-nav-shell::after {
+        content: "";
+        display: block;
+        clear: both;
     }
 
     .app-nav-toggle {
         display: inline-flex;
+        justify-self: end;
     }
 
     .app-nav {
         position: absolute;
-        top: calc(100% + 0.75rem);
+        top: calc(100% + 0.5rem);
         right: 0;
         left: 0;
         display: none;
-        flex-direction: column;
-        align-items: stretch;
+        grid-template-columns: 1fr;
         padding: 1rem;
         border: 1px solid rgba(127, 105, 81, 0.18);
         border-radius: 1.5rem;
         background: rgba(255, 250, 244, 0.98);
         box-shadow: 0 22px 40px rgba(127, 105, 81, 0.16);
+        z-index: 20;
     }
 
     .app-nav.is-open {
-        display: flex;
+        display: grid;
     }
 
     .app-nav-links {
-        flex-direction: column;
-        align-items: stretch;
+        gap: 0.6rem;
     }
 
     .app-nav-link {
-        padding: 0.9rem 1rem;
-        border-radius: 1rem;
+        grid-template-columns: 2.2rem 1fr;
     }
 
     .app-account-chip {
         width: 100%;
-        justify-content: space-between;
     }
 }

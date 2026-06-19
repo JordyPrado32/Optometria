@@ -1,27 +1,36 @@
 @inherits LayoutComponentBase
 
 <div class="app-shell">
-    <header class="app-header">
-        <div class="app-frame app-header-frame">
+    <div class="app-frame app-dashboard-frame">
+        <aside class="app-sidebar">
             <a class="app-brand" href="/dashboard">
                 <span class="app-brand-mark">O</span>
                 <span class="app-brand-copy">
                     <strong>Modelo Estrella</strong>
-                    <small>Optica segura y elegante</small>
+                    <small>Panel administrativo</small>
                 </span>
             </a>
 
             <NavMenu />
-        </div>
-    </header>
+        </aside>
 
-    <main class="app-main">
-        <div class="app-frame">
-            <article class="app-stage">
-                @Body
-            </article>
+        <div class="app-content">
+            <header class="app-header">
+                <div class="app-header-frame">
+                    <div class="app-header-copy">
+                        <span class="eyebrow">Dashboard</span>
+                        <strong>Optica segura y elegante</strong>
+                    </div>
+                </div>
+            </header>
+
+            <main class="app-main">
+                <article class="app-stage">
+                    @Body
+                </article>
+            </main>
         </div>
-    </main>
+    </div>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>

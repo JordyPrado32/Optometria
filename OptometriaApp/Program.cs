@@ -846,11 +846,12 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             VALUES
                 ('Dashboard', '/dashboard', 'dashboard', 1, 1),
                 ('Mi perfil', '/profile', 'user', 2, 1),
-                ('Registrar usuario', '/register', 'user-plus', 3, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 4, 1),
+                ('Pacientes', '/patients', 'patients', 3, 1),
+                ('Usuarios', '/users', 'users', 4, 1),
                 ('Roles', '/roles', 'roles', 5, 1),
                 ('Menus', '/menus', 'menu', 6, 1),
-                ('Usuarios', '/users', 'users', 7, 1)
+                ('Registrar usuario', '/register', 'user-plus', 7, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 8, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN

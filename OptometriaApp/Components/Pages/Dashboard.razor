@@ -11,79 +11,120 @@
 {
     <section class="workspace-shell">
         <div class="workspace-card">
-            <h1>Cargando panel...</h1>
+            <h1>Cargando dashboard...</h1>
         </div>
     </section>
 }
 else
 {
-    <section class="workspace-shell">
-        <div class="workspace-hero">
-            <div class="workspace-info-card">
-                <span class="eyebrow">Sesion activa</span>
-                <h1>@FullName</h1>
-                <p>
-                    Ya ingresaste con autenticacion completa, bloqueo por intentos fallidos y verificacion en dos pasos.
-                    Desde aqui puedes moverte solo por los modulos permitidos para tu rol.
-                </p>
-
-                <div class="workspace-meta">
-                    <div>
-                        <span>Usuario</span>
-                        <strong>@UserName</strong>
-                    </div>
-                    <div>
-                        <span>Rol</span>
-                        <strong>@RoleName</strong>
-                    </div>
-                    <div>
-                        <span>Correo</span>
-                        <strong>@(Email ?? "No registrado")</strong>
-                    </div>
-                </div>
-
-                <div class="workspace-actions">
-                    <a class="btn btn-primary" href="/profile">Mi perfil</a>
-                    <a class="btn btn-primary" href="/register">Registrar usuario</a>
-                    <a class="btn btn-outline-primary" href="/setup-2fa">Seguridad</a>
-                </div>
+    <section class="workspace-shell dashboard-shell">
+        <section class="dashboard-welcome-card">
+            <div>
+                <span class="eyebrow">Panel administrativo</span>
+                <h1>@GetDashboardTitle()</h1>
+                <p>@GetDashboardDescription()</p>
             </div>
 
-            <div class="workspace-spotlight">
-                <div class="workspace-spotlight-shape"></div>
-                <div class="workspace-spotlight-copy">
-                    <span class="eyebrow">Vision precisa</span>
-                    <h2>Gestiona tu optica con una experiencia mas limpia, rapida y segura.</h2>
-                    <p>Menus por rol, recuperacion con clave temporal y dashboard editorial para que el sistema se sienta mas premium.</p>
-                </div>
-                <div class="workspace-spotlight-outline">OPTICA</div>
-            </div>
-        </div>
-
-        <section class="workspace-module-section">
-            <div class="management-card-header">
-                <h2>Modulos disponibles</h2>
-                <span>@availableMenus.Count accesos</span>
-            </div>
-
-            <div class="workspace-module-grid">
-                @foreach (var menu in availableMenus.Where(m => m.Ruta != "/dashboard"))
+            <div class="workspace-actions">
+                @foreach (var shortcut in availableMenus.Where(m => m.Ruta != "/dashboard").Take(3))
                 {
-                    <a class="workspace-module-card" href="@menu.Ruta">
-                        <span class="eyebrow">Modulo</span>
-                        <strong>@menu.Nombre</strong>
-                        <p>@GetModuleDescription(menu.Ruta)</p>
-                    </a>
+                    <a class="btn @(shortcut.Ruta == "/patients" ? "btn-primary" : "btn-outline-primary")" href="@shortcut.Ruta">@shortcut.Nombre</a>
                 }
             </div>
         </section>
+
+        <section class="dashboard-kpi-grid">
+            <article class="dashboard-kpi-card">
+                <span class="eyebrow">Rol activo</span>
+                <strong>@RoleName</strong>
+                <p>Accesos habilitados segun permisos configurados en el sistema.</p>
+            </article>
+
+            <article class="dashboard-kpi-card">
+                <span class="eyebrow">Modulos visibles</span>
+                <strong>@availableMenus.Count</strong>
+                <p>Navegacion filtrada para reducir carga cognitiva y errores.</p>
+            </article>
+
+            <article class="dashboard-kpi-card">
+                <span class="eyebrow">Cuenta</span>
+                <strong>@UserName</strong>
+                <p>@(Email ?? "Sin correo registrado")</p>
+            </article>
+        </section>
+
+        <div class="dashboard-main-grid">
+            <section class="workspace-module-section">
+                <div class="management-card-header">
+                    <h2>Atajos operativos</h2>
+                    <span>@availableMenus.Count accesos</span>
+                </div>
+
+                <div class="workspace-module-grid">
+                    @foreach (var menu in availableMenus.Where(m => m.Ruta != "/dashboard"))
+                    {
+                        <a class="workspace-module-card dashboard-module-card" href="@menu.Ruta">
+                            <span class="workspace-module-icon">@GetModuleInitial(menu)</span>
+                            <div>
+                                <strong>@menu.Nombre</strong>
+                                <p>@GetModuleDescription(menu.Ruta)</p>
+                            </div>
+                        </a>
+                    }
+                </div>
+            </section>
+
+            <aside class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Cuenta y seguridad</h2>
+                        <span>Control</span>
+                    </div>
+
+                    <div class="dashboard-checklist">
+                        <article>
+                            <strong>Perfil</strong>
+                            <p>Actualiza datos personales y mantén tu ficha al día.</p>
+                            <a href="/profile">Ir a mi perfil</a>
+                        </article>
+
+                        <article>
+                            <strong>Autenticacion</strong>
+                            <p>Configura el segundo factor y revisa tu estado de seguridad.</p>
+                            <a href="/setup-2fa">Ir a seguridad</a>
+                        </article>
+
+                        @if (availableMenus.Any(m => m.Ruta == "/register"))
+                        {
+                            <article>
+                                <strong>Alta rapida</strong>
+                                <p>Registra nuevas cuentas cuando tu rol tenga privilegios administrativos.</p>
+                                <a href="/register">Crear usuario</a>
+                            </article>
+                        }
+                    </div>
+                </section>
+
+                <section class="management-card dashboard-guidance-card">
+                    <div class="management-card-header">
+                        <h2>Buenas practicas</h2>
+                        <span>UX y control</span>
+                    </div>
+
+                    <ul class="dashboard-guidance-list">
+                        <li>Prioriza la consulta del paciente antes de editar para evitar errores de contexto.</li>
+                        <li>Usa roles y permisos mínimos necesarios para respetar segregación de funciones.</li>
+                        <li>Mantén datos completos y consistentes para mejorar seguimiento clínico y administrativo.</li>
+                    </ul>
+                </section>
+            </aside>
+        </div>
     </section>
 }
 
 @code {
     private ClaimsPrincipal? user;
     private List<AppMenuItem> availableMenus = [];
-    private string FullName => user?.FindFirst("NombreCompleto")?.Value ?? "Usuario";
     private string UserName => user?.Identity?.Name ?? string.Empty;
     private string RoleName => user?.FindFirst(ClaimTypes.Role)?.Value ?? "Sin rol";
     private string? Email => user?.FindFirst(ClaimTypes.Email)?.Value;
@@ -104,13 +145,40 @@ else
         availableMenus = await MenuAccessService.GetMenusForRoleAsync(roleId);
     }
 
+    private string GetDashboardTitle()
+    {
+        if (availableMenus.Any(m => m.Ruta == "/patients"))
+        {
+            return $"Bienvenido, {user?.FindFirst("NombreCompleto")?.Value ?? "Administrador"}";
+        }
+
+        return $"Tu espacio de trabajo, {user?.FindFirst("NombreCompleto")?.Value ?? "usuario"}";
+    }
+
+    private string GetDashboardDescription()
+    {
+        if (availableMenus.Any(m => m.Ruta == "/patients"))
+        {
+            return "Este dashboard concentra accesos administrativos, navegación lateral y acciones priorizadas para gestionar pacientes, usuarios, roles y seguridad con menos fricción.";
+        }
+
+        return "Aquí encuentras únicamente los módulos permitidos para tu rol, con accesos directos a perfil y seguridad.";
+    }
+
     private static string GetModuleDescription(string route) => route switch
     {
-        "/profile" => "Gestiona tus datos personales, avatar y cambio de contrasena segura.",
-        "/register" => "Alta de usuarios con correo, rol base y 2FA obligatorio.",
-        "/setup-2fa" => "Configuracion y validacion de Google Authenticator.",
-        "/roles" => "Permisos por rol para ver, crear, editar o eliminar.",
-        "/menus" => "Catalogo de menus visibles y su orden de navegacion.",
-        _ => "Acceso disponible segun los permisos del rol actual."
+        "/patients" => "CRUD de pacientes con validacion completa, seguimiento e inactivacion segura.",
+        "/users" => "Gestiona cuentas, estados, claves temporales y control por permisos.",
+        "/profile" => "Actualiza tus datos y tu experiencia personal dentro del sistema.",
+        "/register" => "Registra cuentas nuevas con alta controlada por seguridad.",
+        "/setup-2fa" => "Revisa y fortalece la autenticacion de segundo factor.",
+        "/roles" => "Configura visibilidad y acciones por cada rol operativo.",
+        "/menus" => "Administra la navegación y el orden del panel.",
+        _ => "Acceso disponible segun las reglas del rol actual."
     };
+
+    private static string GetModuleInitial(AppMenuItem menu)
+    {
+        return string.IsNullOrWhiteSpace(menu.Nombre) ? "M" : menu.Nombre[..1].ToUpperInvariant();
+    }
 }

@@ -276,6 +276,7 @@ else
                             @if (!isCreatingNewUser && permissions.CanEdit)
                             {
                                 <button type="button" class="btn btn-outline-primary" @onclick="ResetPasswordAsync">Enviar clave temporal</button>
+                                <button type="button" class="btn btn-outline-primary" @onclick="DisableMfaAsync" disabled="@(!editor.TwoFactorEnabled)">Desactivar MFA</button>
                             }
 
                             @if (!isCreatingNewUser && permissions.CanDelete)
@@ -310,6 +311,11 @@ else
                             <div>
                                 <label class="form-label">Estado de clave</label>
                                 <input class="form-control" value="@editor.PasswordStatusLabel" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">MFA</label>
+                                <input class="form-control" value="@(editor.TwoFactorEnabled ? "Activo" : "Inactivo")" readonly />
                             </div>
 
                             <div>
@@ -670,6 +676,49 @@ else
         await LoadAsync(userEntity.id_usuario);
     }
 
+    private async Task DisableMfaAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!permissions.CanEdit || editor is null || editor.IdUsuario <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userEntity = await dbContext.tbl_usuarios
+            .Include(u => u.tbl_usuario_seguridad)
+            .FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+
+        if (userEntity is null)
+        {
+            errorMessage = "No se encontro el usuario seleccionado.";
+            return;
+        }
+
+        var security = userEntity.tbl_usuario_seguridad;
+        if (security is null || (!security.two_factor_enabled && string.IsNullOrWhiteSpace(security.authenticator_secret)))
+        {
+            errorMessage = "El usuario no tiene MFA activo.";
+            return;
+        }
+
+        security.two_factor_enabled = false;
+        security.authenticator_secret = null;
+        security.updated_at = DateTime.Now;
+
+        WriteAudit(
+            dbContext,
+            "Desactivar MFA",
+            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; Motivo=Recuperacion por perdida de acceso");
+
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "Se desactivo MFA para el usuario seleccionado.";
+        await LoadAsync(userEntity.id_usuario);
+    }
+
     private async Task ToggleActiveAsync()
     {
         statusMessage = null;
@@ -926,6 +975,7 @@ else
             Telefono = user.telefono ?? string.Empty,
             FechaNacimiento = user.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty,
             Activo = user.activo == true,
+            TwoFactorEnabled = user.tbl_usuario_seguridad?.two_factor_enabled == true,
             UltimoCambioPassword = user.ultimo_cambio_password?.ToString("yyyy-MM-dd") ?? "Sin registro",
             FechaCreacion = user.fecha_creacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin registro",
             PasswordStatusLabel = GetPasswordStatusLabel(user)
@@ -1105,6 +1155,7 @@ else
         public string Telefono { get; set; } = string.Empty;
         public string FechaNacimiento { get; set; } = string.Empty;
         public bool Activo { get; set; }
+        public bool TwoFactorEnabled { get; set; }
         public string UltimoCambioPassword { get; set; } = string.Empty;
         public string FechaCreacion { get; set; } = string.Empty;
         public string PasswordStatusLabel { get; set; } = string.Empty;

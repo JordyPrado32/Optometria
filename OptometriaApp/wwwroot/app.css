@@ -280,6 +280,10 @@ h1:focus {
     gap: 1.35rem;
 }
 
+.dashboard-shell {
+    gap: 1.25rem;
+}
+
 .workspace-card,
 .management-card,
 .workspace-module-section {
@@ -443,6 +447,129 @@ h1:focus {
     color: rgba(60, 52, 46, 0.72);
 }
 
+.dashboard-welcome-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    padding: 1.7rem;
+    border-radius: 2rem;
+    background:
+        radial-gradient(circle at top right, rgba(254, 188, 100, 0.32), transparent 24%),
+        linear-gradient(135deg, rgba(255, 250, 244, 0.98) 0%, rgba(236, 204, 197, 0.58) 100%);
+    border: 1px solid rgba(127, 105, 81, 0.14);
+    box-shadow: var(--shadow-soft);
+}
+
+.dashboard-welcome-card h1 {
+    margin: 0.4rem 0 0.8rem;
+    font-size: clamp(2.2rem, 4vw, 3.8rem);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+    color: var(--color-taupe-deep);
+}
+
+.dashboard-welcome-card p {
+    max-width: 52rem;
+    margin: 0;
+    color: rgba(60, 52, 46, 0.76);
+    line-height: 1.7;
+}
+
+.dashboard-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.dashboard-kpi-card {
+    padding: 1.25rem;
+    border-radius: 1.4rem;
+    background: rgba(255, 250, 244, 0.9);
+    border: 1px solid rgba(127, 105, 81, 0.12);
+    box-shadow: 0 12px 40px rgba(127, 105, 81, 0.07);
+}
+
+.dashboard-kpi-card strong {
+    display: block;
+    margin: 0.45rem 0 0.35rem;
+    font-size: 1.65rem;
+    color: var(--color-taupe-deep);
+}
+
+.dashboard-kpi-card p {
+    margin: 0;
+    color: rgba(60, 52, 46, 0.74);
+}
+
+.dashboard-main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+    gap: 1.25rem;
+}
+
+.dashboard-module-card {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    align-items: start;
+    gap: 0.9rem;
+}
+
+.workspace-module-icon {
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background: rgba(93, 161, 129, 0.16);
+    color: var(--color-taupe-deep);
+    font-weight: 800;
+}
+
+.dashboard-checklist,
+.dashboard-guidance-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.dashboard-checklist article {
+    padding: 1rem;
+    border-radius: 1.1rem;
+    background: rgba(244, 240, 228, 0.78);
+    border: 1px solid rgba(127, 105, 81, 0.1);
+}
+
+.dashboard-checklist strong {
+    display: block;
+    color: var(--color-taupe-deep);
+}
+
+.dashboard-checklist p {
+    margin: 0.35rem 0 0.65rem;
+    color: rgba(60, 52, 46, 0.72);
+}
+
+.dashboard-checklist a {
+    color: var(--color-sage);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.dashboard-guidance-card {
+    align-content: start;
+}
+
+.dashboard-guidance-list {
+    margin: 0;
+    padding-left: 1.2rem;
+    color: rgba(60, 52, 46, 0.76);
+}
+
+.dashboard-guidance-list li {
+    line-height: 1.6;
+}
+
 .management-hero {
     display: flex;
     justify-content: space-between;
@@ -561,6 +688,37 @@ h1:focus {
 .user-explorer-item {
     display: grid;
     gap: 0.7rem;
+}
+
+.patient-explorer-item,
+.patient-explorer-head,
+.patient-explorer-copy,
+.patient-explorer-meta {
+    display: grid;
+    gap: 0.28rem;
+}
+
+.patient-explorer-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+.patient-explorer-meta span {
+    margin-top: 0;
+    padding: 0.35rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(236, 204, 197, 0.28);
+    color: var(--color-taupe-deep);
+    font-size: 0.72rem;
+    text-align: center;
+}
+
+.patient-form-block {
+    margin-top: 1rem;
+}
+
+.patient-form-span {
+    grid-column: 1 / -1;
 }
 
 .user-explorer-head,
@@ -814,7 +972,8 @@ h1:focus {
 @media (max-width: 1100px) {
     .workspace-hero,
     .management-grid,
-    .profile-layout {
+    .profile-layout,
+    .dashboard-main-grid {
         grid-template-columns: 1fr;
     }
 
@@ -837,7 +996,9 @@ h1:focus {
     .workspace-meta,
     .user-summary-grid,
     .user-audit-grid,
-    .user-explorer-meta {
+    .user-explorer-meta,
+    .patient-explorer-meta,
+    .dashboard-kpi-grid {
         grid-template-columns: 1fr;
     }
 
@@ -857,6 +1018,11 @@ h1:focus {
     }
 
     .management-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .dashboard-welcome-card {
         flex-direction: column;
         align-items: flex-start;
     }

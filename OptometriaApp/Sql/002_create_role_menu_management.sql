@@ -36,10 +36,11 @@ USING
 (
     VALUES
         ('Dashboard', '/dashboard', 'dashboard', 1, 1),
-        ('Registrar usuario', '/register', 'user-plus', 2, 1),
-        ('Seguridad', '/setup-2fa', 'shield', 3, 1),
-        ('Roles', '/roles', 'roles', 4, 1),
-        ('Menus', '/menus', 'menu', 5, 1)
+        ('Pacientes', '/patients', 'patients', 2, 1),
+        ('Roles', '/roles', 'roles', 3, 1),
+        ('Menus', '/menus', 'menu', 4, 1),
+        ('Registrar usuario', '/register', 'user-plus', 5, 1),
+        ('Seguridad', '/setup-2fa', 'shield', 6, 1)
 ) AS source(nombre, ruta, icono, orden, activo)
 ON target.ruta = source.ruta
 WHEN MATCHED THEN

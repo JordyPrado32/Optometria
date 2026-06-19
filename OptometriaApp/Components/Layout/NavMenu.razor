@@ -13,7 +13,11 @@
             @foreach (var menu in menus)
             {
                 <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                    @menu.Nombre
+                    <span class="app-nav-link-mark">@GetInitial(menu.Nombre)</span>
+                    <span class="app-nav-link-copy">
+                        <strong>@menu.Nombre</strong>
+                        <small>@GetMenuTagline(menu.Ruta)</small>
+                    </span>
                 </NavLink>
             }
         </div>
@@ -53,4 +57,22 @@
     {
         menuOpen = !menuOpen;
     }
+
+    private static string GetInitial(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "M" : value[..1].ToUpperInvariant();
+    }
+
+    private static string GetMenuTagline(string route) => route switch
+    {
+        "/dashboard" => "Resumen",
+        "/patients" => "CRUD",
+        "/users" => "Accesos",
+        "/roles" => "Permisos",
+        "/menus" => "Navegacion",
+        "/profile" => "Cuenta",
+        "/register" => "Alta",
+        "/setup-2fa" => "2FA",
+        _ => "Modulo"
+    };
 }
