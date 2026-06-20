@@ -9,24 +9,25 @@
 
 .app-dashboard-frame {
     display: grid;
-    grid-template-columns: 290px minmax(0, 1fr);
-    gap: 1.4rem;
-    padding: 1.4rem 0;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 1.6rem;
+    padding: 1.5rem 0;
 }
 
 .app-sidebar {
     position: sticky;
-    top: 1.4rem;
-    height: calc(100vh - 2.8rem);
+    top: 1.5rem;
+    height: calc(100vh - 3rem);
     display: grid;
-    align-content: start;
-    gap: 1.2rem;
-    padding: 1.35rem;
-    border: 1px solid rgba(127, 105, 81, 0.14);
-    border-radius: 2rem;
-    background: rgba(255, 250, 244, 0.86);
-    box-shadow: 0 24px 70px rgba(127, 105, 81, 0.12);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 1.1rem;
+    padding: 1.2rem;
+    border: 1px solid rgba(127, 105, 81, 0.12);
+    border-radius: 2.2rem;
+    background: linear-gradient(180deg, rgba(255, 250, 244, 0.94) 0%, rgba(244, 240, 228, 0.88) 100%);
+    box-shadow: 0 24px 60px rgba(127, 105, 81, 0.12);
     backdrop-filter: blur(14px);
+    overflow: hidden;
 }
 
 .app-content {
@@ -34,16 +35,17 @@
 }
 
 .app-brand {
-    display: flex;
+    display: grid;
+    grid-template-columns: 3.25rem 1fr;
     align-items: center;
-    gap: 0.9rem;
+    gap: 1rem;
     text-decoration: none;
     color: var(--color-ink);
 }
 
 .app-brand-mark {
-    width: 2.9rem;
-    height: 2.9rem;
+    width: 3.25rem;
+    height: 3.25rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -61,15 +63,15 @@
 }
 
 .app-brand-copy strong {
-    font-size: 1rem;
-    letter-spacing: 0.02em;
+    font-size: 1.2rem;
+    letter-spacing: -0.01em;
 }
 
 .app-brand-copy small {
-    font-size: 0.78rem;
-    color: rgba(60, 52, 46, 0.72);
+    font-size: 0.76rem;
+    color: rgba(60, 52, 46, 0.64);
     text-transform: uppercase;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.2em;
 }
 
 .app-header {
@@ -81,11 +83,11 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.2rem;
-    border: 1px solid rgba(127, 105, 81, 0.14);
+    padding: 1rem 1.3rem;
+    border: 1px solid rgba(127, 105, 81, 0.12);
     border-radius: 1.5rem;
-    background: rgba(255, 250, 244, 0.82);
-    box-shadow: 0 16px 40px rgba(127, 105, 81, 0.08);
+    background: rgba(255, 250, 244, 0.72);
+    box-shadow: 0 14px 30px rgba(127, 105, 81, 0.06);
 }
 
 .app-header-copy {
@@ -103,7 +105,7 @@
 }
 
 .app-stage {
-    min-height: calc(100vh - 6rem);
+    min-height: calc(100vh - 7rem);
 }
 
 #blazor-error-ui {

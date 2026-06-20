@@ -5,6 +5,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
 
 <PageTitle>Pacientes</PageTitle>
 
@@ -41,6 +42,8 @@ else
                 {
                     <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewPatient">Nuevo paciente</button>
                 }
+
+                <button type="button" class="btn btn-primary" @onclick="ExportPatients">Exportar CSV</button>
             </div>
         </div>
 
@@ -617,6 +620,37 @@ else
         selectedStatusFilter = "all";
         selectedGenderFilter = string.Empty;
         selectedCivilStatusFilter = string.Empty;
+    }
+
+    private void ExportPatients()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (!string.Equals(selectedStatusFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedGenderFilter))
+        {
+            query.Add($"gender={Uri.EscapeDataString(selectedGenderFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCivilStatusFilter))
+        {
+            query.Add($"civilStatus={Uri.EscapeDataString(selectedCivilStatusFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/patients.csv"
+            : $"/exports/patients.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
 
     private async Task LoadAuditEntriesAsync(int patientId)

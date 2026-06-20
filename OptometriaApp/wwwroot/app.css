@@ -280,7 +280,8 @@ h1:focus {
     gap: 1.35rem;
 }
 
-.dashboard-shell {
+.dashboard-shell,
+.dashboard-shell-v2 {
     gap: 1.25rem;
 }
 
@@ -459,6 +460,236 @@ h1:focus {
         linear-gradient(135deg, rgba(255, 250, 244, 0.98) 0%, rgba(236, 204, 197, 0.58) 100%);
     border: 1px solid rgba(127, 105, 81, 0.14);
     box-shadow: var(--shadow-soft);
+}
+
+.dashboard-shell-v2 {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.dashboard-hero-v2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.7fr);
+    gap: 1rem;
+    padding: 1.5rem;
+    border-radius: 2rem;
+    background:
+        radial-gradient(circle at top right, rgba(254, 188, 100, 0.22), transparent 24%),
+        linear-gradient(135deg, rgba(255, 250, 244, 0.98) 0%, rgba(244, 240, 228, 0.94) 100%);
+    border: 1px solid rgba(127, 105, 81, 0.12);
+    box-shadow: var(--shadow-soft);
+}
+
+.dashboard-hero-copy {
+    display: grid;
+    align-content: start;
+    gap: 0.6rem;
+}
+
+.dashboard-hero-copy h1 {
+    margin: 0;
+    font-size: clamp(2.3rem, 4vw, 4.2rem);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+    color: var(--color-taupe-deep);
+}
+
+.dashboard-hero-copy p {
+    max-width: 48rem;
+    margin: 0;
+    color: rgba(60, 52, 46, 0.76);
+    line-height: 1.7;
+}
+
+.dashboard-hero-side {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.dashboard-hero-chip {
+    display: grid;
+    gap: 0.2rem;
+    padding: 1rem 1.1rem;
+    border-radius: 1.3rem;
+    background: rgba(255, 255, 255, 0.58);
+    border: 1px solid rgba(127, 105, 81, 0.1);
+}
+
+.dashboard-hero-chip span {
+    color: rgba(95, 77, 62, 0.64);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+}
+
+.dashboard-hero-chip strong {
+    color: var(--color-taupe-deep);
+    font-size: 1.5rem;
+}
+
+.dashboard-actions-v2 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.dashboard-action-card {
+    display: grid;
+    gap: 0.65rem;
+    min-height: 100%;
+    padding: 1.15rem;
+    border-radius: 1.5rem;
+    border: 1px solid rgba(127, 105, 81, 0.1);
+    background: rgba(255, 250, 244, 0.92);
+    text-decoration: none;
+    color: var(--color-ink);
+    box-shadow: 0 14px 28px rgba(127, 105, 81, 0.06);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.dashboard-action-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 32px rgba(127, 105, 81, 0.1);
+    border-color: rgba(93, 161, 129, 0.24);
+}
+
+.dashboard-action-badge {
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background: rgba(93, 161, 129, 0.14);
+    color: var(--color-taupe-deep);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}
+
+.dashboard-action-card strong,
+.dashboard-module-tile strong {
+    color: var(--color-taupe-deep);
+    font-size: 1rem;
+}
+
+.dashboard-action-card p,
+.dashboard-module-tile p,
+.dashboard-account-card p,
+.dashboard-sequence-grid p {
+    margin: 0;
+    color: rgba(60, 52, 46, 0.72);
+    line-height: 1.55;
+}
+
+.dashboard-layout-v2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr);
+    gap: 1.25rem;
+}
+
+.dashboard-panel {
+    display: grid;
+    gap: 1rem;
+    padding: 1.4rem;
+    border-radius: 1.8rem;
+    background: rgba(255, 250, 244, 0.92);
+    border: 1px solid rgba(127, 105, 81, 0.12);
+    box-shadow: 0 14px 34px rgba(127, 105, 81, 0.07);
+}
+
+.dashboard-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.dashboard-panel-header h2 {
+    margin: 0.25rem 0 0;
+    color: var(--color-taupe-deep);
+    font-size: 1.4rem;
+}
+
+.dashboard-panel-header > span {
+    color: rgba(95, 77, 62, 0.62);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.dashboard-module-grid-v2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.95rem;
+}
+
+.dashboard-module-tile {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    align-items: start;
+    gap: 0.9rem;
+    padding: 1rem;
+    border-radius: 1.2rem;
+    text-decoration: none;
+    color: var(--color-ink);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(244, 240, 228, 0.68) 100%);
+    border: 1px solid rgba(127, 105, 81, 0.08);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dashboard-module-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 24px rgba(127, 105, 81, 0.08);
+}
+
+.dashboard-module-mark {
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.95rem;
+    background: rgba(127, 105, 81, 0.12);
+    color: var(--color-taupe-deep);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}
+
+.dashboard-side-stack {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.dashboard-account-grid,
+.dashboard-sequence-grid {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.dashboard-account-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-account-card,
+.dashboard-sequence-grid article {
+    display: grid;
+    gap: 0.25rem;
+    padding: 1rem;
+    border-radius: 1.15rem;
+    background: rgba(244, 240, 228, 0.72);
+    border: 1px solid rgba(127, 105, 81, 0.08);
+}
+
+.dashboard-account-card span {
+    color: rgba(95, 77, 62, 0.62);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.dashboard-account-card strong,
+.dashboard-sequence-grid strong {
+    color: var(--color-taupe-deep);
 }
 
 .dashboard-welcome-card h1 {
@@ -973,7 +1204,9 @@ h1:focus {
     .workspace-hero,
     .management-grid,
     .profile-layout,
-    .dashboard-main-grid {
+    .dashboard-main-grid,
+    .dashboard-layout-v2,
+    .dashboard-hero-v2 {
         grid-template-columns: 1fr;
     }
 
@@ -998,7 +1231,9 @@ h1:focus {
     .user-audit-grid,
     .user-explorer-meta,
     .patient-explorer-meta,
-    .dashboard-kpi-grid {
+    .dashboard-kpi-grid,
+    .dashboard-actions-v2,
+    .dashboard-account-grid {
         grid-template-columns: 1fr;
     }
 

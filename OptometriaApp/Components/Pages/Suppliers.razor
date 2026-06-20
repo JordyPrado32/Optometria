@@ -1,0 +1,610 @@
+@page "/suppliers"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Net.Mail
+@using Microsoft.EntityFrameworkCore
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Proveedores</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando proveedores...</h1>
+        </div>
+    </section>
+}
+else if (!canViewSuppliers)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de proveedores</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Administrador</span>
+                <h1>Proveedores</h1>
+                <p>Administra proveedores con validaciones de datos, permisos por rol, operaciones completas y auditoria visible.</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewSupplier">Nuevo proveedor</button>
+                }
+
+                <button type="button" class="btn btn-primary" @onclick="ExportSuppliers">Exportar CSV</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredSuppliers.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="supplierSearch">Buscador</label>
+                    <input id="supplierSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, telefono, correo, direccion u observaciones" />
+                </div>
+            </div>
+
+            <div class="management-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <div class="management-grid">
+            <aside class="management-card management-list-card">
+                <div class="management-card-header">
+                    <h2>Proveedores</h2>
+                    <span>@FilteredSuppliers.Count visibles</span>
+                </div>
+
+                <div class="management-list">
+                    @if (FilteredSuppliers.Count == 0)
+                    {
+                        <p>No hay proveedores que coincidan con los filtros actuales.</p>
+                    }
+                    else
+                    {
+                        @foreach (var supplier in FilteredSuppliers)
+                        {
+                            <button type="button"
+                                    class="management-list-item @(selectedSupplierId == supplier.id_proveedor && !isCreatingNewSupplier ? "is-active" : string.Empty)"
+                                    @onclick="() => SelectSupplierAsync(supplier.id_proveedor)">
+                                <strong>@supplier.nombre</strong>
+                                <span>@(string.IsNullOrWhiteSpace(supplier.email) ? "Sin correo" : supplier.email)</span>
+                                <span>@(string.IsNullOrWhiteSpace(supplier.telefono) ? "Sin telefono" : supplier.telefono)</span>
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <div class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Resumen operativo</h2>
+                        <span>@EditorSubtitle</span>
+                    </div>
+
+                    @if (editor is null)
+                    {
+                        <p>Selecciona un proveedor para ver su informacion o crea uno nuevo.</p>
+                    }
+                    else
+                    {
+                        <div class="user-summary-grid">
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Proveedor</span>
+                                <strong>@editor.Nombre</strong>
+                                <p>@(string.IsNullOrWhiteSpace(editor.Email) ? "Sin correo principal" : editor.Email)</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Comunicacion</span>
+                                <strong>@(string.IsNullOrWhiteSpace(editor.Telefono) ? "Sin telefono" : editor.Telefono)</strong>
+                                <p>@(string.IsNullOrWhiteSpace(editor.Direccion) ? "Sin direccion" : editor.Direccion)</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Relacion</span>
+                                <strong>@editor.TotalProductos productos</strong>
+                                <p>@(isCreatingNewSupplier ? "Registro nuevo listo para guardar." : "Controla relacion comercial y catalogo.")</p>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>@EditorTitle</h2>
+                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
+                    </div>
+
+                    @if (editor is not null)
+                    {
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label" for="supplierName">Nombre</label>
+                                <input id="supplierName" class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="150" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="supplierPhone">Telefono</label>
+                                <input id="supplierPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="30" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="supplierEmail">Correo</label>
+                                <input id="supplierEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
+                            </div>
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="supplierAddress">Direccion</label>
+                                <input id="supplierAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                            </div>
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="supplierNotes">Observaciones</label>
+                                <textarea id="supplierNotes" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions">
+                            @if (CanModifyEditor)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SaveSupplierAsync">Guardar cambios</button>
+                            }
+
+                            @if (!isCreatingNewSupplier && permissions.CanDelete)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick="DeleteSupplierAsync">Eliminar proveedor</button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                @if (editor is not null && !isCreatingNewSupplier)
+                {
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Ficha de control</h2>
+                            <span>Solo lectura</span>
+                        </div>
+
+                        <div class="user-audit-grid">
+                            <div>
+                                <label class="form-label">Id interno</label>
+                                <input class="form-control" value="@editor.IdProveedor" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Productos asociados</label>
+                                <input class="form-control" value="@editor.TotalProductos" readonly />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Auditoria</h2>
+                            <span>@auditEntries.Count eventos</span>
+                        </div>
+
+                        @if (auditEntries.Count == 0)
+                        {
+                            <p>No hay eventos registrados para este proveedor en este modulo.</p>
+                        }
+                        else
+                        {
+                            <div class="management-list">
+                                @foreach (var auditEntry in auditEntries)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@auditEntry.accion</strong>
+                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                        <span>@GetAuditActorLabel(auditEntry)</span>
+                                        <span>@auditEntry.detalle</span>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_proveedor> suppliers = [];
+    private List<tbl_log_auditoria> auditEntries = [];
+    private SupplierEditorModel? editor;
+    private ModulePermissions permissions = new();
+    private bool isLoading = true;
+    private bool canViewSuppliers;
+    private bool isCreatingNewSupplier;
+    private int selectedSupplierId;
+    private int currentUserId;
+    private int currentRoleId;
+    private string searchTerm = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private List<tbl_proveedor> FilteredSuppliers => suppliers
+        .Where(MatchesFilters)
+        .OrderBy(s => s.nombre)
+        .ToList();
+
+    private string EditorTitle => isCreatingNewSupplier ? "Nuevo proveedor" : "Detalle del proveedor";
+    private string EditorSubtitle => isCreatingNewSupplier ? "Alta administrativa" : (selectedSupplierId > 0 ? $"Proveedor #{selectedSupplierId}" : "Vista");
+    private bool CanModifyEditor => isCreatingNewSupplier ? permissions.CanCreate : permissions.CanEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveSelectedSupplierId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewSuppliers = permissions.CanView;
+
+        if (!canViewSuppliers)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var loadedSuppliers = await dbContext.tbl_proveedors
+            .AsNoTracking()
+            .Include(s => s.tbl_productos)
+            .ToListAsync();
+
+        suppliers.Clear();
+        suppliers.AddRange(loadedSuppliers);
+
+        if (isCreatingNewSupplier)
+        {
+            editor ??= new SupplierEditorModel();
+            auditEntries = [];
+        }
+        else
+        {
+            selectedSupplierId = preserveSelectedSupplierId ?? selectedSupplierId;
+            if (selectedSupplierId == 0)
+            {
+                selectedSupplierId = suppliers.FirstOrDefault()?.id_proveedor ?? 0;
+            }
+
+            await SelectSupplierAsync(selectedSupplierId);
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNewSupplier()
+    {
+        isCreatingNewSupplier = true;
+        selectedSupplierId = 0;
+        editor = new SupplierEditorModel();
+        auditEntries = [];
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private async Task SelectSupplierAsync(int supplierId)
+    {
+        isCreatingNewSupplier = false;
+        selectedSupplierId = supplierId;
+        editor = BuildEditor(suppliers.FirstOrDefault(s => s.id_proveedor == supplierId));
+        await LoadAuditEntriesAsync(supplierId);
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private async Task SaveSupplierAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_proveedor supplierEntity;
+
+        if (isCreatingNewSupplier)
+        {
+            if (!permissions.CanCreate)
+            {
+                errorMessage = "Tu rol no tiene permiso para crear proveedores.";
+                return;
+            }
+
+            supplierEntity = new tbl_proveedor();
+            dbContext.tbl_proveedors.Add(supplierEntity);
+        }
+        else
+        {
+            if (!permissions.CanEdit)
+            {
+                errorMessage = "Tu rol no tiene permiso para editar proveedores.";
+                return;
+            }
+
+            supplierEntity = await dbContext.tbl_proveedors.FirstOrDefaultAsync(s => s.id_proveedor == editor!.IdProveedor)
+                ?? throw new InvalidOperationException("No se encontro el proveedor seleccionado.");
+        }
+
+        supplierEntity.nombre = editor!.Nombre.Trim();
+        supplierEntity.telefono = NormalizeOptional(editor.Telefono);
+        supplierEntity.email = NormalizeOptional(editor.Email);
+        supplierEntity.direccion = NormalizeOptional(editor.Direccion);
+        supplierEntity.observaciones = NormalizeOptional(editor.Observaciones);
+
+        await dbContext.SaveChangesAsync();
+
+        WriteAudit(
+            dbContext,
+            isCreatingNewSupplier ? "Crear proveedor" : "Editar proveedor",
+            $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}; Correo={supplierEntity.email}");
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = isCreatingNewSupplier
+            ? "El proveedor se creo correctamente."
+            : "La informacion del proveedor se guardo correctamente.";
+
+        isCreatingNewSupplier = false;
+        await LoadAsync(supplierEntity.id_proveedor);
+    }
+
+    private async Task DeleteSupplierAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!permissions.CanDelete || editor is null || editor.IdProveedor <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var supplierEntity = await dbContext.tbl_proveedors
+            .Include(s => s.tbl_productos)
+            .FirstOrDefaultAsync(s => s.id_proveedor == editor.IdProveedor);
+
+        if (supplierEntity is null)
+        {
+            errorMessage = "No se encontro el proveedor seleccionado.";
+            return;
+        }
+
+        if (supplierEntity.tbl_productos.Count > 0)
+        {
+            errorMessage = "No puedes eliminar un proveedor con productos asociados.";
+            return;
+        }
+
+        WriteAudit(
+            dbContext,
+            "Eliminar proveedor",
+            $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}");
+
+        dbContext.tbl_proveedors.Remove(supplierEntity);
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El proveedor fue eliminado correctamente.";
+        selectedSupplierId = 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAuditEntriesAsync(int supplierId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var token = $"ProveedorId={supplierId};";
+
+        auditEntries = await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.modulo == "Proveedores" && a.detalle != null && a.detalle.Contains(token))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+    }
+
+    private void ExportSuppliers()
+    {
+        var exportUrl = string.IsNullOrWhiteSpace(searchTerm)
+            ? "/exports/suppliers.csv"
+            : $"/exports/suppliers.csv?search={Uri.EscapeDataString(searchTerm)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private bool MatchesFilters(tbl_proveedor supplier)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var search = searchTerm.Trim().ToLowerInvariant();
+        return supplier.nombre.ToLowerInvariant().Contains(search) ||
+               (supplier.telefono?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.email?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.direccion?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.observaciones?.ToLowerInvariant().Contains(search) ?? false);
+    }
+
+    private bool ValidateEditor()
+    {
+        if (editor is null)
+        {
+            errorMessage = "No hay un proveedor seleccionado.";
+            return false;
+        }
+
+        editor.Nombre = editor.Nombre.Trim();
+        editor.Telefono = editor.Telefono.Trim();
+        editor.Email = editor.Email.Trim();
+        editor.Direccion = editor.Direccion.Trim();
+
+        if (string.IsNullOrWhiteSpace(editor.Nombre))
+        {
+            errorMessage = "Ingresa el nombre del proveedor.";
+            return false;
+        }
+
+        if (editor.Nombre.Length > 150 || editor.Telefono.Length > 30 || editor.Email.Length > 150 || editor.Direccion.Length > 255)
+        {
+            errorMessage = "Uno o varios campos exceden la longitud permitida.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
+        {
+            errorMessage = "Ingresa un correo electronico valido.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/suppliers"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private static SupplierEditorModel? BuildEditor(tbl_proveedor? supplier)
+    {
+        if (supplier is null)
+        {
+            return null;
+        }
+
+        return new SupplierEditorModel
+        {
+            IdProveedor = supplier.id_proveedor,
+            Nombre = supplier.nombre,
+            Telefono = supplier.telefono ?? string.Empty,
+            Email = supplier.email ?? string.Empty,
+            Direccion = supplier.direccion ?? string.Empty,
+            Observaciones = supplier.observaciones ?? string.Empty,
+            TotalProductos = supplier.tbl_productos.Count.ToString()
+        };
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        try
+        {
+            _ = new MailAddress(email);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)
+    {
+        return auditEntry.id_usuarioNavigation is null
+            ? "Responsable: Sistema"
+            : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Proveedores",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class SupplierEditorModel
+    {
+        public int IdProveedor { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+        public string TotalProductos { get; set; } = "0";
+    }
+}

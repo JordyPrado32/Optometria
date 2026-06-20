@@ -767,6 +767,279 @@ app.MapGet("/exports/users.csv", async (
         $"usuarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/patients.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    if (!int.TryParse(roleIdValue, out var roleId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewPatients = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/patients"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewPatients)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+    var gender = httpContext.Request.Query["gender"].ToString().Trim();
+    var civilStatus = httpContext.Request.Query["civilStatus"].ToString().Trim();
+
+    var patientsQuery = dbContext.tbl_pacientes
+        .AsNoTracking()
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p =>
+            (p.codigo_paciente != null && p.codigo_paciente.ToLower().Contains(loweredSearch)) ||
+            p.cedula.ToLower().Contains(loweredSearch) ||
+            p.nombres.ToLower().Contains(loweredSearch) ||
+            p.apellidos.ToLower().Contains(loweredSearch) ||
+            (p.email != null && p.email.ToLower().Contains(loweredSearch)) ||
+            (p.telefono != null && p.telefono.ToLower().Contains(loweredSearch)));
+    }
+
+    patientsQuery = status switch
+    {
+        "active" => patientsQuery.Where(p => p.activo == true),
+        "inactive" => patientsQuery.Where(p => p.activo != true),
+        _ => patientsQuery
+    };
+
+    if (!string.IsNullOrWhiteSpace(gender))
+    {
+        var loweredGender = gender.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p => p.genero != null && p.genero.ToLower() == loweredGender);
+    }
+
+    if (!string.IsNullOrWhiteSpace(civilStatus))
+    {
+        var loweredCivilStatus = civilStatus.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p => p.estado_civil != null && p.estado_civil.ToLower() == loweredCivilStatus);
+    }
+
+    var patients = await patientsQuery
+        .OrderBy(p => p.apellidos)
+        .ThenBy(p => p.nombres)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Codigo,Cedula,Nombres,Apellidos,FechaNacimiento,Edad,Genero,EstadoCivil,Ocupacion,Direccion,Telefono,Correo,Activo,FechaRegistro");
+
+    foreach (var patient in patients)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(patient.id_paciente.ToString()),
+            EscapeCsv(patient.codigo_paciente),
+            EscapeCsv(patient.cedula),
+            EscapeCsv(patient.nombres),
+            EscapeCsv(patient.apellidos),
+            EscapeCsv(patient.fecha_nacimiento?.ToString("yyyy-MM-dd")),
+            EscapeCsv(patient.edad?.ToString()),
+            EscapeCsv(patient.genero),
+            EscapeCsv(patient.estado_civil),
+            EscapeCsv(patient.ocupacion),
+            EscapeCsv(patient.direccion),
+            EscapeCsv(patient.telefono),
+            EscapeCsv(patient.email),
+            EscapeCsv(patient.activo == true ? "Activo" : "Inactivo"),
+            EscapeCsv(patient.fecha_registro?.ToString("yyyy-MM-dd HH:mm:ss"))));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = int.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorUserId) ? actorUserId : null,
+        accion = "Exportar CSV",
+        modulo = "Pacientes",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|gender:{gender}|civilStatus:{civilStatus}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/laboratories.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    if (!int.TryParse(roleIdValue, out var roleId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewLaboratories = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/laboratories"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewLaboratories)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+
+    var laboratoriesQuery = dbContext.tbl_laboratorios
+        .AsNoTracking()
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        laboratoriesQuery = laboratoriesQuery.Where(l =>
+            l.nombre.ToLower().Contains(loweredSearch) ||
+            (l.correo != null && l.correo.ToLower().Contains(loweredSearch)) ||
+            (l.persona_contacto != null && l.persona_contacto.ToLower().Contains(loweredSearch)) ||
+            (l.direccion != null && l.direccion.ToLower().Contains(loweredSearch)) ||
+            (l.whatsapp != null && l.whatsapp.ToLower().Contains(loweredSearch)));
+    }
+
+    laboratoriesQuery = status switch
+    {
+        "active" => laboratoriesQuery.Where(l => l.activo == true),
+        "inactive" => laboratoriesQuery.Where(l => l.activo != true),
+        _ => laboratoriesQuery
+    };
+
+    var laboratories = await laboratoriesQuery
+        .OrderBy(l => l.nombre)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Nombre,Correo,Whatsapp,PersonaContacto,Direccion,Activo");
+
+    foreach (var laboratory in laboratories)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(laboratory.id_laboratorio.ToString()),
+            EscapeCsv(laboratory.nombre),
+            EscapeCsv(laboratory.correo),
+            EscapeCsv(laboratory.whatsapp),
+            EscapeCsv(laboratory.persona_contacto),
+            EscapeCsv(laboratory.direccion),
+            EscapeCsv(laboratory.activo == true ? "Activo" : "Inactivo")));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = int.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorUserId) ? actorUserId : null,
+        accion = "Exportar CSV",
+        modulo = "Laboratorios",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"laboratorios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/suppliers.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    if (!int.TryParse(roleIdValue, out var roleId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewSuppliers = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/suppliers"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewSuppliers)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+
+    var suppliersQuery = dbContext.tbl_proveedors
+        .AsNoTracking()
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        suppliersQuery = suppliersQuery.Where(s =>
+            s.nombre.ToLower().Contains(loweredSearch) ||
+            (s.telefono != null && s.telefono.ToLower().Contains(loweredSearch)) ||
+            (s.email != null && s.email.ToLower().Contains(loweredSearch)) ||
+            (s.direccion != null && s.direccion.ToLower().Contains(loweredSearch)) ||
+            (s.observaciones != null && s.observaciones.ToLower().Contains(loweredSearch)));
+    }
+
+    var suppliers = await suppliersQuery
+        .OrderBy(s => s.nombre)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Nombre,Telefono,Correo,Direccion,Observaciones");
+
+    foreach (var supplier in suppliers)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(supplier.id_proveedor.ToString()),
+            EscapeCsv(supplier.nombre),
+            EscapeCsv(supplier.telefono),
+            EscapeCsv(supplier.email),
+            EscapeCsv(supplier.direccion),
+            EscapeCsv(supplier.observaciones)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = int.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorUserId) ? actorUserId : null,
+        accion = "Exportar CSV",
+        modulo = "Proveedores",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -847,11 +1120,13 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Dashboard', '/dashboard', 'dashboard', 1, 1),
                 ('Mi perfil', '/profile', 'user', 2, 1),
                 ('Pacientes', '/patients', 'patients', 3, 1),
-                ('Usuarios', '/users', 'users', 4, 1),
-                ('Roles', '/roles', 'roles', 5, 1),
-                ('Menus', '/menus', 'menu', 6, 1),
-                ('Registrar usuario', '/register', 'user-plus', 7, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 8, 1)
+                ('Laboratorios', '/laboratories', 'lab', 4, 1),
+                ('Proveedores', '/suppliers', 'suppliers', 5, 1),
+                ('Usuarios', '/users', 'users', 6, 1),
+                ('Roles', '/roles', 'roles', 7, 1),
+                ('Menus', '/menus', 'menu', 8, 1),
+                ('Registrar usuario', '/register', 'user-plus', 9, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 10, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN

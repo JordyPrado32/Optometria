@@ -17,54 +17,53 @@
 }
 else
 {
-    <section class="workspace-shell dashboard-shell">
-        <section class="dashboard-welcome-card">
-            <div>
+    <section class="workspace-shell dashboard-shell-v2">
+        <section class="dashboard-hero-v2">
+            <div class="dashboard-hero-copy">
                 <span class="eyebrow">Panel administrativo</span>
                 <h1>@GetDashboardTitle()</h1>
                 <p>@GetDashboardDescription()</p>
             </div>
 
-            <div class="workspace-actions">
-                @foreach (var shortcut in availableMenus.Where(m => m.Ruta != "/dashboard").Take(3))
-                {
-                    <a class="btn @(shortcut.Ruta == "/patients" ? "btn-primary" : "btn-outline-primary")" href="@shortcut.Ruta">@shortcut.Nombre</a>
-                }
+            <div class="dashboard-hero-side">
+                <div class="dashboard-hero-chip">
+                    <span>Rol actual</span>
+                    <strong>@RoleName</strong>
+                </div>
+
+                <div class="dashboard-hero-chip">
+                    <span>Modulos activos</span>
+                    <strong>@availableMenus.Count</strong>
+                </div>
             </div>
         </section>
 
-        <section class="dashboard-kpi-grid">
-            <article class="dashboard-kpi-card">
-                <span class="eyebrow">Rol activo</span>
-                <strong>@RoleName</strong>
-                <p>Accesos habilitados segun permisos configurados en el sistema.</p>
-            </article>
-
-            <article class="dashboard-kpi-card">
-                <span class="eyebrow">Modulos visibles</span>
-                <strong>@availableMenus.Count</strong>
-                <p>Navegacion filtrada para reducir carga cognitiva y errores.</p>
-            </article>
-
-            <article class="dashboard-kpi-card">
-                <span class="eyebrow">Cuenta</span>
-                <strong>@UserName</strong>
-                <p>@(Email ?? "Sin correo registrado")</p>
-            </article>
+        <section class="dashboard-actions-v2">
+            @foreach (var menu in availableMenus.Where(m => m.Ruta != "/dashboard").Take(4))
+            {
+                <a class="dashboard-action-card" href="@menu.Ruta">
+                    <span class="dashboard-action-badge">@GetModuleIconLabel(menu.Ruta)</span>
+                    <strong>@menu.Nombre</strong>
+                    <p>@GetModuleDescription(menu.Ruta)</p>
+                </a>
+            }
         </section>
 
-        <div class="dashboard-main-grid">
-            <section class="workspace-module-section">
-                <div class="management-card-header">
-                    <h2>Atajos operativos</h2>
+        <div class="dashboard-layout-v2">
+            <section class="dashboard-panel dashboard-modules-panel">
+                <div class="dashboard-panel-header">
+                    <div>
+                        <span class="eyebrow">Navegacion</span>
+                        <h2>Modulos disponibles</h2>
+                    </div>
                     <span>@availableMenus.Count accesos</span>
                 </div>
 
-                <div class="workspace-module-grid">
+                <div class="dashboard-module-grid-v2">
                     @foreach (var menu in availableMenus.Where(m => m.Ruta != "/dashboard"))
                     {
-                        <a class="workspace-module-card dashboard-module-card" href="@menu.Ruta">
-                            <span class="workspace-module-icon">@GetModuleInitial(menu)</span>
+                        <a class="dashboard-module-tile" href="@menu.Ruta">
+                            <span class="dashboard-module-mark">@GetModuleIconLabel(menu.Ruta)</span>
                             <div>
                                 <strong>@menu.Nombre</strong>
                                 <p>@GetModuleDescription(menu.Ruta)</p>
@@ -74,48 +73,66 @@ else
                 </div>
             </section>
 
-            <aside class="management-stack">
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Cuenta y seguridad</h2>
-                        <span>Control</span>
+            <aside class="dashboard-side-stack">
+                <section class="dashboard-panel">
+                    <div class="dashboard-panel-header">
+                        <div>
+                            <span class="eyebrow">Cuenta</span>
+                            <h2>Sesion y perfil</h2>
+                        </div>
                     </div>
 
-                    <div class="dashboard-checklist">
-                        <article>
-                            <strong>Perfil</strong>
-                            <p>Actualiza datos personales y mantén tu ficha al día.</p>
-                            <a href="/profile">Ir a mi perfil</a>
+                    <div class="dashboard-account-grid">
+                        <article class="dashboard-account-card">
+                            <span>Usuario</span>
+                            <strong>@UserName</strong>
+                            <p>@(Email ?? "Sin correo registrado")</p>
                         </article>
 
-                        <article>
-                            <strong>Autenticacion</strong>
-                            <p>Configura el segundo factor y revisa tu estado de seguridad.</p>
-                            <a href="/setup-2fa">Ir a seguridad</a>
+                        <article class="dashboard-account-card">
+                            <span>Control</span>
+                            <strong>@RoleName</strong>
+                            <p>Acceso gobernado por permisos del sistema.</p>
                         </article>
+                    </div>
 
-                        @if (availableMenus.Any(m => m.Ruta == "/register"))
+                    <div class="workspace-actions">
+                        @if (availableMenus.Any(m => m.Ruta == "/profile"))
                         {
-                            <article>
-                                <strong>Alta rapida</strong>
-                                <p>Registra nuevas cuentas cuando tu rol tenga privilegios administrativos.</p>
-                                <a href="/register">Crear usuario</a>
-                            </article>
+                            <a class="btn btn-outline-primary" href="/profile">Ir a perfil</a>
+                        }
+
+                        @if (availableMenus.Any(m => m.Ruta == "/setup-2fa"))
+                        {
+                            <a class="btn btn-primary" href="/setup-2fa">Revisar seguridad</a>
                         }
                     </div>
                 </section>
 
-                <section class="management-card dashboard-guidance-card">
-                    <div class="management-card-header">
-                        <h2>Buenas practicas</h2>
-                        <span>UX y control</span>
+                <section class="dashboard-panel">
+                    <div class="dashboard-panel-header">
+                        <div>
+                            <span class="eyebrow">Operacion</span>
+                            <h2>Enfoque recomendado</h2>
+                        </div>
                     </div>
 
-                    <ul class="dashboard-guidance-list">
-                        <li>Prioriza la consulta del paciente antes de editar para evitar errores de contexto.</li>
-                        <li>Usa roles y permisos mínimos necesarios para respetar segregación de funciones.</li>
-                        <li>Mantén datos completos y consistentes para mejorar seguimiento clínico y administrativo.</li>
-                    </ul>
+                    <div class="dashboard-sequence-grid">
+                        <article>
+                            <strong>1. Consulta</strong>
+                            <p>Abre primero el modulo objetivo y valida el contexto antes de editar.</p>
+                        </article>
+
+                        <article>
+                            <strong>2. Control</strong>
+                            <p>Usa roles, menus y permisos para mantener orden operativo.</p>
+                        </article>
+
+                        <article>
+                            <strong>3. Seguridad</strong>
+                            <p>Revisa autenticacion y cuenta cuando detectes bloqueos o perdida de acceso.</p>
+                        </article>
+                    </div>
                 </section>
             </aside>
         </div>
@@ -147,38 +164,39 @@ else
 
     private string GetDashboardTitle()
     {
-        if (availableMenus.Any(m => m.Ruta == "/patients"))
-        {
-            return $"Bienvenido, {user?.FindFirst("NombreCompleto")?.Value ?? "Administrador"}";
-        }
-
-        return $"Tu espacio de trabajo, {user?.FindFirst("NombreCompleto")?.Value ?? "usuario"}";
+        return $"Hola, {user?.FindFirst("NombreCompleto")?.Value ?? "usuario"}";
     }
 
     private string GetDashboardDescription()
     {
-        if (availableMenus.Any(m => m.Ruta == "/patients"))
-        {
-            return "Este dashboard concentra accesos administrativos, navegación lateral y acciones priorizadas para gestionar pacientes, usuarios, roles y seguridad con menos fricción.";
-        }
-
-        return "Aquí encuentras únicamente los módulos permitidos para tu rol, con accesos directos a perfil y seguridad.";
+        return "Este espacio centraliza la operacion administrativa con accesos claros, paneles estables y una lectura rapida del sistema sin ruido visual.";
     }
 
     private static string GetModuleDescription(string route) => route switch
     {
-        "/patients" => "CRUD de pacientes con validacion completa, seguimiento e inactivacion segura.",
-        "/users" => "Gestiona cuentas, estados, claves temporales y control por permisos.",
-        "/profile" => "Actualiza tus datos y tu experiencia personal dentro del sistema.",
-        "/register" => "Registra cuentas nuevas con alta controlada por seguridad.",
-        "/setup-2fa" => "Revisa y fortalece la autenticacion de segundo factor.",
-        "/roles" => "Configura visibilidad y acciones por cada rol operativo.",
-        "/menus" => "Administra la navegación y el orden del panel.",
-        _ => "Acceso disponible segun las reglas del rol actual."
+        "/patients" => "Registra, consulta y actualiza fichas clinicas base.",
+        "/laboratories" => "Gestiona laboratorios, contactos y disponibilidad operativa.",
+        "/suppliers" => "Administra proveedores, relacion comercial y datos de abastecimiento.",
+        "/users" => "Administra cuentas, estados y seguridad de acceso.",
+        "/profile" => "Actualiza tu informacion personal y preferencias.",
+        "/register" => "Crea cuentas nuevas de forma controlada.",
+        "/setup-2fa" => "Gestiona autenticacion de segundo factor.",
+        "/roles" => "Configura permisos y alcance por rol.",
+        "/menus" => "Organiza la navegacion del sistema.",
+        _ => "Acceso habilitado por tu rol actual."
     };
 
-    private static string GetModuleInitial(AppMenuItem menu)
+    private static string GetModuleIconLabel(string route) => route switch
     {
-        return string.IsNullOrWhiteSpace(menu.Nombre) ? "M" : menu.Nombre[..1].ToUpperInvariant();
-    }
+        "/patients" => "PC",
+        "/laboratories" => "LB",
+        "/suppliers" => "PR",
+        "/users" => "US",
+        "/profile" => "PF",
+        "/register" => "RG",
+        "/setup-2fa" => "2F",
+        "/roles" => "RL",
+        "/menus" => "MN",
+        _ => "MD"
+    };
 }

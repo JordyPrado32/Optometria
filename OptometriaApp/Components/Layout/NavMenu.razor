@@ -9,32 +9,51 @@
     </button>
 
     <nav class="app-nav @(menuOpen ? "is-open" : string.Empty)">
-        <div class="app-nav-links">
-            @foreach (var menu in menus)
+        <div class="app-nav-scroll">
+            @foreach (var group in menuGroups.Where(group => group.Items.Count > 0))
             {
-                <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                    <span class="app-nav-link-mark">@GetInitial(menu.Nombre)</span>
-                    <span class="app-nav-link-copy">
-                        <strong>@menu.Nombre</strong>
-                        <small>@GetMenuTagline(menu.Ruta)</small>
-                    </span>
-                </NavLink>
+                <section class="app-nav-group">
+                    <header class="app-nav-group-header">
+                        <span>@group.Title</span>
+                        <small>@group.Description</small>
+                    </header>
+
+                    <div class="app-nav-links">
+                        @foreach (var menu in group.Items)
+                        {
+                            <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                                <span class="app-nav-link-mark @GetMenuIconClass(menu.Ruta)">@GetMenuIconLabel(menu.Ruta)</span>
+                                <span class="app-nav-link-copy">
+                                    <strong>@menu.Nombre</strong>
+                                    <small>@GetMenuDescription(menu.Ruta)</small>
+                                </span>
+                            </NavLink>
+                        }
+                    </div>
+                </section>
             }
         </div>
 
-        <div class="app-account-chip">
-            <div class="app-account-copy">
+        <aside class="app-account-panel">
+            <div class="app-account-panel-copy">
                 <span>@RoleName</span>
                 <strong>@UserName</strong>
+                <small>Sesion con permisos filtrados</small>
             </div>
 
-            <a class="app-account-link" href="/auth/logout">Salir</a>
-        </div>
+            <div class="app-account-panel-grid">
+                <a class="app-account-utility" href="/profile">Perfil</a>
+                <a class="app-account-utility" href="/setup-2fa">Seguridad</a>
+            </div>
+
+            <a class="app-account-link" href="/auth/logout">Cerrar sesion</a>
+        </aside>
     </nav>
 </div>
 
 @code {
     private readonly List<AppMenuItem> menus = [];
+    private readonly List<MenuGroup> menuGroups = [];
     private bool menuOpen;
     private string UserName { get; set; } = "Cuenta";
     private string RoleName { get; set; } = "Sesion";
@@ -51,6 +70,26 @@
         int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
 
         menus.AddRange(await MenuAccessService.GetMenusForRoleAsync(roleId));
+        BuildMenuGroups();
+    }
+
+    private void BuildMenuGroups()
+    {
+        menuGroups.Clear();
+        menuGroups.Add(CreateGroup("Principal", "Vista general", "/dashboard"));
+        menuGroups.Add(CreateGroup("Operacion", "Trabajo diario", "/patients", "/laboratories", "/suppliers", "/users"));
+        menuGroups.Add(CreateGroup("Control", "Reglas del sistema", "/roles", "/menus", "/register", "/setup-2fa"));
+        menuGroups.Add(CreateGroup("Cuenta", "Espacio personal", "/profile"));
+    }
+
+    private MenuGroup CreateGroup(string title, string description, params string[] routes)
+    {
+        var items = menus
+            .Where(menu => routes.Contains(menu.Ruta, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(menu => menu.Orden)
+            .ToList();
+
+        return new MenuGroup(title, description, items);
     }
 
     private void ToggleMenu()
@@ -58,21 +97,50 @@
         menuOpen = !menuOpen;
     }
 
-    private static string GetInitial(string value)
+    private static string GetMenuDescription(string route) => route switch
     {
-        return string.IsNullOrWhiteSpace(value) ? "M" : value[..1].ToUpperInvariant();
-    }
-
-    private static string GetMenuTagline(string route) => route switch
-    {
-        "/dashboard" => "Resumen",
-        "/patients" => "CRUD",
-        "/users" => "Accesos",
-        "/roles" => "Permisos",
-        "/menus" => "Navegacion",
-        "/profile" => "Cuenta",
-        "/register" => "Alta",
-        "/setup-2fa" => "2FA",
-        _ => "Modulo"
+        "/dashboard" => "Resumen del panel",
+        "/patients" => "Gestion de pacientes",
+        "/laboratories" => "Gestion de laboratorios",
+        "/suppliers" => "Gestion de proveedores",
+        "/users" => "Gestion de usuarios",
+        "/roles" => "Roles y permisos",
+        "/menus" => "Navegacion del sistema",
+        "/profile" => "Datos de la cuenta",
+        "/register" => "Alta de cuentas",
+        "/setup-2fa" => "Segundo factor",
+        _ => "Modulo disponible"
     };
+
+    private static string GetMenuIconLabel(string route) => route switch
+    {
+        "/dashboard" => "DB",
+        "/patients" => "PC",
+        "/laboratories" => "LB",
+        "/suppliers" => "PR",
+        "/users" => "US",
+        "/roles" => "RL",
+        "/menus" => "MN",
+        "/profile" => "PF",
+        "/register" => "RG",
+        "/setup-2fa" => "2F",
+        _ => "MD"
+    };
+
+    private static string GetMenuIconClass(string route) => route switch
+    {
+        "/dashboard" => "is-dashboard",
+        "/patients" => "is-patients",
+        "/laboratories" => "is-laboratories",
+        "/suppliers" => "is-suppliers",
+        "/users" => "is-users",
+        "/roles" => "is-roles",
+        "/menus" => "is-menus",
+        "/profile" => "is-profile",
+        "/register" => "is-register",
+        "/setup-2fa" => "is-security",
+        _ => string.Empty
+    };
+
+    private sealed record MenuGroup(string Title, string Description, List<AppMenuItem> Items);
 }

@@ -1,0 +1,652 @@
+@page "/laboratories"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Net.Mail
+@using Microsoft.EntityFrameworkCore
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Laboratorios</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando laboratorios...</h1>
+        </div>
+    </section>
+}
+else if (!canViewLaboratories)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de laboratorios</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Administrador</span>
+                <h1>Laboratorios</h1>
+                <p>Administra convenios y contactos de laboratorio con permisos por rol, validaciones de datos y auditoria visible.</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewLaboratory">Nuevo laboratorio</button>
+                }
+
+                <button type="button" class="btn btn-primary" @onclick="ExportLaboratories">Exportar CSV</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredLaboratories.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="laboratorySearch">Buscador</label>
+                    <input id="laboratorySearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, correo, contacto, direccion o whatsapp" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="laboratoryStatus">Estado</label>
+                    <select id="laboratoryStatus" class="form-select" @bind="selectedStatusFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <div class="management-grid">
+            <aside class="management-card management-list-card">
+                <div class="management-card-header">
+                    <h2>Laboratorios</h2>
+                    <span>@FilteredLaboratories.Count visibles</span>
+                </div>
+
+                <div class="management-list">
+                    @if (FilteredLaboratories.Count == 0)
+                    {
+                        <p>No hay laboratorios que coincidan con los filtros actuales.</p>
+                    }
+                    else
+                    {
+                        @foreach (var laboratory in FilteredLaboratories)
+                        {
+                            <button type="button"
+                                    class="management-list-item @(selectedLaboratoryId == laboratory.id_laboratorio && !isCreatingNewLaboratory ? "is-active" : string.Empty)"
+                                    @onclick="() => SelectLaboratoryAsync(laboratory.id_laboratorio)">
+                                <strong>@laboratory.nombre</strong>
+                                <span>@(string.IsNullOrWhiteSpace(laboratory.persona_contacto) ? "Sin contacto" : laboratory.persona_contacto)</span>
+                                <span>@(string.IsNullOrWhiteSpace(laboratory.correo) ? "Sin correo" : laboratory.correo)</span>
+                                <span>@(laboratory.activo == true ? "Activo" : "Inactivo")</span>
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <div class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Resumen operativo</h2>
+                        <span>@EditorSubtitle</span>
+                    </div>
+
+                    @if (editor is null)
+                    {
+                        <p>Selecciona un laboratorio para ver su informacion o crea uno nuevo.</p>
+                    }
+                    else
+                    {
+                        <div class="user-summary-grid">
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Laboratorio</span>
+                                <strong>@editor.Nombre</strong>
+                                <p>@(string.IsNullOrWhiteSpace(editor.PersonaContacto) ? "Sin contacto principal" : editor.PersonaContacto)</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Comunicacion</span>
+                                <strong>@(string.IsNullOrWhiteSpace(editor.Correo) ? "Sin correo" : editor.Correo)</strong>
+                                <p>@(string.IsNullOrWhiteSpace(editor.Whatsapp) ? "Sin whatsapp" : editor.Whatsapp)</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Estado</span>
+                                <strong>@(editor.Activo ? "Activo" : "Inactivo")</strong>
+                                <p>@(isCreatingNewLaboratory ? "Nuevo registro listo para guardar." : "Controla disponibilidad sin perder historial.")</p>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>@EditorTitle</h2>
+                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
+                    </div>
+
+                    @if (editor is not null)
+                    {
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label" for="labName">Nombre</label>
+                                <input id="labName" class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="150" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="labContact">Persona de contacto</label>
+                                <input id="labContact" class="form-control" @bind="editor.PersonaContacto" readonly="@(!CanModifyEditor)" maxlength="100" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="labEmail">Correo</label>
+                                <input id="labEmail" type="email" class="form-control" @bind="editor.Correo" readonly="@(!CanModifyEditor)" maxlength="150" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="labWhatsapp">Whatsapp</label>
+                                <input id="labWhatsapp" class="form-control" @bind="editor.Whatsapp" readonly="@(!CanModifyEditor)" maxlength="30" />
+                            </div>
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="labAddress">Direccion</label>
+                                <input id="labAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions">
+                            @if (CanModifyEditor)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SaveLaboratoryAsync">Guardar cambios</button>
+                            }
+
+                            @if (!isCreatingNewLaboratory && permissions.CanDelete)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
+                                    @(editor.Activo ? "Inactivar laboratorio" : "Reactivar laboratorio")
+                                </button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                @if (editor is not null && !isCreatingNewLaboratory)
+                {
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Ficha de control</h2>
+                            <span>Solo lectura</span>
+                        </div>
+
+                        <div class="user-audit-grid">
+                            <div>
+                                <label class="form-label">Id interno</label>
+                                <input class="form-control" value="@editor.IdLaboratorio" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Ordenes asociadas</label>
+                                <input class="form-control" value="@editor.TotalOrdenes" readonly />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Auditoria</h2>
+                            <span>@auditEntries.Count eventos</span>
+                        </div>
+
+                        @if (auditEntries.Count == 0)
+                        {
+                            <p>No hay eventos registrados para este laboratorio en este modulo.</p>
+                        }
+                        else
+                        {
+                            <div class="management-list">
+                                @foreach (var auditEntry in auditEntries)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@auditEntry.accion</strong>
+                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                        <span>@GetAuditActorLabel(auditEntry)</span>
+                                        <span>@auditEntry.detalle</span>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_laboratorio> laboratories = [];
+    private List<tbl_log_auditoria> auditEntries = [];
+    private LaboratoryEditorModel? editor;
+    private ModulePermissions permissions = new();
+    private bool isLoading = true;
+    private bool canViewLaboratories;
+    private bool isCreatingNewLaboratory;
+    private int selectedLaboratoryId;
+    private int currentUserId;
+    private int currentRoleId;
+    private string searchTerm = string.Empty;
+    private string selectedStatusFilter = "all";
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private List<tbl_laboratorio> FilteredLaboratories => laboratories
+        .Where(MatchesFilters)
+        .OrderBy(l => l.nombre)
+        .ToList();
+
+    private string EditorTitle => isCreatingNewLaboratory ? "Nuevo laboratorio" : "Detalle del laboratorio";
+    private string EditorSubtitle => isCreatingNewLaboratory ? "Alta administrativa" : (selectedLaboratoryId > 0 ? $"Laboratorio #{selectedLaboratoryId}" : "Vista");
+    private bool CanModifyEditor => isCreatingNewLaboratory ? permissions.CanCreate : permissions.CanEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveSelectedLaboratoryId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewLaboratories = permissions.CanView;
+
+        if (!canViewLaboratories)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var loadedLaboratories = await dbContext.tbl_laboratorios
+            .AsNoTracking()
+            .Include(l => l.tbl_orden_rxes)
+            .ToListAsync();
+
+        laboratories.Clear();
+        laboratories.AddRange(loadedLaboratories);
+
+        if (isCreatingNewLaboratory)
+        {
+            editor ??= new LaboratoryEditorModel { Activo = true };
+            auditEntries = [];
+        }
+        else
+        {
+            selectedLaboratoryId = preserveSelectedLaboratoryId ?? selectedLaboratoryId;
+            if (selectedLaboratoryId == 0)
+            {
+                selectedLaboratoryId = laboratories.FirstOrDefault()?.id_laboratorio ?? 0;
+            }
+
+            await SelectLaboratoryAsync(selectedLaboratoryId);
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNewLaboratory()
+    {
+        isCreatingNewLaboratory = true;
+        selectedLaboratoryId = 0;
+        editor = new LaboratoryEditorModel { Activo = true };
+        auditEntries = [];
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private async Task SelectLaboratoryAsync(int laboratoryId)
+    {
+        isCreatingNewLaboratory = false;
+        selectedLaboratoryId = laboratoryId;
+        editor = BuildEditor(laboratories.FirstOrDefault(l => l.id_laboratorio == laboratoryId));
+        await LoadAuditEntriesAsync(laboratoryId);
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private async Task SaveLaboratoryAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_laboratorio laboratoryEntity;
+
+        if (isCreatingNewLaboratory)
+        {
+            if (!permissions.CanCreate)
+            {
+                errorMessage = "Tu rol no tiene permiso para crear laboratorios.";
+                return;
+            }
+
+            laboratoryEntity = new tbl_laboratorio
+            {
+                activo = true
+            };
+
+            dbContext.tbl_laboratorios.Add(laboratoryEntity);
+        }
+        else
+        {
+            if (!permissions.CanEdit)
+            {
+                errorMessage = "Tu rol no tiene permiso para editar laboratorios.";
+                return;
+            }
+
+            laboratoryEntity = await dbContext.tbl_laboratorios.FirstOrDefaultAsync(l => l.id_laboratorio == editor!.IdLaboratorio)
+                ?? throw new InvalidOperationException("No se encontro el laboratorio seleccionado.");
+        }
+
+        laboratoryEntity.nombre = editor!.Nombre.Trim();
+        laboratoryEntity.correo = NormalizeOptional(editor.Correo);
+        laboratoryEntity.whatsapp = NormalizeOptional(editor.Whatsapp);
+        laboratoryEntity.persona_contacto = NormalizeOptional(editor.PersonaContacto);
+        laboratoryEntity.direccion = NormalizeOptional(editor.Direccion);
+
+        await dbContext.SaveChangesAsync();
+
+        WriteAudit(
+            dbContext,
+            isCreatingNewLaboratory ? "Crear laboratorio" : "Editar laboratorio",
+            $"LaboratorioId={laboratoryEntity.id_laboratorio}; Nombre={laboratoryEntity.nombre}; Correo={laboratoryEntity.correo}");
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = isCreatingNewLaboratory
+            ? "El laboratorio se creo correctamente."
+            : "La informacion del laboratorio se guardo correctamente.";
+
+        isCreatingNewLaboratory = false;
+        await LoadAsync(laboratoryEntity.id_laboratorio);
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!permissions.CanDelete || editor is null || editor.IdLaboratorio <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var laboratoryEntity = await dbContext.tbl_laboratorios.FirstOrDefaultAsync(l => l.id_laboratorio == editor.IdLaboratorio);
+        if (laboratoryEntity is null)
+        {
+            errorMessage = "No se encontro el laboratorio seleccionado.";
+            return;
+        }
+
+        laboratoryEntity.activo = !(laboratoryEntity.activo ?? false);
+
+        WriteAudit(
+            dbContext,
+            laboratoryEntity.activo == true ? "Reactivar laboratorio" : "Inactivar laboratorio",
+            $"LaboratorioId={laboratoryEntity.id_laboratorio}; Nombre={laboratoryEntity.nombre}; Activo={(laboratoryEntity.activo == true ? "Si" : "No")}");
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = laboratoryEntity.activo == true
+            ? "El laboratorio fue reactivado correctamente."
+            : "El laboratorio fue inactivado correctamente.";
+
+        await LoadAsync(laboratoryEntity.id_laboratorio);
+    }
+
+    private async Task LoadAuditEntriesAsync(int laboratoryId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var token = $"LaboratorioId={laboratoryId};";
+
+        auditEntries = await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.modulo == "Laboratorios" && a.detalle != null && a.detalle.Contains(token))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedStatusFilter = "all";
+    }
+
+    private void ExportLaboratories()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (!string.Equals(selectedStatusFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/laboratories.csv"
+            : $"/exports/laboratories.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private bool MatchesFilters(tbl_laboratorio laboratory)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var search = searchTerm.Trim().ToLowerInvariant();
+            var matches =
+                laboratory.nombre.ToLowerInvariant().Contains(search) ||
+                (laboratory.correo?.ToLowerInvariant().Contains(search) ?? false) ||
+                (laboratory.persona_contacto?.ToLowerInvariant().Contains(search) ?? false) ||
+                (laboratory.direccion?.ToLowerInvariant().Contains(search) ?? false) ||
+                (laboratory.whatsapp?.ToLowerInvariant().Contains(search) ?? false);
+
+            if (!matches)
+            {
+                return false;
+            }
+        }
+
+        if (selectedStatusFilter == "active" && laboratory.activo != true)
+        {
+            return false;
+        }
+
+        if (selectedStatusFilter == "inactive" && laboratory.activo == true)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidateEditor()
+    {
+        if (editor is null)
+        {
+            errorMessage = "No hay un laboratorio seleccionado.";
+            return false;
+        }
+
+        editor.Nombre = editor.Nombre.Trim();
+        editor.Correo = editor.Correo.Trim();
+        editor.Whatsapp = editor.Whatsapp.Trim();
+        editor.PersonaContacto = editor.PersonaContacto.Trim();
+        editor.Direccion = editor.Direccion.Trim();
+
+        if (string.IsNullOrWhiteSpace(editor.Nombre))
+        {
+            errorMessage = "Ingresa el nombre del laboratorio.";
+            return false;
+        }
+
+        if (editor.Nombre.Length > 150 || editor.Correo.Length > 150 || editor.Whatsapp.Length > 30 || editor.PersonaContacto.Length > 100 || editor.Direccion.Length > 255)
+        {
+            errorMessage = "Uno o varios campos exceden la longitud permitida.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Correo) && !IsValidEmail(editor.Correo))
+        {
+            errorMessage = "Ingresa un correo electronico valido.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/laboratories"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private static LaboratoryEditorModel? BuildEditor(tbl_laboratorio? laboratory)
+    {
+        if (laboratory is null)
+        {
+            return null;
+        }
+
+        return new LaboratoryEditorModel
+        {
+            IdLaboratorio = laboratory.id_laboratorio,
+            Nombre = laboratory.nombre,
+            Correo = laboratory.correo ?? string.Empty,
+            Whatsapp = laboratory.whatsapp ?? string.Empty,
+            PersonaContacto = laboratory.persona_contacto ?? string.Empty,
+            Direccion = laboratory.direccion ?? string.Empty,
+            Activo = laboratory.activo == true,
+            TotalOrdenes = laboratory.tbl_orden_rxes.Count.ToString()
+        };
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        try
+        {
+            _ = new MailAddress(email);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)
+    {
+        return auditEntry.id_usuarioNavigation is null
+            ? "Responsable: Sistema"
+            : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Laboratorios",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class LaboratoryEditorModel
+    {
+        public int IdLaboratorio { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Correo { get; set; } = string.Empty;
+        public string Whatsapp { get; set; } = string.Empty;
+        public string PersonaContacto { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public bool Activo { get; set; }
+        public string TotalOrdenes { get; set; } = "0";
+    }
+}
