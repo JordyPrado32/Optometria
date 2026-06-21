@@ -1,0 +1,1034 @@
+@using System.Net.Mail
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando pacientes asignados...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>@PageTitleText</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Doctor</span>
+                <h1>@PageTitleText</h1>
+                <p>@PageDescription</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (IsEntryMode && permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewPatient">Nuevo paciente</button>
+                }
+
+                <button type="button" class="btn btn-primary" @onclick="ExportPatients">Exportar CSV</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredPatients.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="doctorPatientSearch">Buscador</label>
+                    <input id="doctorPatientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, cedula, nombre, correo o telefono" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="doctorPatientStatus">Estado</label>
+                    <select id="doctorPatientStatus" class="form-select" @bind="selectedStatusFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="doctorPatientGender">Genero</label>
+                    <select id="doctorPatientGender" class="form-select" @bind="selectedGenderFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in genderOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="doctorPatientCivilStatus">Estado civil</label>
+                    <select id="doctorPatientCivilStatus" class="form-select" @bind="selectedCivilStatusFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in civilStatusOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <div class="management-grid">
+            <aside class="management-card management-list-card">
+                <div class="management-card-header">
+                    <h2>@ListTitle</h2>
+                    <span>@FilteredPatients.Count visibles</span>
+                </div>
+
+                <div class="management-list">
+                    @if (FilteredPatients.Count == 0)
+                    {
+                        <p>No hay pacientes asignados que coincidan con los filtros actuales.</p>
+                    }
+                    else
+                    {
+                        @foreach (var patient in FilteredPatients)
+                        {
+                            <button type="button"
+                                    class="management-list-item patient-explorer-item @(selectedPatientId == patient.id_paciente && !isCreatingNewPatient ? "is-active" : string.Empty)"
+                                    @onclick="() => SelectPatientAsync(patient.id_paciente)">
+                                <div class="patient-explorer-head">
+                                    <strong>@($"{patient.nombres} {patient.apellidos}")</strong>
+                                    <span>@(string.IsNullOrWhiteSpace(patient.codigo_paciente) ? "Sin codigo" : patient.codigo_paciente)</span>
+                                </div>
+                                <div class="patient-explorer-meta">
+                                    <span>@patient.cedula</span>
+                                    <span>@(patient.activo == true ? "Activo" : "Inactivo")</span>
+                                </div>
+                                <div class="patient-explorer-copy">
+                                    <span>@(string.IsNullOrWhiteSpace(patient.email) ? "Sin correo" : patient.email)</span>
+                                    <span>@(string.IsNullOrWhiteSpace(patient.telefono) ? "Sin telefono" : patient.telefono)</span>
+                                </div>
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <div class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Resumen del paciente</h2>
+                        <span>@EditorSubtitle</span>
+                    </div>
+
+                    @if (editor is null)
+                    {
+                        <p>@EmptySelectionMessage</p>
+                    }
+                    else
+                    {
+                        <div class="user-summary-grid">
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Identificacion</span>
+                                <strong>@editor.FullName</strong>
+                                <p>@editor.Cedula</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Seguimiento</span>
+                                <strong>@editor.CodigoPaciente</strong>
+                                <p>@GetAgeSummary()</p>
+                            </div>
+
+                            <div class="user-summary-card">
+                                <span class="eyebrow">Asignacion</span>
+                                <strong>@editor.TotalConsultas</strong>
+                                <p>@GetConsultationSummary()</p>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>@EditorTitle</h2>
+                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
+                    </div>
+
+                    @if (editor is not null)
+                    {
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label" for="doctorPatientCode">Codigo paciente</label>
+                                <input id="doctorPatientCode" class="form-control" @bind="editor.CodigoPaciente" readonly="@(!CanModifyEditor)" maxlength="30" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientDocument">Cedula</label>
+                                <input id="doctorPatientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientNames">Nombres</label>
+                                <input id="doctorPatientNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="100" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientLastNames">Apellidos</label>
+                                <input id="doctorPatientLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="100" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientBirthDate">Fecha de nacimiento</label>
+                                <input id="doctorPatientBirthDate"
+                                       type="date"
+                                       class="form-control"
+                                       value="@editor.FechaNacimiento"
+                                       @onchange="OnBirthDateChanged"
+                                       readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientAge">Edad</label>
+                                <input id="doctorPatientAge" class="form-control" value="@GetCalculatedAgeText()" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientGenderField">Genero</label>
+                                <select id="doctorPatientGenderField" class="form-select" @bind="editor.Genero" disabled="@(!CanModifyEditor)">
+                                    <option value="">Selecciona</option>
+                                    @foreach (var option in genderOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientCivilStatusField">Estado civil</label>
+                                <select id="doctorPatientCivilStatusField" class="form-select" @bind="editor.EstadoCivil" disabled="@(!CanModifyEditor)">
+                                    <option value="">Selecciona</option>
+                                    @foreach (var option in civilStatusOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientOccupation">Ocupacion</label>
+                                <input id="doctorPatientOccupation" class="form-control" @bind="editor.Ocupacion" readonly="@(!CanModifyEditor)" maxlength="100" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientPhone">Telefono</label>
+                                <input id="doctorPatientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorPatientEmail">Correo</label>
+                                <input id="doctorPatientEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
+                            </div>
+                        </div>
+
+                        <div class="management-form-grid patient-form-block">
+                            <div class="patient-form-span">
+                                <label class="form-label" for="doctorPatientAddress">Direccion</label>
+                                <input id="doctorPatientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                            </div>
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="doctorPatientObservations">Observaciones</label>
+                                <textarea id="doctorPatientObservations" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions">
+                            @if (CanModifyEditor)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SavePatientAsync">Guardar cambios</button>
+                            }
+
+                            @if (IsEntryMode && !isCreatingNewPatient && permissions.CanDelete)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
+                                    @(editor.Activo ? "Inactivar paciente" : "Reactivar paciente")
+                                </button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                @if (editor is not null && !isCreatingNewPatient)
+                {
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Ficha de control</h2>
+                            <span>Solo lectura</span>
+                        </div>
+
+                        <div class="user-audit-grid">
+                            <div>
+                                <label class="form-label">Fecha de registro</label>
+                                <input class="form-control" value="@editor.FechaRegistro" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Usuario registro</label>
+                                <input class="form-control" value="@editor.UsuarioRegistro" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Consultas contigo</label>
+                                <input class="form-control" value="@editor.TotalConsultas" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Ultima consulta</label>
+                                <input class="form-control" value="@editor.UltimaConsulta" readonly />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Auditoria</h2>
+                            <span>@auditEntries.Count eventos</span>
+                        </div>
+
+                        @if (auditEntries.Count == 0)
+                        {
+                            <p>No hay eventos registrados para este paciente.</p>
+                        }
+                        else
+                        {
+                            <div class="management-list">
+                                @foreach (var auditEntry in auditEntries)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@auditEntry.accion</strong>
+                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                        <span>@GetAuditActorLabel(auditEntry)</span>
+                                        <span>@auditEntry.detalle</span>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string Mode { get; set; } = "entry";
+
+    private readonly List<tbl_paciente> patients = [];
+    private List<tbl_log_auditoria> auditEntries = [];
+    private DoctorPatientEditorModel? editor;
+    private ModulePermissions permissions = new();
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool isCreatingNewPatient;
+    private int selectedPatientId;
+    private int currentUserId;
+    private int currentRoleId;
+    private string searchTerm = string.Empty;
+    private string selectedStatusFilter = "all";
+    private string selectedGenderFilter = string.Empty;
+    private string selectedCivilStatusFilter = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
+    private static readonly string[] civilStatusOptions = ["Soltero(a)", "Casado(a)", "Union libre", "Divorciado(a)", "Viudo(a)"];
+
+    private bool IsEntryMode => string.Equals(Mode, "entry", StringComparison.OrdinalIgnoreCase);
+    private string CurrentRoute => IsEntryMode ? "/doctor/patient-entry" : "/doctor/my-patients";
+    private string CurrentModuleName => IsEntryMode ? "Ingresar pacientes" : "Ver mis pacientes";
+    private string ExportRoute => IsEntryMode ? "/exports/doctor-patient-entry.csv" : "/exports/doctor-my-patients.csv";
+    private string PageTitleText => IsEntryMode ? "Ingresar pacientes" : "Ver mis pacientes";
+    private string PageDescription => IsEntryMode
+        ? "Registra pacientes nuevos, actualiza sus datos base y trabaja solo con los pacientes vinculados a tus consultas."
+        : "Consulta tu cartera de pacientes asignados con filtros, busqueda rapida y exportacion controlada.";
+    private string ListTitle => IsEntryMode ? "Pacientes asignados" : "Mis pacientes";
+    private string EditorTitle => isCreatingNewPatient ? "Nuevo paciente" : "Detalle del paciente";
+    private string EditorSubtitle => isCreatingNewPatient ? "Alta medica" : (selectedPatientId > 0 ? $"Paciente #{selectedPatientId}" : "Vista");
+    private string EmptySelectionMessage => IsEntryMode
+        ? "Selecciona un paciente asignado o crea uno nuevo."
+        : "Selecciona un paciente para revisar su informacion.";
+    private bool CanModifyEditor => IsEntryMode && (isCreatingNewPatient ? permissions.CanCreate : permissions.CanEdit);
+
+    private List<tbl_paciente> FilteredPatients => patients
+        .Where(MatchesFilters)
+        .OrderBy(p => p.apellidos)
+        .ThenBy(p => p.nombres)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveSelectedPatientId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+
+        if (!canViewModule || currentUserId <= 0)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var loadedPatients = await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .Where(p => p.tbl_consulta.Any(c => c.id_optometra == currentUserId))
+            .Include(p => p.id_usuario_registroNavigation)
+            .Include(p => p.tbl_consulta.Where(c => c.id_optometra == currentUserId))
+            .ToListAsync();
+
+        patients.Clear();
+        patients.AddRange(loadedPatients);
+
+        if (isCreatingNewPatient)
+        {
+            editor ??= BuildNewEditor();
+            auditEntries = [];
+        }
+        else
+        {
+            selectedPatientId = preserveSelectedPatientId ?? selectedPatientId;
+            if (selectedPatientId == 0)
+            {
+                selectedPatientId = patients.FirstOrDefault()?.id_paciente ?? 0;
+            }
+
+            if (selectedPatientId > 0)
+            {
+                await SelectPatientAsync(selectedPatientId);
+            }
+            else
+            {
+                editor = null;
+                auditEntries = [];
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNewPatient()
+    {
+        statusMessage = null;
+        errorMessage = null;
+        isCreatingNewPatient = true;
+        selectedPatientId = 0;
+        editor = BuildNewEditor();
+        auditEntries = [];
+    }
+
+    private async Task SelectPatientAsync(int patientId)
+    {
+        selectedPatientId = patientId;
+        isCreatingNewPatient = false;
+        statusMessage = null;
+        errorMessage = null;
+        editor = BuildEditor(patients.FirstOrDefault(p => p.id_paciente == patientId));
+        await LoadAuditEntriesAsync(patientId);
+    }
+
+    private async Task SavePatientAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!IsEntryMode || !ValidateEditor())
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var normalizedCedula = editor!.Cedula.Trim().ToLowerInvariant();
+        var normalizedEmail = editor.Email.Trim().ToLowerInvariant();
+        var normalizedCode = editor.CodigoPaciente.Trim().ToLowerInvariant();
+
+        var cedulaExists = await dbContext.tbl_pacientes
+            .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.cedula.ToLower() == normalizedCedula);
+
+        if (cedulaExists)
+        {
+            errorMessage = "La cedula ya esta registrada para otro paciente.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            var emailExists = await dbContext.tbl_pacientes
+                .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.email != null && p.email.ToLower() == normalizedEmail);
+
+            if (emailExists)
+            {
+                errorMessage = "El correo ya esta registrado para otro paciente.";
+                return;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedCode))
+        {
+            var codeExists = await dbContext.tbl_pacientes
+                .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.codigo_paciente != null && p.codigo_paciente.ToLower() == normalizedCode);
+
+            if (codeExists)
+            {
+                errorMessage = "El codigo del paciente ya existe.";
+                return;
+            }
+        }
+
+        var birthDate = ParseBirthDate(editor.FechaNacimiento);
+        var age = CalculateAge(birthDate);
+
+        if (isCreatingNewPatient)
+        {
+            if (!permissions.CanCreate)
+            {
+                errorMessage = "Tu rol no tiene permiso para crear pacientes en este modulo.";
+                return;
+            }
+
+            var newPatient = new tbl_paciente
+            {
+                codigo_paciente = ResolvePatientCode(editor.CodigoPaciente),
+                cedula = editor.Cedula.Trim(),
+                nombres = editor.Nombres.Trim(),
+                apellidos = editor.Apellidos.Trim(),
+                fecha_nacimiento = birthDate,
+                edad = age,
+                genero = NormalizeOptional(editor.Genero),
+                estado_civil = NormalizeOptional(editor.EstadoCivil),
+                ocupacion = NormalizeOptional(editor.Ocupacion),
+                direccion = NormalizeOptional(editor.Direccion),
+                telefono = NormalizeOptional(editor.Telefono),
+                email = NormalizeOptional(editor.Email),
+                observaciones = NormalizeOptional(editor.Observaciones),
+                activo = true,
+                fecha_registro = DateTime.Now,
+                id_usuario_registro = currentUserId
+            };
+
+            dbContext.tbl_pacientes.Add(newPatient);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.tbl_consulta.Add(new tbl_consulta
+            {
+                id_paciente = newPatient.id_paciente,
+                id_optometra = currentUserId,
+                fecha_consulta = DateTime.Now,
+                motivo_consulta = "Asignacion inicial desde ingreso de pacientes"
+            });
+
+            WriteAudit(
+                dbContext,
+                "Crear paciente",
+                $"PacienteId={newPatient.id_paciente}; Cedula={newPatient.cedula}; Nombre={newPatient.nombres} {newPatient.apellidos}; Codigo={newPatient.codigo_paciente}; DoctorId={currentUserId}");
+
+            await dbContext.SaveChangesAsync();
+            statusMessage = "El paciente se registro y quedo asignado a tu cuenta.";
+            isCreatingNewPatient = false;
+            await LoadAsync(newPatient.id_paciente);
+            return;
+        }
+
+        if (!permissions.CanEdit)
+        {
+            errorMessage = "Tu rol no tiene permiso para editar pacientes en este modulo.";
+            return;
+        }
+
+        var isAssignedToCurrentDoctor = await dbContext.tbl_consulta
+            .AnyAsync(c => c.id_paciente == editor.IdPaciente && c.id_optometra == currentUserId);
+
+        if (!isAssignedToCurrentDoctor)
+        {
+            errorMessage = "Solo puedes editar pacientes asignados a tus consultas.";
+            return;
+        }
+
+        var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
+        if (patientEntity is null)
+        {
+            errorMessage = "No se encontro el paciente seleccionado.";
+            return;
+        }
+
+        patientEntity.codigo_paciente = ResolvePatientCode(editor.CodigoPaciente);
+        patientEntity.cedula = editor.Cedula.Trim();
+        patientEntity.nombres = editor.Nombres.Trim();
+        patientEntity.apellidos = editor.Apellidos.Trim();
+        patientEntity.fecha_nacimiento = birthDate;
+        patientEntity.edad = age;
+        patientEntity.genero = NormalizeOptional(editor.Genero);
+        patientEntity.estado_civil = NormalizeOptional(editor.EstadoCivil);
+        patientEntity.ocupacion = NormalizeOptional(editor.Ocupacion);
+        patientEntity.direccion = NormalizeOptional(editor.Direccion);
+        patientEntity.telefono = NormalizeOptional(editor.Telefono);
+        patientEntity.email = NormalizeOptional(editor.Email);
+        patientEntity.observaciones = NormalizeOptional(editor.Observaciones);
+
+        WriteAudit(
+            dbContext,
+            "Editar paciente",
+            $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Nombre={patientEntity.nombres} {patientEntity.apellidos}; DoctorId={currentUserId}");
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = "La informacion del paciente se guardo correctamente.";
+        await LoadAsync(patientEntity.id_paciente);
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!IsEntryMode || !permissions.CanDelete || editor is null || editor.IdPaciente <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var isAssignedToCurrentDoctor = await dbContext.tbl_consulta
+            .AnyAsync(c => c.id_paciente == editor.IdPaciente && c.id_optometra == currentUserId);
+
+        if (!isAssignedToCurrentDoctor)
+        {
+            errorMessage = "Solo puedes cambiar el estado de pacientes asignados a tus consultas.";
+            return;
+        }
+
+        var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
+        if (patientEntity is null)
+        {
+            errorMessage = "No se encontro el paciente seleccionado.";
+            return;
+        }
+
+        patientEntity.activo = !(patientEntity.activo ?? false);
+        WriteAudit(
+            dbContext,
+            patientEntity.activo == true ? "Reactivar paciente" : "Inactivar paciente",
+            $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Activo={(patientEntity.activo == true ? "Si" : "No")}; DoctorId={currentUserId}");
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = patientEntity.activo == true
+            ? "El paciente fue reactivado correctamente."
+            : "El paciente fue inactivado correctamente.";
+
+        await LoadAsync(patientEntity.id_paciente);
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedStatusFilter = "all";
+        selectedGenderFilter = string.Empty;
+        selectedCivilStatusFilter = string.Empty;
+    }
+
+    private void ExportPatients()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (!string.Equals(selectedStatusFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedGenderFilter))
+        {
+            query.Add($"gender={Uri.EscapeDataString(selectedGenderFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCivilStatusFilter))
+        {
+            query.Add($"civilStatus={Uri.EscapeDataString(selectedCivilStatusFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? ExportRoute
+            : $"{ExportRoute}?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private async Task LoadAuditEntriesAsync(int patientId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var patientToken = $"PacienteId={patientId};";
+        var moduleNames = IsEntryMode
+            ? new[] { "Ingresar pacientes", "Pacientes" }
+            : new[] { "Ingresar pacientes", "Ver mis pacientes", "Pacientes" };
+
+        auditEntries = await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.detalle != null && a.detalle.Contains(patientToken) && a.modulo != null && moduleNames.Contains(a.modulo))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private void OnBirthDateChanged(ChangeEventArgs args)
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.FechaNacimiento = args.Value?.ToString() ?? string.Empty;
+        editor.Edad = CalculateAge(ParseBirthDate(editor.FechaNacimiento));
+    }
+
+    private bool MatchesFilters(tbl_paciente patient)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var normalizedSearch = searchTerm.Trim().ToLowerInvariant();
+            var fullName = $"{patient.nombres} {patient.apellidos}".ToLowerInvariant();
+            var matchesSearch =
+                (patient.codigo_paciente?.ToLowerInvariant().Contains(normalizedSearch) ?? false) ||
+                patient.cedula.ToLowerInvariant().Contains(normalizedSearch) ||
+                fullName.Contains(normalizedSearch) ||
+                (patient.email?.ToLowerInvariant().Contains(normalizedSearch) ?? false) ||
+                (patient.telefono?.ToLowerInvariant().Contains(normalizedSearch) ?? false);
+
+            if (!matchesSearch)
+            {
+                return false;
+            }
+        }
+
+        if (selectedStatusFilter == "active" && patient.activo != true)
+        {
+            return false;
+        }
+
+        if (selectedStatusFilter == "inactive" && patient.activo == true)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedGenderFilter) &&
+            !string.Equals(patient.genero, selectedGenderFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCivilStatusFilter) &&
+            !string.Equals(patient.estado_civil, selectedCivilStatusFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidateEditor()
+    {
+        if (editor is null)
+        {
+            errorMessage = "No hay un paciente seleccionado.";
+            return false;
+        }
+
+        editor.CodigoPaciente = editor.CodigoPaciente.Trim();
+        editor.Cedula = editor.Cedula.Trim();
+        editor.Nombres = editor.Nombres.Trim();
+        editor.Apellidos = editor.Apellidos.Trim();
+        editor.Email = editor.Email.Trim();
+        editor.Telefono = editor.Telefono.Trim();
+        editor.Ocupacion = editor.Ocupacion.Trim();
+        editor.Direccion = editor.Direccion.Trim();
+
+        if (string.IsNullOrWhiteSpace(editor.Cedula) ||
+            string.IsNullOrWhiteSpace(editor.Nombres) ||
+            string.IsNullOrWhiteSpace(editor.Apellidos))
+        {
+            errorMessage = "Completa cedula, nombres y apellidos.";
+            return false;
+        }
+
+        if (editor.Cedula.Length > 20 || editor.Nombres.Length > 100 || editor.Apellidos.Length > 100)
+        {
+            errorMessage = "Verifica las longitudes maximas de cedula, nombres y apellidos.";
+            return false;
+        }
+
+        if (editor.CodigoPaciente.Length > 30 ||
+            editor.Email.Length > 150 ||
+            editor.Telefono.Length > 20 ||
+            editor.Ocupacion.Length > 100 ||
+            editor.Direccion.Length > 255)
+        {
+            errorMessage = "Uno o varios campos exceden la longitud permitida.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
+        {
+            errorMessage = "Ingresa un correo electronico valido.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) && !DateOnly.TryParse(editor.FechaNacimiento, out _))
+        {
+            errorMessage = "La fecha de nacimiento no es valida.";
+            return false;
+        }
+
+        if (DateOnly.TryParse(editor.FechaNacimiento, out var birthDate) && birthDate > DateOnly.FromDateTime(DateTime.Today))
+        {
+            errorMessage = "La fecha de nacimiento no puede estar en el futuro.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static DoctorPatientEditorModel BuildNewEditor()
+    {
+        return new DoctorPatientEditorModel
+        {
+            Activo = true,
+            CodigoPaciente = GeneratePatientCode()
+        };
+    }
+
+    private static DoctorPatientEditorModel? BuildEditor(tbl_paciente? patient)
+    {
+        if (patient is null)
+        {
+            return null;
+        }
+
+        var lastConsultation = patient.tbl_consulta
+            .OrderByDescending(c => c.fecha_consulta)
+            .FirstOrDefault();
+
+        return new DoctorPatientEditorModel
+        {
+            IdPaciente = patient.id_paciente,
+            CodigoPaciente = patient.codigo_paciente ?? string.Empty,
+            Cedula = patient.cedula,
+            Nombres = patient.nombres,
+            Apellidos = patient.apellidos,
+            FechaNacimiento = patient.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty,
+            Edad = patient.edad,
+            Genero = patient.genero ?? string.Empty,
+            EstadoCivil = patient.estado_civil ?? string.Empty,
+            Ocupacion = patient.ocupacion ?? string.Empty,
+            Direccion = patient.direccion ?? string.Empty,
+            Telefono = patient.telefono ?? string.Empty,
+            Email = patient.email ?? string.Empty,
+            Observaciones = patient.observaciones ?? string.Empty,
+            Activo = patient.activo == true,
+            FechaRegistro = patient.fecha_registro?.ToString("yyyy-MM-dd HH:mm") ?? "Sin registro",
+            UsuarioRegistro = patient.id_usuario_registroNavigation?.usuario ?? "Sistema",
+            TotalConsultas = patient.tbl_consulta.Count.ToString(),
+            UltimaConsulta = lastConsultation?.fecha_consulta?.ToString("yyyy-MM-dd HH:mm") ?? "Sin consulta"
+        };
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == CurrentRoute),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        if (permission is null)
+        {
+            return new ModulePermissions();
+        }
+
+        return new ModulePermissions
+        {
+            CanView = permission.puede_ver,
+            CanCreate = permission.puede_crear,
+            CanEdit = permission.puede_editar,
+            CanDelete = permission.puede_eliminar
+        };
+    }
+
+    private string GetAgeSummary()
+    {
+        var ageText = GetCalculatedAgeText();
+        return string.IsNullOrWhiteSpace(ageText) ? "Edad pendiente por definir." : $"Edad registrada: {ageText}.";
+    }
+
+    private string GetConsultationSummary()
+    {
+        if (editor is null)
+        {
+            return string.Empty;
+        }
+
+        return $"Ultima consulta: {editor.UltimaConsulta}.";
+    }
+
+    private string GetCalculatedAgeText()
+    {
+        if (editor is null)
+        {
+            return string.Empty;
+        }
+
+        return editor.Edad.HasValue ? $"{editor.Edad.Value} anos" : "Sin dato";
+    }
+
+    private static DateOnly? ParseBirthDate(string? rawBirthDate)
+    {
+        return DateOnly.TryParse(rawBirthDate, out var birthDate) ? birthDate : null;
+    }
+
+    private static int? CalculateAge(DateOnly? birthDate)
+    {
+        if (!birthDate.HasValue)
+        {
+            return null;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var age = today.Year - birthDate.Value.Year;
+        if (birthDate.Value > today.AddYears(-age))
+        {
+            age--;
+        }
+
+        return age < 0 ? null : age;
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string ResolvePatientCode(string? rawCode)
+    {
+        return string.IsNullOrWhiteSpace(rawCode) ? GeneratePatientCode() : rawCode.Trim();
+    }
+
+    private static string GeneratePatientCode()
+    {
+        return $"PAC-{DateTime.Now:yyyyMMddHHmmssfff}";
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        try
+        {
+            _ = new MailAddress(email);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)
+    {
+        return auditEntry.id_usuarioNavigation is null
+            ? "Responsable: Sistema"
+            : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = CurrentModuleName,
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class DoctorPatientEditorModel
+    {
+        public int IdPaciente { get; set; }
+        public string CodigoPaciente { get; set; } = string.Empty;
+        public string Cedula { get; set; } = string.Empty;
+        public string Nombres { get; set; } = string.Empty;
+        public string Apellidos { get; set; } = string.Empty;
+        public string FullName => $"{Nombres} {Apellidos}".Trim();
+        public string FechaNacimiento { get; set; } = string.Empty;
+        public int? Edad { get; set; }
+        public string Genero { get; set; } = string.Empty;
+        public string EstadoCivil { get; set; } = string.Empty;
+        public string Ocupacion { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+        public bool Activo { get; set; }
+        public string FechaRegistro { get; set; } = string.Empty;
+        public string UsuarioRegistro { get; set; } = string.Empty;
+        public string TotalConsultas { get; set; } = "0";
+        public string UltimaConsulta { get; set; } = "Sin consulta";
+    }
+}

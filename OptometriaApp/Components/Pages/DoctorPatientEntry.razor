@@ -1,0 +1,7 @@
+@page "/doctor/patient-entry"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+
+<PageTitle>Ingresar pacientes</PageTitle>
+
+<DoctorPatientsWorkspace Mode="entry" />

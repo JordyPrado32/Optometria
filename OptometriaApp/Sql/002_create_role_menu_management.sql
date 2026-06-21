@@ -37,12 +37,14 @@ USING
     VALUES
         ('Dashboard', '/dashboard', 'dashboard', 1, 1),
         ('Pacientes', '/patients', 'patients', 2, 1),
-        ('Laboratorios', '/laboratories', 'lab', 3, 1),
-        ('Proveedores', '/suppliers', 'suppliers', 4, 1),
-        ('Roles', '/roles', 'roles', 5, 1),
-        ('Menus', '/menus', 'menu', 6, 1),
-        ('Registrar usuario', '/register', 'user-plus', 7, 1),
-        ('Seguridad', '/setup-2fa', 'shield', 8, 1)
+        ('Ingresar pacientes', '/doctor/patient-entry', 'doctor-entry', 3, 1),
+        ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 4, 1),
+        ('Laboratorios', '/laboratories', 'lab', 5, 1),
+        ('Proveedores', '/suppliers', 'suppliers', 6, 1),
+        ('Roles', '/roles', 'roles', 7, 1),
+        ('Menus', '/menus', 'menu', 8, 1),
+        ('Registrar usuario', '/register', 'user-plus', 9, 1),
+        ('Seguridad', '/setup-2fa', 'shield', 10, 1)
 ) AS source(nombre, ruta, icono, orden, activo)
 ON target.ruta = source.ruta
 WHEN MATCHED THEN
@@ -62,6 +64,47 @@ BEGIN
     (
         SELECT 1 AS id_rol, id_menu, 1 AS puede_ver, 1 AS puede_crear, 1 AS puede_editar, 1 AS puede_eliminar
         FROM dbo.tbl_menu_app
+    ) AS source
+    ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+    WHEN MATCHED THEN
+        UPDATE SET
+            target.puede_ver = source.puede_ver,
+            target.puede_crear = source.puede_crear,
+            target.puede_editar = source.puede_editar,
+            target.puede_eliminar = source.puede_eliminar
+    WHEN NOT MATCHED THEN
+        INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+        VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+END
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.tbl_rol
+    WHERE LOWER(nombre) LIKE '%doctor%'
+        OR LOWER(nombre) LIKE '%medic%'
+        OR LOWER(nombre) LIKE '%optomet%'
+)
+BEGIN
+    MERGE dbo.tbl_rol_menu_permiso AS target
+    USING
+    (
+        SELECT
+            r.id_rol,
+            m.id_menu,
+            CAST(1 AS BIT) AS puede_ver,
+            CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+            CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+            CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+        FROM dbo.tbl_rol r
+        CROSS JOIN dbo.tbl_menu_app m
+        WHERE
+            (
+                LOWER(r.nombre) LIKE '%doctor%'
+                OR LOWER(r.nombre) LIKE '%medic%'
+                OR LOWER(r.nombre) LIKE '%optomet%'
+            )
+            AND m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/doctor/patient-entry', '/doctor/my-patients')
     ) AS source
     ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
     WHEN MATCHED THEN

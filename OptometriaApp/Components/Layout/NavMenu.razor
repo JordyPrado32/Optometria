@@ -77,7 +77,7 @@
     {
         menuGroups.Clear();
         menuGroups.Add(CreateGroup("Principal", "Vista general", "/dashboard"));
-        menuGroups.Add(CreateGroup("Operacion", "Trabajo diario", "/patients", "/laboratories", "/suppliers", "/users"));
+        menuGroups.Add(CreateGroup("Operacion", "Trabajo diario", "/patients", "/doctor/patient-entry", "/doctor/my-patients", "/laboratories", "/suppliers", "/users"));
         menuGroups.Add(CreateGroup("Control", "Reglas del sistema", "/roles", "/menus", "/register", "/setup-2fa"));
         menuGroups.Add(CreateGroup("Cuenta", "Espacio personal", "/profile"));
     }
@@ -101,6 +101,8 @@
     {
         "/dashboard" => "Resumen del panel",
         "/patients" => "Gestion de pacientes",
+        "/doctor/patient-entry" => "Alta clinica propia",
+        "/doctor/my-patients" => "Cartera asignada",
         "/laboratories" => "Gestion de laboratorios",
         "/suppliers" => "Gestion de proveedores",
         "/users" => "Gestion de usuarios",
@@ -116,6 +118,8 @@
     {
         "/dashboard" => "DB",
         "/patients" => "PC",
+        "/doctor/patient-entry" => "IP",
+        "/doctor/my-patients" => "MP",
         "/laboratories" => "LB",
         "/suppliers" => "PR",
         "/users" => "US",
@@ -131,6 +135,8 @@
     {
         "/dashboard" => "is-dashboard",
         "/patients" => "is-patients",
+        "/doctor/patient-entry" => "is-patients",
+        "/doctor/my-patients" => "is-patients",
         "/laboratories" => "is-laboratories",
         "/suppliers" => "is-suppliers",
         "/users" => "is-users",

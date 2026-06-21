@@ -877,6 +877,232 @@ app.MapGet("/exports/patients.csv", async (
         $"pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/doctor-patient-entry.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var doctorUserId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewModule = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/patient-entry"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewModule)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+    var gender = httpContext.Request.Query["gender"].ToString().Trim();
+    var civilStatus = httpContext.Request.Query["civilStatus"].ToString().Trim();
+
+    var patientsQuery = dbContext.tbl_pacientes
+        .AsNoTracking()
+        .Where(p => p.tbl_consulta.Any(c => c.id_optometra == doctorUserId))
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p =>
+            (p.codigo_paciente != null && p.codigo_paciente.ToLower().Contains(loweredSearch)) ||
+            p.cedula.ToLower().Contains(loweredSearch) ||
+            p.nombres.ToLower().Contains(loweredSearch) ||
+            p.apellidos.ToLower().Contains(loweredSearch) ||
+            (p.email != null && p.email.ToLower().Contains(loweredSearch)) ||
+            (p.telefono != null && p.telefono.ToLower().Contains(loweredSearch)));
+    }
+
+    patientsQuery = status switch
+    {
+        "active" => patientsQuery.Where(p => p.activo == true),
+        "inactive" => patientsQuery.Where(p => p.activo != true),
+        _ => patientsQuery
+    };
+
+    if (!string.IsNullOrWhiteSpace(gender))
+    {
+        var loweredGender = gender.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p => p.genero != null && p.genero.ToLower() == loweredGender);
+    }
+
+    if (!string.IsNullOrWhiteSpace(civilStatus))
+    {
+        var loweredCivilStatus = civilStatus.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p => p.estado_civil != null && p.estado_civil.ToLower() == loweredCivilStatus);
+    }
+
+    var patients = await patientsQuery
+        .OrderBy(p => p.apellidos)
+        .ThenBy(p => p.nombres)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Codigo,Cedula,Nombres,Apellidos,FechaNacimiento,Edad,Genero,EstadoCivil,Ocupacion,Direccion,Telefono,Correo,Activo,FechaRegistro");
+
+    foreach (var patient in patients)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(patient.id_paciente.ToString()),
+            EscapeCsv(patient.codigo_paciente),
+            EscapeCsv(patient.cedula),
+            EscapeCsv(patient.nombres),
+            EscapeCsv(patient.apellidos),
+            EscapeCsv(patient.fecha_nacimiento?.ToString("yyyy-MM-dd")),
+            EscapeCsv(patient.edad?.ToString()),
+            EscapeCsv(patient.genero),
+            EscapeCsv(patient.estado_civil),
+            EscapeCsv(patient.ocupacion),
+            EscapeCsv(patient.direccion),
+            EscapeCsv(patient.telefono),
+            EscapeCsv(patient.email),
+            EscapeCsv(patient.activo == true ? "Activo" : "Inactivo"),
+            EscapeCsv(patient.fecha_registro?.ToString("yyyy-MM-dd HH:mm:ss"))));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = doctorUserId,
+        accion = "Exportar CSV",
+        modulo = "Ingresar pacientes",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|gender:{gender}|civilStatus:{civilStatus}|DoctorId={doctorUserId}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"ingresar-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/doctor-my-patients.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var doctorUserId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewModule = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/my-patients"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewModule)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+    var gender = httpContext.Request.Query["gender"].ToString().Trim();
+    var civilStatus = httpContext.Request.Query["civilStatus"].ToString().Trim();
+
+    var patientsQuery = dbContext.tbl_pacientes
+        .AsNoTracking()
+        .Where(p => p.tbl_consulta.Any(c => c.id_optometra == doctorUserId))
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p =>
+            (p.codigo_paciente != null && p.codigo_paciente.ToLower().Contains(loweredSearch)) ||
+            p.cedula.ToLower().Contains(loweredSearch) ||
+            p.nombres.ToLower().Contains(loweredSearch) ||
+            p.apellidos.ToLower().Contains(loweredSearch) ||
+            (p.email != null && p.email.ToLower().Contains(loweredSearch)) ||
+            (p.telefono != null && p.telefono.ToLower().Contains(loweredSearch)));
+    }
+
+    patientsQuery = status switch
+    {
+        "active" => patientsQuery.Where(p => p.activo == true),
+        "inactive" => patientsQuery.Where(p => p.activo != true),
+        _ => patientsQuery
+    };
+
+    if (!string.IsNullOrWhiteSpace(gender))
+    {
+        var loweredGender = gender.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p => p.genero != null && p.genero.ToLower() == loweredGender);
+    }
+
+    if (!string.IsNullOrWhiteSpace(civilStatus))
+    {
+        var loweredCivilStatus = civilStatus.ToLowerInvariant();
+        patientsQuery = patientsQuery.Where(p => p.estado_civil != null && p.estado_civil.ToLower() == loweredCivilStatus);
+    }
+
+    var patients = await patientsQuery
+        .OrderBy(p => p.apellidos)
+        .ThenBy(p => p.nombres)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Codigo,Cedula,Nombres,Apellidos,FechaNacimiento,Edad,Genero,EstadoCivil,Ocupacion,Direccion,Telefono,Correo,Activo,FechaRegistro");
+
+    foreach (var patient in patients)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(patient.id_paciente.ToString()),
+            EscapeCsv(patient.codigo_paciente),
+            EscapeCsv(patient.cedula),
+            EscapeCsv(patient.nombres),
+            EscapeCsv(patient.apellidos),
+            EscapeCsv(patient.fecha_nacimiento?.ToString("yyyy-MM-dd")),
+            EscapeCsv(patient.edad?.ToString()),
+            EscapeCsv(patient.genero),
+            EscapeCsv(patient.estado_civil),
+            EscapeCsv(patient.ocupacion),
+            EscapeCsv(patient.direccion),
+            EscapeCsv(patient.telefono),
+            EscapeCsv(patient.email),
+            EscapeCsv(patient.activo == true ? "Activo" : "Inactivo"),
+            EscapeCsv(patient.fecha_registro?.ToString("yyyy-MM-dd HH:mm:ss"))));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = doctorUserId,
+        accion = "Exportar CSV",
+        modulo = "Ver mis pacientes",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|gender:{gender}|civilStatus:{civilStatus}|DoctorId={doctorUserId}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"mis-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapGet("/exports/laboratories.csv", async (
     HttpContext httpContext,
     OpticaDbContext dbContext) =>
@@ -1120,13 +1346,15 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Dashboard', '/dashboard', 'dashboard', 1, 1),
                 ('Mi perfil', '/profile', 'user', 2, 1),
                 ('Pacientes', '/patients', 'patients', 3, 1),
-                ('Laboratorios', '/laboratories', 'lab', 4, 1),
-                ('Proveedores', '/suppliers', 'suppliers', 5, 1),
-                ('Usuarios', '/users', 'users', 6, 1),
-                ('Roles', '/roles', 'roles', 7, 1),
-                ('Menus', '/menus', 'menu', 8, 1),
-                ('Registrar usuario', '/register', 'user-plus', 9, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 10, 1)
+                ('Ingresar pacientes', '/doctor/patient-entry', 'doctor-entry', 4, 1),
+                ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 5, 1),
+                ('Laboratorios', '/laboratories', 'lab', 6, 1),
+                ('Proveedores', '/suppliers', 'suppliers', 7, 1),
+                ('Usuarios', '/users', 'users', 8, 1),
+                ('Roles', '/roles', 'roles', 9, 1),
+                ('Menus', '/menus', 'menu', 10, 1),
+                ('Registrar usuario', '/register', 'user-plus', 11, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 12, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -1178,6 +1406,47 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                     CAST(0 AS BIT) AS puede_editar,
                     CAST(0 AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app m
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.puede_ver = source.puede_ver,
+                    target.puede_crear = source.puede_crear,
+                    target.puede_editar = source.puede_editar,
+                    target.puede_eliminar = source.puede_eliminar
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM dbo.tbl_rol
+            WHERE LOWER(nombre) LIKE '%doctor%'
+                OR LOWER(nombre) LIKE '%medic%'
+                OR LOWER(nombre) LIKE '%optomet%'
+        )
+        BEGIN
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING
+            (
+                SELECT
+                    r.id_rol,
+                    m.id_menu,
+                    CAST(1 AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                FROM dbo.tbl_rol r
+                CROSS JOIN dbo.tbl_menu_app m
+                WHERE
+                    (
+                        LOWER(r.nombre) LIKE '%doctor%'
+                        OR LOWER(r.nombre) LIKE '%medic%'
+                        OR LOWER(r.nombre) LIKE '%optomet%'
+                    )
+                    AND m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/doctor/patient-entry', '/doctor/my-patients')
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
             WHEN MATCHED THEN

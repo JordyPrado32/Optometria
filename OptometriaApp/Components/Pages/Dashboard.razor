@@ -175,6 +175,8 @@ else
     private static string GetModuleDescription(string route) => route switch
     {
         "/patients" => "Registra, consulta y actualiza fichas clinicas base.",
+        "/doctor/patient-entry" => "Da de alta pacientes y manten solo los tuyos al dia.",
+        "/doctor/my-patients" => "Consulta tu lista asignada con filtros y exportacion.",
         "/laboratories" => "Gestiona laboratorios, contactos y disponibilidad operativa.",
         "/suppliers" => "Administra proveedores, relacion comercial y datos de abastecimiento.",
         "/users" => "Administra cuentas, estados y seguridad de acceso.",
@@ -189,6 +191,8 @@ else
     private static string GetModuleIconLabel(string route) => route switch
     {
         "/patients" => "PC",
+        "/doctor/patient-entry" => "IP",
+        "/doctor/my-patients" => "MP",
         "/laboratories" => "LB",
         "/suppliers" => "PR",
         "/users" => "US",
