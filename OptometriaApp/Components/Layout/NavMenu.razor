@@ -10,35 +10,25 @@
 
     <nav class="app-nav @(menuOpen ? "is-open" : string.Empty)">
         <div class="app-nav-scroll">
-            @foreach (var group in menuGroups.Where(group => group.Items.Count > 0))
-            {
-                <section class="app-nav-group">
-                    <header class="app-nav-group-header">
-                        <span>@group.Title</span>
-                        <small>@group.Description</small>
-                    </header>
-
-                    <div class="app-nav-links">
-                        @foreach (var menu in group.Items)
-                        {
-                            <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                                <span class="app-nav-link-mark @GetMenuIconClass(menu.Ruta)">@GetMenuIconLabel(menu.Ruta)</span>
-                                <span class="app-nav-link-copy">
-                                    <strong>@menu.Nombre</strong>
-                                    <small>@GetMenuDescription(menu.Ruta)</small>
-                                </span>
-                            </NavLink>
-                        }
-                    </div>
-                </section>
-            }
+            <div class="app-nav-links">
+                @foreach (var menu in sortedMenus)
+                {
+                    <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                        <span class="app-nav-link-mark">
+                            <i class="@GetMenuIconClass(menu.Ruta)"></i>
+                        </span>
+                        <span class="app-nav-link-copy">
+                            <strong>@menu.Nombre</strong>
+                        </span>
+                    </NavLink>
+                }
+            </div>
         </div>
 
         <aside class="app-account-panel">
             <div class="app-account-panel-copy">
                 <span>@RoleName</span>
                 <strong>@UserName</strong>
-                <small>Sesion con permisos filtrados</small>
             </div>
 
             <div class="app-account-panel-grid">
@@ -52,8 +42,7 @@
 </div>
 
 @code {
-    private readonly List<AppMenuItem> menus = [];
-    private readonly List<MenuGroup> menuGroups = [];
+    private readonly List<AppMenuItem> sortedMenus = [];
     private bool menuOpen;
     private string UserName { get; set; } = "Cuenta";
     private string RoleName { get; set; } = "Sesion";
@@ -69,27 +58,8 @@
         var roleIdValue = user.FindFirst("RoleId")?.Value;
         int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
 
-        menus.AddRange(await MenuAccessService.GetMenusForRoleAsync(roleId));
-        BuildMenuGroups();
-    }
-
-    private void BuildMenuGroups()
-    {
-        menuGroups.Clear();
-        menuGroups.Add(CreateGroup("Principal", "Vista general", "/dashboard"));
-        menuGroups.Add(CreateGroup("Operacion", "Trabajo diario", "/patients", "/doctor/patient-entry", "/doctor/my-patients", "/laboratories", "/suppliers", "/users"));
-        menuGroups.Add(CreateGroup("Control", "Reglas del sistema", "/roles", "/menus", "/register", "/setup-2fa"));
-        menuGroups.Add(CreateGroup("Cuenta", "Espacio personal", "/profile"));
-    }
-
-    private MenuGroup CreateGroup(string title, string description, params string[] routes)
-    {
-        var items = menus
-            .Where(menu => routes.Contains(menu.Ruta, StringComparer.OrdinalIgnoreCase))
-            .OrderBy(menu => menu.Orden)
-            .ToList();
-
-        return new MenuGroup(title, description, items);
+        var rawMenus = await MenuAccessService.GetMenusForRoleAsync(roleId);
+        sortedMenus.AddRange(rawMenus.OrderBy(m => GetRouteOrder(m.Ruta)));
     }
 
     private void ToggleMenu()
@@ -97,56 +67,37 @@
         menuOpen = !menuOpen;
     }
 
-    private static string GetMenuDescription(string route) => route switch
+    private static int GetRouteOrder(string route) => route switch
     {
-        "/dashboard" => "Resumen del panel",
-        "/patients" => "Gestion de pacientes",
-        "/doctor/patient-entry" => "Alta clinica propia",
-        "/doctor/my-patients" => "Cartera asignada",
-        "/laboratories" => "Gestion de laboratorios",
-        "/suppliers" => "Gestion de proveedores",
-        "/users" => "Gestion de usuarios",
-        "/roles" => "Roles y permisos",
-        "/menus" => "Navegacion del sistema",
-        "/profile" => "Datos de la cuenta",
-        "/register" => "Alta de cuentas",
-        "/setup-2fa" => "Segundo factor",
-        _ => "Modulo disponible"
-    };
-
-    private static string GetMenuIconLabel(string route) => route switch
-    {
-        "/dashboard" => "DB",
-        "/patients" => "PC",
-        "/doctor/patient-entry" => "IP",
-        "/doctor/my-patients" => "MP",
-        "/laboratories" => "LB",
-        "/suppliers" => "PR",
-        "/users" => "US",
-        "/roles" => "RL",
-        "/menus" => "MN",
-        "/profile" => "PF",
-        "/register" => "RG",
-        "/setup-2fa" => "2F",
-        _ => "MD"
+        "/dashboard" => 1,
+        "/patients" => 2,
+        "/doctor/patient-entry" => 3,
+        "/doctor/my-patients" => 4,
+        "/laboratories" => 5,
+        "/suppliers" => 6,
+        "/users" => 7,
+        "/roles" => 8,
+        "/menus" => 9,
+        "/register" => 10,
+        "/setup-2fa" => 11,
+        "/profile" => 12,
+        _ => 100
     };
 
     private static string GetMenuIconClass(string route) => route switch
     {
-        "/dashboard" => "is-dashboard",
-        "/patients" => "is-patients",
-        "/doctor/patient-entry" => "is-patients",
-        "/doctor/my-patients" => "is-patients",
-        "/laboratories" => "is-laboratories",
-        "/suppliers" => "is-suppliers",
-        "/users" => "is-users",
-        "/roles" => "is-roles",
-        "/menus" => "is-menus",
-        "/profile" => "is-profile",
-        "/register" => "is-register",
-        "/setup-2fa" => "is-security",
-        _ => string.Empty
+        "/dashboard" => "bi bi-grid-1x2-fill",
+        "/patients" => "bi bi-people-fill",
+        "/doctor/patient-entry" => "bi bi-person-plus-fill",
+        "/doctor/my-patients" => "bi bi-journal-medical",
+        "/laboratories" => "bi bi-clipboard2-pulse-fill",
+        "/suppliers" => "bi bi-truck",
+        "/users" => "bi bi-people",
+        "/roles" => "bi bi-shield-lock-fill",
+        "/menus" => "bi bi-menu-button-wide-fill",
+        "/profile" => "bi bi-person-circle",
+        "/register" => "bi bi-person-add",
+        "/setup-2fa" => "bi bi-shield-fill-check",
+        _ => "bi bi-link-45deg"
     };
-
-    private sealed record MenuGroup(string Title, string Description, List<AppMenuItem> Items);
 }
