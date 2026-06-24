@@ -1424,3 +1424,175 @@ code {
         align-items: flex-start;
     }
 }
+
+/* ==========================================
+   GLOBAL DESIGN SYSTEM OVERRIDES (MINIMALIST PREMIUM)
+   ========================================== */
+* {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+html, body {
+    background: radial-gradient(circle at top right, rgba(93, 161, 129, 0.05), transparent 45%), #F4F0E4 !important;
+    background-color: #F4F0E4 !important;
+    color: #3c342e !important;
+}
+
+/* Global Link Restyles - Remove all underlines */
+a, 
+a:hover, 
+a:focus, 
+a:active, 
+.btn-link, 
+.nav-link,
+a *,
+.btn-link *,
+.nav-link * {
+    text-decoration: none !important;
+}
+
+/* Premium Card Designs */
+.card, 
+.workspace-card, 
+.management-card, 
+.workspace-info-card, 
+.dashboard-panel, 
+.dashboard-action-card, 
+.dashboard-module-tile, 
+.dashboard-account-card, 
+.profile-hero-card, 
+.workspace-module-section,
+.app-header-frame {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(127, 105, 81, 0.08) !important;
+    border-radius: 1.2rem !important;
+    box-shadow: 0 12px 32px rgba(127, 105, 81, 0.04) !important;
+    padding: 1.5rem !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.dashboard-action-card:hover, 
+.dashboard-module-tile:hover,
+.dashboard-account-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 16px 40px rgba(127, 105, 81, 0.07) !important;
+    border-color: rgba(93, 161, 129, 0.25) !important;
+}
+
+/* Premium Eyebrow styling */
+.eyebrow {
+    color: #5DA181 !important; /* Sage green */
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.1em !important;
+    font-size: 0.72rem !important;
+    display: inline-block !important;
+    margin-bottom: 0.3rem !important;
+}
+
+/* Forms & Inputs */
+input.form-control, 
+select.form-select, 
+textarea.form-control,
+.form-floating > .form-control {
+    border-radius: 0.75rem !important;
+    border: 1.5px solid rgba(127, 105, 81, 0.15) !important;
+    background-color: #ffffff !important;
+    color: #3c342e !important;
+    padding: 0.65rem 1rem !important;
+    transition: all 0.2s ease !important;
+    height: auto !important;
+}
+
+input.form-control:focus, 
+select.form-select:focus, 
+textarea.form-control:focus,
+.form-control:focus {
+    border-color: #5DA181 !important; /* Sage Green focus */
+    box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15) !important;
+    outline: none !important;
+}
+
+/* Buttons */
+.btn {
+    border-radius: 2rem !important; /* Pill shape */
+    padding: 0.6rem 1.6rem !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-primary {
+    background-color: #5DA181 !important; /* Sage Green */
+    border-color: #5DA181 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(93, 161, 129, 0.2) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: #4c8b6d !important;
+    border-color: #4c8b6d !important;
+    box-shadow: 0 6px 18px rgba(93, 161, 129, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+
+.btn-outline-primary,
+.btn-secondary {
+    background-color: transparent !important;
+    color: #7F6951 !important; /* Taupe brown */
+    border: 1.5px solid #7F6951 !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background-color: #7F6951 !important;
+    border-color: #7F6951 !important;
+    color: #ffffff !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Tables */
+.table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+}
+
+.table th {
+    background-color: #F4F0E4 !important;
+    color: #5f4d3e !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid rgba(127, 105, 81, 0.1) !important;
+    padding: 0.8rem 1rem !important;
+    font-size: 0.85rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+.table td {
+    border-bottom: 1px solid rgba(127, 105, 81, 0.06) !important;
+    padding: 0.95rem 1rem !important;
+    font-size: 0.9rem !important;
+    color: #3c342e !important;
+    vertical-align: middle !important;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(244, 240, 228, 0.2) !important;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(93, 161, 129, 0.04) !important;
+}
+
+/* Modals & Popups */
+.modal-content {
+    border-radius: 1.5rem !important;
+    border: 1px solid rgba(127, 105, 81, 0.1) !important;
+    box-shadow: 0 20px 60px rgba(127, 105, 81, 0.15) !important;
+}

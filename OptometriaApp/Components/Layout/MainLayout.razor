@@ -4,10 +4,16 @@
     <div class="app-frame app-dashboard-frame">
         <aside class="app-sidebar">
             <a class="app-brand" href="/dashboard">
-                <span class="app-brand-mark">O</span>
+                <svg class="optica-logo-svg" viewBox="0 0 100 60" width="42" height="26" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M 5,30 C 25,10 75,10 95,30 C 75,50 25,50 5,30 Z" stroke="#5DA181" stroke-width="6" fill="none" stroke-linejoin="round"/>
+                    <circle cx="50" cy="30" r="16" stroke="#7F6951" stroke-width="6" fill="#F4F0E4" />
+                    <line x1="61" y1="41" x2="72" y2="52" stroke="#7F6951" stroke-width="6" stroke-linecap="round" />
+                    <circle cx="50" cy="30" r="9" fill="#5DA181" />
+                    <circle cx="50" cy="30" r="4.5" fill="#3c4e43" />
+                    <circle cx="47" cy="27" r="2.2" fill="#fff" />
+                </svg>
                 <span class="app-brand-copy">
-                    <strong>Modelo Estrella</strong>
-                    <small>Panel administrativo</small>
+                    <span class="logo-text-optica">Óptica</span><span class="logo-text-lux">Lux</span>
                 </span>
             </a>
 
@@ -38,3 +44,235 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">X</span>
 </div>
+
+<style>
+    /* Absolute overrides to bypass browser cache and force horizontal sidebar layout */
+    @@media (min-width: 901px) {
+        .app-sidebar {
+            width: 280px !important;
+            min-width: 280px !important;
+            max-width: 280px !important;
+        }
+        .app-dashboard-frame {
+            grid-template-columns: 280px minmax(0, 1fr) !important;
+        }
+    }
+
+    /* Fixed sidebar with hidden vertical scrollbar */
+    .app-sidebar {
+        background-color: #ECCCC5 !important; /* Rose pink from palette */
+        background: #ECCCC5 !important;
+        border-right: 1px solid rgba(127, 105, 81, 0.15) !important;
+        height: 100vh !important;
+        display: grid !important;
+        grid-template-rows: auto minmax(0, 1fr) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -ms-overflow-style: none !important;
+        scrollbar-width: none !important;
+    }
+    .app-sidebar::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .app-brand {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.7rem !important;
+        text-decoration: none !important;
+        padding: 0.2rem 0.5rem !important;
+        margin-bottom: 0.8rem !important;
+    }
+
+    .logo-text-optica {
+        color: #5DA181 !important; /* Sage green */
+        font-weight: 800 !important;
+        font-size: 1.4rem !important;
+        letter-spacing: -0.02em !important;
+    }
+
+    .logo-text-lux {
+        color: #7F6951 !important; /* Taupe brown */
+        font-weight: 300 !important;
+        font-size: 1.4rem !important;
+        letter-spacing: -0.01em !important;
+        margin-left: 2px !important;
+    }
+
+    /* Prevent vertical stretching in the sidebar scroll area & hide scrollbar */
+    .app-nav-scroll {
+        display: grid !important;
+        align-content: start !important;
+        gap: 0.35rem !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -ms-overflow-style: none !important;
+        scrollbar-width: none !important;
+    }
+    .app-nav-scroll::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .app-nav-links {
+        display: grid !important;
+        align-content: start !important;
+        gap: 0.35rem !important;
+    }
+
+    .app-nav-link {
+        position: relative !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 0.85rem !important;
+        padding: 0.6rem 0.9rem !important;
+        text-decoration: none !important;
+        border: none !important;
+        background: transparent !important;
+        border-radius: 0.5rem !important;
+        box-shadow: none !important;
+        transform: none !important;
+        color: #3c342e !important; /* Ink color */
+        opacity: 0.8 !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .app-nav-link,
+    .app-nav-link:hover,
+    .app-nav-link:focus,
+    .app-nav-link:active,
+    .app-nav-link.active,
+    .app-nav-link *,
+    .app-nav-link:hover *,
+    .app-nav-link.active * {
+        text-decoration: none !important;
+    }
+
+    /* Hover State */
+    .app-nav-link:hover:not(.active) {
+        background: rgba(255, 255, 255, 0.4) !important; /* Transparent white */
+        color: #3c342e !important;
+        opacity: 1 !important;
+    }
+
+    /* Active State (White card + Sage Green highlight) */
+    .app-nav-link.active {
+        background: #ffffff !important;
+        color: #5DA181 !important; /* Sage green */
+        opacity: 1 !important;
+        font-weight: 600 !important;
+        padding-left: 1.25rem !important;
+        box-shadow: 0 4px 12px rgba(127, 105, 81, 0.05) !important;
+    }
+
+    /* Active indicator bar on the left */
+    .app-nav-link.active::before {
+        content: '' !important;
+        position: absolute !important;
+        left: 8px !important;
+        top: 25% !important;
+        height: 50% !important;
+        width: 3.5px !important;
+        background-color: #5DA181 !important;
+        border-radius: 4px !important;
+    }
+
+    .app-nav-link-mark {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: auto !important;
+        height: auto !important;
+        background: transparent !important;
+        color: inherit !important;
+    }
+
+    .app-nav-link-mark i {
+        font-size: 1.2rem !important;
+    }
+
+    .app-nav-link-copy {
+        display: inline-block !important;
+    }
+
+    .app-nav-link-copy strong {
+        font-size: 0.92rem !important;
+        font-weight: 500 !important;
+        text-decoration: none !important;
+        color: inherit !important;
+    }
+
+    /* Main Content Panel - vertical scroll scrollbar hidden, no horizontal scroll */
+    .app-content {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -ms-overflow-style: none !important;
+        scrollbar-width: none !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        min-width: 0 !important;
+    }
+    .app-content::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* Force window scrollbar to be hidden and lock height */
+    html, body {
+        height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+    .app-shell {
+        height: 100vh !important;
+        min-height: 100vh !important;
+        overflow: hidden !important;
+    }
+    .app-frame, .app-dashboard-frame {
+        height: 100vh !important;
+        max-height: 100vh !important;
+        overflow: hidden !important;
+        width: 100% !important;
+    }
+
+    /* Constrain main sections and cards to prevent overflow */
+    .app-main, .app-stage {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+    .management-shell {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+    .management-card {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+    }
+    .table-responsive {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* Premium thin custom scrollbars for horizontal tables */
+    .table-responsive::-webkit-scrollbar {
+        height: 6px !important;
+    }
+    .table-responsive::-webkit-scrollbar-track {
+        background: rgba(127, 105, 81, 0.05) !important;
+        border-radius: 3px !important;
+    }
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: rgba(127, 105, 81, 0.25) !important;
+        border-radius: 3px !important;
+    }
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: rgba(93, 161, 129, 0.5) !important;
+    }
+</style>
+

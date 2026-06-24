@@ -38,41 +38,33 @@ else
     <section class="management-shell">
         <div class="management-hero">
             <div>
-                <span class="eyebrow">Administracion</span>
+                <span class="eyebrow">Administración</span>
                 <h1>Usuarios</h1>
-                <p>Consulta, crea y administra cuentas con control por permisos, clave temporal por correo y exportacion a CSV.</p>
+                <p>Consulta, crea y administra cuentas con control por permisos, clave temporal por correo y exportación a CSV.</p>
             </div>
 
             <div class="workspace-actions">
                 @if (permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewUser">Nuevo usuario</button>
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNewUser">
+                        <i class="bi bi-person-plus-fill" style="margin-right: 6px;"></i> Nuevo usuario
+                    </button>
                 }
 
-                <button type="button" class="btn btn-primary" @onclick="ExportUsers">Exportar CSV</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportUsers">Exportar CSV</button>
             </div>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(statusMessage))
-        {
-            <div class="alert alert-success" role="alert">@statusMessage</div>
-        }
-
-        @if (!string.IsNullOrWhiteSpace(errorMessage))
-        {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
-        }
-
         <section class="management-card">
             <div class="management-card-header">
-                <h2>Filtros y busqueda</h2>
+                <h2>Filtros y búsqueda</h2>
                 <span>@FilteredUsers.Count resultados</span>
             </div>
 
             <div class="management-form-grid">
                 <div>
                     <label class="form-label" for="userSearch">Buscador</label>
-                    <input id="userSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, correo o telefono" />
+                    <input id="userSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, correo o teléfono" />
                 </div>
 
                 <div>
@@ -107,254 +99,384 @@ else
                 </div>
             </div>
 
-            <div class="management-actions">
+            <div class="management-actions" style="margin-top: 1rem;">
                 <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
             </div>
         </section>
 
-        <div class="management-grid">
-            <aside class="management-card management-list-card">
-                <div class="management-card-header">
-                    <h2>Explorador</h2>
-                    <span>@FilteredUsers.Count visibles</span>
-                </div>
+        <!-- Users Table Card (Full Width) -->
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Listado de Usuarios</h2>
+                <span>@FilteredUsers.Count registrados</span>
+            </div>
 
-                <div class="management-list">
-                    @if (FilteredUsers.Count == 0)
-                    {
-                        <p>No hay usuarios que coincidan con los filtros actuales.</p>
-                    }
-                    else
-                    {
-                        @foreach (var user in FilteredUsers)
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Nombre Completo</th>
+                            <th>Correo</th>
+                            <th>Teléfono</th>
+                            <th>Rol</th>
+                            <th>Estado</th>
+                            <th>Seguridad Clave</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredUsers.Count == 0)
                         {
-                            <button type="button"
-                                    class="management-list-item user-explorer-item @(selectedUserId == user.id_usuario && !isCreatingNewUser ? "is-active" : string.Empty)"
-                                    @onclick="() => SelectUserAsync(user.id_usuario)">
-                                <div class="user-explorer-head">
-                                    <strong>@($"{user.nombres} {user.apellidos}")</strong>
-                                    <span>@user.usuario</span>
-                                </div>
-                                <div class="user-explorer-meta">
-                                    <span>@user.id_rolNavigation.nombre</span>
-                                    <span>@GetStatusLabel(user)</span>
-                                    <span>@GetPasswordStatusLabel(user)</span>
-                                </div>
-                                <div class="user-explorer-copy">
-                                    <span>@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo" : user.email)</span>
-                                    <span>@(string.IsNullOrWhiteSpace(user.telefono) ? "Sin telefono" : user.telefono)</span>
-                                </div>
-                            </button>
-                        }
-                    }
-                </div>
-            </aside>
-
-            <div class="management-stack">
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Resumen operativo</h2>
-                        <span>@EditorSubtitle</span>
-                    </div>
-
-                    @if (editor is null)
-                    {
-                        <p>Selecciona un usuario para ver su informacion o crea uno nuevo.</p>
-                    }
-                    else
-                    {
-                        <div class="user-summary-grid">
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Identidad</span>
-                                <strong>@(isCreatingNewUser ? "Nuevo usuario" : $"{editor.Nombres} {editor.Apellidos}")</strong>
-                                <p>@editor.Usuario</p>
-                            </div>
-
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Rol y estado</span>
-                                <strong>@(isCreatingNewUser ? roles.FirstOrDefault(r => r.id_rol == editor.IdRol)?.nombre ?? "Sin rol" : editor.RoleName)</strong>
-                                <p>@(editor.Activo ? "Cuenta activa" : "Cuenta inactiva")</p>
-                            </div>
-
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Seguridad</span>
-                                <strong>@editor.PasswordStatusLabel</strong>
-                                <p>@(isCreatingNewUser ? "Define la clave inicial." : "Gestiona restablecimiento o desactivacion.")</p>
-                            </div>
-                        </div>
-                    }
-                </section>
-
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>@EditorTitle</h2>
-                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
-                    </div>
-
-                    @if (editor is not null)
-                    {
-                        <div class="management-form-grid">
-                            <div>
-                                <label class="form-label" for="editNames">Nombres</label>
-                                <input id="editNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="editLastNames">Apellidos</label>
-                                <input id="editLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="editUserName">Usuario</label>
-                                <input id="editUserName" class="form-control" @bind="editor.Usuario" readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="editEmail">Correo</label>
-                                <input id="editEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="editPhone">Telefono</label>
-                                <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="editBirthDate">Fecha de nacimiento</label>
-                                <input id="editBirthDate"
-                                       type="date"
-                                       class="form-control"
-                                       value="@editor.FechaNacimiento"
-                                       @onchange="OnBirthDateChanged"
-                                       readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="editRole">Rol</label>
-                                <select id="editRole" class="form-select" @bind="editor.IdRol" disabled="@(!CanModifyEditor)">
-                                    @foreach (var role in roles)
-                                    {
-                                        <option value="@role.id_rol">@role.nombre</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label">Estado actual</label>
-                                <input class="form-control" value="@GetEditorStatusText()" readonly />
-                            </div>
-                        </div>
-
-                        @if (isCreatingNewUser)
-                        {
-                            <div class="profile-password-section">
-                                <div class="management-card-header">
-                                    <h2>Credenciales iniciales</h2>
-                                    <span>Alta</span>
-                                </div>
-
-                                <div class="auth-grid">
-                                    <div>
-                                        <label class="form-label" for="newPassword">Contrasena inicial</label>
-                                        <input id="newPassword" type="password" class="form-control" @bind="editor.Password" />
-                                    </div>
-
-                                    <div>
-                                        <label class="form-label" for="confirmNewPassword">Confirmar contrasena</label>
-                                        <input id="confirmNewPassword" type="password" class="form-control" @bind="editor.ConfirmPassword" />
-                                    </div>
-                                </div>
-                            </div>
-                        }
-
-                        <div class="workspace-actions">
-                            @if (CanModifyEditor)
-                            {
-                                <button type="button" class="btn btn-primary" @onclick="SaveUserAsync">Guardar cambios</button>
-                            }
-
-                            @if (!isCreatingNewUser && permissions.CanEdit)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick="ResetPasswordAsync">Enviar clave temporal</button>
-                                <button type="button" class="btn btn-outline-primary" @onclick="DisableMfaAsync" disabled="@(!editor.TwoFactorEnabled)">Desactivar MFA</button>
-                            }
-
-                            @if (!isCreatingNewUser && permissions.CanDelete)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
-                                    @(editor.Activo ? "Desactivar usuario" : "Reactivar usuario")
-                                </button>
-                            }
-                        </div>
-                    }
-                </section>
-
-                @if (editor is not null && !isCreatingNewUser)
-                {
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Ficha de control</h2>
-                            <span>Solo lectura</span>
-                        </div>
-
-                        <div class="user-audit-grid">
-                            <div>
-                                <label class="form-label">Fecha de creacion</label>
-                                <input class="form-control" value="@editor.FechaCreacion" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Ultimo cambio de clave</label>
-                                <input class="form-control" value="@editor.UltimoCambioPassword" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Estado de clave</label>
-                                <input class="form-control" value="@editor.PasswordStatusLabel" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">MFA</label>
-                                <input class="form-control" value="@(editor.TwoFactorEnabled ? "Activo" : "Inactivo")" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Id interno</label>
-                                <input class="form-control" value="@editor.IdUsuario" readonly />
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Auditoria</h2>
-                            <span>@auditEntries.Count eventos</span>
-                        </div>
-
-                        @if (auditEntries.Count == 0)
-                        {
-                            <p>No hay eventos registrados para este usuario en este modulo.</p>
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No se encontraron usuarios registrados con los filtros seleccionados.
+                                </td>
+                            </tr>
                         }
                         else
                         {
-                            <div class="management-list">
-                                @foreach (var auditEntry in auditEntries)
-                                {
-                                    <article class="management-list-item">
-                                        <strong>@auditEntry.accion</strong>
-                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
-                                        <span>@GetAuditActorLabel(auditEntry)</span>
-                                        <span>@auditEntry.detalle</span>
-                                    </article>
-                                }
-                            </div>
+                            @foreach (var u in FilteredUsers)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong style="color: var(--color-sage);">@u.usuario</strong>
+                                    </td>
+                                    <td>
+                                        <strong style="color: var(--color-ink);">@($"{u.nombres} {u.apellidos}")</strong>
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(u.email) ? "-" : u.email)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(u.telefono) ? "-" : u.telefono)</td>
+                                    <td>
+                                        <span class="badge" style="background: rgba(127, 105, 81, 0.08) !important; color: var(--color-taupe-deep) !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">
+                                            @u.id_rolNavigation?.nombre
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (u.activo == true)
+                                        {
+                                            @if (u.bloqueado == true)
+                                            {
+                                                <span class="badge" style="background: rgba(254, 188, 100, 0.15) !important; color: #e09b3c !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Bloqueado</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge" style="background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Activo</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Inactivo</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span style="font-size: 0.8rem;">@GetPasswordStatusLabel(u)</span>
+                                    </td>
+                                    <td style="text-align: right; padding-right: 1.2rem;">
+                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditUser(u)">
+                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
+                                            </button>
+                                            @if (permissions.CanEdit)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.25) !important; color: var(--color-taupe-deep) !important;" @onclick="() => ResetPasswordAsync(u)" title="Enviar clave temporal">
+                                                    <i class="bi bi-key-fill"></i> Clave
+                                                </button>
+                                            }
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditUser(u)">
+                                                <i class="bi bi-clock-history"></i> Auditoría
+                                            </button>
+                                            @if (permissions.CanDelete)
+                                            {
+                                                @if (u.activo == true)
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(u)">
+                                                        Desactivar
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; background-color: var(--color-sage) !important; border-color: var(--color-sage) !important;" @onclick="() => ToggleActiveAsync(u)">
+                                                        Activar
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
-                    </section>
-                }
+                    </tbody>
+                </table>
             </div>
-        </div>
+        </section>
     </section>
 }
+
+<!-- Custom Form Modal -->
+@if (showFormModal && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>@EditorTitle</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="editNames">Nombres</label>
+                        <input id="editNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="editLastNames">Apellidos</label>
+                        <input id="editLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="editUserName">Usuario</label>
+                        <input id="editUserName" class="form-control" @bind="editor.Usuario" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="editEmail">Correo</label>
+                        <input id="editEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="editPhone">Teléfono</label>
+                        <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="editBirthDate">Fecha de nacimiento</label>
+                        <input id="editBirthDate"
+                               type="date"
+                               class="form-control"
+                               value="@editor.FechaNacimiento"
+                               @onchange="OnBirthDateChanged"
+                               readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="editRole">Rol</label>
+                        <select id="editRole" class="form-select" @bind="editor.IdRol" disabled="@(!CanModifyEditor)">
+                            @foreach (var role in roles)
+                            {
+                                <option value="@role.id_rol">@role.nombre</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Estado actual</label>
+                        <input class="form-control" value="@GetEditorStatusText()" readonly />
+                    </div>
+                </div>
+
+                @if (isCreatingNewUser)
+                {
+                    <div class="profile-password-section" style="margin-top: 1.5rem; border-top: 1px solid rgba(127, 105, 81, 0.08); padding-top: 1.2rem;">
+                        <div class="management-card-header" style="margin-bottom: 1rem;">
+                            <h3>Credenciales iniciales</h3>
+                        </div>
+
+                        <div class="auth-grid">
+                            <div>
+                                <label class="form-label" for="newPassword">Contraseña inicial</label>
+                                <input id="newPassword" type="password" class="form-control" @bind="editor.Password" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="confirmNewPassword">Confirmar contraseña</label>
+                                <input id="confirmNewPassword" type="password" class="form-control" @bind="editor.ConfirmPassword" />
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                @if (CanModifyEditor)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveUserAsync">Guardar cambios</button>
+                }
+                @if (!isCreatingNewUser && permissions.CanEdit)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="() => DisableMfaAsync(selectedUser)" disabled="@(!editor.TwoFactorEnabled)">Desactivar MFA</button>
+                }
+                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<!-- Custom Audit Modal -->
+@if (showAuditModal && selectedUser is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card audit-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Historial de Auditoría - @($"{selectedUser.nombres} {selectedUser.apellidos}")</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showAuditModal = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                @if (auditEntries.Count == 0)
+                {
+                    <p style="text-align: center; color: var(--color-taupe); margin: 2rem 0;">No hay eventos registrados para este usuario en este módulo.</p>
+                }
+                else
+                {
+                    <div class="management-list">
+                        @foreach (var auditEntry in auditEntries)
+                        {
+                            <article class="management-list-item" style="border: 1px solid rgba(127, 105, 81, 0.08); border-radius: 0.8rem; padding: 0.95rem; margin-bottom: 0.6rem; background: #faf8f4;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                                    <strong style="color: var(--color-sage);">@auditEntry.accion</strong>
+                                    <span style="font-size: 0.78rem; color: var(--color-taupe);">@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                </div>
+                                <div style="font-size: 0.82rem; color: var(--color-ink); margin-bottom: 0.35rem;">@auditEntry.detalle</div>
+                                <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-taupe); opacity: 0.8;">@GetAuditActorLabel(auditEntry)</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="() => showAuditModal = false">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<!-- Custom Alert Modal -->
+@if (showAlertModal)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
+                <h2>@(alertIsError ? "Error de Validación" : "Operación Exitosa")</h2>
+            </header>
+            <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
+                    <i class="bi @(alertIsError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+                </div>
+                <p style="font-size: 1rem; color: var(--color-ink); line-height: 1.5; margin: 0;">@alertMessage</p>
+            </div>
+            <footer class="custom-modal-footer" style="justify-content: center; background: transparent; border-top: none; padding-top: 0;">
+                <button type="button" class="btn btn-primary" style="min-width: 120px;" @onclick="CloseAlertModal">Aceptar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<style>
+    /* Custom Modal Overlays */
+    .custom-modal-overlay {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(60, 52, 46, 0.4) !important;
+        backdrop-filter: blur(4px) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 1050 !important;
+    }
+
+    .custom-modal-card {
+        background: #ffffff !important;
+        border-radius: 1.2rem !important;
+        border: 1px solid rgba(127, 105, 81, 0.1) !important;
+        box-shadow: 0 24px 64px rgba(127, 105, 81, 0.15) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        max-height: 90vh !important;
+        width: min(90%, 750px) !important;
+        overflow: hidden !important;
+        animation: modalFadeIn 0.25s ease-out !important;
+    }
+
+    .audit-modal-card {
+        width: min(90%, 600px) !important;
+    }
+
+    .alert-modal-card {
+        width: min(90%, 420px) !important;
+    }
+
+    @@keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .custom-modal-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 1.2rem 1.6rem !important;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.08) !important;
+    }
+
+    .rose-header {
+        background: #ECCCC5 !important;
+    }
+
+    .apricot-header {
+        background: #FEBC64 !important;
+    }
+
+    .error-header {
+        background: #ECCCC5 !important;
+        color: #3c342e !important;
+    }
+
+    .success-header {
+        background: rgba(93, 161, 129, 0.15) !important;
+        color: #3c342e !important;
+    }
+
+    .custom-modal-header h2 {
+        margin: 0 !important;
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+        color: #3c342e !important;
+    }
+
+    .btn-close-modal {
+        background: transparent !important;
+        border: none !important;
+        font-size: 1.8rem !important;
+        line-height: 1 !important;
+        color: #7F6951 !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        transition: color 0.15s ease !important;
+    }
+
+    .btn-close-modal:hover {
+        color: #3c342e !important;
+    }
+
+    .custom-modal-body {
+        padding: 1.6rem !important;
+        overflow-y: auto !important;
+        max-height: calc(90vh - 120px) !important;
+    }
+
+    .custom-modal-footer {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 0.8rem !important;
+        padding: 1.2rem 1.6rem !important;
+        border-top: 1px solid rgba(127, 105, 81, 0.08) !important;
+        background: #fbf9f4 !important;
+    }
+</style>
+
 
 @code {
     private readonly List<tbl_usuario> users = [];
@@ -372,8 +494,15 @@ else
     private string selectedRoleFilter = string.Empty;
     private string selectedStatusFilter = "all";
     private string selectedPasswordFilter = "all";
-    private string? statusMessage;
     private string? errorMessage;
+
+    // Modals & custom alerts state:
+    private bool showFormModal;
+    private bool showAuditModal;
+    private bool showAlertModal;
+    private string alertMessage = string.Empty;
+    private bool alertIsError;
+    private tbl_usuario? selectedUser;
 
     private List<tbl_usuario> FilteredUsers => users
         .Where(MatchesFilters)
@@ -421,20 +550,14 @@ else
         users.Clear();
         users.AddRange(loadedUsers);
 
-        if (isCreatingNewUser)
+        if (preserveSelectedUserId.HasValue)
         {
-            editor ??= BuildNewEditor();
-            auditEntries = [];
-        }
-        else
-        {
-            selectedUserId = preserveSelectedUserId ?? selectedUserId;
-            if (selectedUserId == 0)
+            selectedUserId = preserveSelectedUserId.Value;
+            var currentUser = users.FirstOrDefault(u => u.id_usuario == selectedUserId);
+            if (currentUser is not null)
             {
-                selectedUserId = users.FirstOrDefault()?.id_usuario ?? 0;
+                editor = BuildEditor(currentUser);
             }
-
-            await SelectUserAsync(selectedUserId);
         }
 
         isLoading = false;
@@ -444,6 +567,7 @@ else
     {
         if (!permissions.CanCreate)
         {
+            ShowAlert("Tu rol no tiene permiso para crear usuarios.", true);
             return;
         }
 
@@ -451,43 +575,54 @@ else
         selectedUserId = 0;
         editor = BuildNewEditor();
         auditEntries = [];
-        statusMessage = null;
         errorMessage = null;
+        showFormModal = true;
     }
 
-    private async Task SelectUserAsync(int userId)
+    private void PrepareEditUser(tbl_usuario user)
     {
         isCreatingNewUser = false;
-        selectedUserId = userId;
-        editor = BuildEditor(users.FirstOrDefault(u => u.id_usuario == userId));
-        await LoadAuditEntriesAsync(userId);
-        statusMessage = null;
+        selectedUserId = user.id_usuario;
+        selectedUser = user;
+        editor = BuildEditor(user);
         errorMessage = null;
+        showFormModal = true;
     }
 
-    private void EditUser(int userId)
+    private async Task PrepareAuditUser(tbl_usuario user)
     {
-        if (!permissions.CanEdit)
-        {
-            return;
-        }
+        selectedUser = user;
+        await LoadAuditEntriesAsync(user.id_usuario);
+        showAuditModal = true;
+    }
 
-        _ = SelectUserAsync(userId);
+    private void ShowAlert(string message, bool isError)
+    {
+        alertMessage = message;
+        alertIsError = isError;
+        showAlertModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseAlertModal()
+    {
+        showAlertModal = false;
+        alertMessage = string.Empty;
     }
 
     private async Task SaveUserAsync()
     {
-        statusMessage = null;
         errorMessage = null;
 
         if (editor is null)
         {
-            errorMessage = "Selecciona o crea un usuario antes de guardar.";
+            ShowAlert("Selecciona o crea un usuario antes de guardar.", true);
             return;
         }
 
         if (!ValidateEditor())
         {
+            ShowAlert(errorMessage ?? "Error de validación.", true);
             return;
         }
 
@@ -501,7 +636,7 @@ else
 
         if (userNameInUse)
         {
-            errorMessage = "El nombre de usuario ya esta registrado.";
+            ShowAlert("El nombre de usuario ya está registrado.", true);
             return;
         }
 
@@ -510,7 +645,7 @@ else
 
         if (emailInUse)
         {
-            errorMessage = "El correo electronico ya esta registrado.";
+            ShowAlert("El correo electrónico ya está registrado.", true);
             return;
         }
 
@@ -518,14 +653,14 @@ else
         {
             if (!permissions.CanCreate)
             {
-                errorMessage = "Tu rol no tiene permiso para crear usuarios.";
+                ShowAlert("Tu rol no tiene permiso para crear usuarios.", true);
                 return;
             }
 
             var passwordValidationError = ValidatePasswordForAdmin(editor.Password, editor.Usuario, editor.Nombres, editor.Apellidos, editor.Email);
             if (passwordValidationError is not null)
             {
-                errorMessage = passwordValidationError;
+                ShowAlert(passwordValidationError, true);
                 return;
             }
 
@@ -566,7 +701,8 @@ else
 
             await dbContext.SaveChangesAsync();
 
-            statusMessage = "El usuario se creo correctamente.";
+            ShowAlert("El usuario se creó correctamente.", false);
+            showFormModal = false;
             isCreatingNewUser = false;
             await LoadAsync(newUser.id_usuario);
             return;
@@ -574,14 +710,14 @@ else
 
         if (!permissions.CanEdit)
         {
-            errorMessage = "Tu rol no tiene permiso para editar usuarios.";
+            ShowAlert("Tu rol no tiene permiso para editar usuarios.", true);
             return;
         }
 
         var userEntity = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
         if (userEntity is null)
         {
-            errorMessage = "No se encontro el usuario seleccionado.";
+            ShowAlert("No se encontró el usuario seleccionado.", true);
             return;
         }
 
@@ -600,40 +736,40 @@ else
 
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "La informacion del usuario se guardo correctamente.";
+        ShowAlert("La información del usuario se guardó correctamente.", false);
+        showFormModal = false;
         await LoadAsync(userEntity.id_usuario);
     }
 
-    private async Task ResetPasswordAsync()
+    private async Task ResetPasswordAsync(tbl_usuario user)
     {
-        statusMessage = null;
         errorMessage = null;
 
-        if (!permissions.CanEdit || editor is null || editor.IdUsuario <= 0)
+        if (!permissions.CanEdit || user is null || user.id_usuario <= 0)
         {
             return;
         }
 
         if (!EmailSender.IsConfigured())
         {
-            errorMessage = "SMTP no configurado. Completa la seccion Smtp en appsettings.json.";
+            ShowAlert("SMTP no configurado. Completa la sección Smtp en appsettings.json.", true);
             return;
         }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var userEntity = await dbContext.tbl_usuarios
             .Include(u => u.tbl_usuario_seguridad)
-            .FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+            .FirstOrDefaultAsync(u => u.id_usuario == user.id_usuario);
 
         if (userEntity is null)
         {
-            errorMessage = "No se encontro el usuario seleccionado.";
+            ShowAlert("No se encontró el usuario seleccionado.", true);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(userEntity.email))
         {
-            errorMessage = "El usuario no tiene un correo registrado para enviar la clave temporal.";
+            ShowAlert("El usuario no tiene un correo registrado para enviar la clave temporal.", true);
             return;
         }
 
@@ -662,7 +798,7 @@ else
         WriteAudit(
             dbContext,
             "Resetear clave",
-            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; Metodo=Clave temporal por correo");
+            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; Método=Clave temporal por correo");
 
         await dbContext.SaveChangesAsync();
 
@@ -672,16 +808,15 @@ else
             temporaryPassword,
             minutesValid);
 
-        statusMessage = "Se envio una clave temporal al correo del usuario.";
+        ShowAlert("Se envió una clave temporal al correo del usuario.", false);
         await LoadAsync(userEntity.id_usuario);
     }
 
-    private async Task DisableMfaAsync()
+    private async Task DisableMfaAsync(tbl_usuario? user)
     {
-        statusMessage = null;
         errorMessage = null;
 
-        if (!permissions.CanEdit || editor is null || editor.IdUsuario <= 0)
+        if (!permissions.CanEdit || user is null || user.id_usuario <= 0)
         {
             return;
         }
@@ -689,18 +824,18 @@ else
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var userEntity = await dbContext.tbl_usuarios
             .Include(u => u.tbl_usuario_seguridad)
-            .FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+            .FirstOrDefaultAsync(u => u.id_usuario == user.id_usuario);
 
         if (userEntity is null)
         {
-            errorMessage = "No se encontro el usuario seleccionado.";
+            ShowAlert("No se encontró el usuario seleccionado.", true);
             return;
         }
 
         var security = userEntity.tbl_usuario_seguridad;
         if (security is null || (!security.two_factor_enabled && string.IsNullOrWhiteSpace(security.authenticator_secret)))
         {
-            errorMessage = "El usuario no tiene MFA activo.";
+            ShowAlert("El usuario no tiene MFA activo.", true);
             return;
         }
 
@@ -715,31 +850,31 @@ else
 
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "Se desactivo MFA para el usuario seleccionado.";
+        ShowAlert("Se desactivó MFA para el usuario seleccionado.", false);
+        showFormModal = false;
         await LoadAsync(userEntity.id_usuario);
     }
 
-    private async Task ToggleActiveAsync()
+    private async Task ToggleActiveAsync(tbl_usuario user)
     {
-        statusMessage = null;
         errorMessage = null;
 
-        if (!permissions.CanDelete || editor is null || editor.IdUsuario <= 0)
+        if (!permissions.CanDelete || user is null || user.id_usuario <= 0)
         {
             return;
         }
 
-        if (editor.IdUsuario == currentUserId && editor.Activo)
+        if (user.id_usuario == currentUserId && (user.activo ?? false))
         {
-            errorMessage = "No puedes desactivar tu propio usuario.";
+            ShowAlert("No puedes desactivar tu propio usuario.", true);
             return;
         }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var userEntity = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == editor.IdUsuario);
+        var userEntity = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == user.id_usuario);
         if (userEntity is null)
         {
-            errorMessage = "No se encontro el usuario seleccionado.";
+            ShowAlert("No se encontró el usuario seleccionado.", true);
             return;
         }
 
@@ -750,9 +885,9 @@ else
             $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; Activo={(userEntity.activo == true ? "Si" : "No")}");
         await dbContext.SaveChangesAsync();
 
-        statusMessage = userEntity.activo == true
+        ShowAlert(userEntity.activo == true
             ? "El usuario fue reactivado correctamente."
-            : "El usuario fue desactivado correctamente.";
+            : "El usuario fue desactivado correctamente.", false);
 
         await LoadAsync(userEntity.id_usuario);
     }
@@ -918,8 +1053,18 @@ else
 
         if (!IsValidEmail(editor.Email))
         {
-            errorMessage = "Ingresa un correo electronico valido.";
+            errorMessage = "Ingresa un correo electrónico válido.";
             return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Telefono))
+        {
+            var cleaned = new string(editor.Telefono.Where(char.IsDigit).ToArray());
+            if (cleaned.Length != 10)
+            {
+                errorMessage = "El número de teléfono debe tener exactamente 10 dígitos.";
+                return false;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) &&

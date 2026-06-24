@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using System.Net.Mail
 @using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
@@ -22,8 +23,8 @@ else if (!canViewPatients)
     <section class="management-shell">
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
-            <h1>Gestion de pacientes</h1>
-            <p>Tu rol no tiene permiso para ver este modulo.</p>
+            <h1>Gestión de pacientes</h1>
+            <p>Tu rol no tiene permiso para ver este módulo.</p>
         </div>
     </section>
 }
@@ -34,39 +35,31 @@ else
             <div>
                 <span class="eyebrow">Administrador</span>
                 <h1>Pacientes</h1>
-                <p>Administra historias base de pacientes con permisos por rol, validaciones completas y una vista clara para registrar, actualizar o inactivar.</p>
+                <p>Administra historias base de pacientes con una vista clara, filtros rápidos y acciones integradas.</p>
             </div>
 
             <div class="workspace-actions">
                 @if (permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewPatient">Nuevo paciente</button>
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNewPatient">
+                        <i class="bi bi-person-plus-fill" style="margin-right: 6px;"></i> Nuevo paciente
+                    </button>
                 }
 
-                <button type="button" class="btn btn-primary" @onclick="ExportPatients">Exportar CSV</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportPatients">Exportar CSV</button>
             </div>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(statusMessage))
-        {
-            <div class="alert alert-success" role="alert">@statusMessage</div>
-        }
-
-        @if (!string.IsNullOrWhiteSpace(errorMessage))
-        {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
-        }
-
         <section class="management-card">
             <div class="management-card-header">
-                <h2>Filtros y busqueda</h2>
+                <h2>Filtros y búsqueda</h2>
                 <span>@FilteredPatients.Count resultados</span>
             </div>
 
             <div class="management-form-grid">
                 <div>
                     <label class="form-label" for="patientSearch">Buscador</label>
-                    <input id="patientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, cedula, nombre, correo o telefono" />
+                    <input id="patientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Código, cédula, nombre, correo o teléfono" />
                 </div>
 
                 <div>
@@ -79,7 +72,7 @@ else
                 </div>
 
                 <div>
-                    <label class="form-label" for="patientGender">Genero</label>
+                    <label class="form-label" for="patientGender">Género</label>
                     <select id="patientGender" class="form-select" @bind="selectedGenderFilter">
                         <option value="">Todos</option>
                         @foreach (var option in genderOptions)
@@ -101,254 +94,388 @@ else
                 </div>
             </div>
 
-            <div class="management-actions">
+            <div class="management-actions" style="margin-top: 1rem;">
                 <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
             </div>
         </section>
 
-        <div class="management-grid">
-            <aside class="management-card management-list-card">
-                <div class="management-card-header">
-                    <h2>Pacientes</h2>
-                    <span>@FilteredPatients.Count visibles</span>
-                </div>
+        <!-- Patients Table Card (Full Width) -->
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Listado de Pacientes</h2>
+                <span>@FilteredPatients.Count registrados</span>
+            </div>
 
-                <div class="management-list">
-                    @if (FilteredPatients.Count == 0)
-                    {
-                        <p>No hay pacientes que coincidan con los filtros actuales.</p>
-                    }
-                    else
-                    {
-                        @foreach (var patient in FilteredPatients)
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Cédula</th>
+                            <th>Paciente</th>
+                            <th>Celular</th>
+                            <th>Correo</th>
+                            <th>Estado</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredPatients.Count == 0)
                         {
-                            <button type="button"
-                                    class="management-list-item patient-explorer-item @(selectedPatientId == patient.id_paciente && !isCreatingNewPatient ? "is-active" : string.Empty)"
-                                    @onclick="() => SelectPatientAsync(patient.id_paciente)">
-                                <div class="patient-explorer-head">
-                                    <strong>@($"{patient.nombres} {patient.apellidos}")</strong>
-                                    <span>@(string.IsNullOrWhiteSpace(patient.codigo_paciente) ? "Sin codigo" : patient.codigo_paciente)</span>
-                                </div>
-                                <div class="patient-explorer-meta">
-                                    <span>@patient.cedula</span>
-                                    <span>@(patient.activo == true ? "Activo" : "Inactivo")</span>
-                                </div>
-                                <div class="patient-explorer-copy">
-                                    <span>@(string.IsNullOrWhiteSpace(patient.email) ? "Sin correo" : patient.email)</span>
-                                    <span>@(string.IsNullOrWhiteSpace(patient.telefono) ? "Sin telefono" : patient.telefono)</span>
-                                </div>
-                            </button>
-                        }
-                    }
-                </div>
-            </aside>
-
-            <div class="management-stack">
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Resumen del registro</h2>
-                        <span>@EditorSubtitle</span>
-                    </div>
-
-                    @if (editor is null)
-                    {
-                        <p>Selecciona un paciente para ver su informacion o crea uno nuevo.</p>
-                    }
-                    else
-                    {
-                        <div class="user-summary-grid">
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Identificacion</span>
-                                <strong>@editor.FullName</strong>
-                                <p>@editor.Cedula</p>
-                            </div>
-
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Seguimiento</span>
-                                <strong>@editor.CodigoPaciente</strong>
-                                <p>@GetAgeSummary()</p>
-                            </div>
-
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Estado</span>
-                                <strong>@(editor.Activo ? "Activo" : "Inactivo")</strong>
-                                <p>@(isCreatingNewPatient ? "Registro nuevo listo para validar." : "Controla visibilidad sin perder historial.")</p>
-                            </div>
-                        </div>
-                    }
-                </section>
-
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>@EditorTitle</h2>
-                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
-                    </div>
-
-                    @if (editor is not null)
-                    {
-                        <div class="management-form-grid">
-                            <div>
-                                <label class="form-label" for="patientCode">Codigo paciente</label>
-                                <input id="patientCode" class="form-control" @bind="editor.CodigoPaciente" readonly="@(!CanModifyEditor)" maxlength="30" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientDocument">Cedula</label>
-                                <input id="patientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientNames">Nombres</label>
-                                <input id="patientNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="100" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientLastNames">Apellidos</label>
-                                <input id="patientLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="100" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientBirthDate">Fecha de nacimiento</label>
-                                <input id="patientBirthDate"
-                                       type="date"
-                                       class="form-control"
-                                       value="@editor.FechaNacimiento"
-                                       @onchange="OnBirthDateChanged"
-                                       readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientAge">Edad</label>
-                                <input id="patientAge" class="form-control" value="@GetCalculatedAgeText()" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientGenderField">Genero</label>
-                                <select id="patientGenderField" class="form-select" @bind="editor.Genero" disabled="@(!CanModifyEditor)">
-                                    <option value="">Selecciona</option>
-                                    @foreach (var option in genderOptions)
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientCivilStatusField">Estado civil</label>
-                                <select id="patientCivilStatusField" class="form-select" @bind="editor.EstadoCivil" disabled="@(!CanModifyEditor)">
-                                    <option value="">Selecciona</option>
-                                    @foreach (var option in civilStatusOptions)
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientOccupation">Ocupacion</label>
-                                <input id="patientOccupation" class="form-control" @bind="editor.Ocupacion" readonly="@(!CanModifyEditor)" maxlength="100" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientPhone">Telefono</label>
-                                <input id="patientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="patientEmail">Correo</label>
-                                <input id="patientEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
-                            </div>
-                        </div>
-
-                        <div class="management-form-grid patient-form-block">
-                            <div class="patient-form-span">
-                                <label class="form-label" for="patientAddress">Direccion</label>
-                                <input id="patientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
-                            </div>
-
-                            <div class="patient-form-span">
-                                <label class="form-label" for="patientObservations">Observaciones</label>
-                                <textarea id="patientObservations" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions">
-                            @if (CanModifyEditor)
-                            {
-                                <button type="button" class="btn btn-primary" @onclick="SavePatientAsync">Guardar cambios</button>
-                            }
-
-                            @if (!isCreatingNewPatient && permissions.CanDelete)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
-                                    @(editor.Activo ? "Inactivar paciente" : "Reactivar paciente")
-                                </button>
-                            }
-                        </div>
-                    }
-                </section>
-
-                @if (editor is not null && !isCreatingNewPatient)
-                {
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Ficha de control</h2>
-                            <span>Solo lectura</span>
-                        </div>
-
-                        <div class="user-audit-grid">
-                            <div>
-                                <label class="form-label">Fecha de registro</label>
-                                <input class="form-control" value="@editor.FechaRegistro" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Usuario registro</label>
-                                <input class="form-control" value="@editor.UsuarioRegistro" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Id interno</label>
-                                <input class="form-control" value="@editor.IdPaciente" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Consultas asociadas</label>
-                                <input class="form-control" value="@editor.TotalConsultas" readonly />
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Auditoria</h2>
-                            <span>@auditEntries.Count eventos</span>
-                        </div>
-
-                        @if (auditEntries.Count == 0)
-                        {
-                            <p>No hay eventos registrados para este paciente en este modulo.</p>
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No se encontraron pacientes registrados con los filtros seleccionados.
+                                </td>
+                            </tr>
                         }
                         else
                         {
-                            <div class="management-list">
-                                @foreach (var auditEntry in auditEntries)
-                                {
-                                    <article class="management-list-item">
-                                        <strong>@auditEntry.accion</strong>
-                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
-                                        <span>@GetAuditActorLabel(auditEntry)</span>
-                                        <span>@auditEntry.detalle</span>
-                                    </article>
-                                }
-                            </div>
+                            @foreach (var patient in FilteredPatients)
+                            {
+                                <tr>
+                                    <td>
+                                        <span style="font-family: monospace; font-size: 0.85rem;">@(string.IsNullOrWhiteSpace(patient.codigo_paciente) ? "-" : patient.codigo_paciente)</span>
+                                    </td>
+                                    <td>@patient.cedula</td>
+                                    <td>
+                                        <strong style="color: var(--color-ink);">@($"{patient.nombres} {patient.apellidos}")</strong>
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(patient.telefono) ? "-" : patient.telefono)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(patient.email) ? "-" : patient.email)</td>
+                                    <td>
+                                        @if (patient.activo == true)
+                                        {
+                                            <span class="badge" style="background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;">Activo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;">Inactivo</span>
+                                        }
+                                    </td>
+                                    <td style="text-align: right; padding-right: 1.2rem;">
+                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditPatient(patient)">
+                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditPatient(patient)">
+                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoría
+                                            </button>
+                                            @if (permissions.CanDelete)
+                                            {
+                                                @if (patient.activo == true)
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(patient)">
+                                                        Desactivar
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; background-color: var(--color-sage) !important; border-color: var(--color-sage) !important;" @onclick="() => ToggleActiveAsync(patient)">
+                                                        Activar
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
-                    </section>
-                }
+                    </tbody>
+                </table>
             </div>
-        </div>
+        </section>
     </section>
 }
+
+<!-- Custom Form Modal -->
+@if (showFormModal && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>@EditorTitle</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="patientCode">Código paciente</label>
+                        <input id="patientCode" class="form-control" @bind="editor.CodigoPaciente" readonly="@(!CanModifyEditor)" maxlength="30" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientDocument">Cédula</label>
+                        <input id="patientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientNames">Nombres</label>
+                        <input id="patientNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientLastNames">Apellidos</label>
+                        <input id="patientLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientBirthDate">Fecha de nacimiento</label>
+                        <input id="patientBirthDate" type="date" class="form-control" value="@editor.FechaNacimiento" @onchange="OnBirthDateChanged" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientAge">Edad</label>
+                        <input id="patientAge" class="form-control" value="@GetCalculatedAgeText()" readonly />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientGenderField">Género</label>
+                        <select id="patientGenderField" class="form-select" @bind="editor.Genero" disabled="@(!CanModifyEditor)">
+                            <option value="">Selecciona</option>
+                            @foreach (var option in genderOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientCivilStatusField">Estado civil</label>
+                        <select id="patientCivilStatusField" class="form-select" @bind="editor.EstadoCivil" disabled="@(!CanModifyEditor)">
+                            <option value="">Selecciona</option>
+                            @foreach (var option in civilStatusOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientOccupation">Ocupación</label>
+                        <input id="patientOccupation" class="form-control" @bind="editor.Ocupacion" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientPhone">Teléfono / Celular</label>
+                        <input id="patientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" placeholder="10 dígitos (opcional)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="patientEmail">Correo</label>
+                        <input id="patientEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
+                    </div>
+                </div>
+
+                <div class="management-form-grid patient-form-block" style="grid-template-columns: 1fr; margin-top: 1rem;">
+                    <div>
+                        <label class="form-label" for="patientAddress">Dirección</label>
+                        <input id="patientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                    </div>
+
+                    <div style="margin-top: 1rem;">
+                        <label class="form-label" for="patientObservations">Observaciones</label>
+                        <textarea id="patientObservations" class="form-control" rows="3" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                    </div>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cancelar</button>
+                @if (CanModifyEditor)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SavePatientAsync">Guardar cambios</button>
+                }
+            </footer>
+        </div>
+    </div>
+}
+
+<!-- Custom Audit Modal -->
+@if (showAuditModal && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card audit-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Historial de Auditoría</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showAuditModal = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div style="margin-bottom: 1.5rem;">
+                    <strong style="font-size: 1.1rem; color: var(--color-ink);">@editor.FullName</strong>
+                    <span style="display: block; font-size: 0.85rem; color: var(--color-taupe);">Código: @editor.CodigoPaciente | Cédula: @editor.Cedula</span>
+                </div>
+
+                <div class="audit-info-summary" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; background: rgba(244, 240, 228, 0.4); padding: 1rem; border-radius: 0.8rem;">
+                    <div>
+                        <small style="color: var(--color-taupe); display: block; font-size: 0.75rem;">Fecha Registro</small>
+                        <strong>@editor.FechaRegistro</strong>
+                    </div>
+                    <div>
+                        <small style="color: var(--color-taupe); display: block; font-size: 0.75rem;">Usuario Registro</small>
+                        <strong>@editor.UsuarioRegistro</strong>
+                    </div>
+                </div>
+
+                <div class="audit-history-list" style="max-height: 300px; overflow-y: auto;">
+                    @if (auditEntries.Count == 0)
+                    {
+                        <p>No hay eventos registrados para este paciente.</p>
+                    }
+                    else
+                    {
+                        <div style="display: grid; gap: 0.8rem;">
+                            @foreach (var auditEntry in auditEntries)
+                            {
+                                <div style="background: #ffffff; border: 1px solid rgba(127, 105, 81, 0.08); padding: 0.8rem; border-radius: 0.6rem; box-shadow: 0 2px 8px rgba(127,105,81,0.02);">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                                        <strong style="color: var(--color-sage);">@auditEntry.accion</strong>
+                                        <span style="font-size: 0.78rem; color: var(--color-taupe);">@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                    </div>
+                                    <div style="font-size: 0.82rem; color: var(--color-ink); margin-bottom: 0.2rem;">
+                                        @auditEntry.detalle
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">
+                                        Actor: @GetAuditActorLabel(auditEntry)
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="() => showAuditModal = false">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<!-- Custom Alert Modal -->
+@if (showAlertModal)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
+                <h2>@(alertIsError ? "Error de Validación" : "Operación Exitosa")</h2>
+            </header>
+            <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
+                    <i class="bi @(alertIsError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+                </div>
+                <p style="font-size: 1rem; color: var(--color-ink); line-height: 1.5; margin: 0;">@alertMessage</p>
+            </div>
+            <footer class="custom-modal-footer" style="justify-content: center; background: transparent; border-top: none; padding-top: 0;">
+                <button type="button" class="btn btn-primary" style="min-width: 120px;" @onclick="CloseAlertModal">Aceptar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<style>
+    /* Custom Modal Overlays */
+    .custom-modal-overlay {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(60, 52, 46, 0.4) !important;
+        backdrop-filter: blur(4px) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 1050 !important;
+    }
+
+    .custom-modal-card {
+        background: #ffffff !important;
+        border-radius: 1.2rem !important;
+        border: 1px solid rgba(127, 105, 81, 0.1) !important;
+        box-shadow: 0 24px 64px rgba(127, 105, 81, 0.15) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        max-height: 90vh !important;
+        width: min(90%, 750px) !important;
+        overflow: hidden !important;
+        animation: modalFadeIn 0.25s ease-out !important;
+    }
+
+    .audit-modal-card {
+        width: min(90%, 600px) !important;
+    }
+
+    .alert-modal-card {
+        width: min(90%, 420px) !important;
+    }
+
+    @@keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .custom-modal-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 1.2rem 1.6rem !important;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.08) !important;
+    }
+
+    .rose-header {
+        background: #ECCCC5 !important; /* Rose pink background */
+    }
+
+    .apricot-header {
+        background: #FEBC64 !important; /* Apricot background */
+    }
+
+    .error-header {
+        background: #ECCCC5 !important;
+        color: #3c342e !important;
+    }
+
+    .success-header {
+        background: rgba(93, 161, 129, 0.15) !important;
+        color: #3c342e !important;
+    }
+
+    .custom-modal-header h2 {
+        margin: 0 !important;
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+        color: #3c342e !important;
+    }
+
+    .btn-close-modal {
+        background: transparent !important;
+        border: none !important;
+        font-size: 1.8rem !important;
+        line-height: 1 !important;
+        color: #7F6951 !important;
+        cursor: pointer !important;
+        padding: 0 !important;
+        transition: color 0.15s ease !important;
+    }
+
+    .btn-close-modal:hover {
+        color: #3c342e !important;
+    }
+
+    .custom-modal-body {
+        padding: 1.6rem !important;
+        overflow-y: auto !important;
+        max-height: calc(90vh - 120px) !important;
+    }
+
+    .custom-modal-footer {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 0.8rem !important;
+        padding: 1.2rem 1.6rem !important;
+        border-top: 1px solid rgba(127, 105, 81, 0.08) !important;
+        background: #fbf9f4 !important;
+    }
+</style>
 
 @code {
     private readonly List<tbl_paciente> patients = [];
@@ -365,8 +492,14 @@ else
     private string selectedStatusFilter = "all";
     private string selectedGenderFilter = string.Empty;
     private string selectedCivilStatusFilter = string.Empty;
-    private string? statusMessage;
     private string? errorMessage;
+
+    // Modal Control Fields
+    private bool showFormModal;
+    private bool showAuditModal;
+    private bool showAlertModal;
+    private string alertMessage = string.Empty;
+    private bool alertIsError;
 
     private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
     private static readonly string[] civilStatusOptions = ["Soltero(a)", "Casado(a)", "Union libre", "Divorciado(a)", "Viudo(a)"];
@@ -378,7 +511,6 @@ else
         .ToList();
 
     private string EditorTitle => isCreatingNewPatient ? "Nuevo paciente" : "Detalle del paciente";
-    private string EditorSubtitle => isCreatingNewPatient ? "Alta administrativa" : (selectedPatientId > 0 ? $"Paciente #{selectedPatientId}" : "Vista");
     private bool CanModifyEditor => isCreatingNewPatient ? permissions.CanCreate : permissions.CanEdit;
 
     protected override async Task OnInitializedAsync()
@@ -390,8 +522,9 @@ else
         await LoadAsync();
     }
 
-    private async Task LoadAsync(int? preserveSelectedPatientId = null)
+    private async Task LoadAsync()
     {
+        isLoading = true;
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
 
         permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
@@ -412,40 +545,55 @@ else
         patients.Clear();
         patients.AddRange(loadedPatients);
 
-        if (isCreatingNewPatient)
-        {
-            editor ??= BuildNewEditor();
-            auditEntries = [];
-        }
-        else
-        {
-            selectedPatientId = preserveSelectedPatientId ?? selectedPatientId;
-            if (selectedPatientId == 0)
-            {
-                selectedPatientId = patients.FirstOrDefault()?.id_paciente ?? 0;
-            }
-
-            await SelectPatientAsync(selectedPatientId);
-        }
+        selectedPatientId = 0;
+        editor = null;
+        auditEntries = [];
 
         isLoading = false;
     }
 
     private void PrepareNewPatient()
     {
-        statusMessage = null;
-        errorMessage = null;
         isCreatingNewPatient = true;
         selectedPatientId = 0;
         editor = BuildNewEditor();
         auditEntries = [];
+        showFormModal = true;
+    }
+
+    private void PrepareEditPatient(tbl_paciente patient)
+    {
+        isCreatingNewPatient = false;
+        selectedPatientId = patient.id_paciente;
+        editor = BuildEditor(patient);
+        showFormModal = true;
+    }
+
+    private async Task PrepareAuditPatient(tbl_paciente patient)
+    {
+        selectedPatientId = patient.id_paciente;
+        editor = BuildEditor(patient);
+        await LoadAuditEntriesAsync(patient.id_paciente);
+        showAuditModal = true;
+    }
+
+    private void ShowAlert(string message, bool isError)
+    {
+        alertMessage = message;
+        alertIsError = isError;
+        showAlertModal = true;
+    }
+
+    private void CloseAlertModal()
+    {
+        showAlertModal = false;
+        alertMessage = string.Empty;
     }
 
     private async Task SelectPatientAsync(int patientId)
     {
         selectedPatientId = patientId;
         isCreatingNewPatient = false;
-        statusMessage = null;
         errorMessage = null;
         editor = BuildEditor(patients.FirstOrDefault(p => p.id_paciente == patientId));
         await LoadAuditEntriesAsync(patientId);
@@ -453,11 +601,9 @@ else
 
     private async Task SavePatientAsync()
     {
-        statusMessage = null;
-        errorMessage = null;
-
         if (!ValidateEditor())
         {
+            ShowAlert(errorMessage ?? "Por favor corrige los errores del formulario.", true);
             return;
         }
 
@@ -471,7 +617,7 @@ else
 
         if (cedulaExists)
         {
-            errorMessage = "La cedula ya esta registrada para otro paciente.";
+            ShowAlert("La cédula ya está registrada para otro paciente.", true);
             return;
         }
 
@@ -482,7 +628,7 @@ else
 
             if (emailExists)
             {
-                errorMessage = "El correo ya esta registrado para otro paciente.";
+                ShowAlert("El correo ya está registrado para otro paciente.", true);
                 return;
             }
         }
@@ -494,7 +640,7 @@ else
 
             if (codeExists)
             {
-                errorMessage = "El codigo del paciente ya existe.";
+                ShowAlert("El código del paciente ya existe.", true);
                 return;
             }
         }
@@ -506,7 +652,7 @@ else
         {
             if (!permissions.CanCreate)
             {
-                errorMessage = "Tu rol no tiene permiso para crear pacientes.";
+                ShowAlert("Tu rol no tiene permiso para crear pacientes.", true);
                 return;
             }
 
@@ -539,22 +685,22 @@ else
                 $"PacienteId={newPatient.id_paciente}; Cedula={newPatient.cedula}; Nombre={newPatient.nombres} {newPatient.apellidos}; Codigo={newPatient.codigo_paciente}");
 
             await dbContext.SaveChangesAsync();
-            statusMessage = "El paciente se registro correctamente.";
-            isCreatingNewPatient = false;
-            await LoadAsync(newPatient.id_paciente);
+            ShowAlert("El paciente se registró correctamente.", false);
+            showFormModal = false;
+            await LoadAsync();
             return;
         }
 
         if (!permissions.CanEdit)
         {
-            errorMessage = "Tu rol no tiene permiso para editar pacientes.";
+            ShowAlert("Tu rol no tiene permiso para editar pacientes.", true);
             return;
         }
 
         var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
         if (patientEntity is null)
         {
-            errorMessage = "No se encontro el paciente seleccionado.";
+            ShowAlert("No se encontró el paciente seleccionado.", true);
             return;
         }
 
@@ -578,25 +724,24 @@ else
             $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Nombre={patientEntity.nombres} {patientEntity.apellidos}");
 
         await dbContext.SaveChangesAsync();
-        statusMessage = "La informacion del paciente se guardo correctamente.";
-        await LoadAsync(patientEntity.id_paciente);
+        ShowAlert("La información del paciente se guardó correctamente.", false);
+        showFormModal = false;
+        await LoadAsync();
     }
 
-    private async Task ToggleActiveAsync()
+    private async Task ToggleActiveAsync(tbl_paciente patient)
     {
-        statusMessage = null;
-        errorMessage = null;
-
-        if (!permissions.CanDelete || editor is null || editor.IdPaciente <= 0)
+        if (!permissions.CanDelete)
         {
+            ShowAlert("Tu rol no tiene permiso para activar o desactivar pacientes.", true);
             return;
         }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
+        var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == patient.id_paciente);
         if (patientEntity is null)
         {
-            errorMessage = "No se encontro el paciente seleccionado.";
+            ShowAlert("No se encontró el paciente seleccionado.", true);
             return;
         }
 
@@ -607,11 +752,11 @@ else
             $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Activo={(patientEntity.activo == true ? "Si" : "No")}");
 
         await dbContext.SaveChangesAsync();
-        statusMessage = patientEntity.activo == true
+        ShowAlert(patientEntity.activo == true
             ? "El paciente fue reactivado correctamente."
-            : "El paciente fue inactivado correctamente.";
+            : "El paciente fue inactivado correctamente.", false);
 
-        await LoadAsync(patientEntity.id_paciente);
+        await LoadAsync();
     }
 
     private void ClearFilters()
@@ -683,40 +828,32 @@ else
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
             var normalizedSearch = searchTerm.Trim().ToLowerInvariant();
-            var fullName = $"{patient.nombres} {patient.apellidos}".ToLowerInvariant();
-            var matchesSearch =
-                (patient.codigo_paciente?.ToLowerInvariant().Contains(normalizedSearch) ?? false) ||
-                patient.cedula.ToLowerInvariant().Contains(normalizedSearch) ||
-                fullName.Contains(normalizedSearch) ||
-                (patient.email?.ToLowerInvariant().Contains(normalizedSearch) ?? false) ||
-                (patient.telefono?.ToLowerInvariant().Contains(normalizedSearch) ?? false);
+            var matches = (patient.codigo_paciente != null && patient.codigo_paciente.ToLower().Contains(normalizedSearch)) ||
+                          (patient.cedula != null && patient.cedula.ToLower().Contains(normalizedSearch)) ||
+                          (patient.nombres != null && patient.nombres.ToLower().Contains(normalizedSearch)) ||
+                          (patient.apellidos != null && patient.apellidos.ToLower().Contains(normalizedSearch)) ||
+                          (patient.email != null && patient.email.ToLower().Contains(normalizedSearch)) ||
+                          (patient.telefono != null && patient.telefono.ToLower().Contains(normalizedSearch));
 
-            if (!matchesSearch)
-            {
+            if (!matches) return false;
+        }
+
+        if (!string.Equals(selectedStatusFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var wantActive = string.Equals(selectedStatusFilter, "active", StringComparison.OrdinalIgnoreCase);
+            if (patient.activo != wantActive) return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedGenderFilter))
+        {
+            if (!string.Equals(patient.genero, selectedGenderFilter, StringComparison.OrdinalIgnoreCase))
                 return false;
-            }
         }
 
-        if (selectedStatusFilter == "active" && patient.activo != true)
+        if (!string.IsNullOrWhiteSpace(selectedCivilStatusFilter))
         {
-            return false;
-        }
-
-        if (selectedStatusFilter == "inactive" && patient.activo == true)
-        {
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(selectedGenderFilter) &&
-            !string.Equals(patient.genero, selectedGenderFilter, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(selectedCivilStatusFilter) &&
-            !string.Equals(patient.estado_civil, selectedCivilStatusFilter, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
+            if (!string.Equals(patient.estado_civil, selectedCivilStatusFilter, StringComparison.OrdinalIgnoreCase))
+                return false;
         }
 
         return true;
@@ -743,13 +880,13 @@ else
             string.IsNullOrWhiteSpace(editor.Nombres) ||
             string.IsNullOrWhiteSpace(editor.Apellidos))
         {
-            errorMessage = "Completa cedula, nombres y apellidos.";
+            errorMessage = "Cédula, Nombres y Apellidos son obligatorios.";
             return false;
         }
 
         if (editor.Cedula.Length > 20 || editor.Nombres.Length > 100 || editor.Apellidos.Length > 100)
         {
-            errorMessage = "Verifica las longitudes maximas de cedula, nombres y apellidos.";
+            errorMessage = "Verifica las longitudes máximas de cédula, nombres y apellidos.";
             return false;
         }
 
@@ -763,15 +900,26 @@ else
             return false;
         }
 
+        // Validate cellphone number exactly 10 digits if entered
+        if (!string.IsNullOrWhiteSpace(editor.Telefono))
+        {
+            var digitsOnly = new string(editor.Telefono.Where(char.IsDigit).ToArray());
+            if (digitsOnly.Length != 10)
+            {
+                errorMessage = "El número de celular debe tener exactamente 10 dígitos (solo se permiten números).";
+                return false;
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
         {
-            errorMessage = "Ingresa un correo electronico valido.";
+            errorMessage = "Ingresa un correo electrónico válido.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) && !DateOnly.TryParse(editor.FechaNacimiento, out _))
         {
-            errorMessage = "La fecha de nacimiento no es valida.";
+            errorMessage = "La fecha de nacimiento no es válida.";
             return false;
         }
 
@@ -867,7 +1015,7 @@ else
             return string.Empty;
         }
 
-        return editor.Edad.HasValue ? $"{editor.Edad.Value} anos" : "Sin dato";
+        return editor.Edad.HasValue ? $"{editor.Edad.Value} años" : "Sin dato";
     }
 
     private static DateOnly? ParseBirthDate(string? rawBirthDate)
@@ -959,6 +1107,7 @@ else
         public string Genero { get; set; } = string.Empty;
         public string EstadoCivil { get; set; } = string.Empty;
         public string Ocupacion { get; set; } = string.Empty;
+        public string LightColor { get; set; } = string.Empty;
         public string Direccion { get; set; } = string.Empty;
         public string Telefono { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
