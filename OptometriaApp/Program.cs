@@ -73,6 +73,7 @@ await EnsureSecuritySchemaAsync(app);
 await EnsureNavigationSchemaAsync(app);
 await EnsureUserProfileSchemaAsync(app);
 await EnsureAuditSchemaAsync(app);
+await EnsureElectronicBillingSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -1266,6 +1267,175 @@ app.MapGet("/exports/suppliers.csv", async (
         $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/clients.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var actorUserId = GetUserId(httpContext.User);
+    if (!int.TryParse(roleIdValue, out var roleId) || actorUserId is null)
+    {
+        return Results.Forbid();
+    }
+
+    var canViewClients = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/clients"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewClients)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+    var clientType = httpContext.Request.Query["type"].ToString().Trim();
+
+    var clientsQuery = dbContext.clients
+        .AsNoTracking()
+        .Where(c => c.id_usuario_creacion == actorUserId.Value)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        clientsQuery = clientsQuery.Where(c =>
+            c.razon_social.ToLower().Contains(loweredSearch) ||
+            c.numero_identificacion.ToLower().Contains(loweredSearch) ||
+            (c.nombres != null && c.nombres.ToLower().Contains(loweredSearch)) ||
+            (c.apellidos != null && c.apellidos.ToLower().Contains(loweredSearch)) ||
+            (c.ciudad != null && c.ciudad.ToLower().Contains(loweredSearch)) ||
+            (c.correo_electronico != null && c.correo_electronico.ToLower().Contains(loweredSearch)));
+    }
+
+    if (status is "active" or "inactive")
+    {
+        var expectedStatus = status == "active";
+        clientsQuery = clientsQuery.Where(c => c.estado == expectedStatus);
+    }
+
+    if (!string.IsNullOrWhiteSpace(clientType))
+    {
+        clientsQuery = clientsQuery.Where(c => c.tipo_cliente == clientType);
+    }
+
+    var clients = await clientsQuery
+        .OrderBy(c => c.razon_social)
+        .ThenBy(c => c.numero_identificacion)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,TipoCliente,TipoIdentificacion,NumeroIdentificacion,RazonSocial,Nombres,Apellidos,Ciudad,Provincia,Telefono,Correo,CondicionPago,Estado");
+
+    foreach (var client in clients)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(client.cliente_id.ToString()),
+            EscapeCsv(client.tipo_cliente),
+            EscapeCsv(client.tipo_identificacion),
+            EscapeCsv(client.numero_identificacion),
+            EscapeCsv(client.razon_social),
+            EscapeCsv(client.nombres),
+            EscapeCsv(client.apellidos),
+            EscapeCsv(client.ciudad),
+            EscapeCsv(client.provincia),
+            EscapeCsv(client.telefono),
+            EscapeCsv(client.correo_electronico),
+            EscapeCsv(client.condicion_pago),
+            EscapeCsv(client.estado ? "Activo" : "Inactivo")));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = actorUserId,
+        accion = "Exportar CSV",
+        modulo = "Clientes",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|type:{clientType}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"clientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/emisor.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var actorUserId = GetUserId(httpContext.User);
+    if (!int.TryParse(roleIdValue, out var roleId) || actorUserId is null)
+    {
+        return Results.Forbid();
+    }
+
+    var canViewEmisor = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/emisor"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewEmisor)
+    {
+        return Results.Forbid();
+    }
+
+    var emisores = await dbContext.emisor
+        .AsNoTracking()
+        .Where(e => e.id_usuario_creacion == actorUserId.Value)
+        .OrderBy(e => e.razon_social)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Ruc,RazonSocial,NombreComercial,TipoPersona,TipoIdentificacion,Correo,Telefono,Establecimiento,PuntoEmision,Estado");
+
+    foreach (var issuer in emisores)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(issuer.emisor_id.ToString()),
+            EscapeCsv(issuer.ruc),
+            EscapeCsv(issuer.razon_social),
+            EscapeCsv(issuer.nombre_comercial),
+            EscapeCsv(issuer.tipo_persona),
+            EscapeCsv(issuer.tipo_identificacion),
+            EscapeCsv(issuer.correo),
+            EscapeCsv(issuer.telefono),
+            EscapeCsv(issuer.establecimiento_codigo),
+            EscapeCsv(issuer.punto_emision_codigo),
+            EscapeCsv(issuer.estado ? "Activo" : "Inactivo")));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = actorUserId,
+        accion = "Exportar CSV",
+        modulo = "Emisor",
+        fecha = DateTime.Now,
+        detalle = "Tipo=Exportacion"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"emisor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -1350,11 +1520,13 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 5, 1),
                 ('Laboratorios', '/laboratories', 'lab', 6, 1),
                 ('Proveedores', '/suppliers', 'suppliers', 7, 1),
-                ('Usuarios', '/users', 'users', 8, 1),
-                ('Roles', '/roles', 'roles', 9, 1),
-                ('Menus', '/menus', 'menu', 10, 1),
-                ('Registrar usuario', '/register', 'user-plus', 11, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 12, 1)
+                ('Clientes', '/clients', 'clients', 8, 1),
+                ('Emisor', '/emisor', 'issuer', 9, 1),
+                ('Usuarios', '/users', 'users', 10, 1),
+                ('Roles', '/roles', 'roles', 11, 1),
+                ('Menus', '/menus', 'menu', 12, 1),
+                ('Registrar usuario', '/register', 'user-plus', 13, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 14, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -1498,6 +1670,129 @@ static async Task EnsureAuditSchemaAsync(WebApplication app)
                     FOREIGN KEY (id_usuario) REFERENCES dbo.tbl_usuario(id_usuario)
             );
         END
+        """);
+}
+
+static async Task EnsureElectronicBillingSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.emisor', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.emisor
+            (
+                emisor_id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                ruc VARCHAR(13) NOT NULL,
+                razon_social VARCHAR(300) NOT NULL,
+                nombre_comercial VARCHAR(300) NULL,
+                tipo_persona CHAR(1) NOT NULL,
+                tipo_identificacion VARCHAR(2) NOT NULL,
+                direccion VARCHAR(500) NULL,
+                telefono VARCHAR(20) NULL,
+                correo VARCHAR(100) NULL,
+                provincia VARCHAR(100) NULL,
+                ciudad VARCHAR(100) NULL,
+                codigo_postal VARCHAR(10) NULL,
+                establecimiento_codigo VARCHAR(3) NOT NULL,
+                punto_emision_codigo VARCHAR(3) NOT NULL,
+                nombre_representante_legal VARCHAR(300) NULL,
+                cedula_representante VARCHAR(10) NULL,
+                es_contribuyente_especial BIT NOT NULL CONSTRAINT DF_emisor_es_contribuyente_especial DEFAULT (0),
+                numero_contribuyente_especial VARCHAR(10) NULL,
+                estado BIT NOT NULL CONSTRAINT DF_emisor_estado DEFAULT (1),
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_emisor_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME NOT NULL CONSTRAINT DF_emisor_fecha_actualizacion DEFAULT (GETDATE()),
+                id_usuario_creacion INT NOT NULL,
+                id_usuario_actualizacion INT NULL,
+                CONSTRAINT FK_emisor_usuario_creacion FOREIGN KEY (id_usuario_creacion) REFERENCES dbo.tbl_usuario(id_usuario),
+                CONSTRAINT FK_emisor_usuario_actualizacion FOREIGN KEY (id_usuario_actualizacion) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.clients', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.clients
+            (
+                cliente_id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                tipo_cliente VARCHAR(20) NOT NULL,
+                tipo_identificacion VARCHAR(2) NOT NULL,
+                numero_identificacion VARCHAR(20) NOT NULL,
+                razon_social VARCHAR(300) NOT NULL,
+                nombres VARCHAR(200) NULL,
+                apellidos VARCHAR(200) NULL,
+                nombre_comercial VARCHAR(300) NULL,
+                direccion VARCHAR(500) NULL,
+                ciudad VARCHAR(100) NULL,
+                provincia VARCHAR(100) NULL,
+                codigo_postal VARCHAR(10) NULL,
+                telefono VARCHAR(20) NULL,
+                correo_electronico VARCHAR(100) NULL,
+                es_contribuyente_especial BIT NOT NULL CONSTRAINT DF_clients_es_contribuyente_especial DEFAULT (0),
+                numero_contribuyente_especial VARCHAR(10) NULL,
+                pais_codigo VARCHAR(2) NOT NULL CONSTRAINT DF_clients_pais_codigo DEFAULT ('EC'),
+                es_residente_exterior BIT NOT NULL CONSTRAINT DF_clients_es_residente_exterior DEFAULT (0),
+                es_consumidor_final BIT NOT NULL CONSTRAINT DF_clients_es_consumidor_final DEFAULT (0),
+                es_obligado_contabilidad BIT NOT NULL CONSTRAINT DF_clients_es_obligado_contabilidad DEFAULT (0),
+                contacto_nombre VARCHAR(200) NULL,
+                contacto_telefono VARCHAR(20) NULL,
+                contacto_correo VARCHAR(100) NULL,
+                condicion_pago VARCHAR(50) NULL,
+                dias_plazo INT NOT NULL CONSTRAINT DF_clients_dias_plazo DEFAULT (0),
+                limite_credito DECIMAL(15,2) NOT NULL CONSTRAINT DF_clients_limite_credito DEFAULT (0),
+                saldo_deudor DECIMAL(15,2) NOT NULL CONSTRAINT DF_clients_saldo_deudor DEFAULT (0),
+                estado BIT NOT NULL CONSTRAINT DF_clients_estado DEFAULT (1),
+                observaciones VARCHAR(500) NULL,
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_clients_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME NOT NULL CONSTRAINT DF_clients_fecha_actualizacion DEFAULT (GETDATE()),
+                id_usuario_creacion INT NOT NULL,
+                id_usuario_actualizacion INT NULL,
+                CONSTRAINT FK_clients_usuario_creacion FOREIGN KEY (id_usuario_creacion) REFERENCES dbo.tbl_usuario(id_usuario),
+                CONSTRAINT FK_clients_usuario_actualizacion FOREIGN KEY (id_usuario_actualizacion) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_emisor_ruc' AND object_id = OBJECT_ID('dbo.emisor'))
+        BEGIN
+            CREATE UNIQUE NONCLUSTERED INDEX UQ_emisor_ruc ON dbo.emisor (ruc);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_emisor_usuario' AND object_id = OBJECT_ID('dbo.emisor'))
+        BEGIN
+            CREATE UNIQUE NONCLUSTERED INDEX UQ_emisor_usuario ON dbo.emisor (id_usuario_creacion);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_emisor_ruc' AND object_id = OBJECT_ID('dbo.emisor'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_emisor_ruc ON dbo.emisor (ruc);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_emisor_estado' AND object_id = OBJECT_ID('dbo.emisor'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_emisor_estado ON dbo.emisor (estado);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_clients_usuario_identificacion' AND object_id = OBJECT_ID('dbo.clients'))
+        BEGIN
+            CREATE UNIQUE NONCLUSTERED INDEX UQ_clients_usuario_identificacion ON dbo.clients (id_usuario_creacion, tipo_identificacion, numero_identificacion);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_clients_numero_identificacion' AND object_id = OBJECT_ID('dbo.clients'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_clients_numero_identificacion ON dbo.clients (numero_identificacion);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_clients_estado' AND object_id = OBJECT_ID('dbo.clients'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_clients_estado ON dbo.clients (estado);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_clients_razon_social' AND object_id = OBJECT_ID('dbo.clients'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_clients_razon_social ON dbo.clients (razon_social);
+        END;
         """);
 }
 
