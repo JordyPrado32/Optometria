@@ -75,6 +75,8 @@ await EnsureUserProfileSchemaAsync(app);
 await EnsureAuditSchemaAsync(app);
 await EnsureElectronicBillingSchemaAsync(app);
 await EnsureProductSchemaAsync(app);
+await EnsureSupplierSchemaAsync(app);
+await EnsureProcurementSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -1217,6 +1219,7 @@ app.MapGet("/exports/suppliers.csv", async (
     }
 
     var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
 
     var suppliersQuery = dbContext.tbl_proveedors
         .AsNoTracking()
@@ -1227,10 +1230,18 @@ app.MapGet("/exports/suppliers.csv", async (
         var loweredSearch = search.ToLowerInvariant();
         suppliersQuery = suppliersQuery.Where(s =>
             s.nombre.ToLower().Contains(loweredSearch) ||
+            (s.razon_social != null && s.razon_social.ToLower().Contains(loweredSearch)) ||
+            (s.ruc != null && s.ruc.ToLower().Contains(loweredSearch)) ||
             (s.telefono != null && s.telefono.ToLower().Contains(loweredSearch)) ||
             (s.email != null && s.email.ToLower().Contains(loweredSearch)) ||
             (s.direccion != null && s.direccion.ToLower().Contains(loweredSearch)) ||
             (s.observaciones != null && s.observaciones.ToLower().Contains(loweredSearch)));
+    }
+
+    if (status is "active" or "inactive")
+    {
+        var expectedStatus = status == "active";
+        suppliersQuery = suppliersQuery.Where(s => (s.es_activo ?? true) == expectedStatus);
     }
 
     var suppliers = await suppliersQuery
@@ -1238,17 +1249,23 @@ app.MapGet("/exports/suppliers.csv", async (
         .ToListAsync();
 
     var csvBuilder = new StringBuilder();
-    csvBuilder.AppendLine("Id,Nombre,Telefono,Correo,Direccion,Observaciones");
+    csvBuilder.AppendLine("Id,Nombre,RazonSocial,Ruc,Telefono,Correo,Ciudad,Provincia,CondicionPago,LimiteCredito,SaldoPendiente,Estado");
 
     foreach (var supplier in suppliers)
     {
         csvBuilder.AppendLine(string.Join(",",
             EscapeCsv(supplier.id_proveedor.ToString()),
             EscapeCsv(supplier.nombre),
+            EscapeCsv(supplier.razon_social),
+            EscapeCsv(supplier.ruc),
             EscapeCsv(supplier.telefono),
             EscapeCsv(supplier.email),
-            EscapeCsv(supplier.direccion),
-            EscapeCsv(supplier.observaciones)));
+            EscapeCsv(supplier.ciudad),
+            EscapeCsv(supplier.provincia),
+            EscapeCsv(supplier.condicion_pago),
+            EscapeCsv(supplier.limite_credito?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(supplier.saldo_pendiente?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv((supplier.es_activo ?? true) ? "Activo" : "Inactivo")));
     }
 
     dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
@@ -1257,7 +1274,7 @@ app.MapGet("/exports/suppliers.csv", async (
         accion = "Exportar CSV",
         modulo = "Proveedores",
         fecha = DateTime.Now,
-        detalle = $"Tipo=Exportacion; Filtros=search:{search}"
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}"
     });
 
     await dbContext.SaveChangesAsync();
@@ -1553,6 +1570,378 @@ app.MapGet("/exports/products.csv", async (
         $"productos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/purchase-orders.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canView = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-orders"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canView)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var state = httpContext.Request.Query["state"].ToString().Trim();
+    var supplierIdRaw = httpContext.Request.Query["supplierId"].ToString().Trim();
+
+    var ordersQuery = dbContext.tbl_orden_compra
+        .AsNoTracking()
+        .Include(x => x.id_proveedorNavigation)
+        .Include(x => x.tbl_detalle_orden_compra)
+        .Where(x => x.id_usuario_solicita == userId)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        ordersQuery = ordersQuery.Where(x =>
+            x.numero_orden.ToLower().Contains(loweredSearch) ||
+            (x.referencia_externa != null && x.referencia_externa.ToLower().Contains(loweredSearch)) ||
+            x.id_proveedorNavigation.nombre.ToLower().Contains(loweredSearch));
+    }
+
+    if (!string.IsNullOrWhiteSpace(state))
+    {
+        ordersQuery = ordersQuery.Where(x => x.estado_orden == state);
+    }
+
+    if (int.TryParse(supplierIdRaw, out var supplierId) && supplierId > 0)
+    {
+        ordersQuery = ordersQuery.Where(x => x.id_proveedor == supplierId);
+    }
+
+    var orders = await ordersQuery.OrderByDescending(x => x.fecha_orden).ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,NumeroOrden,Proveedor,FechaOrden,Estado,CondicionPago,Moneda,Total,Lineas,ReferenciaExterna");
+
+    foreach (var item in orders)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(item.id_orden_compra.ToString()),
+            EscapeCsv(item.numero_orden),
+            EscapeCsv(item.id_proveedorNavigation?.nombre),
+            EscapeCsv(item.fecha_orden?.ToString("yyyy-MM-dd HH:mm")),
+            EscapeCsv(item.estado_orden),
+            EscapeCsv(item.condicion_pago),
+            EscapeCsv(item.moneda),
+            EscapeCsv(item.total?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.tbl_detalle_orden_compra.Count.ToString()),
+            EscapeCsv(item.referencia_externa)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = "Exportar CSV",
+        modulo = "OrdenesCompra",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|state:{state}|supplierId:{supplierIdRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/purchase-receptions.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canView = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-receptions"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canView)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var state = httpContext.Request.Query["state"].ToString().Trim();
+    var orderIdRaw = httpContext.Request.Query["orderId"].ToString().Trim();
+
+    var receptionsQuery = dbContext.tbl_recepcion_compra
+        .AsNoTracking()
+        .Include(x => x.id_orden_compraNavigation)
+        .Where(x => x.id_usuario_recibe == userId)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        receptionsQuery = receptionsQuery.Where(x =>
+            x.numero_recepcion.ToLower().Contains(loweredSearch) ||
+            (x.numero_guia_remision != null && x.numero_guia_remision.ToLower().Contains(loweredSearch)) ||
+            x.id_orden_compraNavigation.numero_orden.ToLower().Contains(loweredSearch));
+    }
+
+    if (!string.IsNullOrWhiteSpace(state))
+    {
+        receptionsQuery = receptionsQuery.Where(x => x.estado_recepcion == state);
+    }
+
+    if (int.TryParse(orderIdRaw, out var orderId) && orderId > 0)
+    {
+        receptionsQuery = receptionsQuery.Where(x => x.id_orden_compra == orderId);
+    }
+
+    var receptions = await receptionsQuery.OrderByDescending(x => x.fecha_recepcion).ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,NumeroRecepcion,OrdenCompra,FechaRecepcion,Estado,CantidadRecibida,GuiaRemision,Observaciones");
+
+    foreach (var item in receptions)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(item.id_recepcion.ToString()),
+            EscapeCsv(item.numero_recepcion),
+            EscapeCsv(item.id_orden_compraNavigation?.numero_orden),
+            EscapeCsv(item.fecha_recepcion?.ToString("yyyy-MM-dd HH:mm")),
+            EscapeCsv(item.estado_recepcion),
+            EscapeCsv(item.cantidad_total_recibida?.ToString()),
+            EscapeCsv(item.numero_guia_remision),
+            EscapeCsv(item.observaciones_recepcion)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = "Exportar CSV",
+        modulo = "RecepcionesCompra",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|state:{state}|orderId:{orderIdRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"recepciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/purchase-liquidations.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canView = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-liquidations"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canView)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var state = httpContext.Request.Query["state"].ToString().Trim();
+    var orderIdRaw = httpContext.Request.Query["orderId"].ToString().Trim();
+
+    var liquidationsQuery = dbContext.tbl_liquidacion_compra
+        .AsNoTracking()
+        .Include(x => x.id_orden_compraNavigation)
+        .Where(x => x.id_usuario_registro == userId)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        liquidationsQuery = liquidationsQuery.Where(x =>
+            x.numero_liquidacion.ToLower().Contains(loweredSearch) ||
+            (x.numero_factura != null && x.numero_factura.ToLower().Contains(loweredSearch)) ||
+            (x.numero_autorizacion != null && x.numero_autorizacion.ToLower().Contains(loweredSearch)) ||
+            x.id_orden_compraNavigation.numero_orden.ToLower().Contains(loweredSearch));
+    }
+
+    if (!string.IsNullOrWhiteSpace(state))
+    {
+        liquidationsQuery = liquidationsQuery.Where(x => x.estado_liquidacion == state);
+    }
+
+    if (int.TryParse(orderIdRaw, out var orderId) && orderId > 0)
+    {
+        liquidationsQuery = liquidationsQuery.Where(x => x.id_orden_compra == orderId);
+    }
+
+    var liquidations = await liquidationsQuery.OrderByDescending(x => x.fecha_liquidacion).ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,NumeroLiquidacion,OrdenCompra,FechaLiquidacion,Factura,Autorizacion,Estado,Subtotal,Impuesto,Total,Pagado,Pendiente");
+
+    foreach (var item in liquidations)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(item.id_liquidacion_compra.ToString()),
+            EscapeCsv(item.numero_liquidacion),
+            EscapeCsv(item.id_orden_compraNavigation?.numero_orden),
+            EscapeCsv(item.fecha_liquidacion?.ToString("yyyy-MM-dd HH:mm")),
+            EscapeCsv(item.numero_factura),
+            EscapeCsv(item.numero_autorizacion),
+            EscapeCsv(item.estado_liquidacion),
+            EscapeCsv(item.subtotal?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.impuesto_total?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.total?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.saldo_pagado?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.saldo_pendiente?.ToString("0.00", CultureInfo.InvariantCulture))));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = "Exportar CSV",
+        modulo = "LiquidacionesCompra",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|state:{state}|orderId:{orderIdRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"liquidaciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/inventories.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canView = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/inventories"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canView)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var type = httpContext.Request.Query["type"].ToString().Trim();
+    var productIdRaw = httpContext.Request.Query["productId"].ToString().Trim();
+
+    var movementsQuery = dbContext.tbl_movimiento_inventarios
+        .AsNoTracking()
+        .Include(x => x.id_productoNavigation)
+        .Where(x => x.id_usuario == userId)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        movementsQuery = movementsQuery.Where(x =>
+            x.id_productoNavigation.nombre_producto.ToLower().Contains(loweredSearch) ||
+            (x.comprobante_numero != null && x.comprobante_numero.ToLower().Contains(loweredSearch)) ||
+            (x.tipo_documento_referencia != null && x.tipo_documento_referencia.ToLower().Contains(loweredSearch)) ||
+            (x.numero_lote != null && x.numero_lote.ToLower().Contains(loweredSearch)));
+    }
+
+    if (!string.IsNullOrWhiteSpace(type))
+    {
+        movementsQuery = movementsQuery.Where(x => x.tipo_movimiento == type);
+    }
+
+    if (int.TryParse(productIdRaw, out var productId) && productId > 0)
+    {
+        movementsQuery = movementsQuery.Where(x => x.id_producto == productId);
+    }
+
+    var movements = await movementsQuery.OrderByDescending(x => x.fecha_movimiento).ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Fecha,Producto,Tipo,Cantidad,StockAnterior,StockResultante,Documento,Referencia,Lote,MetodoValuacion");
+
+    foreach (var item in movements)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(item.id_movimiento_inventario.ToString()),
+            EscapeCsv(item.fecha_movimiento?.ToString("yyyy-MM-dd HH:mm")),
+            EscapeCsv(item.id_productoNavigation?.nombre_producto),
+            EscapeCsv(item.tipo_movimiento),
+            EscapeCsv(item.cantidad.ToString()),
+            EscapeCsv(item.stock_anterior?.ToString()),
+            EscapeCsv(item.stock_resultante?.ToString()),
+            EscapeCsv(item.comprobante_numero),
+            EscapeCsv(item.tipo_documento_referencia),
+            EscapeCsv(item.numero_lote),
+            EscapeCsv(item.metodo_valuacion)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = "Exportar CSV",
+        modulo = "Inventarios",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|type:{type}|productId:{productIdRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"inventarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -1638,13 +2027,18 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Laboratorios', '/laboratories', 'lab', 6, 1),
                 ('Proveedores', '/suppliers', 'suppliers', 7, 1),
                 ('Productos', '/products', 'products', 8, 1),
-                ('Clientes', '/clients', 'clients', 9, 1),
-                ('Emisor', '/emisor', 'issuer', 10, 1),
-                ('Usuarios', '/users', 'users', 11, 1),
-                ('Roles', '/roles', 'roles', 12, 1),
-                ('Menus', '/menus', 'menu', 13, 1),
-                ('Registrar usuario', '/register', 'user-plus', 14, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 15, 1)
+                ('Compras', '/purchases', 'purchases', 9, 1),
+                ('Ordenes de compra', '/purchase-orders', 'purchase-orders', 10, 1),
+                ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 11, 1),
+                ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 12, 1),
+                ('Inventarios', '/inventories', 'inventories', 13, 1),
+                ('Clientes', '/clients', 'clients', 14, 1),
+                ('Emisor', '/emisor', 'issuer', 15, 1),
+                ('Usuarios', '/users', 'users', 16, 1),
+                ('Roles', '/roles', 'roles', 17, 1),
+                ('Menus', '/menus', 'menu', 18, 1),
+                ('Registrar usuario', '/register', 'user-plus', 19, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 20, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -1983,6 +2377,265 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
             ON dbo.tbl_producto (codigo_barras)
             WHERE codigo_barras IS NOT NULL;
         END;
+        """);
+}
+
+static async Task EnsureSupplierSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF COL_LENGTH('dbo.tbl_proveedor', 'ruc') IS NULL ALTER TABLE dbo.tbl_proveedor ADD ruc VARCHAR(13) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'razon_social') IS NULL ALTER TABLE dbo.tbl_proveedor ADD razon_social VARCHAR(300) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'nombre_comercial') IS NULL ALTER TABLE dbo.tbl_proveedor ADD nombre_comercial VARCHAR(300) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'tipo_identificacion') IS NULL ALTER TABLE dbo.tbl_proveedor ADD tipo_identificacion VARCHAR(2) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'ciudad') IS NULL ALTER TABLE dbo.tbl_proveedor ADD ciudad VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'provincia') IS NULL ALTER TABLE dbo.tbl_proveedor ADD provincia VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'codigo_postal') IS NULL ALTER TABLE dbo.tbl_proveedor ADD codigo_postal VARCHAR(10) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'contacto_nombre') IS NULL ALTER TABLE dbo.tbl_proveedor ADD contacto_nombre VARCHAR(200) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'contacto_telefono') IS NULL ALTER TABLE dbo.tbl_proveedor ADD contacto_telefono VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'contacto_correo') IS NULL ALTER TABLE dbo.tbl_proveedor ADD contacto_correo VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'dias_credito_promedio') IS NULL ALTER TABLE dbo.tbl_proveedor ADD dias_credito_promedio INT NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'saldo_pendiente') IS NULL ALTER TABLE dbo.tbl_proveedor ADD saldo_pendiente DECIMAL(15,2) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'limite_credito') IS NULL ALTER TABLE dbo.tbl_proveedor ADD limite_credito DECIMAL(15,2) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'condicion_pago') IS NULL ALTER TABLE dbo.tbl_proveedor ADD condicion_pago VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'banco_nombre') IS NULL ALTER TABLE dbo.tbl_proveedor ADD banco_nombre VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'cuenta_bancaria') IS NULL ALTER TABLE dbo.tbl_proveedor ADD cuenta_bancaria VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'tipo_cuenta') IS NULL ALTER TABLE dbo.tbl_proveedor ADD tipo_cuenta VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'calificacion') IS NULL ALTER TABLE dbo.tbl_proveedor ADD calificacion VARCHAR(1) NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'tiempo_entrega_promedio') IS NULL ALTER TABLE dbo.tbl_proveedor ADD tiempo_entrega_promedio INT NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'es_activo') IS NULL ALTER TABLE dbo.tbl_proveedor ADD es_activo BIT NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'fecha_registro') IS NULL ALTER TABLE dbo.tbl_proveedor ADD fecha_registro DATETIME NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'fecha_actualizacion') IS NULL ALTER TABLE dbo.tbl_proveedor ADD fecha_actualizacion DATETIME NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'id_usuario_registro') IS NULL ALTER TABLE dbo.tbl_proveedor ADD id_usuario_registro INT NULL;
+        IF COL_LENGTH('dbo.tbl_proveedor', 'id_usuario_actualizacion') IS NULL ALTER TABLE dbo.tbl_proveedor ADD id_usuario_actualizacion INT NULL;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_proveedor_usuario_registro')
+        BEGIN
+            ALTER TABLE dbo.tbl_proveedor
+            ADD CONSTRAINT FK_tbl_proveedor_usuario_registro
+                FOREIGN KEY (id_usuario_registro) REFERENCES dbo.tbl_usuario(id_usuario);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_proveedor_usuario_actualizacion')
+        BEGIN
+            ALTER TABLE dbo.tbl_proveedor
+            ADD CONSTRAINT FK_tbl_proveedor_usuario_actualizacion
+                FOREIGN KEY (id_usuario_actualizacion) REFERENCES dbo.tbl_usuario(id_usuario);
+        END;
+        """);
+}
+
+static async Task EnsureProcurementSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.tbl_lote_producto', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_lote_producto
+            (
+                id_lote INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_producto INT NOT NULL,
+                numero_lote VARCHAR(50) NOT NULL,
+                numero_serie VARCHAR(50) NULL,
+                id_orden_compra INT NULL,
+                cantidad_inicial INT NOT NULL,
+                cantidad_disponible INT NOT NULL,
+                cantidad_vendida INT NOT NULL CONSTRAINT DF_tbl_lote_producto_cantidad_vendida DEFAULT (0),
+                cantidad_devuelta INT NOT NULL CONSTRAINT DF_tbl_lote_producto_cantidad_devuelta DEFAULT (0),
+                cantidad_merma INT NOT NULL CONSTRAINT DF_tbl_lote_producto_cantidad_merma DEFAULT (0),
+                fecha_fabricacion DATE NULL,
+                fecha_vencimiento DATE NULL,
+                costo_unitario DECIMAL(15,2) NULL,
+                precio_venta_unitario DECIMAL(15,2) NULL,
+                valor_total_costo DECIMAL(15,2) NULL,
+                estado_lote VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_lote_producto_estado_lote DEFAULT ('Disponible'),
+                almacen VARCHAR(50) NULL,
+                pasillo VARCHAR(10) NULL,
+                estante VARCHAR(10) NULL,
+                nivel VARCHAR(10) NULL,
+                fecha_ingreso DATETIME NOT NULL CONSTRAINT DF_tbl_lote_producto_fecha_ingreso DEFAULT (GETDATE()),
+                fecha_ultima_salida DATETIME NULL,
+                id_usuario_ingreso INT NULL,
+                observaciones VARCHAR(500) NULL,
+                CONSTRAINT UQ_lote_numero UNIQUE (numero_lote, id_producto),
+                CONSTRAINT FK_lote_producto FOREIGN KEY (id_producto) REFERENCES dbo.tbl_producto(id_producto)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_orden_compra', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_orden_compra
+            (
+                id_orden_compra INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                numero_orden VARCHAR(20) NOT NULL UNIQUE,
+                id_proveedor INT NOT NULL,
+                id_usuario_solicita INT NOT NULL,
+                id_usuario_autoriza INT NULL,
+                fecha_orden DATETIME NOT NULL CONSTRAINT DF_tbl_orden_compra_fecha_orden DEFAULT (GETDATE()),
+                fecha_requerida DATE NULL,
+                fecha_recepcion_esperada DATE NULL,
+                fecha_recepcion_real DATETIME NULL,
+                subtotal DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_orden_compra_subtotal DEFAULT (0),
+                descuento_general DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_orden_compra_descuento DEFAULT (0),
+                impuesto_total DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_orden_compra_impuesto DEFAULT (0),
+                total DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_orden_compra_total DEFAULT (0),
+                condicion_pago VARCHAR(50) NULL,
+                dias_credito INT NULL,
+                fecha_vencimiento_pago DATE NULL,
+                moneda VARCHAR(3) NOT NULL CONSTRAINT DF_tbl_orden_compra_moneda DEFAULT ('USD'),
+                tasa_cambio DECIMAL(10,6) NULL,
+                estado_orden VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_orden_compra_estado DEFAULT ('Pendiente'),
+                tipo_orden VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_orden_compra_tipo DEFAULT ('Compra'),
+                referencia_externa VARCHAR(100) NULL,
+                observaciones VARCHAR(MAX) NULL,
+                activo BIT NOT NULL CONSTRAINT DF_tbl_orden_compra_activo DEFAULT (1),
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_orden_compra_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME NULL,
+                CONSTRAINT FK_orden_proveedor FOREIGN KEY (id_proveedor) REFERENCES dbo.tbl_proveedor(id_proveedor),
+                CONSTRAINT FK_orden_usuario_solicita FOREIGN KEY (id_usuario_solicita) REFERENCES dbo.tbl_usuario(id_usuario),
+                CONSTRAINT FK_orden_usuario_autoriza FOREIGN KEY (id_usuario_autoriza) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_detalle_orden_compra', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_detalle_orden_compra
+            (
+                id_detalle_orden_compra INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_orden_compra INT NOT NULL,
+                id_producto INT NOT NULL,
+                id_lote INT NULL,
+                cantidad_solicitada INT NOT NULL,
+                cantidad_recibida INT NOT NULL CONSTRAINT DF_tbl_detalle_orden_compra_cantidad_recibida DEFAULT (0),
+                cantidad_rechazada INT NOT NULL CONSTRAINT DF_tbl_detalle_orden_compra_cantidad_rechazada DEFAULT (0),
+                cantidad_pendiente INT NULL,
+                precio_unitario DECIMAL(15,2) NOT NULL,
+                precio_total_linea DECIMAL(15,2) NULL,
+                descuento_linea DECIMAL(5,2) NULL,
+                impuesto_linea DECIMAL(15,2) NULL,
+                codigo_fiscal_fe VARCHAR(10) NULL,
+                unidad_medida_fe VARCHAR(10) NULL,
+                estado_linea VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_detalle_orden_compra_estado DEFAULT ('Pendiente'),
+                fecha_recepcion_esperada DATE NULL,
+                observaciones VARCHAR(500) NULL,
+                CONSTRAINT FK_detalle_orden FOREIGN KEY (id_orden_compra) REFERENCES dbo.tbl_orden_compra(id_orden_compra) ON DELETE CASCADE,
+                CONSTRAINT FK_detalle_producto FOREIGN KEY (id_producto) REFERENCES dbo.tbl_producto(id_producto)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_recepcion_compra', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_recepcion_compra
+            (
+                id_recepcion INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_orden_compra INT NOT NULL,
+                numero_recepcion VARCHAR(20) NOT NULL UNIQUE,
+                numero_guia_remision VARCHAR(30) NULL,
+                id_usuario_recibe INT NOT NULL,
+                fecha_recepcion DATETIME NOT NULL CONSTRAINT DF_tbl_recepcion_compra_fecha_recepcion DEFAULT (GETDATE()),
+                cantidad_total_recibida INT NULL,
+                cantidad_total_rechazada INT NOT NULL CONSTRAINT DF_tbl_recepcion_compra_cantidad_rechazada DEFAULT (0),
+                observaciones_recepcion VARCHAR(MAX) NULL,
+                estado_recepcion VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_recepcion_compra_estado DEFAULT ('Completa'),
+                activo BIT NOT NULL CONSTRAINT DF_tbl_recepcion_compra_activo DEFAULT (1),
+                CONSTRAINT FK_recepcion_orden FOREIGN KEY (id_orden_compra) REFERENCES dbo.tbl_orden_compra(id_orden_compra),
+                CONSTRAINT FK_recepcion_usuario FOREIGN KEY (id_usuario_recibe) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_liquidacion_compra', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_liquidacion_compra
+            (
+                id_liquidacion_compra INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_orden_compra INT NOT NULL,
+                numero_liquidacion VARCHAR(20) NOT NULL UNIQUE,
+                id_usuario_registro INT NOT NULL,
+                fecha_liquidacion DATETIME NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_fecha DEFAULT (GETDATE()),
+                numero_factura VARCHAR(50) NULL,
+                numero_autorizacion VARCHAR(100) NULL,
+                subtotal DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_subtotal DEFAULT (0),
+                descuento_total DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_descuento DEFAULT (0),
+                impuesto_total DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_impuesto DEFAULT (0),
+                total DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_total DEFAULT (0),
+                saldo_pagado DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_pagado DEFAULT (0),
+                saldo_pendiente DECIMAL(15,2) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_pendiente DEFAULT (0),
+                estado_liquidacion VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_estado DEFAULT ('Pendiente'),
+                observaciones VARCHAR(MAX) NULL,
+                activo BIT NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_activo DEFAULT (1),
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_liquidacion_compra_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME NULL,
+                CONSTRAINT FK_liquidacion_orden_compra FOREIGN KEY (id_orden_compra) REFERENCES dbo.tbl_orden_compra(id_orden_compra),
+                CONSTRAINT FK_liquidacion_usuario_registro FOREIGN KEY (id_usuario_registro) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'id_referencia_documento') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD id_referencia_documento INT NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'tipo_documento_referencia') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD tipo_documento_referencia VARCHAR(30) NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'id_lote') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD id_lote INT NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'numero_lote') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD numero_lote VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'costo_unitario') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD costo_unitario DECIMAL(15,2) NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'costo_total_movimiento') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD costo_total_movimiento DECIMAL(15,2) NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'saldo_en_dinero') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD saldo_en_dinero DECIMAL(15,2) NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'metodo_valuacion') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD metodo_valuacion VARCHAR(30) NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'id_usuario_autoriza') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD id_usuario_autoriza INT NULL;
+        IF COL_LENGTH('dbo.tbl_movimiento_inventario', 'comprobante_numero') IS NULL ALTER TABLE dbo.tbl_movimiento_inventario ADD comprobante_numero VARCHAR(50) NULL;
+
+        IF OBJECT_ID('dbo.tbl_kardex', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_kardex
+            (
+                id_kardex INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_producto INT NOT NULL,
+                id_lote INT NULL,
+                numero_lote VARCHAR(50) NULL,
+                fecha_movimiento DATETIME NOT NULL CONSTRAINT DF_tbl_kardex_fecha_movimiento DEFAULT (GETDATE()),
+                tipo_movimiento VARCHAR(30) NOT NULL,
+                id_referencia INT NULL,
+                tipo_referencia VARCHAR(30) NULL,
+                comprobante_numero VARCHAR(50) NULL,
+                cantidad_movimiento INT NOT NULL,
+                costo_unitario DECIMAL(15,2) NULL,
+                costo_total DECIMAL(15,2) NULL,
+                stock_anterior INT NULL,
+                stock_nuevo INT NULL,
+                saldo_anterior_dinero DECIMAL(15,2) NULL,
+                saldo_nuevo_dinero DECIMAL(15,2) NULL,
+                precio_promedio_ponderado DECIMAL(15,2) NULL,
+                metodo_valuacion VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_kardex_metodo DEFAULT ('Promedio'),
+                id_usuario_movimiento INT NULL,
+                descripcion_movimiento VARCHAR(500) NULL,
+                glosa_contable VARCHAR(255) NULL,
+                cuenta_contable_debito VARCHAR(20) NULL,
+                cuenta_contable_credito VARCHAR(20) NULL,
+                centro_costo VARCHAR(20) NULL,
+                estado_kardex VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_kardex_estado DEFAULT ('Registrado'),
+                observaciones VARCHAR(MAX) NULL,
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_kardex_fecha_creacion DEFAULT (GETDATE()),
+                CONSTRAINT FK_kardex_producto FOREIGN KEY (id_producto) REFERENCES dbo.tbl_producto(id_producto)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_lote_orden_compra')
+            ALTER TABLE dbo.tbl_lote_producto ADD CONSTRAINT FK_lote_orden_compra FOREIGN KEY (id_orden_compra) REFERENCES dbo.tbl_orden_compra(id_orden_compra);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_lote_usuario_ingreso')
+            ALTER TABLE dbo.tbl_lote_producto ADD CONSTRAINT FK_lote_usuario_ingreso FOREIGN KEY (id_usuario_ingreso) REFERENCES dbo.tbl_usuario(id_usuario);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_detalle_lote')
+            ALTER TABLE dbo.tbl_detalle_orden_compra ADD CONSTRAINT FK_detalle_lote FOREIGN KEY (id_lote) REFERENCES dbo.tbl_lote_producto(id_lote);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_movimiento_lote')
+            ALTER TABLE dbo.tbl_movimiento_inventario ADD CONSTRAINT FK_movimiento_lote FOREIGN KEY (id_lote) REFERENCES dbo.tbl_lote_producto(id_lote);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_movimiento_usuario_autoriza')
+            ALTER TABLE dbo.tbl_movimiento_inventario ADD CONSTRAINT FK_movimiento_usuario_autoriza FOREIGN KEY (id_usuario_autoriza) REFERENCES dbo.tbl_usuario(id_usuario);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_kardex_lote')
+            ALTER TABLE dbo.tbl_kardex ADD CONSTRAINT FK_kardex_lote FOREIGN KEY (id_lote) REFERENCES dbo.tbl_lote_producto(id_lote);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_kardex_usuario')
+            ALTER TABLE dbo.tbl_kardex ADD CONSTRAINT FK_kardex_usuario FOREIGN KEY (id_usuario_movimiento) REFERENCES dbo.tbl_usuario(id_usuario);
         """);
 }
 

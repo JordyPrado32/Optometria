@@ -132,4 +132,10 @@ public partial class tbl_producto
     public virtual ICollection<tbl_detalle_venta> tbl_detalle_venta { get; set; } = new List<tbl_detalle_venta>();
 
     public virtual ICollection<tbl_movimiento_inventario> tbl_movimiento_inventarios { get; set; } = new List<tbl_movimiento_inventario>();
+
+    public virtual ICollection<tbl_lote_producto> tbl_lote_producto { get; set; } = new List<tbl_lote_producto>();
+
+    public virtual ICollection<tbl_detalle_orden_compra> tbl_detalle_orden_compra { get; set; } = new List<tbl_detalle_orden_compra>();
+
+    public virtual ICollection<tbl_kardex> tbl_kardex { get; set; } = new List<tbl_kardex>();
 }

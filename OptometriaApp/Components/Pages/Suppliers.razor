@@ -32,9 +32,9 @@ else
     <section class="management-shell">
         <div class="management-hero">
             <div>
-                <span class="eyebrow">Administrador</span>
+                <span class="eyebrow">Compras</span>
                 <h1>Proveedores</h1>
-                <p>Administra proveedores con una vista clara, filtros rápidos y acciones integradas.</p>
+                <p>Administra relacion comercial, contacto, credito, datos fiscales y seguimiento operativo del proveedor en un solo lugar.</p>
             </div>
 
             <div class="workspace-actions">
@@ -51,14 +51,34 @@ else
 
         <section class="management-card">
             <div class="management-card-header">
-                <h2>Filtros y búsqueda</h2>
+                <h2>Filtros y busqueda</h2>
                 <span>@FilteredSuppliers.Count resultados</span>
             </div>
 
             <div class="management-form-grid">
                 <div>
                     <label class="form-label" for="supplierSearch">Buscador</label>
-                    <input id="supplierSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, teléfono, correo, dirección u observaciones" />
+                    <input id="supplierSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, razon social, RUC, telefono, correo o ciudad" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="supplierStatus">Estado</label>
+                    <select id="supplierStatus" class="form-select" @bind="selectedStatusFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="supplierRating">Calificacion</label>
+                    <select id="supplierRating" class="form-select" @bind="selectedRatingFilter">
+                        <option value="">Todas</option>
+                        @foreach (var option in ratingOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
                 </div>
             </div>
 
@@ -67,10 +87,9 @@ else
             </div>
         </section>
 
-        <!-- Suppliers Table Card (Full Width) -->
         <section class="management-card" style="margin-top: 1.5rem;">
             <div class="management-card-header">
-                <h2>Listado de Proveedores</h2>
+                <h2>Listado de proveedores</h2>
                 <span>@FilteredSuppliers.Count registrados</span>
             </div>
 
@@ -78,12 +97,13 @@ else
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Código</th>
-                            <th>Nombre</th>
-                            <th>Teléfono</th>
-                            <th>Correo</th>
-                            <th>Dirección</th>
-                            <th>Observaciones</th>
+                            <th>Codigo</th>
+                            <th>Proveedor</th>
+                            <th>RUC</th>
+                            <th>Contacto</th>
+                            <th>Ciudad</th>
+                            <th>Credito</th>
+                            <th>Estado</th>
                             <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
                         </tr>
                     </thead>
@@ -91,8 +111,8 @@ else
                         @if (FilteredSuppliers.Count == 0)
                         {
                             <tr>
-                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
-                                    No se encontraron proveedores registrados con los filtros seleccionados.
+                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No se encontraron proveedores con los filtros seleccionados.
                                 </td>
                             </tr>
                         }
@@ -106,18 +126,29 @@ else
                                     </td>
                                     <td>
                                         <strong style="color: var(--color-ink);">@supplier.nombre</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(supplier.razon_social) ? "Sin razon social" : supplier.razon_social)</div>
                                     </td>
-                                    <td>@(string.IsNullOrWhiteSpace(supplier.telefono) ? "-" : supplier.telefono)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(supplier.email) ? "-" : supplier.email)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(supplier.direccion) ? "-" : supplier.direccion)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(supplier.observaciones) ? "-" : (supplier.observaciones.Length > 40 ? supplier.observaciones.Substring(0, 37) + "..." : supplier.observaciones))</td>
+                                    <td>@(string.IsNullOrWhiteSpace(supplier.ruc) ? "-" : supplier.ruc)</td>
+                                    <td>
+                                        <div>@(string.IsNullOrWhiteSpace(supplier.contacto_nombre) ? (string.IsNullOrWhiteSpace(supplier.telefono) ? "-" : supplier.telefono) : supplier.contacto_nombre)</div>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(supplier.contacto_correo) ? (string.IsNullOrWhiteSpace(supplier.email) ? "-" : supplier.email) : supplier.contacto_correo)</div>
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(supplier.ciudad) ? "-" : supplier.ciudad)</td>
+                                    <td>
+                                        <div>@(string.IsNullOrWhiteSpace(supplier.condicion_pago) ? "-" : supplier.condicion_pago)</div>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">Limite: @(supplier.limite_credito?.ToString("0.00") ?? "0.00")</div>
+                                    </td>
+                                    <td>
+                                        <div>@((supplier.es_activo ?? true) ? "Activo" : "Inactivo")</div>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">Calif: @(supplier.calificacion ?? "-")</div>
+                                    </td>
                                     <td style="text-align: right; padding-right: 1.2rem;">
                                         <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
                                             <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditSupplier(supplier)">
                                                 <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
                                             </button>
                                             <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditSupplier(supplier)">
-                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoría
+                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoria
                                             </button>
                                             @if (permissions.CanDelete)
                                             {
@@ -137,7 +168,6 @@ else
     </section>
 }
 
-<!-- Custom Form Modal -->
 @if (showFormModal && editor is not null)
 {
     <div class="custom-modal-overlay">
@@ -149,28 +179,152 @@ else
             <div class="custom-modal-body">
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="supplierName">Nombre</label>
-                        <input id="supplierName" class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="150" />
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="supplierPhone">Teléfono</label>
-                        <input id="supplierPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="30" />
+                        <label class="form-label">Razon social</label>
+                        <input class="form-control" @bind="editor.RazonSocial" readonly="@(!CanModifyEditor)" maxlength="300" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="supplierEmail">Correo</label>
-                        <input id="supplierEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
+                        <label class="form-label">RUC</label>
+                        <input class="form-control" @bind="editor.Ruc" readonly="@(!CanModifyEditor)" maxlength="13" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Tipo identificacion</label>
+                        <select class="form-select" @bind="editor.TipoIdentificacion" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in identificationOptions)
+                            {
+                                <option value="@option.Code">@option.Label</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Nombre comercial</label>
+                        <input class="form-control" @bind="editor.NombreComercial" readonly="@(!CanModifyEditor)" maxlength="300" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Telefono</label>
+                        <input class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="30" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Correo</label>
+                        <input type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label" for="supplierAddress">Dirección</label>
-                        <input id="supplierAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                        <label class="form-label">Direccion</label>
+                        <input class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Ciudad</label>
+                        <input class="form-control" @bind="editor.Ciudad" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Provincia</label>
+                        <input class="form-control" @bind="editor.Provincia" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Codigo postal</label>
+                        <input class="form-control" @bind="editor.CodigoPostal" readonly="@(!CanModifyEditor)" maxlength="10" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Contacto nombre</label>
+                        <input class="form-control" @bind="editor.ContactoNombre" readonly="@(!CanModifyEditor)" maxlength="200" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Contacto telefono</label>
+                        <input class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Contacto correo</label>
+                        <input type="email" class="form-control" @bind="editor.ContactoCorreo" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Dias credito promedio</label>
+                        <input type="number" class="form-control" @bind="editor.DiasCreditoPromedio" readonly="@(!CanModifyEditor)" min="0" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Saldo pendiente</label>
+                        <input type="number" step="0.01" class="form-control" @bind="editor.SaldoPendiente" readonly="@(!CanModifyEditor)" min="0" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Limite credito</label>
+                        <input type="number" step="0.01" class="form-control" @bind="editor.LimiteCredito" readonly="@(!CanModifyEditor)" min="0" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Condicion pago</label>
+                        <select class="form-select" @bind="editor.CondicionPago" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in paymentConditionOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Banco</label>
+                        <input class="form-control" @bind="editor.BancoNombre" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Cuenta bancaria</label>
+                        <input class="form-control" @bind="editor.CuentaBancaria" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Tipo cuenta</label>
+                        <select class="form-select" @bind="editor.TipoCuenta" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in accountTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Calificacion</label>
+                        <select class="form-select" @bind="editor.Calificacion" disabled="@(!CanModifyEditor)">
+                            <option value="">Sin asignar</option>
+                            @foreach (var option in ratingOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Tiempo entrega promedio</label>
+                        <input type="number" class="form-control" @bind="editor.TiempoEntregaPromedio" readonly="@(!CanModifyEditor)" min="0" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="editor.EsActivo" disabled="@(!CanModifyEditor)">
+                            <option value="true">Activo</option>
+                            <option value="false">Inactivo</option>
+                        </select>
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label" for="supplierNotes">Observaciones</label>
-                        <textarea id="supplierNotes" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                        <label class="form-label">Observaciones</label>
+                        <textarea class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
                     </div>
                 </div>
             </div>
@@ -185,19 +339,18 @@ else
     </div>
 }
 
-<!-- Custom Audit Modal -->
 @if (showAuditModal && selectedSupplier is not null)
 {
     <div class="custom-modal-overlay">
         <div class="custom-modal-card audit-modal-card">
             <header class="custom-modal-header apricot-header">
-                <h2>Historial de Auditoría - @selectedSupplier.nombre</h2>
+                <h2>Historial de auditoria - @selectedSupplier.nombre</h2>
                 <button type="button" class="btn-close-modal" @onclick="() => showAuditModal = false">×</button>
             </header>
             <div class="custom-modal-body">
                 @if (auditEntries.Count == 0)
                 {
-                    <p style="text-align: center; color: var(--color-taupe); margin: 2rem 0;">No hay eventos registrados para este proveedor en este módulo.</p>
+                    <p style="text-align: center; color: var(--color-taupe); margin: 2rem 0;">No hay eventos registrados para este proveedor en este modulo.</p>
                 }
                 else
                 {
@@ -223,13 +376,12 @@ else
     </div>
 }
 
-<!-- Custom Alert Modal -->
 @if (showAlertModal)
 {
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de Validación" : "Operación Exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
@@ -244,116 +396,18 @@ else
     </div>
 }
 
-<style>
-    /* Custom Modal Overlays */
-    .custom-modal-overlay {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        background: rgba(60, 52, 46, 0.4) !important;
-        backdrop-filter: blur(4px) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        z-index: 1050 !important;
-    }
-
-    .custom-modal-card {
-        background: #ffffff !important;
-        border-radius: 1.2rem !important;
-        border: 1px solid rgba(127, 105, 81, 0.1) !important;
-        box-shadow: 0 24px 64px rgba(127, 105, 81, 0.15) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        max-height: 90vh !important;
-        width: min(90%, 750px) !important;
-        overflow: hidden !important;
-        animation: modalFadeIn 0.25s ease-out !important;
-    }
-
-    .audit-modal-card {
-        width: min(90%, 600px) !important;
-    }
-
-    .alert-modal-card {
-        width: min(90%, 420px) !important;
-    }
-
-    @@keyframes modalFadeIn {
-        from { opacity: 0; transform: scale(0.96); }
-        to { opacity: 1; transform: scale(1); }
-    }
-
-    .custom-modal-header {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        padding: 1.2rem 1.6rem !important;
-        border-bottom: 1px solid rgba(127, 105, 81, 0.08) !important;
-    }
-
-    .rose-header {
-        background: #ECCCC5 !important;
-    }
-
-    .apricot-header {
-        background: #FEBC64 !important;
-    }
-
-    .error-header {
-        background: #ECCCC5 !important;
-        color: #3c342e !important;
-    }
-
-    .success-header {
-        background: rgba(93, 161, 129, 0.15) !important;
-        color: #3c342e !important;
-    }
-
-    .custom-modal-header h2 {
-        margin: 0 !important;
-        font-size: 1.2rem !important;
-        font-weight: 700 !important;
-        color: #3c342e !important;
-    }
-
-    .btn-close-modal {
-        background: transparent !important;
-        border: none !important;
-        font-size: 1.8rem !important;
-        line-height: 1 !important;
-        color: #7F6951 !important;
-        cursor: pointer !important;
-        padding: 0 !important;
-        transition: color 0.15s ease !important;
-    }
-
-    .btn-close-modal:hover {
-        color: #3c342e !important;
-    }
-
-    .custom-modal-body {
-        padding: 1.6rem !important;
-        overflow-y: auto !important;
-        max-height: calc(90vh - 120px) !important;
-    }
-
-    .custom-modal-footer {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        gap: 0.8rem !important;
-        padding: 1.2rem 1.6rem !important;
-        border-top: 1px solid rgba(127, 105, 81, 0.08) !important;
-        background: #fbf9f4 !important;
-    }
-</style>
-
-
 @code {
     private readonly List<tbl_proveedor> suppliers = [];
+    private readonly List<(string Code, string Label)> identificationOptions =
+    [
+        ("04", "04 - RUC"),
+        ("05", "05 - Cedula"),
+        ("06", "06 - Pasaporte"),
+        ("08", "08 - Exterior")
+    ];
+    private readonly string[] paymentConditionOptions = ["Contado", "Credito", "Mixto"];
+    private readonly string[] accountTypeOptions = ["Ahorros", "Corriente"];
+    private readonly string[] ratingOptions = ["A", "B", "C", "D"];
     private List<tbl_log_auditoria> auditEntries = [];
     private SupplierEditorModel? editor;
     private ModulePermissions permissions = new();
@@ -364,9 +418,9 @@ else
     private int currentUserId;
     private int currentRoleId;
     private string searchTerm = string.Empty;
+    private string selectedStatusFilter = "all";
+    private string selectedRatingFilter = string.Empty;
     private string? errorMessage;
-
-    // Modals & custom alerts state:
     private bool showFormModal;
     private bool showAuditModal;
     private bool showAlertModal;
@@ -377,10 +431,10 @@ else
     private List<tbl_proveedor> FilteredSuppliers => suppliers
         .Where(MatchesFilters)
         .OrderBy(s => s.nombre)
+        .ThenBy(s => s.razon_social)
         .ToList();
 
     private string EditorTitle => isCreatingNewSupplier ? "Nuevo proveedor" : "Detalle del proveedor";
-    private string EditorSubtitle => isCreatingNewSupplier ? "Alta administrativa" : (selectedSupplierId > 0 ? $"Proveedor #{selectedSupplierId}" : "Vista");
     private bool CanModifyEditor => isCreatingNewSupplier ? permissions.CanCreate : permissions.CanEdit;
 
     protected override async Task OnInitializedAsync()
@@ -428,7 +482,13 @@ else
     {
         isCreatingNewSupplier = true;
         selectedSupplierId = 0;
-        editor = new SupplierEditorModel();
+        editor = new SupplierEditorModel
+        {
+            TipoIdentificacion = "04",
+            CondicionPago = "Contado",
+            TipoCuenta = "Ahorros",
+            EsActivo = true
+        };
         auditEntries = [];
         errorMessage = null;
         showFormModal = true;
@@ -470,7 +530,7 @@ else
 
         if (!ValidateEditor())
         {
-            ShowAlert(errorMessage ?? "Error de validación.", true);
+            ShowAlert(errorMessage ?? "Error de validacion.", true);
             return;
         }
 
@@ -485,7 +545,11 @@ else
                 return;
             }
 
-            supplierEntity = new tbl_proveedor();
+            supplierEntity = new tbl_proveedor
+            {
+                fecha_registro = DateTime.Now,
+                id_usuario_registro = currentUserId > 0 ? currentUserId : null
+            };
             dbContext.tbl_proveedors.Add(supplierEntity);
         }
         else
@@ -497,27 +561,49 @@ else
             }
 
             supplierEntity = await dbContext.tbl_proveedors.FirstOrDefaultAsync(s => s.id_proveedor == editor!.IdProveedor)
-                ?? throw new InvalidOperationException("No se encontró el proveedor seleccionado.");
+                ?? throw new InvalidOperationException("No se encontro el proveedor seleccionado.");
         }
 
         supplierEntity.nombre = editor!.Nombre.Trim();
+        supplierEntity.razon_social = NormalizeOptional(editor.RazonSocial);
+        supplierEntity.ruc = NormalizeOptional(editor.Ruc);
+        supplierEntity.tipo_identificacion = NormalizeOptional(editor.TipoIdentificacion);
+        supplierEntity.nombre_comercial = NormalizeOptional(editor.NombreComercial);
         supplierEntity.telefono = NormalizeOptional(editor.Telefono);
         supplierEntity.email = NormalizeOptional(editor.Email);
         supplierEntity.direccion = NormalizeOptional(editor.Direccion);
+        supplierEntity.ciudad = NormalizeOptional(editor.Ciudad);
+        supplierEntity.provincia = NormalizeOptional(editor.Provincia);
+        supplierEntity.codigo_postal = NormalizeOptional(editor.CodigoPostal);
+        supplierEntity.contacto_nombre = NormalizeOptional(editor.ContactoNombre);
+        supplierEntity.contacto_telefono = NormalizeOptional(editor.ContactoTelefono);
+        supplierEntity.contacto_correo = NormalizeOptional(editor.ContactoCorreo);
+        supplierEntity.dias_credito_promedio = editor.DiasCreditoPromedio;
+        supplierEntity.saldo_pendiente = editor.SaldoPendiente;
+        supplierEntity.limite_credito = editor.LimiteCredito;
+        supplierEntity.condicion_pago = NormalizeOptional(editor.CondicionPago);
+        supplierEntity.banco_nombre = NormalizeOptional(editor.BancoNombre);
+        supplierEntity.cuenta_bancaria = NormalizeOptional(editor.CuentaBancaria);
+        supplierEntity.tipo_cuenta = NormalizeOptional(editor.TipoCuenta);
+        supplierEntity.calificacion = NormalizeOptional(editor.Calificacion);
+        supplierEntity.tiempo_entrega_promedio = editor.TiempoEntregaPromedio;
+        supplierEntity.es_activo = editor.EsActivo;
         supplierEntity.observaciones = NormalizeOptional(editor.Observaciones);
+        supplierEntity.fecha_actualizacion = DateTime.Now;
+        supplierEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
 
         await dbContext.SaveChangesAsync();
 
         WriteAudit(
             dbContext,
             isCreatingNewSupplier ? "Crear proveedor" : "Editar proveedor",
-            $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}; Correo={supplierEntity.email}");
+            $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}; Ruc={supplierEntity.ruc}; RazonSocial={supplierEntity.razon_social}; Estado={(supplierEntity.es_activo ?? true ? "Activo" : "Inactivo")}");
 
         await dbContext.SaveChangesAsync();
-        
+
         ShowAlert(isCreatingNewSupplier
-            ? "El proveedor se creó correctamente."
-            : "La información del proveedor se guardó correctamente.", false);
+            ? "El proveedor se creo correctamente."
+            : "La informacion del proveedor se guardo correctamente.", false);
 
         showFormModal = false;
         isCreatingNewSupplier = false;
@@ -528,7 +614,7 @@ else
     {
         errorMessage = null;
 
-        if (!permissions.CanDelete || supplier is null || supplier.id_proveedor <= 0)
+        if (!permissions.CanDelete || supplier.id_proveedor <= 0)
         {
             return;
         }
@@ -540,7 +626,7 @@ else
 
         if (supplierEntity is null)
         {
-            ShowAlert("No se encontró el proveedor seleccionado.", true);
+            ShowAlert("No se encontro el proveedor seleccionado.", true);
             return;
         }
 
@@ -553,7 +639,7 @@ else
         WriteAudit(
             dbContext,
             "Eliminar proveedor",
-            $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}");
+            $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}; Ruc={supplierEntity.ruc}");
 
         dbContext.tbl_proveedors.Remove(supplierEntity);
         await dbContext.SaveChangesAsync();
@@ -580,19 +666,48 @@ else
     private void ClearFilters()
     {
         searchTerm = string.Empty;
+        selectedStatusFilter = "all";
+        selectedRatingFilter = string.Empty;
     }
 
     private void ExportSuppliers()
     {
-        var exportUrl = string.IsNullOrWhiteSpace(searchTerm)
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (selectedStatusFilter != "all")
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
             ? "/exports/suppliers.csv"
-            : $"/exports/suppliers.csv?search={Uri.EscapeDataString(searchTerm)}";
+            : $"/exports/suppliers.csv?{string.Join("&", query)}";
 
         NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
 
     private bool MatchesFilters(tbl_proveedor supplier)
     {
+        if (selectedStatusFilter is "active" or "inactive")
+        {
+            var expectedStatus = selectedStatusFilter == "active";
+            if ((supplier.es_activo ?? true) != expectedStatus)
+            {
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedRatingFilter) &&
+            !string.Equals(supplier.calificacion, selectedRatingFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(searchTerm))
         {
             return true;
@@ -600,9 +715,14 @@ else
 
         var search = searchTerm.Trim().ToLowerInvariant();
         return supplier.nombre.ToLowerInvariant().Contains(search) ||
+               (supplier.razon_social?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.ruc?.ToLowerInvariant().Contains(search) ?? false) ||
                (supplier.telefono?.ToLowerInvariant().Contains(search) ?? false) ||
                (supplier.email?.ToLowerInvariant().Contains(search) ?? false) ||
-               (supplier.direccion?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.contacto_nombre?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.contacto_correo?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.ciudad?.ToLowerInvariant().Contains(search) ?? false) ||
+               (supplier.provincia?.ToLowerInvariant().Contains(search) ?? false) ||
                (supplier.observaciones?.ToLowerInvariant().Contains(search) ?? false);
     }
 
@@ -615,9 +735,11 @@ else
         }
 
         editor.Nombre = editor.Nombre.Trim();
-        editor.Telefono = editor.Telefono.Trim();
+        editor.Ruc = editor.Ruc.Trim();
         editor.Email = editor.Email.Trim();
-        editor.Direccion = editor.Direccion.Trim();
+        editor.ContactoCorreo = editor.ContactoCorreo.Trim();
+        editor.Telefono = editor.Telefono.Trim();
+        editor.ContactoTelefono = editor.ContactoTelefono.Trim();
 
         if (string.IsNullOrWhiteSpace(editor.Nombre))
         {
@@ -625,26 +747,28 @@ else
             return false;
         }
 
-        if (editor.Nombre.Length > 150 || editor.Telefono.Length > 30 || editor.Email.Length > 150 || editor.Direccion.Length > 255)
+        if (!string.IsNullOrWhiteSpace(editor.Ruc) && (editor.Ruc.Length != 13 || !editor.Ruc.All(char.IsDigit)))
         {
-            errorMessage = "Uno o varios campos exceden la longitud permitida.";
+            errorMessage = "El RUC debe tener exactamente 13 digitos.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
         {
-            errorMessage = "Ingresa un correo electrónico válido.";
+            errorMessage = "Ingresa un correo electronico valido.";
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Telefono))
+        if (!string.IsNullOrWhiteSpace(editor.ContactoCorreo) && !IsValidEmail(editor.ContactoCorreo))
         {
-            var cleaned = new string(editor.Telefono.Where(char.IsDigit).ToArray());
-            if (cleaned.Length != 10)
-            {
-                errorMessage = "El número de teléfono debe tener exactamente 10 dígitos.";
-                return false;
-            }
+            errorMessage = "Ingresa un correo del contacto valido.";
+            return false;
+        }
+
+        if (editor.DiasCreditoPromedio < 0 || editor.TiempoEntregaPromedio < 0 || editor.LimiteCredito < 0 || editor.SaldoPendiente < 0)
+        {
+            errorMessage = "Los valores numericos no pueden ser negativos.";
+            return false;
         }
 
         return true;
@@ -689,9 +813,29 @@ else
         {
             IdProveedor = supplier.id_proveedor,
             Nombre = supplier.nombre,
+            RazonSocial = supplier.razon_social ?? string.Empty,
+            Ruc = supplier.ruc ?? string.Empty,
+            TipoIdentificacion = supplier.tipo_identificacion ?? "04",
+            NombreComercial = supplier.nombre_comercial ?? string.Empty,
             Telefono = supplier.telefono ?? string.Empty,
             Email = supplier.email ?? string.Empty,
             Direccion = supplier.direccion ?? string.Empty,
+            Ciudad = supplier.ciudad ?? string.Empty,
+            Provincia = supplier.provincia ?? string.Empty,
+            CodigoPostal = supplier.codigo_postal ?? string.Empty,
+            ContactoNombre = supplier.contacto_nombre ?? string.Empty,
+            ContactoTelefono = supplier.contacto_telefono ?? string.Empty,
+            ContactoCorreo = supplier.contacto_correo ?? string.Empty,
+            DiasCreditoPromedio = supplier.dias_credito_promedio ?? 0,
+            SaldoPendiente = supplier.saldo_pendiente ?? 0,
+            LimiteCredito = supplier.limite_credito ?? 0,
+            CondicionPago = supplier.condicion_pago ?? "Contado",
+            BancoNombre = supplier.banco_nombre ?? string.Empty,
+            CuentaBancaria = supplier.cuenta_bancaria ?? string.Empty,
+            TipoCuenta = supplier.tipo_cuenta ?? "Ahorros",
+            Calificacion = supplier.calificacion ?? string.Empty,
+            TiempoEntregaPromedio = supplier.tiempo_entrega_promedio ?? 0,
+            EsActivo = supplier.es_activo ?? true,
             Observaciones = supplier.observaciones ?? string.Empty,
             TotalProductos = supplier.tbl_productos.Count.ToString()
         };
@@ -746,9 +890,29 @@ else
     {
         public int IdProveedor { get; set; }
         public string Nombre { get; set; } = string.Empty;
+        public string RazonSocial { get; set; } = string.Empty;
+        public string Ruc { get; set; } = string.Empty;
+        public string TipoIdentificacion { get; set; } = "04";
+        public string NombreComercial { get; set; } = string.Empty;
         public string Telefono { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Direccion { get; set; } = string.Empty;
+        public string Ciudad { get; set; } = string.Empty;
+        public string Provincia { get; set; } = string.Empty;
+        public string CodigoPostal { get; set; } = string.Empty;
+        public string ContactoNombre { get; set; } = string.Empty;
+        public string ContactoTelefono { get; set; } = string.Empty;
+        public string ContactoCorreo { get; set; } = string.Empty;
+        public int DiasCreditoPromedio { get; set; }
+        public decimal SaldoPendiente { get; set; }
+        public decimal LimiteCredito { get; set; }
+        public string CondicionPago { get; set; } = "Contado";
+        public string BancoNombre { get; set; } = string.Empty;
+        public string CuentaBancaria { get; set; } = string.Empty;
+        public string TipoCuenta { get; set; } = "Ahorros";
+        public string Calificacion { get; set; } = string.Empty;
+        public int TiempoEntregaPromedio { get; set; }
+        public bool EsActivo { get; set; } = true;
         public string Observaciones { get; set; } = string.Empty;
         public string TotalProductos { get; set; } = "0";
     }

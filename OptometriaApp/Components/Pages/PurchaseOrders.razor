@@ -1,0 +1,591 @@
+@page "/purchase-orders"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Ordenes de compra</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando ordenes...</h1></div></section>
+}
+else if (!canView)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para este modulo.</p></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Compras</span>
+                <h1>Ordenes de compra</h1>
+                <p>Cada usuario administra sus propias ordenes, lineas de producto y seguimiento de recepcion.</p>
+            </div>
+            <div class="workspace-actions">
+                @if (permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNew">Nueva orden</button>
+                }
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportOrders">Exportar Excel</button>
+            </div>
+        </div>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>@FilteredOrders.Count resultados</span>
+            </div>
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label">Buscar</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Numero, proveedor o referencia" />
+                </div>
+                <div>
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" @bind="stateFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in stateOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Proveedor</label>
+                    <select class="form-select" @bind="supplierFilter">
+                        <option value="">Todos</option>
+                        @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
+                        {
+                            <option value="@supplier.id_proveedor.ToString()">@supplier.nombre</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="management-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Ordenes</h2>
+                <span>@FilteredOrders.Count registradas</span>
+            </div>
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Proveedor</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Total</th>
+                            <th>Lineas</th>
+                            <th style="text-align:right;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredOrders.Count == 0)
+                        {
+                            <tr><td colspan="7" style="text-align:center; padding:2rem;">No hay ordenes.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var order in FilteredOrders)
+                            {
+                                <tr>
+                                    <td><strong>@order.numero_orden</strong></td>
+                                    <td>@order.id_proveedorNavigation?.nombre</td>
+                                    <td>@order.fecha_orden?.ToString("yyyy-MM-dd")</td>
+                                    <td>@order.estado_orden</td>
+                                    <td>@(order.total?.ToString("0.00") ?? "0.00")</td>
+                                    <td>@order.tbl_detalle_orden_compra.Count</td>
+                                    <td style="text-align:right;">
+                                        <div style="display:inline-flex; gap:0.4rem;">
+                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(order)">Editar</button>
+                                            <button class="btn btn-outline-primary" @onclick="() => ShowAudit(order)">Auditoria</button>
+                                            @if (permissions.CanDelete)
+                                            {
+                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(order)">Eliminar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+}
+
+@if (showForm && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>@(isCreating ? "Nueva orden de compra" : "Editar orden de compra")</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseForm">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label">Numero</label>
+                        <input class="form-control" @bind="editor.NumeroOrden" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" @bind="editor.IdProveedor">
+                            <option value="0">Selecciona</option>
+                            @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
+                            {
+                                <option value="@supplier.id_proveedor">@supplier.nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Fecha requerida</label>
+                        <input type="date" class="form-control" @bind="editor.FechaRequerida" />
+                    </div>
+                    <div>
+                        <label class="form-label">Recepcion esperada</label>
+                        <input type="date" class="form-control" @bind="editor.FechaRecepcionEsperada" />
+                    </div>
+                    <div>
+                        <label class="form-label">Condicion pago</label>
+                        <select class="form-select" @bind="editor.CondicionPago">
+                            @foreach (var option in paymentOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Dias credito</label>
+                        <input type="number" class="form-control" @bind="editor.DiasCredito" min="0" />
+                    </div>
+                    <div>
+                        <label class="form-label">Moneda</label>
+                        <input class="form-control" @bind="editor.Moneda" maxlength="3" />
+                    </div>
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="editor.EstadoOrden">
+                            @foreach (var option in stateOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label">Referencia externa</label>
+                        <input class="form-control" @bind="editor.ReferenciaExterna" maxlength="100" />
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label">Observaciones</label>
+                        <textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea>
+                    </div>
+                </div>
+
+                <div class="management-card" style="margin-top:1rem; padding:1rem;">
+                    <div class="management-card-header">
+                        <h2>Lineas</h2>
+                        <button type="button" class="btn btn-outline-primary" @onclick="AddLine">Agregar linea</button>
+                    </div>
+                    <div style="display:grid; gap:0.8rem; margin-top:1rem;">
+                        @for (var i = 0; i < editor.Lines.Count; i++)
+                        {
+                            var line = editor.Lines[i];
+                            <div class="management-form-grid" style="padding:0.8rem; border:1px solid rgba(127,105,81,0.1); border-radius:12px;">
+                                <div>
+                                    <label class="form-label">Producto</label>
+                                    <select class="form-select" @bind="line.IdProducto">
+                                        <option value="0">Selecciona</option>
+                                        @foreach (var product in products.OrderBy(p => p.nombre_producto))
+                                        {
+                                            <option value="@product.id_producto">@product.nombre_producto</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Cantidad</label>
+                                    <input type="number" class="form-control" @bind="line.CantidadSolicitada" min="1" />
+                                </div>
+                                <div>
+                                    <label class="form-label">Precio unitario</label>
+                                    <input type="number" step="0.01" class="form-control" @bind="line.PrecioUnitario" min="0" />
+                                </div>
+                                <div>
+                                    <label class="form-label">Descuento %</label>
+                                    <input type="number" step="0.01" class="form-control" @bind="line.DescuentoLinea" min="0" />
+                                </div>
+                                <div class="patient-form-span">
+                                    <label class="form-label">Observaciones linea</label>
+                                    <input class="form-control" @bind="line.Observaciones" maxlength="500" />
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-outline-primary" @onclick="() => RemoveLine(i)">Quitar</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showAudit && selectedOrder is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card audit-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Auditoria - @selectedOrder.numero_orden</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showAudit = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                @foreach (var item in auditEntries)
+                {
+                    <article class="management-list-item" style="border:1px solid rgba(127,105,81,0.08); border-radius:12px; padding:0.85rem; margin-bottom:0.6rem;">
+                        <strong>@item.accion</strong>
+                        <div>@item.detalle</div>
+                        <small>@item.fecha?.ToString("yyyy-MM-dd HH:mm")</small>
+                    </article>
+                }
+                @if (auditEntries.Count == 0)
+                {
+                    <p>No hay eventos registrados.</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAlert)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")"><h2>@(alertIsError ? "Error" : "Ok")</h2></header>
+            <div class="custom-modal-body"><p>@alertMessage</p></div>
+            <footer class="custom-modal-footer" style="justify-content:center;"><button class="btn btn-primary" @onclick="() => showAlert = false">Aceptar</button></footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<tbl_orden_compra> orders = [];
+    private readonly List<tbl_proveedor> suppliers = [];
+    private readonly List<tbl_producto> products = [];
+    private readonly string[] stateOptions = ["Pendiente", "Aprobada", "Recibida Parcial", "Recibida", "Cancelada"];
+    private readonly string[] paymentOptions = ["Contado", "Credito", "Mixto"];
+    private readonly List<tbl_log_auditoria> auditEntries = [];
+    private Permissions permissions = new();
+    private PurchaseOrderEditor? editor;
+    private tbl_orden_compra? selectedOrder;
+    private bool isLoading = true, canView, isCreating, showForm, showAudit, showAlert, alertIsError;
+    private int currentUserId, currentRoleId;
+    private string searchTerm = string.Empty, stateFilter = string.Empty, supplierFilter = string.Empty, alertMessage = string.Empty;
+
+    private List<tbl_orden_compra> FilteredOrders => orders.Where(MatchesFilters).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : 0;
+        currentRoleId = int.TryParse(auth.User.FindFirst("RoleId")?.Value, out var rid) ? rid : 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveId = null)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetPermissionsAsync(db);
+        canView = permissions.CanView;
+        if (!canView) { isLoading = false; return; }
+
+        suppliers.Clear();
+        suppliers.AddRange(await db.tbl_proveedors.AsNoTracking().OrderBy(x => x.nombre).ToListAsync());
+        products.Clear();
+        products.AddRange(await db.tbl_productos.AsNoTracking().OrderBy(x => x.nombre_producto).ToListAsync());
+        orders.Clear();
+        orders.AddRange(await db.tbl_orden_compra.AsNoTracking()
+            .Include(x => x.id_proveedorNavigation)
+            .Include(x => x.tbl_detalle_orden_compra)
+            .Where(x => x.id_usuario_solicita == currentUserId)
+            .OrderByDescending(x => x.fecha_orden)
+            .ToListAsync());
+
+        if (preserveId.HasValue)
+        {
+            selectedOrder = orders.FirstOrDefault(x => x.id_orden_compra == preserveId.Value);
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNew()
+    {
+        isCreating = true;
+        editor = new PurchaseOrderEditor
+        {
+            FechaRequerida = DateOnly.FromDateTime(DateTime.Today),
+            FechaRecepcionEsperada = DateOnly.FromDateTime(DateTime.Today),
+            CondicionPago = "Contado",
+            Moneda = "USD",
+            EstadoOrden = "Pendiente"
+        };
+        editor.Lines.Add(new PurchaseOrderLineEditor());
+        showForm = true;
+    }
+
+    private async Task PrepareEdit(tbl_orden_compra order)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var entity = await db.tbl_orden_compra.AsNoTracking()
+            .Include(x => x.tbl_detalle_orden_compra)
+            .FirstAsync(x => x.id_orden_compra == order.id_orden_compra && x.id_usuario_solicita == currentUserId);
+
+        isCreating = false;
+        editor = new PurchaseOrderEditor
+        {
+            Id = entity.id_orden_compra,
+            NumeroOrden = entity.numero_orden,
+            IdProveedor = entity.id_proveedor,
+            FechaRequerida = entity.fecha_requerida,
+            FechaRecepcionEsperada = entity.fecha_recepcion_esperada,
+            CondicionPago = entity.condicion_pago ?? "Contado",
+            DiasCredito = entity.dias_credito ?? 0,
+            Moneda = entity.moneda ?? "USD",
+            EstadoOrden = entity.estado_orden ?? "Pendiente",
+            ReferenciaExterna = entity.referencia_externa ?? string.Empty,
+            Observaciones = entity.observaciones ?? string.Empty,
+            Lines = entity.tbl_detalle_orden_compra.Select(d => new PurchaseOrderLineEditor
+            {
+                Id = d.id_detalle_orden_compra,
+                IdProducto = d.id_producto,
+                CantidadSolicitada = d.cantidad_solicitada,
+                PrecioUnitario = d.precio_unitario,
+                DescuentoLinea = d.descuento_linea ?? 0,
+                Observaciones = d.observaciones ?? string.Empty
+            }).ToList()
+        };
+        showForm = true;
+    }
+
+    private void AddLine() => editor?.Lines.Add(new PurchaseOrderLineEditor());
+
+    private void RemoveLine(int index)
+    {
+        if (editor is not null && index >= 0 && index < editor.Lines.Count)
+        {
+            editor.Lines.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroOrden) || editor.IdProveedor <= 0 || editor.Lines.Count == 0 || editor.Lines.Any(x => x.IdProducto <= 0 || x.CantidadSolicitada <= 0))
+        {
+            ShowAlert("Completa cabecera y lineas validas.", true);
+            return;
+        }
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var duplicate = await db.tbl_orden_compra.AnyAsync(x => x.id_orden_compra != editor.Id && x.numero_orden == editor.NumeroOrden);
+        if (duplicate)
+        {
+            ShowAlert("El numero de orden ya existe.", true);
+            return;
+        }
+
+        tbl_orden_compra entity;
+        if (isCreating)
+        {
+            entity = new tbl_orden_compra
+            {
+                id_usuario_solicita = currentUserId,
+                fecha_orden = DateTime.Now,
+                fecha_creacion = DateTime.Now,
+                activo = true
+            };
+            db.tbl_orden_compra.Add(entity);
+        }
+        else
+        {
+            entity = await db.tbl_orden_compra.Include(x => x.tbl_detalle_orden_compra)
+                .FirstAsync(x => x.id_orden_compra == editor.Id && x.id_usuario_solicita == currentUserId);
+            db.tbl_detalle_orden_compra.RemoveRange(entity.tbl_detalle_orden_compra);
+        }
+
+        entity.numero_orden = editor.NumeroOrden.Trim();
+        entity.id_proveedor = editor.IdProveedor;
+        entity.fecha_requerida = editor.FechaRequerida;
+        entity.fecha_recepcion_esperada = editor.FechaRecepcionEsperada;
+        entity.condicion_pago = editor.CondicionPago;
+        entity.dias_credito = editor.DiasCredito;
+        entity.moneda = string.IsNullOrWhiteSpace(editor.Moneda) ? "USD" : editor.Moneda.Trim().ToUpperInvariant();
+        entity.estado_orden = editor.EstadoOrden;
+        entity.referencia_externa = NullIfBlank(editor.ReferenciaExterna);
+        entity.observaciones = NullIfBlank(editor.Observaciones);
+        entity.fecha_actualizacion = DateTime.Now;
+
+        var subtotal = 0m;
+        foreach (var line in editor.Lines)
+        {
+            var total = line.CantidadSolicitada * line.PrecioUnitario;
+            var discount = total * (line.DescuentoLinea / 100m);
+            subtotal += total - discount;
+            entity.tbl_detalle_orden_compra.Add(new tbl_detalle_orden_compra
+            {
+                id_producto = line.IdProducto,
+                cantidad_solicitada = line.CantidadSolicitada,
+                cantidad_recibida = 0,
+                cantidad_rechazada = 0,
+                cantidad_pendiente = line.CantidadSolicitada,
+                precio_unitario = line.PrecioUnitario,
+                precio_total_linea = total - discount,
+                descuento_linea = line.DescuentoLinea,
+                estado_linea = "Pendiente",
+                observaciones = NullIfBlank(line.Observaciones)
+            });
+        }
+
+        entity.subtotal = subtotal;
+        entity.total = subtotal;
+        await db.SaveChangesAsync();
+        WriteAudit(db, isCreating ? "Crear orden compra" : "Editar orden compra", $"OrdenCompraId={entity.id_orden_compra}; Numero={entity.numero_orden}; Total={entity.total}");
+        await db.SaveChangesAsync();
+        CloseForm();
+        ShowAlert("Orden guardada correctamente.", false);
+        await LoadAsync(entity.id_orden_compra);
+    }
+
+    private async Task DeleteAsync(tbl_orden_compra order)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var entity = await db.tbl_orden_compra.Include(x => x.tbl_recepcion_compra).Include(x => x.tbl_liquidacion_compra)
+            .FirstAsync(x => x.id_orden_compra == order.id_orden_compra && x.id_usuario_solicita == currentUserId);
+        if (entity.tbl_recepcion_compra.Count > 0 || entity.tbl_liquidacion_compra.Count > 0)
+        {
+            ShowAlert("No puedes eliminar una orden con recepciones o liquidaciones.", true);
+            return;
+        }
+        WriteAudit(db, "Eliminar orden compra", $"OrdenCompraId={entity.id_orden_compra}; Numero={entity.numero_orden}");
+        db.tbl_orden_compra.Remove(entity);
+        await db.SaveChangesAsync();
+        ShowAlert("Orden eliminada.", false);
+        await LoadAsync();
+    }
+
+    private async Task ShowAudit(tbl_orden_compra order)
+    {
+        selectedOrder = order;
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        auditEntries.Clear();
+        auditEntries.AddRange(await db.tbl_log_auditoria.AsNoTracking()
+            .Where(x => x.modulo == "OrdenesCompra" && x.detalle != null && x.detalle.Contains($"OrdenCompraId={order.id_orden_compra};"))
+            .OrderByDescending(x => x.fecha).Take(20).ToListAsync());
+        showAudit = true;
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        stateFilter = string.Empty;
+        supplierFilter = string.Empty;
+    }
+
+    private void ExportOrders()
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+        if (!string.IsNullOrWhiteSpace(stateFilter))
+        {
+            query.Add($"state={Uri.EscapeDataString(stateFilter)}");
+        }
+        if (!string.IsNullOrWhiteSpace(supplierFilter))
+        {
+            query.Add($"supplierId={Uri.EscapeDataString(supplierFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/purchase-orders.csv"
+            : $"/exports/purchase-orders.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private bool MatchesFilters(tbl_orden_compra order)
+    {
+        if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(order.estado_orden, stateFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (int.TryParse(supplierFilter, out var supplierId) && supplierId > 0 && order.id_proveedor != supplierId)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var search = searchTerm.Trim().ToLowerInvariant();
+        return order.numero_orden.ToLowerInvariant().Contains(search) ||
+               (order.referencia_externa?.ToLowerInvariant().Contains(search) ?? false) ||
+               (order.id_proveedorNavigation?.nombre.ToLowerInvariant().Contains(search) ?? false);
+    }
+
+    private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
+    {
+        var permission = await db.tbl_rol_menu_permisos.AsNoTracking()
+            .Where(p => p.id_rol == currentRoleId)
+            .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-orders"), p => p.id_menu, m => m.id_menu, (p, _) => p)
+            .FirstOrDefaultAsync();
+        return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
+    }
+
+    private void WriteAudit(OpticaDbContext db, string action, string detail) => db.tbl_log_auditoria.Add(new tbl_log_auditoria { id_usuario = currentUserId > 0 ? currentUserId : null, accion = action, modulo = "OrdenesCompra", fecha = DateTime.Now, detalle = detail });
+    private void CloseForm() { showForm = false; editor = null; }
+    private void ShowAlert(string message, bool isError) { alertMessage = message; alertIsError = isError; showAlert = true; }
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }
+    private sealed class PurchaseOrderEditor
+    {
+        public int Id { get; set; }
+        public string NumeroOrden { get; set; } = string.Empty;
+        public int IdProveedor { get; set; }
+        public DateOnly? FechaRequerida { get; set; }
+        public DateOnly? FechaRecepcionEsperada { get; set; }
+        public string CondicionPago { get; set; } = "Contado";
+        public int DiasCredito { get; set; }
+        public string Moneda { get; set; } = "USD";
+        public string EstadoOrden { get; set; } = "Pendiente";
+        public string ReferenciaExterna { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+        public List<PurchaseOrderLineEditor> Lines { get; set; } = [];
+    }
+    private sealed class PurchaseOrderLineEditor
+    {
+        public int Id { get; set; }
+        public int IdProducto { get; set; }
+        public int CantidadSolicitada { get; set; } = 1;
+        public decimal PrecioUnitario { get; set; }
+        public decimal DescuentoLinea { get; set; }
+        public string Observaciones { get; set; } = string.Empty;
+    }
+}

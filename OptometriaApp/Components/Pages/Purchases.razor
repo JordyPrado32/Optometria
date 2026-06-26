@@ -1,0 +1,52 @@
+@page "/purchases"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Compras</PageTitle>
+
+@if (isLoading)
+{
+    <section class="workspace-shell"><div class="workspace-card"><h1>Cargando compras...</h1></div></section>
+}
+else
+{
+    <section class="workspace-shell dashboard-shell-v2">
+        <section class="dashboard-hero-v2">
+            <div class="dashboard-hero-copy">
+                <span class="eyebrow">Abastecimiento</span>
+                <h1>Compras</h1>
+                <p>Resumen personal de ordenes, recepciones, liquidaciones y movimientos de inventario del usuario actual.</p>
+            </div>
+        </section>
+
+        <section class="dashboard-actions-v2">
+            <a class="dashboard-action-card" href="/purchase-orders"><span class="dashboard-action-badge">OC</span><strong>Ordenes</strong><p>@orderCount registradas</p></a>
+            <a class="dashboard-action-card" href="/purchase-receptions"><span class="dashboard-action-badge">RC</span><strong>Recepciones</strong><p>@receptionCount registradas</p></a>
+            <a class="dashboard-action-card" href="/purchase-liquidations"><span class="dashboard-action-badge">LC</span><strong>Liquidaciones</strong><p>@liquidationCount registradas</p></a>
+            <a class="dashboard-action-card" href="/inventories"><span class="dashboard-action-badge">IV</span><strong>Inventarios</strong><p>@movementCount movimientos</p></a>
+        </section>
+    </section>
+}
+
+@code {
+    private bool isLoading = true;
+    private int currentUserId;
+    private int orderCount;
+    private int receptionCount;
+    private int liquidationCount;
+    private int movementCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : 0;
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        orderCount = await db.tbl_orden_compra.CountAsync(x => x.id_usuario_solicita == currentUserId);
+        receptionCount = await db.tbl_recepcion_compra.CountAsync(x => x.id_usuario_recibe == currentUserId);
+        liquidationCount = await db.tbl_liquidacion_compra.CountAsync(x => x.id_usuario_registro == currentUserId);
+        movementCount = await db.tbl_movimiento_inventarios.CountAsync(x => x.id_usuario == currentUserId);
+        isLoading = false;
+    }
+}

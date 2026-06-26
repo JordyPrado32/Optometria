@@ -356,8 +356,23 @@ public partial class OpticaDbContext : DbContext
 
             entity.ToTable("tbl_movimiento_inventario");
 
+            entity.Property(e => e.comprobante_numero)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.costo_total_movimiento).HasColumnType("decimal(15, 2)");
+            entity.Property(e => e.costo_unitario).HasColumnType("decimal(15, 2)");
             entity.Property(e => e.fecha_movimiento).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.metodo_valuacion)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.numero_lote)
+                .HasMaxLength(50)
+                .IsUnicode(false);
             entity.Property(e => e.observaciones).IsUnicode(false);
+            entity.Property(e => e.saldo_en_dinero).HasColumnType("decimal(15, 2)");
+            entity.Property(e => e.tipo_documento_referencia)
+                .HasMaxLength(30)
+                .IsUnicode(false);
             entity.Property(e => e.tipo_movimiento)
                 .HasMaxLength(20)
                 .IsUnicode(false);
@@ -371,6 +386,14 @@ public partial class OpticaDbContext : DbContext
                 .HasForeignKey(d => d.id_usuario)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_movimiento_usuario");
+
+            entity.HasOne(d => d.id_loteNavigation).WithMany()
+                .HasForeignKey(d => d.id_lote)
+                .HasConstraintName("FK_movimiento_lote");
+
+            entity.HasOne(d => d.id_usuario_autorizaNavigation).WithMany()
+                .HasForeignKey(d => d.id_usuario_autoriza)
+                .HasConstraintName("FK_movimiento_usuario_autoriza");
         });
 
         modelBuilder.Entity<tbl_orden_rx>(entity =>
@@ -618,19 +641,76 @@ public partial class OpticaDbContext : DbContext
 
             entity.ToTable("tbl_proveedor");
 
+            entity.Property(e => e.banco_nombre)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.calificacion)
+                .HasMaxLength(1)
+                .IsUnicode(false);
+            entity.Property(e => e.ciudad)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.codigo_postal)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.condicion_pago)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.contacto_correo)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.contacto_nombre)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.contacto_telefono)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.cuenta_bancaria)
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.direccion)
                 .HasMaxLength(255)
                 .IsUnicode(false);
             entity.Property(e => e.email)
                 .HasMaxLength(150)
                 .IsUnicode(false);
+            entity.Property(e => e.fecha_actualizacion).HasColumnType("datetime");
+            entity.Property(e => e.fecha_registro).HasColumnType("datetime");
+            entity.Property(e => e.limite_credito).HasColumnType("decimal(15, 2)");
             entity.Property(e => e.nombre)
                 .HasMaxLength(150)
                 .IsUnicode(false);
+            entity.Property(e => e.nombre_comercial)
+                .HasMaxLength(300)
+                .IsUnicode(false);
             entity.Property(e => e.observaciones).IsUnicode(false);
+            entity.Property(e => e.provincia)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.razon_social)
+                .HasMaxLength(300)
+                .IsUnicode(false);
+            entity.Property(e => e.ruc)
+                .HasMaxLength(13)
+                .IsUnicode(false);
+            entity.Property(e => e.saldo_pendiente).HasColumnType("decimal(15, 2)");
             entity.Property(e => e.telefono)
                 .HasMaxLength(30)
                 .IsUnicode(false);
+            entity.Property(e => e.tipo_cuenta)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.tipo_identificacion)
+                .HasMaxLength(2)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.id_usuario_actualizacionNavigation).WithMany()
+                .HasForeignKey(d => d.id_usuario_actualizacion)
+                .HasConstraintName("FK_tbl_proveedor_usuario_actualizacion");
+
+            entity.HasOne(d => d.id_usuario_registroNavigation).WithMany()
+                .HasForeignKey(d => d.id_usuario_registro)
+                .HasConstraintName("FK_tbl_proveedor_usuario_registro");
         });
 
         modelBuilder.Entity<tbl_rol>(entity =>

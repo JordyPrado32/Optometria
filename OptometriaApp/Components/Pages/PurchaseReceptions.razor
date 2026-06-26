@@ -1,0 +1,417 @@
+@page "/purchase-receptions"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Recepciones de compra</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando recepciones...</h1></div></section>
+}
+else if (!canView)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div><span class="eyebrow">Compras</span><h1>Recepciones de compra</h1><p>Las recepciones registradas por el usuario actual actualizan stock, movimientos y kardex.</p></div>
+            <div class="workspace-actions">
+                @if (permissions.CanCreate)
+                {
+                    <button class="btn btn-primary" @onclick="PrepareNew">Nueva recepcion</button>
+                }
+                <button class="btn btn-outline-primary" @onclick="ExportReceptions">Exportar Excel</button>
+            </div>
+        </div>
+
+        <section class="management-card">
+            <div class="management-card-header"><h2>Filtros</h2><span>@FilteredReceptions.Count resultados</span></div>
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label">Buscar</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Numero recepcion, orden o guia" />
+                </div>
+                <div>
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" @bind="stateFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in stateOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Orden</label>
+                    <select class="form-select" @bind="orderFilter">
+                        <option value="">Todas</option>
+                        @foreach (var order in availableOrders.OrderByDescending(o => o.fecha_orden))
+                        {
+                            <option value="@order.id_orden_compra.ToString()">@order.numero_orden</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="management-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top:1.5rem;">
+            <div class="management-card-header"><h2>Recepciones</h2><span>@FilteredReceptions.Count</span></div>
+            <div class="table-responsive" style="margin-top:1rem;">
+                <table class="table table-hover">
+                    <thead><tr><th>Numero</th><th>Orden</th><th>Fecha</th><th>Estado</th><th>Recibido</th><th style="text-align:right;">Acciones</th></tr></thead>
+                    <tbody>
+                        @if (FilteredReceptions.Count == 0)
+                        {
+                            <tr><td colspan="6" style="text-align:center; padding:2rem;">No hay recepciones.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in FilteredReceptions)
+                            {
+                                <tr>
+                                    <td>@item.numero_recepcion</td>
+                                    <td>@item.id_orden_compraNavigation?.numero_orden</td>
+                                    <td>@item.fecha_recepcion?.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@item.estado_recepcion</td>
+                                    <td>@(item.cantidad_total_recibida ?? 0)</td>
+                                    <td style="text-align:right;">
+                                        <div style="display:inline-flex; gap:0.4rem;">
+                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">Editar</button>
+                                            @if (permissions.CanDelete)
+                                            {
+                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">Eliminar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+}
+
+@if (showForm && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card">
+            <header class="custom-modal-header rose-header"><h2>@(isCreating ? "Nueva recepcion" : "Editar recepcion")</h2><button class="btn-close-modal" @onclick="CloseForm">×</button></header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div><label class="form-label">Numero recepcion</label><input class="form-control" @bind="editor.NumeroRecepcion" /></div>
+                    <div>
+                        <label class="form-label">Buscar orden</label>
+                        <input class="form-control" @bind="orderSearchTerm" @bind:event="oninput" placeholder="Escribe el numero de orden" />
+                    </div>
+                    <div>
+                        <label class="form-label">Orden compra</label>
+                        <select class="form-select" @bind="editor.IdOrdenCompra">
+                            <option value="0">Selecciona</option>
+                            @foreach (var order in FilteredAvailableOrders)
+                            {
+                                <option value="@order.id_orden_compra">@order.numero_orden</option>
+                            }
+                        </select>
+                    </div>
+                    <div><label class="form-label">Guia remision</label><input class="form-control" @bind="editor.NumeroGuiaRemision" /></div>
+                    <div><label class="form-label">Estado</label><select class="form-select" @bind="editor.EstadoRecepcion">@foreach (var option in stateOptions){<option value="@option">@option</option>}</select></div>
+                    <div class="patient-form-span"><label class="form-label">Observaciones</label><textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea></div>
+                </div>
+            </div>
+            <footer class="custom-modal-footer"><button class="btn btn-primary" @onclick="SaveAsync">Guardar</button><button class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button></footer>
+        </div>
+    </div>
+}
+
+@if (showAlert)
+{
+    <div class="custom-modal-overlay"><div class="custom-modal-card alert-modal-card"><header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")"><h2>@(alertIsError ? "Error" : "Ok")</h2></header><div class="custom-modal-body"><p>@alertMessage</p></div><footer class="custom-modal-footer" style="justify-content:center;"><button class="btn btn-primary" @onclick="() => showAlert = false">Aceptar</button></footer></div></div>
+}
+
+@code {
+    private readonly List<tbl_recepcion_compra> recepciones = [];
+    private readonly List<tbl_orden_compra> availableOrders = [];
+    private readonly string[] stateOptions = ["Completa", "Parcial", "Observada"];
+    private Permissions permissions = new();
+    private ReceptionEditor? editor;
+    private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError;
+    private int currentUserId, currentRoleId;
+    private string alertMessage = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
+
+    private List<tbl_recepcion_compra> FilteredReceptions => recepciones.Where(MatchesFilters).ToList();
+    private IEnumerable<tbl_orden_compra> FilteredAvailableOrders => availableOrders.Where(MatchesOrderSearch).OrderByDescending(x => x.fecha_orden);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : 0;
+        currentRoleId = int.TryParse(auth.User.FindFirst("RoleId")?.Value, out var rid) ? rid : 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetPermissionsAsync(db);
+        canView = permissions.CanView;
+        if (!canView) { isLoading = false; return; }
+        availableOrders.Clear();
+        availableOrders.AddRange(await db.tbl_orden_compra.AsNoTracking().Where(x => x.id_usuario_solicita == currentUserId).OrderByDescending(x => x.fecha_orden).ToListAsync());
+        recepciones.Clear();
+        recepciones.AddRange(await db.tbl_recepcion_compra.AsNoTracking().Include(x => x.id_orden_compraNavigation).Where(x => x.id_usuario_recibe == currentUserId).OrderByDescending(x => x.fecha_recepcion).ToListAsync());
+        isLoading = false;
+    }
+
+    private void PrepareNew()
+    {
+        isCreating = true;
+        orderSearchTerm = string.Empty;
+        editor = new ReceptionEditor { EstadoRecepcion = "Completa" };
+        showForm = true;
+    }
+
+    private void PrepareEdit(tbl_recepcion_compra item)
+    {
+        isCreating = false;
+        orderSearchTerm = item.id_orden_compraNavigation?.numero_orden ?? string.Empty;
+        editor = new ReceptionEditor { Id = item.id_recepcion, IdOrdenCompra = item.id_orden_compra, NumeroRecepcion = item.numero_recepcion, NumeroGuiaRemision = item.numero_guia_remision ?? string.Empty, EstadoRecepcion = item.estado_recepcion ?? "Completa", Observaciones = item.observaciones_recepcion ?? string.Empty };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroRecepcion) || editor.IdOrdenCompra <= 0)
+        {
+            ShowAlert("Completa los datos obligatorios.", true);
+            return;
+        }
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var duplicate = await db.tbl_recepcion_compra.AnyAsync(x => x.id_recepcion != editor.Id && x.numero_recepcion == editor.NumeroRecepcion);
+        if (duplicate) { ShowAlert("El numero de recepcion ya existe.", true); return; }
+
+        tbl_recepcion_compra entity;
+        if (isCreating)
+        {
+            entity = new tbl_recepcion_compra { id_usuario_recibe = currentUserId, fecha_recepcion = DateTime.Now, activo = true };
+            db.tbl_recepcion_compra.Add(entity);
+        }
+        else
+        {
+            entity = await db.tbl_recepcion_compra.FirstAsync(x => x.id_recepcion == editor.Id && x.id_usuario_recibe == currentUserId);
+        }
+
+        entity.id_orden_compra = editor.IdOrdenCompra;
+        entity.numero_recepcion = editor.NumeroRecepcion.Trim();
+        entity.numero_guia_remision = NullIfBlank(editor.NumeroGuiaRemision);
+        entity.estado_recepcion = editor.EstadoRecepcion;
+        entity.observaciones_recepcion = NullIfBlank(editor.Observaciones);
+
+        if (isCreating)
+        {
+            var order = await db.tbl_orden_compra.Include(x => x.tbl_detalle_orden_compra).FirstAsync(x => x.id_orden_compra == editor.IdOrdenCompra && x.id_usuario_solicita == currentUserId);
+            var totalReceived = 0;
+            foreach (var line in order.tbl_detalle_orden_compra.Where(x => (x.cantidad_pendiente ?? 0) > 0))
+            {
+                var received = line.cantidad_pendiente ?? 0;
+                totalReceived += received;
+                line.cantidad_recibida = (line.cantidad_recibida ?? 0) + received;
+                line.cantidad_pendiente = 0;
+                line.estado_linea = "Recibida";
+
+                var product = await db.tbl_productos.FirstAsync(x => x.id_producto == line.id_producto);
+                var previousStock = product.stock_actual ?? 0;
+                product.stock_actual = previousStock + received;
+                product.fecha_ultima_compra = DateTime.Now;
+
+                tbl_lote_producto? lote = null;
+                if (product.requiere_lote == true)
+                {
+                    lote = new tbl_lote_producto
+                    {
+                        id_producto = product.id_producto,
+                        id_orden_compra = order.id_orden_compra,
+                        numero_lote = $"{order.numero_orden}-{line.id_producto}-{DateTime.Now:yyyyMMddHHmmss}",
+                        cantidad_inicial = received,
+                        cantidad_disponible = received,
+                        costo_unitario = line.precio_unitario,
+                        precio_venta_unitario = product.precio_venta,
+                        valor_total_costo = line.precio_unitario * received,
+                        estado_lote = "Disponible",
+                        fecha_ingreso = DateTime.Now,
+                        id_usuario_ingreso = currentUserId
+                    };
+                    db.tbl_lote_producto.Add(lote);
+                }
+
+                db.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+                {
+                    id_producto = product.id_producto,
+                    id_usuario = currentUserId,
+                    tipo_movimiento = "Entrada",
+                    cantidad = received,
+                    stock_anterior = previousStock,
+                    stock_resultante = product.stock_actual,
+                    fecha_movimiento = DateTime.Now,
+                    observaciones = $"Recepcion compra {editor.NumeroRecepcion}",
+                    id_referencia_documento = order.id_orden_compra,
+                    tipo_documento_referencia = "RecepcionCompra",
+                    costo_unitario = line.precio_unitario,
+                    costo_total_movimiento = line.precio_unitario * received,
+                    saldo_en_dinero = (line.precio_unitario * received),
+                    metodo_valuacion = "Promedio",
+                    comprobante_numero = editor.NumeroRecepcion,
+                    numero_lote = lote?.numero_lote
+                });
+
+                db.tbl_kardex.Add(new tbl_kardex
+                {
+                    id_producto = product.id_producto,
+                    numero_lote = lote?.numero_lote,
+                    fecha_movimiento = DateTime.Now,
+                    tipo_movimiento = "Entrada",
+                    id_referencia = order.id_orden_compra,
+                    tipo_referencia = "RecepcionCompra",
+                    comprobante_numero = editor.NumeroRecepcion,
+                    cantidad_movimiento = received,
+                    costo_unitario = line.precio_unitario,
+                    costo_total = line.precio_unitario * received,
+                    stock_anterior = previousStock,
+                    stock_nuevo = product.stock_actual,
+                    saldo_anterior_dinero = 0,
+                    saldo_nuevo_dinero = line.precio_unitario * received,
+                    precio_promedio_ponderado = line.precio_unitario,
+                    metodo_valuacion = "Promedio",
+                    id_usuario_movimiento = currentUserId,
+                    descripcion_movimiento = $"Recepcion de orden {order.numero_orden}",
+                    estado_kardex = "Registrado"
+                });
+            }
+
+            entity.cantidad_total_recibida = totalReceived;
+            order.fecha_recepcion_real = DateTime.Now;
+            order.estado_orden = totalReceived > 0 ? "Recibida" : order.estado_orden;
+            WriteAudit(db, "Crear recepcion compra", $"RecepcionCompraId={entity.id_recepcion}; Numero={entity.numero_recepcion}; OrdenCompraId={order.id_orden_compra}");
+        }
+        else
+        {
+            WriteAudit(db, "Editar recepcion compra", $"RecepcionCompraId={entity.id_recepcion}; Numero={entity.numero_recepcion}; OrdenCompraId={entity.id_orden_compra}");
+        }
+
+        await db.SaveChangesAsync();
+        CloseForm();
+        ShowAlert("Recepcion guardada.", false);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(tbl_recepcion_compra item)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var entity = await db.tbl_recepcion_compra.FirstAsync(x => x.id_recepcion == item.id_recepcion && x.id_usuario_recibe == currentUserId);
+        var hasInventoryImpact = await db.tbl_movimiento_inventarios.AsNoTracking().AnyAsync(x =>
+            x.id_usuario == currentUserId &&
+            x.tipo_documento_referencia == "RecepcionCompra" &&
+            x.comprobante_numero == entity.numero_recepcion);
+
+        if (hasInventoryImpact)
+        {
+            ShowAlert("Esta recepcion ya afecto inventario. Para conservar consistencia no se puede eliminar.", true);
+            return;
+        }
+
+        WriteAudit(db, "Eliminar recepcion compra", $"RecepcionCompraId={entity.id_recepcion}; Numero={entity.numero_recepcion}; OrdenCompraId={entity.id_orden_compra}");
+        db.tbl_recepcion_compra.Remove(entity);
+        await db.SaveChangesAsync();
+        ShowAlert("Recepcion eliminada.", false);
+        await LoadAsync();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        stateFilter = string.Empty;
+        orderFilter = string.Empty;
+    }
+
+    private void ExportReceptions()
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+        if (!string.IsNullOrWhiteSpace(stateFilter))
+        {
+            query.Add($"state={Uri.EscapeDataString(stateFilter)}");
+        }
+        if (!string.IsNullOrWhiteSpace(orderFilter))
+        {
+            query.Add($"orderId={Uri.EscapeDataString(orderFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/purchase-receptions.csv"
+            : $"/exports/purchase-receptions.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private bool MatchesFilters(tbl_recepcion_compra item)
+    {
+        if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(item.estado_recepcion, stateFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (int.TryParse(orderFilter, out var orderId) && orderId > 0 && item.id_orden_compra != orderId)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var search = searchTerm.Trim().ToLowerInvariant();
+        return item.numero_recepcion.ToLowerInvariant().Contains(search) ||
+               (item.numero_guia_remision?.ToLowerInvariant().Contains(search) ?? false) ||
+               (item.id_orden_compraNavigation?.numero_orden.ToLowerInvariant().Contains(search) ?? false);
+    }
+
+    private bool MatchesOrderSearch(tbl_orden_compra order)
+    {
+        if (string.IsNullOrWhiteSpace(orderSearchTerm))
+        {
+            return true;
+        }
+
+        var search = orderSearchTerm.Trim().ToLowerInvariant();
+        return order.numero_orden.ToLowerInvariant().Contains(search) ||
+               (order.referencia_externa?.ToLowerInvariant().Contains(search) ?? false);
+    }
+
+    private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
+    {
+        var permission = await db.tbl_rol_menu_permisos.AsNoTracking().Where(p => p.id_rol == currentRoleId)
+            .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-receptions"), p => p.id_menu, m => m.id_menu, (p, _) => p)
+            .FirstOrDefaultAsync();
+        return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
+    }
+    private void WriteAudit(OpticaDbContext db, string action, string detail) => db.tbl_log_auditoria.Add(new tbl_log_auditoria { id_usuario = currentUserId > 0 ? currentUserId : null, accion = action, modulo = "RecepcionesCompra", fecha = DateTime.Now, detalle = detail });
+    private void ShowAlert(string message, bool isError) { alertMessage = message; alertIsError = isError; showAlert = true; }
+    private void CloseForm() { showForm = false; editor = null; orderSearchTerm = string.Empty; }
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }
+    private sealed class ReceptionEditor { public int Id { get; set; } public int IdOrdenCompra { get; set; } public string NumeroRecepcion { get; set; } = string.Empty; public string NumeroGuiaRemision { get; set; } = string.Empty; public string EstadoRecepcion { get; set; } = "Completa"; public string Observaciones { get; set; } = string.Empty; }
+}

@@ -42,12 +42,17 @@ USING
         ('Laboratorios', '/laboratories', 'lab', 5, 1),
         ('Proveedores', '/suppliers', 'suppliers', 6, 1),
         ('Productos', '/products', 'products', 7, 1),
-        ('Clientes', '/clients', 'clients', 8, 1),
-        ('Emisor', '/emisor', 'issuer', 9, 1),
-        ('Roles', '/roles', 'roles', 10, 1),
-        ('Menus', '/menus', 'menu', 11, 1),
-        ('Registrar usuario', '/register', 'user-plus', 12, 1),
-        ('Seguridad', '/setup-2fa', 'shield', 13, 1)
+        ('Compras', '/purchases', 'purchases', 8, 1),
+        ('Ordenes de compra', '/purchase-orders', 'purchase-orders', 9, 1),
+        ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 10, 1),
+        ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 11, 1),
+        ('Inventarios', '/inventories', 'inventories', 12, 1),
+        ('Clientes', '/clients', 'clients', 13, 1),
+        ('Emisor', '/emisor', 'issuer', 14, 1),
+        ('Roles', '/roles', 'roles', 15, 1),
+        ('Menus', '/menus', 'menu', 16, 1),
+        ('Registrar usuario', '/register', 'user-plus', 17, 1),
+        ('Seguridad', '/setup-2fa', 'shield', 18, 1)
 ) AS source(nombre, ruta, icono, orden, activo)
 ON target.ruta = source.ruta
 WHEN MATCHED THEN
