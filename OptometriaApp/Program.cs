@@ -74,6 +74,7 @@ await EnsureNavigationSchemaAsync(app);
 await EnsureUserProfileSchemaAsync(app);
 await EnsureAuditSchemaAsync(app);
 await EnsureElectronicBillingSchemaAsync(app);
+await EnsureProductSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -1436,6 +1437,122 @@ app.MapGet("/exports/emisor.csv", async (
         $"emisor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/products.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    if (!int.TryParse(roleIdValue, out var roleId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewProducts = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/products"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewProducts)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
+    var state = httpContext.Request.Query["state"].ToString().Trim();
+    var categoryIdRaw = httpContext.Request.Query["categoryId"].ToString().Trim();
+    var supplierIdRaw = httpContext.Request.Query["supplierId"].ToString().Trim();
+
+    var productsQuery = dbContext.tbl_productos
+        .AsNoTracking()
+        .Include(p => p.id_categoriaNavigation)
+        .Include(p => p.id_proveedorNavigation)
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        productsQuery = productsQuery.Where(p =>
+            p.codigo_producto.ToLower().Contains(loweredSearch) ||
+            p.nombre_producto.ToLower().Contains(loweredSearch) ||
+            (p.descripcion != null && p.descripcion.ToLower().Contains(loweredSearch)) ||
+            (p.codigo_barras != null && p.codigo_barras.ToLower().Contains(loweredSearch)) ||
+            (p.marca != null && p.marca.ToLower().Contains(loweredSearch)) ||
+            (p.modelo != null && p.modelo.ToLower().Contains(loweredSearch)) ||
+            (p.etiquetas != null && p.etiquetas.ToLower().Contains(loweredSearch)));
+    }
+
+    if (status is "active" or "inactive")
+    {
+        var expectedStatus = status == "active";
+        productsQuery = productsQuery.Where(p => (p.activo ?? false) == expectedStatus);
+    }
+
+    if (!string.IsNullOrWhiteSpace(state))
+    {
+        productsQuery = productsQuery.Where(p => p.estado_producto == state);
+    }
+
+    if (int.TryParse(categoryIdRaw, out var categoryId) && categoryId > 0)
+    {
+        productsQuery = productsQuery.Where(p => p.id_categoria == categoryId);
+    }
+
+    if (int.TryParse(supplierIdRaw, out var supplierId) && supplierId > 0)
+    {
+        productsQuery = productsQuery.Where(p => p.id_proveedor == supplierId);
+    }
+
+    var products = await productsQuery
+        .OrderBy(p => p.nombre_producto)
+        .ThenBy(p => p.codigo_producto)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Codigo,Nombre,Categoria,Proveedor,PrecioCosto,PrecioVenta,StockActual,StockMinimo,StockMaximo,Estado,EstadoProducto,CodigoBarras,Marca,Modelo");
+
+    foreach (var product in products)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(product.id_producto.ToString()),
+            EscapeCsv(product.codigo_producto),
+            EscapeCsv(product.nombre_producto),
+            EscapeCsv(product.id_categoriaNavigation?.nombre),
+            EscapeCsv(product.id_proveedorNavigation?.nombre),
+            EscapeCsv(product.precio_costo?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(product.precio_venta.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(product.stock_actual?.ToString()),
+            EscapeCsv(product.stock_minimo?.ToString()),
+            EscapeCsv(product.stock_maximo?.ToString()),
+            EscapeCsv((product.activo ?? false) ? "Activo" : "Inactivo"),
+            EscapeCsv(product.estado_producto),
+            EscapeCsv(product.codigo_barras),
+            EscapeCsv(product.marca),
+            EscapeCsv(product.modelo)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = int.TryParse(httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorUserId) ? actorUserId : null,
+        accion = "Exportar CSV",
+        modulo = "Productos",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|state:{state}|categoryId:{categoryIdRaw}|supplierId:{supplierIdRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"productos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -1520,13 +1637,14 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 5, 1),
                 ('Laboratorios', '/laboratories', 'lab', 6, 1),
                 ('Proveedores', '/suppliers', 'suppliers', 7, 1),
-                ('Clientes', '/clients', 'clients', 8, 1),
-                ('Emisor', '/emisor', 'issuer', 9, 1),
-                ('Usuarios', '/users', 'users', 10, 1),
-                ('Roles', '/roles', 'roles', 11, 1),
-                ('Menus', '/menus', 'menu', 12, 1),
-                ('Registrar usuario', '/register', 'user-plus', 13, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 14, 1)
+                ('Productos', '/products', 'products', 8, 1),
+                ('Clientes', '/clients', 'clients', 9, 1),
+                ('Emisor', '/emisor', 'issuer', 10, 1),
+                ('Usuarios', '/users', 'users', 11, 1),
+                ('Roles', '/roles', 'roles', 12, 1),
+                ('Menus', '/menus', 'menu', 13, 1),
+                ('Registrar usuario', '/register', 'user-plus', 14, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 15, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -1792,6 +1910,78 @@ static async Task EnsureElectronicBillingSchemaAsync(WebApplication app)
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_clients_razon_social' AND object_id = OBJECT_ID('dbo.clients'))
         BEGIN
             CREATE NONCLUSTERED INDEX IX_clients_razon_social ON dbo.clients (razon_social);
+        END;
+        """);
+}
+
+static async Task EnsureProductSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF COL_LENGTH('dbo.tbl_producto', 'almacen') IS NULL ALTER TABLE dbo.tbl_producto ADD almacen VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'pasillo') IS NULL ALTER TABLE dbo.tbl_producto ADD pasillo VARCHAR(10) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'estante') IS NULL ALTER TABLE dbo.tbl_producto ADD estante VARCHAR(10) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'nivel') IS NULL ALTER TABLE dbo.tbl_producto ADD nivel VARCHAR(10) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'stock_maximo') IS NULL ALTER TABLE dbo.tbl_producto ADD stock_maximo INT NOT NULL CONSTRAINT DF_tbl_producto_stock_maximo DEFAULT (0);
+        IF COL_LENGTH('dbo.tbl_producto', 'punto_reorden') IS NULL ALTER TABLE dbo.tbl_producto ADD punto_reorden INT NOT NULL CONSTRAINT DF_tbl_producto_punto_reorden DEFAULT (0);
+        IF COL_LENGTH('dbo.tbl_producto', 'cantidad_empaque') IS NULL ALTER TABLE dbo.tbl_producto ADD cantidad_empaque INT NOT NULL CONSTRAINT DF_tbl_producto_cantidad_empaque DEFAULT (1);
+        IF COL_LENGTH('dbo.tbl_producto', 'peso_unitario') IS NULL ALTER TABLE dbo.tbl_producto ADD peso_unitario DECIMAL(10,4) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'dimensiones_largo') IS NULL ALTER TABLE dbo.tbl_producto ADD dimensiones_largo DECIMAL(10,4) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'dimensiones_ancho') IS NULL ALTER TABLE dbo.tbl_producto ADD dimensiones_ancho DECIMAL(10,4) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'dimensiones_alto') IS NULL ALTER TABLE dbo.tbl_producto ADD dimensiones_alto DECIMAL(10,4) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'volumen_m3') IS NULL ALTER TABLE dbo.tbl_producto ADD volumen_m3 DECIMAL(15,8) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'requiere_lote') IS NULL ALTER TABLE dbo.tbl_producto ADD requiere_lote BIT NOT NULL CONSTRAINT DF_tbl_producto_requiere_lote DEFAULT (0);
+        IF COL_LENGTH('dbo.tbl_producto', 'requiere_fecha_vencimiento') IS NULL ALTER TABLE dbo.tbl_producto ADD requiere_fecha_vencimiento BIT NOT NULL CONSTRAINT DF_tbl_producto_requiere_fecha_vencimiento DEFAULT (0);
+        IF COL_LENGTH('dbo.tbl_producto', 'dias_vencimiento') IS NULL ALTER TABLE dbo.tbl_producto ADD dias_vencimiento INT NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'cuenta_contable') IS NULL ALTER TABLE dbo.tbl_producto ADD cuenta_contable VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'centro_costo') IS NULL ALTER TABLE dbo.tbl_producto ADD centro_costo VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'naturaleza_item') IS NULL ALTER TABLE dbo.tbl_producto ADD naturaleza_item VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'porcentaje_margen') IS NULL ALTER TABLE dbo.tbl_producto ADD porcentaje_margen DECIMAL(5,2) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'descuento_mayorista') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_mayorista DECIMAL(5,2) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'descuento_cliente_fijo') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_cliente_fijo DECIMAL(5,2) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'movimiento_frecuencia') IS NULL ALTER TABLE dbo.tbl_producto ADD movimiento_frecuencia VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'dias_rotacion_promedio') IS NULL ALTER TABLE dbo.tbl_producto ADD dias_rotacion_promedio INT NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'fecha_ultima_compra') IS NULL ALTER TABLE dbo.tbl_producto ADD fecha_ultima_compra DATETIME NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'fecha_ultima_venta') IS NULL ALTER TABLE dbo.tbl_producto ADD fecha_ultima_venta DATETIME NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'fecha_actualizacion_precio') IS NULL ALTER TABLE dbo.tbl_producto ADD fecha_actualizacion_precio DATETIME NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'id_usuario_actualizacion') IS NULL ALTER TABLE dbo.tbl_producto ADD id_usuario_actualizacion INT NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'cantidad_movimientos_mes') IS NULL ALTER TABLE dbo.tbl_producto ADD cantidad_movimientos_mes INT NOT NULL CONSTRAINT DF_tbl_producto_cantidad_movimientos_mes DEFAULT (0);
+        IF COL_LENGTH('dbo.tbl_producto', 'etiquetas') IS NULL ALTER TABLE dbo.tbl_producto ADD etiquetas VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'marca') IS NULL ALTER TABLE dbo.tbl_producto ADD marca VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'modelo') IS NULL ALTER TABLE dbo.tbl_producto ADD modelo VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'color') IS NULL ALTER TABLE dbo.tbl_producto ADD color VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'talla') IS NULL ALTER TABLE dbo.tbl_producto ADD talla VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'es_promocion') IS NULL ALTER TABLE dbo.tbl_producto ADD es_promocion BIT NOT NULL CONSTRAINT DF_tbl_producto_es_promocion DEFAULT (0);
+        IF COL_LENGTH('dbo.tbl_producto', 'porcentaje_descuento_promo') IS NULL ALTER TABLE dbo.tbl_producto ADD porcentaje_descuento_promo DECIMAL(5,2) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'material_principal') IS NULL ALTER TABLE dbo.tbl_producto ADD material_principal VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'tratamiento_lente') IS NULL ALTER TABLE dbo.tbl_producto ADD tratamiento_lente VARCHAR(200) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'estado_producto') IS NULL ALTER TABLE dbo.tbl_producto ADD estado_producto VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_producto_estado_producto DEFAULT ('Disponible');
+        IF COL_LENGTH('dbo.tbl_producto', 'motivo_estado') IS NULL ALTER TABLE dbo.tbl_producto ADD motivo_estado VARCHAR(300) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'codigo_barras') IS NULL ALTER TABLE dbo.tbl_producto ADD codigo_barras VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'sku_alterno') IS NULL ALTER TABLE dbo.tbl_producto ADD sku_alterno VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'referencia_fabricante') IS NULL ALTER TABLE dbo.tbl_producto ADD referencia_fabricante VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'proveedor_preferente') IS NULL ALTER TABLE dbo.tbl_producto ADD proveedor_preferente VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'tiempo_entrega_dias') IS NULL ALTER TABLE dbo.tbl_producto ADD tiempo_entrega_dias INT NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'cantidad_pedido_optima') IS NULL ALTER TABLE dbo.tbl_producto ADD cantidad_pedido_optima INT NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'fecha_creacion') IS NULL ALTER TABLE dbo.tbl_producto ADD fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_producto_fecha_creacion DEFAULT (GETDATE());
+        IF COL_LENGTH('dbo.tbl_producto', 'usuario_creacion') IS NULL ALTER TABLE dbo.tbl_producto ADD usuario_creacion VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'notas_internas') IS NULL ALTER TABLE dbo.tbl_producto ADD notas_internas VARCHAR(MAX) NULL;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_producto_usuario_actualizacion')
+        BEGIN
+            ALTER TABLE dbo.tbl_producto
+            ADD CONSTRAINT FK_tbl_producto_usuario_actualizacion
+                FOREIGN KEY (id_usuario_actualizacion) REFERENCES dbo.tbl_usuario(id_usuario);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_producto_codigo_barras' AND object_id = OBJECT_ID('dbo.tbl_producto'))
+        BEGIN
+            CREATE UNIQUE NONCLUSTERED INDEX UQ_tbl_producto_codigo_barras
+            ON dbo.tbl_producto (codigo_barras)
+            WHERE codigo_barras IS NOT NULL;
         END;
         """);
 }

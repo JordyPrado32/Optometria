@@ -497,17 +497,107 @@ public partial class OpticaDbContext : DbContext
             entity.HasIndex(e => e.codigo_producto, "idx_producto_codigo");
 
             entity.Property(e => e.activo).HasDefaultValue(true);
+            entity.Property(e => e.almacen)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.cantidad_empaque).HasDefaultValue(1);
+            entity.Property(e => e.cantidad_movimientos_mes).HasDefaultValue(0);
+            entity.Property(e => e.cantidad_pedido_optima);
+            entity.Property(e => e.centro_costo)
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.codigo_producto)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.codigo_barras)
+                .HasMaxLength(50)
+                .IsUnicode(false);
             entity.Property(e => e.descripcion).IsUnicode(false);
+            entity.Property(e => e.cuenta_contable)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.descuento_cliente_fijo).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.descuento_mayorista).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.dimensiones_alto).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.dimensiones_ancho).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.dimensiones_largo).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.estado_producto)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Disponible");
+            entity.Property(e => e.es_promocion).HasDefaultValue(false);
+            entity.Property(e => e.etiquetas)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.fecha_ultima_compra).HasColumnType("datetime");
+            entity.Property(e => e.fecha_ultima_venta).HasColumnType("datetime");
+            entity.Property(e => e.fecha_actualizacion_precio).HasColumnType("datetime");
+            entity.Property(e => e.marca)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.material_principal)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.modelo)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.movimiento_frecuencia)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.motivo_estado)
+                .HasMaxLength(300)
+                .IsUnicode(false);
+            entity.Property(e => e.naturaleza_item)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.nivel)
+                .HasMaxLength(10)
+                .IsUnicode(false);
             entity.Property(e => e.nombre_producto)
                 .HasMaxLength(150)
                 .IsUnicode(false);
+            entity.Property(e => e.notas_internas).IsUnicode(false);
+            entity.Property(e => e.pasillo)
+                .HasMaxLength(10)
+                .IsUnicode(false);
             entity.Property(e => e.precio_costo).HasColumnType("decimal(10, 2)");
             entity.Property(e => e.precio_venta).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.peso_unitario).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.porcentaje_descuento_promo).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.porcentaje_margen).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.proveedor_preferente)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.punto_reorden).HasDefaultValue(0);
+            entity.Property(e => e.referencia_fabricante)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.requiere_fecha_vencimiento).HasDefaultValue(false);
+            entity.Property(e => e.requiere_lote).HasDefaultValue(false);
+            entity.Property(e => e.sku_alterno)
+                .HasMaxLength(50)
+                .IsUnicode(false);
             entity.Property(e => e.stock_actual).HasDefaultValue(0);
+            entity.Property(e => e.stock_maximo).HasDefaultValue(0);
             entity.Property(e => e.stock_minimo).HasDefaultValue(0);
+            entity.Property(e => e.talla)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.tiempo_entrega_dias);
+            entity.Property(e => e.tratamiento_lente)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.usuario_creacion)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.volumen_m3).HasColumnType("decimal(15, 8)");
+            entity.Property(e => e.color)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.estante)
+                .HasMaxLength(10)
+                .IsUnicode(false);
 
             entity.HasOne(d => d.id_categoriaNavigation).WithMany(p => p.tbl_productos)
                 .HasForeignKey(d => d.id_categoria)
@@ -516,6 +606,10 @@ public partial class OpticaDbContext : DbContext
             entity.HasOne(d => d.id_proveedorNavigation).WithMany(p => p.tbl_productos)
                 .HasForeignKey(d => d.id_proveedor)
                 .HasConstraintName("fk_producto_proveedor");
+
+            entity.HasOne(d => d.id_usuario_actualizacionNavigation).WithMany()
+                .HasForeignKey(d => d.id_usuario_actualizacion)
+                .HasConstraintName("FK_tbl_producto_usuario_actualizacion");
         });
 
         modelBuilder.Entity<tbl_proveedor>(entity =>

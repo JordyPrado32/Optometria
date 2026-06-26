@@ -1,0 +1,1189 @@
+@page "/products"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Net.Mail
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Productos</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando productos...</h1>
+        </div>
+    </section>
+}
+else if (!canViewProducts)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de productos</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Inventario</span>
+                <h1>Productos</h1>
+                <p>Gestiona catalogo, stock, logistica, promociones, reposicion y trazabilidad operativa desde una pagina dedicada.</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNewProduct">
+                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo producto
+                    </button>
+                }
+
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportProducts">Exportar CSV</button>
+            </div>
+        </div>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredProducts.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="productSearch">Buscador</label>
+                    <input id="productSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, nombre, barras, marca, modelo o etiquetas" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="productCategory">Categoria</label>
+                    <select id="productCategory" class="form-select" @bind="selectedCategoryFilter">
+                        <option value="">Todas</option>
+                        @foreach (var category in categories.OrderBy(c => c.nombre))
+                        {
+                            <option value="@category.id_categoria.ToString()">@category.nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="productSupplier">Proveedor</label>
+                    <select id="productSupplier" class="form-select" @bind="selectedSupplierFilter">
+                        <option value="">Todos</option>
+                        @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
+                        {
+                            <option value="@supplier.id_proveedor.ToString()">@supplier.nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="productStatus">Estado activo</label>
+                    <select id="productStatus" class="form-select" @bind="selectedStatusFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="productState">Estado producto</label>
+                    <select id="productState" class="form-select" @bind="selectedStateFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in productStateOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Listado de productos</h2>
+                <span>@FilteredProducts.Count registrados</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Codigo</th>
+                            <th>Producto</th>
+                            <th>Categoria</th>
+                            <th>Proveedor</th>
+                            <th>Precio venta</th>
+                            <th>Stock</th>
+                            <th>Estado</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredProducts.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No se encontraron productos con los filtros seleccionados.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var product in FilteredProducts)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong style="color: var(--color-sage);">@product.codigo_producto</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(product.codigo_barras) ? "Sin barras" : product.codigo_barras)</div>
+                                    </td>
+                                    <td>
+                                        <strong style="color: var(--color-ink);">@product.nombre_producto</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
+                                    </td>
+                                    <td>@(product.id_categoriaNavigation?.nombre ?? "-")</td>
+                                    <td>@(product.id_proveedorNavigation?.nombre ?? "-")</td>
+                                    <td>@product.precio_venta.ToString("0.00")</td>
+                                    <td>@($"{product.stock_actual ?? 0} / min {(product.stock_minimo ?? 0)}")</td>
+                                    <td>
+                                        <div>@((product.activo ?? false) ? "Activo" : "Inactivo")</div>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(product.estado_producto ?? "Disponible")</div>
+                                    </td>
+                                    <td style="text-align: right; padding-right: 1.2rem;">
+                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditProduct(product)">
+                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditProduct(product)">
+                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoria
+                                            </button>
+                                            @if (permissions.CanDelete)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => DeleteProductAsync(product)">
+                                                    Eliminar
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+}
+
+@if (showFormModal && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>@EditorTitle</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label">Codigo</label>
+                        <input class="form-control" @bind="editor.CodigoProducto" readonly="@(!CanModifyEditor)" maxlength="50" />
+                    </div>
+                    <div>
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="editor.NombreProducto" readonly="@(!CanModifyEditor)" maxlength="150" />
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label">Descripcion</label>
+                        <textarea class="form-control" rows="3" @bind="editor.Descripcion" readonly="@(!CanModifyEditor)"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label">Categoria</label>
+                        <select class="form-select" @bind="editor.IdCategoria" disabled="@(!CanModifyEditor)">
+                            <option value="">Sin categoria</option>
+                            @foreach (var category in categories.OrderBy(c => c.nombre))
+                            {
+                                <option value="@category.id_categoria">@category.nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" @bind="editor.IdProveedor" disabled="@(!CanModifyEditor)">
+                            <option value="">Sin proveedor</option>
+                            @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
+                            {
+                                <option value="@supplier.id_proveedor">@supplier.nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Precio costo</label>
+                        <input type="number" step="0.01" min="0" class="form-control" @bind="editor.PrecioCosto" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Precio venta</label>
+                        <input type="number" step="0.01" min="0" class="form-control" @bind="editor.PrecioVenta" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Stock actual</label>
+                        <input type="number" class="form-control" @bind="editor.StockActual" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Stock minimo</label>
+                        <input type="number" class="form-control" @bind="editor.StockMinimo" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Stock maximo</label>
+                        <input type="number" class="form-control" @bind="editor.StockMaximo" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Punto reorden</label>
+                        <input type="number" class="form-control" @bind="editor.PuntoReorden" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Cantidad empaque</label>
+                        <input type="number" class="form-control" @bind="editor.CantidadEmpaque" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Almacen</label>
+                        <input class="form-control" @bind="editor.Almacen" readonly="@(!CanModifyEditor)" maxlength="50" />
+                    </div>
+                    <div>
+                        <label class="form-label">Pasillo</label>
+                        <input class="form-control" @bind="editor.Pasillo" readonly="@(!CanModifyEditor)" maxlength="10" />
+                    </div>
+                    <div>
+                        <label class="form-label">Estante</label>
+                        <input class="form-control" @bind="editor.Estante" readonly="@(!CanModifyEditor)" maxlength="10" />
+                    </div>
+                    <div>
+                        <label class="form-label">Nivel</label>
+                        <input class="form-control" @bind="editor.Nivel" readonly="@(!CanModifyEditor)" maxlength="10" />
+                    </div>
+                    <div>
+                        <label class="form-label">Peso unitario (kg)</label>
+                        <input type="number" step="0.0001" min="0" class="form-control" @bind="editor.PesoUnitario" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Largo (cm)</label>
+                        <input type="number" step="0.0001" min="0" class="form-control" @bind="editor.DimensionesLargo" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Ancho (cm)</label>
+                        <input type="number" step="0.0001" min="0" class="form-control" @bind="editor.DimensionesAncho" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Alto (cm)</label>
+                        <input type="number" step="0.0001" min="0" class="form-control" @bind="editor.DimensionesAlto" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Volumen m3</label>
+                        <input type="number" step="0.00000001" min="0" class="form-control" @bind="editor.VolumenM3" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Dias vencimiento</label>
+                        <input type="number" class="form-control" @bind="editor.DiasVencimiento" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Cuenta contable</label>
+                        <input class="form-control" @bind="editor.CuentaContable" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label">Centro costo</label>
+                        <input class="form-control" @bind="editor.CentroCosto" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label">Naturaleza</label>
+                        <select class="form-select" @bind="editor.NaturalezaItem" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in natureOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Margen %</label>
+                        <input type="number" step="0.01" class="form-control" @bind="editor.PorcentajeMargen" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Desc. mayorista %</label>
+                        <input type="number" step="0.01" class="form-control" @bind="editor.DescuentoMayorista" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Desc. cliente fijo %</label>
+                        <input type="number" step="0.01" class="form-control" @bind="editor.DescuentoClienteFijo" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Frecuencia</label>
+                        <select class="form-select" @bind="editor.MovimientoFrecuencia" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in movementFrequencyOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Dias rotacion</label>
+                        <input type="number" class="form-control" @bind="editor.DiasRotacionPromedio" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Ultima compra</label>
+                        <input type="datetime-local" class="form-control" @bind="editor.FechaUltimaCompra" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Ultima venta</label>
+                        <input type="datetime-local" class="form-control" @bind="editor.FechaUltimaVenta" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Actualizacion precio</label>
+                        <input type="datetime-local" class="form-control" @bind="editor.FechaActualizacionPrecio" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Movimientos mes</label>
+                        <input type="number" class="form-control" @bind="editor.CantidadMovimientosMes" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label">Etiquetas</label>
+                        <input class="form-control" @bind="editor.Etiquetas" readonly="@(!CanModifyEditor)" maxlength="500" />
+                    </div>
+                    <div>
+                        <label class="form-label">Marca</label>
+                        <input class="form-control" @bind="editor.Marca" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label">Modelo</label>
+                        <input class="form-control" @bind="editor.Modelo" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label">Color</label>
+                        <input class="form-control" @bind="editor.Color" readonly="@(!CanModifyEditor)" maxlength="50" />
+                    </div>
+                    <div>
+                        <label class="form-label">Talla</label>
+                        <input class="form-control" @bind="editor.Talla" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label">Desc. promo %</label>
+                        <input type="number" step="0.01" class="form-control" @bind="editor.PorcentajeDescuentoPromo" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Material principal</label>
+                        <input class="form-control" @bind="editor.MaterialPrincipal" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label">Tratamiento lente</label>
+                        <input class="form-control" @bind="editor.TratamientoLente" readonly="@(!CanModifyEditor)" maxlength="200" />
+                    </div>
+                    <div>
+                        <label class="form-label">Estado producto</label>
+                        <select class="form-select" @bind="editor.EstadoProducto" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in productStateOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label">Motivo estado</label>
+                        <input class="form-control" @bind="editor.MotivoEstado" readonly="@(!CanModifyEditor)" maxlength="300" />
+                    </div>
+                    <div>
+                        <label class="form-label">Codigo barras</label>
+                        <input class="form-control" @bind="editor.CodigoBarras" readonly="@(!CanModifyEditor)" maxlength="50" />
+                    </div>
+                    <div>
+                        <label class="form-label">SKU alterno</label>
+                        <input class="form-control" @bind="editor.SkuAlterno" readonly="@(!CanModifyEditor)" maxlength="50" />
+                    </div>
+                    <div>
+                        <label class="form-label">Referencia fabricante</label>
+                        <input class="form-control" @bind="editor.ReferenciaFabricante" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label">Proveedor preferente</label>
+                        <input class="form-control" @bind="editor.ProveedorPreferente" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label">Tiempo entrega dias</label>
+                        <input type="number" class="form-control" @bind="editor.TiempoEntregaDias" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Cantidad pedido optima</label>
+                        <input type="number" class="form-control" @bind="editor.CantidadPedidoOptima" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Usuario creacion</label>
+                        <input class="form-control" @bind="editor.UsuarioCreacion" readonly="true" />
+                    </div>
+                    <div>
+                        <label class="form-label">Activo</label>
+                        <select class="form-select" @bind="editor.Activo" disabled="@(!CanModifyEditor)">
+                            <option value="true">Activo</option>
+                            <option value="false">Inactivo</option>
+                        </select>
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label">Notas internas</label>
+                        <textarea class="form-control" rows="4" @bind="editor.NotasInternas" readonly="@(!CanModifyEditor)"></textarea>
+                    </div>
+                </div>
+
+                <div class="management-form-grid" style="margin-top: 1rem;">
+                    <label class="form-check" style="display: flex; gap: 0.55rem; align-items: center;">
+                        <input type="checkbox" class="form-check-input" @bind="editor.RequiereLote" disabled="@(!CanModifyEditor)" />
+                        <span class="form-check-label">Requiere lote</span>
+                    </label>
+                    <label class="form-check" style="display: flex; gap: 0.55rem; align-items: center;">
+                        <input type="checkbox" class="form-check-input" @bind="editor.RequiereFechaVencimiento" disabled="@(!CanModifyEditor)" />
+                        <span class="form-check-label">Requiere vencimiento</span>
+                    </label>
+                    <label class="form-check" style="display: flex; gap: 0.55rem; align-items: center;">
+                        <input type="checkbox" class="form-check-input" @bind="editor.EsPromocion" disabled="@(!CanModifyEditor)" />
+                        <span class="form-check-label">Es promocion</span>
+                    </label>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                @if (CanModifyEditor)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveProductAsync">Guardar cambios</button>
+                }
+                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showAuditModal && selectedProduct is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card audit-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Historial de auditoria - @selectedProduct.nombre_producto</h2>
+                <button type="button" class="btn-close-modal" @onclick="() => showAuditModal = false">×</button>
+            </header>
+            <div class="custom-modal-body">
+                @if (auditEntries.Count == 0)
+                {
+                    <p style="text-align: center; color: var(--color-taupe); margin: 2rem 0;">No hay eventos registrados para este producto.</p>
+                }
+                else
+                {
+                    <div class="management-list">
+                        @foreach (var auditEntry in auditEntries)
+                        {
+                            <article class="management-list-item" style="border: 1px solid rgba(127, 105, 81, 0.08); border-radius: 0.8rem; padding: 0.95rem; margin-bottom: 0.6rem; background: #faf8f4;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                                    <strong style="color: var(--color-sage);">@auditEntry.accion</strong>
+                                    <span style="font-size: 0.78rem; color: var(--color-taupe);">@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                </div>
+                                <div style="font-size: 0.82rem; color: var(--color-ink); margin-bottom: 0.35rem;">@auditEntry.detalle</div>
+                                <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-taupe); opacity: 0.8;">@GetAuditActorLabel(auditEntry)</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="() => showAuditModal = false">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showAlertModal)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
+                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+            </header>
+            <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
+                    <i class="bi @(alertIsError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+                </div>
+                <p style="font-size: 1rem; color: var(--color-ink); line-height: 1.5; margin: 0;">@alertMessage</p>
+            </div>
+            <footer class="custom-modal-footer" style="justify-content: center;">
+                <button type="button" class="btn btn-primary" style="min-width: 120px;" @onclick="CloseAlertModal">Aceptar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<tbl_producto> products = [];
+    private readonly List<tbl_categoria_producto> categories = [];
+    private readonly List<tbl_proveedor> suppliers = [];
+    private readonly string[] productStateOptions = ["Disponible", "Descontinuado", "Agotado", "Especial Orden"];
+    private readonly string[] movementFrequencyOptions = ["Alta", "Media", "Baja"];
+    private readonly string[] natureOptions = ["Bien", "Servicio", "Mixto"];
+    private List<tbl_log_auditoria> auditEntries = [];
+    private ProductEditorModel? editor;
+    private ModulePermissions permissions = new();
+    private bool isLoading = true;
+    private bool canViewProducts;
+    private bool isCreatingNewProduct;
+    private int currentUserId;
+    private string currentUserName = string.Empty;
+    private int currentRoleId;
+    private string searchTerm = string.Empty;
+    private string selectedCategoryFilter = string.Empty;
+    private string selectedSupplierFilter = string.Empty;
+    private string selectedStatusFilter = "all";
+    private string selectedStateFilter = string.Empty;
+    private string? errorMessage;
+    private bool showFormModal;
+    private bool showAuditModal;
+    private bool showAlertModal;
+    private string alertMessage = string.Empty;
+    private bool alertIsError;
+    private tbl_producto? selectedProduct;
+
+    private List<tbl_producto> FilteredProducts => products
+        .Where(MatchesFilters)
+        .OrderBy(p => p.nombre_producto)
+        .ThenBy(p => p.codigo_producto)
+        .ToList();
+
+    private string EditorTitle => isCreatingNewProduct ? "Nuevo producto" : "Detalle del producto";
+    private bool CanModifyEditor => isCreatingNewProduct ? permissions.CanCreate : permissions.CanEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        currentUserName = authState.User.Identity?.Name ?? "Sistema";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveSelectedProductId = null)
+    {
+        isLoading = true;
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewProducts = permissions.CanView;
+
+        if (!canViewProducts)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var loadedProducts = await dbContext.tbl_productos
+            .AsNoTracking()
+            .Include(p => p.id_categoriaNavigation)
+            .Include(p => p.id_proveedorNavigation)
+            .ToListAsync();
+
+        var loadedCategories = await dbContext.tbl_categoria_productos
+            .AsNoTracking()
+            .OrderBy(c => c.nombre)
+            .ToListAsync();
+
+        var loadedSuppliers = await dbContext.tbl_proveedors
+            .AsNoTracking()
+            .OrderBy(s => s.nombre)
+            .ToListAsync();
+
+        products.Clear();
+        products.AddRange(loadedProducts);
+        categories.Clear();
+        categories.AddRange(loadedCategories);
+        suppliers.Clear();
+        suppliers.AddRange(loadedSuppliers);
+
+        if (preserveSelectedProductId.HasValue)
+        {
+            selectedProduct = products.FirstOrDefault(p => p.id_producto == preserveSelectedProductId.Value);
+            editor = BuildEditor(selectedProduct);
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNewProduct()
+    {
+        isCreatingNewProduct = true;
+        selectedProduct = null;
+        editor = BuildNewEditor();
+        auditEntries = [];
+        errorMessage = null;
+        showFormModal = true;
+    }
+
+    private void PrepareEditProduct(tbl_producto product)
+    {
+        isCreatingNewProduct = false;
+        selectedProduct = product;
+        editor = BuildEditor(product);
+        errorMessage = null;
+        showFormModal = true;
+    }
+
+    private async Task PrepareAuditProduct(tbl_producto product)
+    {
+        selectedProduct = product;
+        await LoadAuditEntriesAsync(product.id_producto);
+        showAuditModal = true;
+    }
+
+    private void ShowAlert(string message, bool isError)
+    {
+        alertMessage = message;
+        alertIsError = isError;
+        showAlertModal = true;
+    }
+
+    private void CloseAlertModal()
+    {
+        showAlertModal = false;
+        alertMessage = string.Empty;
+    }
+
+    private async Task SaveProductAsync()
+    {
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            ShowAlert(errorMessage ?? "Corrige los datos del formulario.", true);
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var normalizedCode = editor!.CodigoProducto.Trim().ToLowerInvariant();
+        var normalizedBarcode = editor.CodigoBarras.Trim().ToLowerInvariant();
+
+        var codeExists = await dbContext.tbl_productos
+            .AnyAsync(p => p.id_producto != editor.IdProducto && p.codigo_producto.ToLower() == normalizedCode);
+
+        if (codeExists)
+        {
+            ShowAlert("Ya existe un producto con el mismo codigo.", true);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedBarcode))
+        {
+            var barcodeExists = await dbContext.tbl_productos
+                .AnyAsync(p => p.id_producto != editor.IdProducto && p.codigo_barras != null && p.codigo_barras.ToLower() == normalizedBarcode);
+
+            if (barcodeExists)
+            {
+                ShowAlert("El codigo de barras ya existe.", true);
+                return;
+            }
+        }
+
+        tbl_producto productEntity;
+        if (isCreatingNewProduct)
+        {
+            if (!permissions.CanCreate)
+            {
+                ShowAlert("Tu rol no tiene permiso para crear productos.", true);
+                return;
+            }
+
+            productEntity = new tbl_producto
+            {
+                fecha_creacion = DateTime.Now,
+                usuario_creacion = currentUserName
+            };
+            dbContext.tbl_productos.Add(productEntity);
+        }
+        else
+        {
+            if (!permissions.CanEdit)
+            {
+                ShowAlert("Tu rol no tiene permiso para editar productos.", true);
+                return;
+            }
+
+            productEntity = await dbContext.tbl_productos.FirstOrDefaultAsync(p => p.id_producto == editor.IdProducto)
+                ?? throw new InvalidOperationException("No se encontro el producto seleccionado.");
+        }
+
+        ApplyEditorToEntity(productEntity);
+        productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
+
+        await dbContext.SaveChangesAsync();
+
+        WriteAudit(
+            dbContext,
+            isCreatingNewProduct ? "Crear producto" : "Editar producto",
+            $"ProductoId={productEntity.id_producto}; Codigo={productEntity.codigo_producto}; Nombre={productEntity.nombre_producto}; EstadoProducto={productEntity.estado_producto}");
+
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert(
+            isCreatingNewProduct
+                ? "El producto se creo correctamente."
+                : "La informacion del producto se guardo correctamente.",
+            false);
+
+        showFormModal = false;
+        isCreatingNewProduct = false;
+        await LoadAsync(productEntity.id_producto);
+    }
+
+    private async Task DeleteProductAsync(tbl_producto product)
+    {
+        if (!permissions.CanDelete)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var productEntity = await dbContext.tbl_productos
+            .Include(p => p.tbl_detalle_venta)
+            .Include(p => p.tbl_movimiento_inventarios)
+            .FirstOrDefaultAsync(p => p.id_producto == product.id_producto);
+
+        if (productEntity is null)
+        {
+            ShowAlert("No se encontro el producto seleccionado.", true);
+            return;
+        }
+
+        if (productEntity.tbl_detalle_venta.Count > 0 || productEntity.tbl_movimiento_inventarios.Count > 0)
+        {
+            ShowAlert("No puedes eliminar un producto con ventas o movimientos asociados.", true);
+            return;
+        }
+
+        WriteAudit(
+            dbContext,
+            "Eliminar producto",
+            $"ProductoId={productEntity.id_producto}; Codigo={productEntity.codigo_producto}; Nombre={productEntity.nombre_producto}");
+
+        dbContext.tbl_productos.Remove(productEntity);
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert("El producto fue eliminado correctamente.", false);
+        selectedProduct = null;
+        await LoadAsync();
+    }
+
+    private void ApplyEditorToEntity(tbl_producto entity)
+    {
+        entity.id_proveedor = editor!.IdProveedor;
+        entity.id_categoria = editor.IdCategoria;
+        entity.codigo_producto = editor.CodigoProducto.Trim();
+        entity.nombre_producto = editor.NombreProducto.Trim();
+        entity.descripcion = NormalizeOptional(editor.Descripcion);
+        entity.precio_costo = editor.PrecioCosto;
+        entity.precio_venta = editor.PrecioVenta;
+        entity.stock_actual = editor.StockActual;
+        entity.stock_minimo = editor.StockMinimo;
+        entity.activo = editor.Activo;
+        entity.almacen = NormalizeOptional(editor.Almacen);
+        entity.pasillo = NormalizeOptional(editor.Pasillo);
+        entity.estante = NormalizeOptional(editor.Estante);
+        entity.nivel = NormalizeOptional(editor.Nivel);
+        entity.stock_maximo = editor.StockMaximo;
+        entity.punto_reorden = editor.PuntoReorden;
+        entity.cantidad_empaque = editor.CantidadEmpaque;
+        entity.peso_unitario = editor.PesoUnitario;
+        entity.dimensiones_largo = editor.DimensionesLargo;
+        entity.dimensiones_ancho = editor.DimensionesAncho;
+        entity.dimensiones_alto = editor.DimensionesAlto;
+        entity.volumen_m3 = editor.VolumenM3;
+        entity.requiere_lote = editor.RequiereLote;
+        entity.requiere_fecha_vencimiento = editor.RequiereFechaVencimiento;
+        entity.dias_vencimiento = editor.DiasVencimiento;
+        entity.cuenta_contable = NormalizeOptional(editor.CuentaContable);
+        entity.centro_costo = NormalizeOptional(editor.CentroCosto);
+        entity.naturaleza_item = NormalizeOptional(editor.NaturalezaItem);
+        entity.porcentaje_margen = editor.PorcentajeMargen;
+        entity.descuento_mayorista = editor.DescuentoMayorista;
+        entity.descuento_cliente_fijo = editor.DescuentoClienteFijo;
+        entity.movimiento_frecuencia = NormalizeOptional(editor.MovimientoFrecuencia);
+        entity.dias_rotacion_promedio = editor.DiasRotacionPromedio;
+        entity.fecha_ultima_compra = editor.FechaUltimaCompra;
+        entity.fecha_ultima_venta = editor.FechaUltimaVenta;
+        entity.fecha_actualizacion_precio = editor.FechaActualizacionPrecio;
+        entity.cantidad_movimientos_mes = editor.CantidadMovimientosMes;
+        entity.etiquetas = NormalizeOptional(editor.Etiquetas);
+        entity.marca = NormalizeOptional(editor.Marca);
+        entity.modelo = NormalizeOptional(editor.Modelo);
+        entity.color = NormalizeOptional(editor.Color);
+        entity.talla = NormalizeOptional(editor.Talla);
+        entity.es_promocion = editor.EsPromocion;
+        entity.porcentaje_descuento_promo = editor.PorcentajeDescuentoPromo;
+        entity.material_principal = NormalizeOptional(editor.MaterialPrincipal);
+        entity.tratamiento_lente = NormalizeOptional(editor.TratamientoLente);
+        entity.estado_producto = NormalizeOptional(editor.EstadoProducto) ?? "Disponible";
+        entity.motivo_estado = NormalizeOptional(editor.MotivoEstado);
+        entity.codigo_barras = NormalizeOptional(editor.CodigoBarras);
+        entity.sku_alterno = NormalizeOptional(editor.SkuAlterno);
+        entity.referencia_fabricante = NormalizeOptional(editor.ReferenciaFabricante);
+        entity.proveedor_preferente = NormalizeOptional(editor.ProveedorPreferente);
+        entity.tiempo_entrega_dias = editor.TiempoEntregaDias;
+        entity.cantidad_pedido_optima = editor.CantidadPedidoOptima;
+        entity.notas_internas = NormalizeOptional(editor.NotasInternas);
+    }
+
+    private async Task LoadAuditEntriesAsync(int productId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var token = $"ProductoId={productId};";
+
+        auditEntries = await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.modulo == "Productos" && a.detalle != null && a.detalle.Contains(token))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedCategoryFilter = string.Empty;
+        selectedSupplierFilter = string.Empty;
+        selectedStatusFilter = "all";
+        selectedStateFilter = string.Empty;
+    }
+
+    private void ExportProducts()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCategoryFilter))
+        {
+            query.Add($"categoryId={Uri.EscapeDataString(selectedCategoryFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedSupplierFilter))
+        {
+            query.Add($"supplierId={Uri.EscapeDataString(selectedSupplierFilter)}");
+        }
+
+        if (selectedStatusFilter != "all")
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedStateFilter))
+        {
+            query.Add($"state={Uri.EscapeDataString(selectedStateFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/products.csv"
+            : $"/exports/products.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private bool MatchesFilters(tbl_producto product)
+    {
+        if (selectedStatusFilter is "active" or "inactive")
+        {
+            var expectedStatus = selectedStatusFilter == "active";
+            if ((product.activo ?? false) != expectedStatus)
+            {
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedStateFilter) &&
+            !string.Equals(product.estado_producto, selectedStateFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (int.TryParse(selectedCategoryFilter, out var categoryId) && categoryId > 0 && product.id_categoria != categoryId)
+        {
+            return false;
+        }
+
+        if (int.TryParse(selectedSupplierFilter, out var supplierId) && supplierId > 0 && product.id_proveedor != supplierId)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var search = searchTerm.Trim().ToLowerInvariant();
+        return product.codigo_producto.ToLowerInvariant().Contains(search) ||
+               product.nombre_producto.ToLowerInvariant().Contains(search) ||
+               (product.descripcion?.ToLowerInvariant().Contains(search) ?? false) ||
+               (product.codigo_barras?.ToLowerInvariant().Contains(search) ?? false) ||
+               (product.marca?.ToLowerInvariant().Contains(search) ?? false) ||
+               (product.modelo?.ToLowerInvariant().Contains(search) ?? false) ||
+               (product.etiquetas?.ToLowerInvariant().Contains(search) ?? false);
+    }
+
+    private bool ValidateEditor()
+    {
+        if (editor is null)
+        {
+            errorMessage = "No hay un producto seleccionado.";
+            return false;
+        }
+
+        editor.CodigoProducto = editor.CodigoProducto.Trim();
+        editor.NombreProducto = editor.NombreProducto.Trim();
+        editor.CodigoBarras = editor.CodigoBarras.Trim();
+
+        if (string.IsNullOrWhiteSpace(editor.CodigoProducto) || string.IsNullOrWhiteSpace(editor.NombreProducto))
+        {
+            errorMessage = "Completa el codigo y el nombre del producto.";
+            return false;
+        }
+
+        if (editor.PrecioVenta < 0 || editor.PrecioCosto < 0)
+        {
+            errorMessage = "Los precios no pueden ser negativos.";
+            return false;
+        }
+
+        if (editor.StockActual < 0 || editor.StockMinimo < 0 || editor.StockMaximo < 0 || editor.PuntoReorden < 0 || editor.CantidadEmpaque < 0)
+        {
+            errorMessage = "Los campos de inventario no pueden ser negativos.";
+            return false;
+        }
+
+        if (editor.PorcentajeMargen < 0 || editor.DescuentoMayorista < 0 || editor.DescuentoClienteFijo < 0 || editor.PorcentajeDescuentoPromo < 0)
+        {
+            errorMessage = "Los porcentajes no pueden ser negativos.";
+            return false;
+        }
+
+        if (editor.CodigoBarras.Length > 50)
+        {
+            errorMessage = "El codigo de barras excede la longitud permitida.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/products"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private ProductEditorModel BuildNewEditor()
+    {
+        return new ProductEditorModel
+        {
+            CantidadEmpaque = 1,
+            Activo = true,
+            RequiereLote = false,
+            RequiereFechaVencimiento = false,
+            EsPromocion = false,
+            EstadoProducto = "Disponible",
+            NaturalezaItem = "Bien",
+            MovimientoFrecuencia = "Media",
+            UsuarioCreacion = currentUserName
+        };
+    }
+
+    private static ProductEditorModel? BuildEditor(tbl_producto? product)
+    {
+        if (product is null)
+        {
+            return null;
+        }
+
+        return new ProductEditorModel
+        {
+            IdProducto = product.id_producto,
+            IdProveedor = product.id_proveedor,
+            IdCategoria = product.id_categoria,
+            CodigoProducto = product.codigo_producto,
+            NombreProducto = product.nombre_producto,
+            Descripcion = product.descripcion ?? string.Empty,
+            PrecioCosto = product.precio_costo ?? 0,
+            PrecioVenta = product.precio_venta,
+            StockActual = product.stock_actual ?? 0,
+            StockMinimo = product.stock_minimo ?? 0,
+            Activo = product.activo ?? true,
+            Almacen = product.almacen ?? string.Empty,
+            Pasillo = product.pasillo ?? string.Empty,
+            Estante = product.estante ?? string.Empty,
+            Nivel = product.nivel ?? string.Empty,
+            StockMaximo = product.stock_maximo ?? 0,
+            PuntoReorden = product.punto_reorden ?? 0,
+            CantidadEmpaque = product.cantidad_empaque ?? 1,
+            PesoUnitario = product.peso_unitario ?? 0,
+            DimensionesLargo = product.dimensiones_largo ?? 0,
+            DimensionesAncho = product.dimensiones_ancho ?? 0,
+            DimensionesAlto = product.dimensiones_alto ?? 0,
+            VolumenM3 = product.volumen_m3 ?? 0,
+            RequiereLote = product.requiere_lote ?? false,
+            RequiereFechaVencimiento = product.requiere_fecha_vencimiento ?? false,
+            DiasVencimiento = product.dias_vencimiento ?? 0,
+            CuentaContable = product.cuenta_contable ?? string.Empty,
+            CentroCosto = product.centro_costo ?? string.Empty,
+            NaturalezaItem = product.naturaleza_item ?? "Bien",
+            PorcentajeMargen = product.porcentaje_margen ?? 0,
+            DescuentoMayorista = product.descuento_mayorista ?? 0,
+            DescuentoClienteFijo = product.descuento_cliente_fijo ?? 0,
+            MovimientoFrecuencia = product.movimiento_frecuencia ?? "Media",
+            DiasRotacionPromedio = product.dias_rotacion_promedio ?? 0,
+            FechaUltimaCompra = product.fecha_ultima_compra,
+            FechaUltimaVenta = product.fecha_ultima_venta,
+            FechaActualizacionPrecio = product.fecha_actualizacion_precio,
+            CantidadMovimientosMes = product.cantidad_movimientos_mes ?? 0,
+            Etiquetas = product.etiquetas ?? string.Empty,
+            Marca = product.marca ?? string.Empty,
+            Modelo = product.modelo ?? string.Empty,
+            Color = product.color ?? string.Empty,
+            Talla = product.talla ?? string.Empty,
+            EsPromocion = product.es_promocion ?? false,
+            PorcentajeDescuentoPromo = product.porcentaje_descuento_promo ?? 0,
+            MaterialPrincipal = product.material_principal ?? string.Empty,
+            TratamientoLente = product.tratamiento_lente ?? string.Empty,
+            EstadoProducto = product.estado_producto ?? "Disponible",
+            MotivoEstado = product.motivo_estado ?? string.Empty,
+            CodigoBarras = product.codigo_barras ?? string.Empty,
+            SkuAlterno = product.sku_alterno ?? string.Empty,
+            ReferenciaFabricante = product.referencia_fabricante ?? string.Empty,
+            ProveedorPreferente = product.proveedor_preferente ?? string.Empty,
+            TiempoEntregaDias = product.tiempo_entrega_dias ?? 0,
+            CantidadPedidoOptima = product.cantidad_pedido_optima ?? 0,
+            UsuarioCreacion = product.usuario_creacion ?? string.Empty,
+            NotasInternas = product.notas_internas ?? string.Empty
+        };
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)
+    {
+        return auditEntry.id_usuarioNavigation is null
+            ? "Responsable: Sistema"
+            : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Productos",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class ProductEditorModel
+    {
+        public int IdProducto { get; set; }
+        public int? IdProveedor { get; set; }
+        public int? IdCategoria { get; set; }
+        public string CodigoProducto { get; set; } = string.Empty;
+        public string NombreProducto { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal PrecioCosto { get; set; }
+        public decimal PrecioVenta { get; set; }
+        public int StockActual { get; set; }
+        public int StockMinimo { get; set; }
+        public bool Activo { get; set; } = true;
+        public string Almacen { get; set; } = string.Empty;
+        public string Pasillo { get; set; } = string.Empty;
+        public string Estante { get; set; } = string.Empty;
+        public string Nivel { get; set; } = string.Empty;
+        public int StockMaximo { get; set; }
+        public int PuntoReorden { get; set; }
+        public int CantidadEmpaque { get; set; } = 1;
+        public decimal PesoUnitario { get; set; }
+        public decimal DimensionesLargo { get; set; }
+        public decimal DimensionesAncho { get; set; }
+        public decimal DimensionesAlto { get; set; }
+        public decimal VolumenM3 { get; set; }
+        public bool RequiereLote { get; set; }
+        public bool RequiereFechaVencimiento { get; set; }
+        public int DiasVencimiento { get; set; }
+        public string CuentaContable { get; set; } = string.Empty;
+        public string CentroCosto { get; set; } = string.Empty;
+        public string NaturalezaItem { get; set; } = "Bien";
+        public decimal PorcentajeMargen { get; set; }
+        public decimal DescuentoMayorista { get; set; }
+        public decimal DescuentoClienteFijo { get; set; }
+        public string MovimientoFrecuencia { get; set; } = "Media";
+        public int DiasRotacionPromedio { get; set; }
+        public DateTime? FechaUltimaCompra { get; set; }
+        public DateTime? FechaUltimaVenta { get; set; }
+        public DateTime? FechaActualizacionPrecio { get; set; }
+        public int CantidadMovimientosMes { get; set; }
+        public string Etiquetas { get; set; } = string.Empty;
+        public string Marca { get; set; } = string.Empty;
+        public string Modelo { get; set; } = string.Empty;
+        public string Color { get; set; } = string.Empty;
+        public string Talla { get; set; } = string.Empty;
+        public bool EsPromocion { get; set; }
+        public decimal PorcentajeDescuentoPromo { get; set; }
+        public string MaterialPrincipal { get; set; } = string.Empty;
+        public string TratamientoLente { get; set; } = string.Empty;
+        public string EstadoProducto { get; set; } = "Disponible";
+        public string MotivoEstado { get; set; } = string.Empty;
+        public string CodigoBarras { get; set; } = string.Empty;
+        public string SkuAlterno { get; set; } = string.Empty;
+        public string ReferenciaFabricante { get; set; } = string.Empty;
+        public string ProveedorPreferente { get; set; } = string.Empty;
+        public int TiempoEntregaDias { get; set; }
+        public int CantidadPedidoOptima { get; set; }
+        public string UsuarioCreacion { get; set; } = string.Empty;
+        public string NotasInternas { get; set; } = string.Empty;
+    }
+}

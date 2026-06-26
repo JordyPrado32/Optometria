@@ -41,12 +41,13 @@ USING
         ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 4, 1),
         ('Laboratorios', '/laboratories', 'lab', 5, 1),
         ('Proveedores', '/suppliers', 'suppliers', 6, 1),
-        ('Clientes', '/clients', 'clients', 7, 1),
-        ('Emisor', '/emisor', 'issuer', 8, 1),
-        ('Roles', '/roles', 'roles', 9, 1),
-        ('Menus', '/menus', 'menu', 10, 1),
-        ('Registrar usuario', '/register', 'user-plus', 11, 1),
-        ('Seguridad', '/setup-2fa', 'shield', 12, 1)
+        ('Productos', '/products', 'products', 7, 1),
+        ('Clientes', '/clients', 'clients', 8, 1),
+        ('Emisor', '/emisor', 'issuer', 9, 1),
+        ('Roles', '/roles', 'roles', 10, 1),
+        ('Menus', '/menus', 'menu', 11, 1),
+        ('Registrar usuario', '/register', 'user-plus', 12, 1),
+        ('Seguridad', '/setup-2fa', 'shield', 13, 1)
 ) AS source(nombre, ruta, icono, orden, activo)
 ON target.ruta = source.ruta
 WHEN MATCHED THEN
