@@ -61,6 +61,17 @@ else
                 </div>
 
                 <div>
+                    <label class="form-label" for="productType">Tipo</label>
+                    <select id="productType" class="form-select" @bind="selectedTypeFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in productTypeOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
                     <label class="form-label" for="productCategory">Categoria</label>
                     <select id="productCategory" class="form-select" @bind="selectedCategoryFilter">
                         <option value="">Todas</option>
@@ -120,6 +131,7 @@ else
                         <tr>
                             <th>Codigo</th>
                             <th>Producto</th>
+                            <th>Tipo</th>
                             <th>Categoria</th>
                             <th>Proveedor</th>
                             <th>Precio venta</th>
@@ -132,7 +144,7 @@ else
                         @if (FilteredProducts.Count == 0)
                         {
                             <tr>
-                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
                                     No se encontraron productos con los filtros seleccionados.
                                 </td>
                             </tr>
@@ -150,6 +162,7 @@ else
                                         <strong style="color: var(--color-ink);">@product.nombre_producto</strong>
                                         <div style="font-size: 0.78rem; color: var(--color-taupe);">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
                                     </td>
+                                    <td>@(product.tipo_item ?? "Producto")</td>
                                     <td>@(product.id_categoriaNavigation?.nombre ?? "-")</td>
                                     <td>@(product.id_proveedorNavigation?.nombre ?? "-")</td>
                                     <td>@product.precio_venta.ToString("0.00")</td>
@@ -205,6 +218,15 @@ else
                     <div class="patient-form-span">
                         <label class="form-label">Descripcion</label>
                         <textarea class="form-control" rows="3" @bind="editor.Descripcion" readonly="@(!CanModifyEditor)"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label">Tipo item</label>
+                        <select class="form-select" @bind="editor.TipoItem" disabled="@(!CanModifyEditor)">
+                            @foreach (var option in productTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
                     </div>
                     <div>
                         <label class="form-label">Categoria</label>
@@ -526,6 +548,7 @@ else
     private readonly List<tbl_categoria_producto> categories = [];
     private readonly List<tbl_proveedor> suppliers = [];
     private readonly string[] productStateOptions = ["Disponible", "Descontinuado", "Agotado", "Especial Orden"];
+    private readonly string[] productTypeOptions = ["Producto", "Servicio"];
     private readonly string[] movementFrequencyOptions = ["Alta", "Media", "Baja"];
     private readonly string[] natureOptions = ["Bien", "Servicio", "Mixto"];
     private List<tbl_log_auditoria> auditEntries = [];
@@ -542,6 +565,7 @@ else
     private string selectedSupplierFilter = string.Empty;
     private string selectedStatusFilter = "all";
     private string selectedStateFilter = string.Empty;
+    private string selectedTypeFilter = string.Empty;
     private string? errorMessage;
     private bool showFormModal;
     private bool showAuditModal;
@@ -782,6 +806,7 @@ else
         entity.id_categoria = editor.IdCategoria;
         entity.codigo_producto = editor.CodigoProducto.Trim();
         entity.nombre_producto = editor.NombreProducto.Trim();
+        entity.tipo_item = editor.TipoItem;
         entity.descripcion = NormalizeOptional(editor.Descripcion);
         entity.precio_costo = editor.PrecioCosto;
         entity.precio_venta = editor.PrecioVenta;
@@ -856,6 +881,7 @@ else
         selectedSupplierFilter = string.Empty;
         selectedStatusFilter = "all";
         selectedStateFilter = string.Empty;
+        selectedTypeFilter = string.Empty;
     }
 
     private void ExportProducts()
@@ -870,6 +896,11 @@ else
         if (!string.IsNullOrWhiteSpace(selectedCategoryFilter))
         {
             query.Add($"categoryId={Uri.EscapeDataString(selectedCategoryFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedTypeFilter))
+        {
+            query.Add($"type={Uri.EscapeDataString(selectedTypeFilter)}");
         }
 
         if (!string.IsNullOrWhiteSpace(selectedSupplierFilter))
@@ -911,6 +942,12 @@ else
             return false;
         }
 
+        if (!string.IsNullOrWhiteSpace(selectedTypeFilter) &&
+            !string.Equals(product.tipo_item ?? "Producto", selectedTypeFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         if (int.TryParse(selectedCategoryFilter, out var categoryId) && categoryId > 0 && product.id_categoria != categoryId)
         {
             return false;
@@ -947,10 +984,23 @@ else
         editor.CodigoProducto = editor.CodigoProducto.Trim();
         editor.NombreProducto = editor.NombreProducto.Trim();
         editor.CodigoBarras = editor.CodigoBarras.Trim();
+        editor.TipoItem = string.IsNullOrWhiteSpace(editor.TipoItem) ? "Producto" : editor.TipoItem.Trim();
 
         if (string.IsNullOrWhiteSpace(editor.CodigoProducto) || string.IsNullOrWhiteSpace(editor.NombreProducto))
         {
             errorMessage = "Completa el codigo y el nombre del producto.";
+            return false;
+        }
+
+        if (!productTypeOptions.Contains(editor.TipoItem, StringComparer.OrdinalIgnoreCase))
+        {
+            errorMessage = "Selecciona un tipo de item valido.";
+            return false;
+        }
+
+        if (!editor.IdCategoria.HasValue || editor.IdCategoria.Value <= 0)
+        {
+            errorMessage = "Selecciona una categoria para el producto o servicio.";
             return false;
         }
 
@@ -1019,6 +1069,7 @@ else
             RequiereFechaVencimiento = false,
             EsPromocion = false,
             EstadoProducto = "Disponible",
+            TipoItem = "Producto",
             NaturalezaItem = "Bien",
             MovimientoFrecuencia = "Media",
             UsuarioCreacion = currentUserName
@@ -1039,6 +1090,7 @@ else
             IdCategoria = product.id_categoria,
             CodigoProducto = product.codigo_producto,
             NombreProducto = product.nombre_producto,
+            TipoItem = product.tipo_item ?? "Producto",
             Descripcion = product.descripcion ?? string.Empty,
             PrecioCosto = product.precio_costo ?? 0,
             PrecioVenta = product.precio_venta,
@@ -1133,6 +1185,7 @@ else
         public int? IdCategoria { get; set; }
         public string CodigoProducto { get; set; } = string.Empty;
         public string NombreProducto { get; set; } = string.Empty;
+        public string TipoItem { get; set; } = "Producto";
         public string Descripcion { get; set; } = string.Empty;
         public decimal PrecioCosto { get; set; }
         public decimal PrecioVenta { get; set; }

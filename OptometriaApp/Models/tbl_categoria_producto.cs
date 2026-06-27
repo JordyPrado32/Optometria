@@ -11,5 +11,7 @@ public partial class tbl_categoria_producto
 
     public string? descripcion { get; set; }
 
+    public bool? activo { get; set; }
+
     public virtual ICollection<tbl_producto> tbl_productos { get; set; } = new List<tbl_producto>();
 }

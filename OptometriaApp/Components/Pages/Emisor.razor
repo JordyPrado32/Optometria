@@ -85,7 +85,7 @@ else
                                         <strong style="color: var(--color-ink);">@item.razon_social</strong>
                                         <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(item.nombre_comercial) ? "Sin nombre comercial" : item.nombre_comercial)</div>
                                     </td>
-                                    <td>@item.establecimiento_codigo-@item.punto_emision_codigo</td>
+                                    <td>@GetEmissionCode(item.establecimiento_codigo, item.punto_emision_codigo)</td>
                                     <td>@(string.IsNullOrWhiteSpace(item.correo) ? "-" : item.correo)</td>
                                     <td>
                                         @if (item.estado)
@@ -489,8 +489,8 @@ else
         issuerEntity.provincia = NormalizeOptional(editor.Provincia);
         issuerEntity.ciudad = NormalizeOptional(editor.Ciudad);
         issuerEntity.codigo_postal = NormalizeOptional(editor.CodigoPostal);
-        issuerEntity.establecimiento_codigo = editor.EstablecimientoCodigo.Trim();
-        issuerEntity.punto_emision_codigo = editor.PuntoEmisionCodigo.Trim();
+        issuerEntity.establecimiento_codigo = NormalizeEmissionCode(editor.EstablecimientoCodigo);
+        issuerEntity.punto_emision_codigo = NormalizeEmissionCode(editor.PuntoEmisionCodigo);
         issuerEntity.nombre_representante_legal = NormalizeOptional(editor.NombreRepresentanteLegal);
         issuerEntity.cedula_representante = NormalizeOptional(editor.CedulaRepresentante);
         issuerEntity.es_contribuyente_especial = editor.EsContribuyenteEspecial;
@@ -579,13 +579,26 @@ else
 
         editor.Ruc = editor.Ruc.Trim();
         editor.RazonSocial = editor.RazonSocial.Trim();
-        editor.EstablecimientoCodigo = editor.EstablecimientoCodigo.Trim();
-        editor.PuntoEmisionCodigo = editor.PuntoEmisionCodigo.Trim();
+        editor.Correo = editor.Correo.Trim();
+        editor.Telefono = editor.Telefono.Trim();
+        editor.Provincia = editor.Provincia.Trim();
+        editor.Ciudad = editor.Ciudad.Trim();
+        editor.Direccion = editor.Direccion.Trim();
+        editor.CodigoPostal = editor.CodigoPostal.Trim();
+        editor.CedulaRepresentante = editor.CedulaRepresentante.Trim();
+        editor.NumeroContribuyenteEspecial = editor.NumeroContribuyenteEspecial.Trim();
+        editor.NombreRepresentanteLegal = editor.NombreRepresentanteLegal.Trim();
+        editor.EstablecimientoCodigo = NormalizeEmissionCode(editor.EstablecimientoCodigo);
+        editor.PuntoEmisionCodigo = NormalizeEmissionCode(editor.PuntoEmisionCodigo);
 
         if (string.IsNullOrWhiteSpace(editor.Ruc) ||
             string.IsNullOrWhiteSpace(editor.RazonSocial) ||
             string.IsNullOrWhiteSpace(editor.TipoPersona) ||
             string.IsNullOrWhiteSpace(editor.TipoIdentificacion) ||
+            string.IsNullOrWhiteSpace(editor.Direccion) ||
+            string.IsNullOrWhiteSpace(editor.Provincia) ||
+            string.IsNullOrWhiteSpace(editor.Ciudad) ||
+            string.IsNullOrWhiteSpace(editor.Correo) ||
             string.IsNullOrWhiteSpace(editor.EstablecimientoCodigo) ||
             string.IsNullOrWhiteSpace(editor.PuntoEmisionCodigo))
         {
@@ -599,13 +612,14 @@ else
             return false;
         }
 
-        if (editor.EstablecimientoCodigo.Length != 3 || editor.PuntoEmisionCodigo.Length != 3)
+        if (editor.EstablecimientoCodigo.Length != 3 || !editor.EstablecimientoCodigo.All(char.IsDigit) ||
+            editor.PuntoEmisionCodigo.Length != 3 || !editor.PuntoEmisionCodigo.All(char.IsDigit))
         {
-            errorMessage = "Establecimiento y punto de emision deben tener 3 caracteres.";
+            errorMessage = "Establecimiento y punto de emision deben tener exactamente 3 digitos.";
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Correo) && !IsValidEmail(editor.Correo))
+        if (!IsValidEmail(editor.Correo))
         {
             errorMessage = "Ingresa un correo electronico valido.";
             return false;
@@ -615,6 +629,24 @@ else
             (editor.CedulaRepresentante.Length != 10 || !editor.CedulaRepresentante.All(char.IsDigit)))
         {
             errorMessage = "La cedula del representante debe tener 10 digitos.";
+            return false;
+        }
+
+        if (editor.TipoPersona == "J" && string.IsNullOrWhiteSpace(editor.NombreRepresentanteLegal))
+        {
+            errorMessage = "Para una persona juridica debes registrar el representante legal.";
+            return false;
+        }
+
+        if (editor.EsContribuyenteEspecial && string.IsNullOrWhiteSpace(editor.NumeroContribuyenteEspecial))
+        {
+            errorMessage = "Si marcas contribuyente especial debes indicar el numero correspondiente.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.NumeroContribuyenteEspecial) && !editor.NumeroContribuyenteEspecial.All(char.IsDigit))
+        {
+            errorMessage = "El numero de contribuyente especial debe contener solo digitos.";
             return false;
         }
 
@@ -655,6 +687,8 @@ else
         {
             TipoPersona = "J",
             TipoIdentificacion = "04",
+            EstablecimientoCodigo = "001",
+            PuntoEmisionCodigo = "001",
             Estado = true
         };
     }
@@ -693,6 +727,22 @@ else
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string NormalizeEmissionCode(string? value)
+    {
+        var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return digits.Length >= 3 ? digits[^3..] : digits.PadLeft(3, '0');
+    }
+
+    private static string GetEmissionCode(string establecimientoCodigo, string puntoEmisionCodigo)
+    {
+        return $"{NormalizeEmissionCode(establecimientoCodigo)}-{NormalizeEmissionCode(puntoEmisionCodigo)}";
     }
 
     private static bool IsValidEmail(string email)

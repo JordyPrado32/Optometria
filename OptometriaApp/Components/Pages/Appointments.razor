@@ -1,0 +1,2188 @@
+@page "/appointments"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Citas y turnos</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando citas y turnos...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Citas y turnos</h1>
+            <p>Tu rol no tiene permiso para entrar a este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Agenda clinica</span>
+                <h1>@HeroTitle</h1>
+                <p>@HeroDescription</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (CanCreateAppointments)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNewAppointmentAsync">Nueva cita</button>
+                }
+
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportAppointments">Exportar CSV</button>
+
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        @if (isClient && linkedPatient is null)
+        {
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Tu perfil de paciente aun no esta completo</h2>
+                    <span>Se crea automaticamente</span>
+                </div>
+
+                <p>
+                    Cuando agendes una cita para ti, el sistema puede crear una ficha rapida con tu usuario y luego la completas
+                    con mas detalle. Si prefieres dejarla lista ahora, puedes hacerlo aqui.
+                </p>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="selfPatientDocument">Cedula</label>
+                        <input id="selfPatientDocument" class="form-control" @bind="selfPatientEditor.Cedula" maxlength="20" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="selfPatientBirthDate">Fecha de nacimiento</label>
+                        <input id="selfPatientBirthDate" type="date" class="form-control" value="@selfPatientEditor.FechaNacimiento" @onchange="OnSelfPatientBirthDateChanged" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="selfPatientPhone">Telefono</label>
+                        <input id="selfPatientPhone" class="form-control" @bind="selfPatientEditor.Telefono" maxlength="20" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="selfPatientGender">Genero</label>
+                        <select id="selfPatientGender" class="form-select" @bind="selfPatientEditor.Genero">
+                            <option value="">Selecciona</option>
+                            @foreach (var option in genderOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="management-form-grid patient-form-block">
+                    <div class="patient-form-span">
+                        <label class="form-label" for="selfPatientAddress">Direccion</label>
+                        <input id="selfPatientAddress" class="form-control" @bind="selfPatientEditor.Direccion" maxlength="255" />
+                    </div>
+
+                    <div class="patient-form-span">
+                        <label class="form-label" for="selfPatientNotes">Observaciones</label>
+                        <textarea id="selfPatientNotes" class="form-control" rows="3" @bind="selfPatientEditor.Observaciones"></textarea>
+                    </div>
+                </div>
+
+                <div class="workspace-actions">
+                    <button type="button" class="btn btn-primary" @onclick="SaveLinkedPatientAsync">Guardar y vincular</button>
+                </div>
+            </section>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>@FilteredAppointments.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="appointmentSearch">Busqueda</label>
+                    <input id="appointmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Paciente, doctor, motivo o tipo" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="appointmentScope">Periodo</label>
+                    <select id="appointmentScope" class="form-select" @bind="selectedTemporalFilter">
+                        <option value="upcoming">Proximas</option>
+                        <option value="past">Anteriores</option>
+                        <option value="today">Hoy</option>
+                        <option value="all">Todas</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="appointmentStatus">Estado</label>
+                    <select id="appointmentStatus" class="form-select" @bind="selectedStatusFilter">
+                        <option value="">Todos</option>
+                        @foreach (var state in appointmentStates)
+                        {
+                            <option value="@state.nombre_estado">@state.nombre_estado</option>
+                        }
+                    </select>
+                </div>
+
+                @if (!isDoctor)
+                {
+                    <div>
+                        <label class="form-label" for="appointmentDoctorFilter">Medico</label>
+                        <select id="appointmentDoctorFilter" class="form-select" @bind="selectedDoctorFilter">
+                            <option value="0">Todos</option>
+                            @foreach (var doctor in doctors)
+                            {
+                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div>
+                    <label class="form-label" for="appointmentDateFrom">Desde</label>
+                    <input id="appointmentDateFrom" type="date" class="form-control" value="@dateFromFilter" @onchange="OnDateFromFilterChanged" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="appointmentDateTo">Hasta</label>
+                    <input id="appointmentDateTo" type="date" class="form-control" value="@dateToFilter" @onchange="OnDateToFilterChanged" />
+                </div>
+            </div>
+
+            <div class="management-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+
+            @if (!doctors.Any())
+            {
+                <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
+                    No hay medicos disponibles para agendar o filtrar en este momento.
+                </div>
+            }
+        </section>
+
+        <div class="management-grid appointments-grid">
+            <aside class="management-card management-list-card">
+                <div class="management-card-header">
+                    <h2>Agenda</h2>
+                    <span>@CurrentEditorModeLabel</span>
+                </div>
+
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.88rem;">
+                    @(isCreatingAppointment
+                        ? "Estas creando una nueva cita. La lista sigue visible para que compares horarios, pero el formulario actual esta en modo creacion."
+                        : "Selecciona una cita para verla o editarla. El panel derecho cambia de forma segun el modo activo.")
+                </p>
+
+                <div class="management-list">
+                    @if (FilteredAppointments.Count == 0)
+                    {
+                        <p>No hay citas que coincidan con los filtros actuales.</p>
+                    }
+                    else
+                    {
+                        @foreach (var appointment in FilteredAppointments)
+                        {
+                            <button type="button"
+                                    class="management-list-item appointment-list-item @(selectedAppointmentId == appointment.id_cita && !isCreatingAppointment ? "is-active" : string.Empty)"
+                                    @onclick="() => SelectAppointmentAsync(appointment.id_cita)">
+                                <div class="patient-explorer-head">
+                                    <strong>@GetAppointmentTitle(appointment)</strong>
+                                    <span>@appointment.fecha_cita.ToString("yyyy-MM-dd")</span>
+                                </div>
+                                <div class="patient-explorer-meta">
+                                    <span>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</span>
+                                    <span>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                                </div>
+                                <div class="patient-explorer-copy">
+                                    <span>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
+                                    <span>@(string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita)</span>
+                                </div>
+                            </button>
+                        }
+                    }
+                </div>
+            </aside>
+
+            <div class="management-stack">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Resumen</h2>
+                        <span>@CurrentEditorModeLabel</span>
+                    </div>
+
+                    <div class="user-summary-grid">
+                        <div class="user-summary-card">
+                            <span class="eyebrow">Citas</span>
+                            <strong>@appointments.Count</strong>
+                            <p>Total segun tu alcance actual.</p>
+                        </div>
+
+                        <div class="user-summary-card">
+                            <span class="eyebrow">Pendientes</span>
+                            <strong>@appointments.Count(a => IsPendingState(a.id_estadoNavigation?.nombre_estado))</strong>
+                            <p>Programadas, confirmadas o reprogramadas.</p>
+                        </div>
+
+                        <div class="user-summary-card">
+                            <span class="eyebrow">Recordatorios</span>
+                            <strong>@appointments.Count(a => a.notificacion_enviada == true)</strong>
+                            <p>Eventos con correo de recordatorio enviado.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>@EditorTitle</h2>
+                        <span>@EditorStatusLabel</span>
+                    </div>
+
+                    @if (appointmentEditor is null)
+                    {
+                        <p>Selecciona una cita para ver su detalle o crea una nueva.</p>
+                    }
+                    else
+                    {
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; padding: 1rem; border-radius: 1rem; border: 1px solid rgba(93, 161, 129, 0.16); background: @(isCreatingAppointment ? "rgba(93, 161, 129, 0.08)" : "rgba(127, 105, 81, 0.06)");">
+                            <div>
+                                <span class="eyebrow">@CurrentEditorModeLabel</span>
+                                <strong style="display: block; color: var(--color-ink); margin-top: 0.2rem;">@EditorTitle</strong>
+                                <p style="margin: 0.35rem 0 0; color: var(--color-taupe); font-size: 0.9rem;">@EditorDescription</p>
+                            </div>
+
+                            <div style="text-align: right; min-width: 180px;">
+                                <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: var(--color-taupe-deep) !important; padding: 0.35rem 0.7rem; border-radius: 2rem;">
+                                    Estado: @appointmentEditor.Estado
+                                </span>
+
+                                @if (isCreatingAppointment)
+                                {
+                                    <div style="margin-top: 0.7rem;">
+                                        <button type="button" class="btn btn-outline-primary" @onclick="CancelAppointmentCreationAsync">Cancelar nueva cita</button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label" for="appointmentDoctor">Medico</label>
+                                <select id="appointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
+                                    <option value="0">Selecciona</option>
+                                    @foreach (var doctor in doctors)
+                                    {
+                                        <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                                    }
+                                </select>
+                                @if (!doctors.Any())
+                                {
+                                    <small style="display: block; margin-top: 0.35rem; color: #a66a24;">No hay medicos disponibles para asignar.</small>
+                                }
+                            </div>
+
+                            @if (isAdmin || isDoctor)
+                            {
+                                <div>
+                                    <label class="form-label" for="appointmentPatient">Paciente</label>
+                                    <select id="appointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
+                                        <option value="0">Selecciona</option>
+                                        @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                        {
+                                            <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                            else
+                            {
+                                <div>
+                                    <label class="form-label" for="appointmentTarget">La cita es para</label>
+                                    <select id="appointmentTarget" class="form-select" value="@appointmentEditor.TargetType" @onchange="OnAppointmentTargetChanged" disabled="@(!CanEditAppointments)">
+                                        <option value="self">Mi usuario</option>
+                                        <option value="family">Un familiar</option>
+                                    </select>
+                                </div>
+                            }
+
+                            @if (isClient)
+                            {
+                                <div>
+                                    <label class="form-label">Paciente</label>
+                                    <input class="form-control" value="@CurrentPatientLabel" readonly />
+                                </div>
+                            }
+
+                            <div>
+                                <label class="form-label" for="appointmentDate">Fecha</label>
+                                <input id="appointmentDate" type="date" class="form-control" value="@appointmentEditor.FechaCita" @onchange="OnAppointmentDateChanged" readonly="@(!CanEditAppointments)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="appointmentSlot">Horario disponible</label>
+                                <select id="appointmentSlot" class="form-select" @bind="appointmentEditor.SelectedSlotKey" disabled="@(!CanEditAppointments)">
+                                    <option value="">Selecciona</option>
+                                    @foreach (var slot in availableSlots)
+                                    {
+                                        <option value="@slot.Key">@slot.Label</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="appointmentType">Tipo</label>
+                                <select id="appointmentType" class="form-select" @bind="appointmentEditor.TipoCita" disabled="@(!CanEditAppointments)">
+                                    @foreach (var option in appointmentTypeOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Estado</label>
+                                <input class="form-control" value="@appointmentEditor.Estado" readonly />
+                            </div>
+                        </div>
+
+                        <div class="management-form-grid patient-form-block">
+                            @if (isClient && appointmentEditor.TargetType == "family")
+                            {
+                                <div class="patient-form-span">
+                                    <label class="form-label" for="familyPatientSelect">Familiar</label>
+                                    <select id="familyPatientSelect" class="form-select" value="@appointmentEditor.FamilyPatientId" @onchange="OnFamilyPatientSelectionChanged" disabled="@(!CanEditAppointments)">
+                                        <option value="0">Registrar nuevo familiar</option>
+                                        @foreach (var familyPatient in clientFamilyPatients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                        {
+                                            <option value="@familyPatient.id_paciente">@GetPatientDisplayName(familyPatient)</option>
+                                        }
+                                    </select>
+                                    @if (!clientFamilyPatients.Any())
+                                    {
+                                        <small style="display: block; margin-top: 0.35rem; color: var(--color-taupe);">Todavia no tienes familiares registrados. Puedes crear el primero aqui.</small>
+                                    }
+                                </div>
+                            }
+
+                            @if (isClient && appointmentEditor.TargetType == "family" && appointmentEditor.FamilyPatientId <= 0)
+                            {
+                                <div>
+                                    <label class="form-label" for="familyCedula">Cedula familiar</label>
+                                    <input id="familyCedula" class="form-control" @bind="appointmentEditor.FamilyCedula" maxlength="20" readonly="@(!CanEditAppointments)" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label" for="familyNames">Nombres</label>
+                                    <input id="familyNames" class="form-control" @bind="appointmentEditor.FamilyNames" maxlength="100" readonly="@(!CanEditAppointments)" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label" for="familyLastNames">Apellidos</label>
+                                    <input id="familyLastNames" class="form-control" @bind="appointmentEditor.FamilyLastNames" maxlength="100" readonly="@(!CanEditAppointments)" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label" for="familyPhone">Telefono</label>
+                                    <input id="familyPhone" class="form-control" @bind="appointmentEditor.FamilyPhone" maxlength="20" readonly="@(!CanEditAppointments)" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label" for="familyBirthDate">Fecha nacimiento</label>
+                                    <input id="familyBirthDate" type="date" class="form-control" value="@appointmentEditor.FamilyBirthDate" @onchange="OnFamilyBirthDateChanged" readonly="@(!CanEditAppointments)" />
+                                </div>
+                            }
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="appointmentReason">Motivo</label>
+                                <input id="appointmentReason" class="form-control" @bind="appointmentEditor.Motivo" maxlength="255" readonly="@(!CanEditAppointments)" />
+                            </div>
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="appointmentDescription">Descripcion adicional</label>
+                                <textarea id="appointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
+                            </div>
+
+                            @if (CanWriteMedicalNotes)
+                            {
+                                <div class="patient-form-span">
+                                    <label class="form-label" for="appointmentNotes">Notas medicas</label>
+                                    <textarea id="appointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico" readonly="@(!CanWriteMedicalNotes)"></textarea>
+                                </div>
+                            }
+
+                            <div class="patient-form-span">
+                                <label class="form-label" for="appointmentCancelReason">Razon de cancelacion</label>
+                                <textarea id="appointmentCancelReason" class="form-control" rows="2" @bind="appointmentEditor.RazonCancelacion" readonly="@(!CanCancelAppointments)"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions">
+                            @if (CanEditAppointments)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SaveAppointmentAsync">
+                                    @(isCreatingAppointment ? "Agendar cita" : "Guardar cambios")
+                                </button>
+                            }
+
+                            @if (!isCreatingAppointment && CanConfirmAppointments)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Confirmada")'>Confirmar</button>
+                            }
+
+                            @if (!isCreatingAppointment && CanCloseAppointments)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Realizada")'>Marcar realizada</button>
+                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("No presento")'>No presento</button>
+                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Pendiente pago")'>Pendiente pago</button>
+                            }
+
+                            @if (!isCreatingAppointment && CanCancelAppointments)
+                            {
+                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Cancelada")'>Cancelar cita</button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                @if (selectedAppointmentId > 0 && selectedAppointment is not null)
+                {
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Seguimiento</h2>
+                            <span>Solo lectura</span>
+                        </div>
+
+                        <div class="user-audit-grid">
+                            <div>
+                                <label class="form-label">Creada</label>
+                                <input class="form-control" value="@(selectedAppointment.fecha_creacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin dato")" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Ultima actualizacion</label>
+                                <input class="form-control" value="@(selectedAppointment.fecha_actualizacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin dato")" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Recordatorio 24h</label>
+                                <input class="form-control" value="@(selectedAppointment.recordatorio_24hrs == true ? "Enviado" : "Pendiente")" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Recordatorio 1h</label>
+                                <input class="form-control" value="@(selectedAppointment.recordatorio_1hr == true ? "Enviado" : "Pendiente")" readonly />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="management-card">
+                        <div class="management-card-header">
+                            <h2>Auditoria</h2>
+                            <span>@appointmentAuditEntries.Count eventos</span>
+                        </div>
+
+                        @if (appointmentAuditEntries.Count == 0)
+                        {
+                            <p>No hay eventos registrados para esta cita.</p>
+                        }
+                        else
+                        {
+                            <div class="management-list">
+                                @foreach (var auditEntry in appointmentAuditEntries)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@auditEntry.accion</strong>
+                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                        <span>@(auditEntry.id_usuarioNavigation?.usuario ?? "Sistema")</span>
+                                        <span>@auditEntry.detalle</span>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_citas> appointments = [];
+    private readonly List<tbl_medico> doctors = [];
+    private readonly List<tbl_paciente> patients = [];
+    private readonly List<tbl_paciente> clientFamilyPatients = [];
+    private readonly List<tbl_estado_cita> appointmentStates = [];
+    private readonly List<tbl_log_auditoria> appointmentAuditEntries = [];
+    private readonly List<SlotOption> availableSlots = [];
+    private readonly List<tbl_disponibilidad_medico> currentAvailabilityRows = [];
+    private readonly List<tbl_bloqueo_horarios> currentBlocks = [];
+
+    private AppointmentEditorModel? appointmentEditor;
+    private LinkedPatientEditor selfPatientEditor = new();
+    private AvailabilityEditor availabilityEditor = new();
+    private BlockEditor blockEditor = new();
+    private ModulePermissions permissions = new();
+    private tbl_paciente? linkedPatient;
+    private tbl_citas? selectedAppointment;
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool isAdmin;
+    private bool isDoctor;
+    private bool isClient;
+    private bool isCreatingAppointment;
+    private int selectedAppointmentId;
+    private int currentUserId;
+    private int currentRoleId;
+    private int currentDoctorId;
+    private int availabilityDoctorId;
+    private string currentRoleName = string.Empty;
+    private string searchTerm = string.Empty;
+    private string selectedTemporalFilter = "upcoming";
+    private string selectedStatusFilter = string.Empty;
+    private int selectedDoctorFilter;
+    private string dateFromFilter = string.Empty;
+    private string dateToFilter = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private static readonly string[] appointmentTypeOptions = ["Presencial", "Telefonica", "Virtual"];
+    private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
+    private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Mantenimiento", "Otro"];
+    private static readonly DayOption[] dayOptions =
+    [
+        new((byte)1, "Lunes"),
+        new((byte)2, "Martes"),
+        new((byte)3, "Miercoles"),
+        new((byte)4, "Jueves"),
+        new((byte)5, "Viernes"),
+        new((byte)6, "Sabado"),
+        new((byte)7, "Domingo")
+    ];
+
+    private bool CanCreateAppointments => permissions.CanCreate;
+    private bool CanEditAppointments => appointmentEditor is not null && (isCreatingAppointment ? permissions.CanCreate : permissions.CanEdit);
+    private bool CanConfirmAppointments => appointmentEditor is not null && !isCreatingAppointment && (isAdmin || isDoctor || isClient);
+    private bool CanCancelAppointments => appointmentEditor is not null && !isCreatingAppointment && permissions.CanDelete;
+    private bool CanCloseAppointments => appointmentEditor is not null && !isCreatingAppointment && (isAdmin || isDoctor);
+    private bool CanManageAvailability => permissions.CanEdit && (isAdmin || isDoctor);
+    private bool CanWriteMedicalNotes => appointmentEditor is not null && (isAdmin || isDoctor) && permissions.CanEdit;
+    private bool CanChangeDoctor => CanEditAppointments && (isAdmin || (isDoctor && currentDoctorId == appointmentEditor!.IdMedico));
+    private string CurrentEditorLabel => isCreatingAppointment ? "Nuevo registro" : (selectedAppointmentId > 0 ? $"Cita #{selectedAppointmentId}" : "Sin seleccion");
+    private string CurrentEditorModeLabel => appointmentEditor is null ? "Sin seleccion" : isCreatingAppointment ? "Creacion" : CanEditAppointments ? "Edicion" : "Consulta";
+    private string CurrentPatientLabel => appointmentEditor is null
+        ? linkedPatient is null ? "Sin paciente" : GetPatientDisplayName(linkedPatient)
+        : GetCurrentAppointmentPatientLabel();
+    private string EditorTitle => appointmentEditor is null
+        ? "Detalle de la cita"
+        : isCreatingAppointment
+            ? "Crear cita nueva"
+            : selectedAppointmentId > 0
+                ? $"Editar cita #{selectedAppointmentId}"
+                : "Detalle de la cita";
+    private string EditorStatusLabel => appointmentEditor is null ? "Sin datos" : CanEditAppointments ? "Edicion habilitada" : "Solo lectura";
+    private string EditorDescription => appointmentEditor is null
+        ? "Selecciona una cita o crea una nueva."
+        : isCreatingAppointment
+            ? "Completa medico, paciente, fecha y horario para registrar una nueva cita sin perder el contexto de la agenda."
+            : CanEditAppointments
+                ? "Estas trabajando sobre una cita existente. Cualquier ajuste que guardes actualizara su agenda, estado o detalle."
+                : "Estas revisando una cita existente en modo consulta.";
+    private string HeroTitle => isAdmin ? "Control total de citas y turnos" : isDoctor ? "Mi agenda medica" : "Mis citas y recordatorios";
+    private string HeroDescription => isAdmin
+        ? "Consulta todas las citas del sistema, controla estados, agenda por cualquier paciente y exporta la operacion filtrada."
+        : isDoctor
+            ? "Revisa todas tus citas asignadas, su motivo, su estado y mantien tu agenda diaria bajo control."
+            : "Agenda para ti o para un familiar, revisa tus estados, filtra citas anteriores y reprograma o cancela cuando lo necesites.";
+
+    private List<tbl_citas> FilteredAppointments => appointments
+        .Where(MatchesFilters)
+        .OrderBy(a => a.fecha_cita)
+        .ThenBy(a => a.hora_inicio)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? focusAppointmentId = null)
+    {
+        isLoading = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        currentRoleName = authState.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+
+        isAdmin = currentRoleId == 1 || currentRoleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
+        isDoctor = currentRoleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
+            || currentRoleName.Contains("medic", StringComparison.OrdinalIgnoreCase)
+            || currentRoleName.Contains("optomet", StringComparison.OrdinalIgnoreCase);
+        isClient = !isAdmin && !isDoctor;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        doctors.Clear();
+        doctors.AddRange(await dbContext.tbl_medico
+            .AsNoTracking()
+            .Include(m => m.id_usuarioNavigation)
+            .Where(m => m.activo == true && m.id_usuarioNavigation.activo == true)
+            .OrderBy(m => m.id_usuarioNavigation.apellidos)
+            .ThenBy(m => m.id_usuarioNavigation.nombres)
+            .ToListAsync());
+
+        if (isDoctor)
+        {
+            currentDoctorId = doctors.FirstOrDefault(d => d.id_usuario == currentUserId)?.id_medico ?? 0;
+        }
+
+        availabilityDoctorId = currentDoctorId > 0 ? currentDoctorId : availabilityDoctorId > 0 ? availabilityDoctorId : doctors.FirstOrDefault()?.id_medico ?? 0;
+        selectedDoctorFilter = isDoctor ? currentDoctorId : selectedDoctorFilter;
+
+        appointmentStates.Clear();
+        appointmentStates.AddRange(await dbContext.tbl_estado_cita.AsNoTracking().Where(s => s.activo == true).OrderBy(s => s.id_estado).ToListAsync());
+
+        linkedPatient = null;
+        clientFamilyPatients.Clear();
+        if (isClient)
+        {
+            var visibleClientPatients = await dbContext.tbl_pacientes
+                .AsNoTracking()
+                .Where(p => p.activo == true && (p.id_usuario == currentUserId || p.id_usuario_registro == currentUserId))
+                .OrderBy(p => p.apellidos)
+                .ThenBy(p => p.nombres)
+                .ToListAsync();
+
+            linkedPatient = visibleClientPatients.FirstOrDefault(p => p.id_usuario == currentUserId);
+            clientFamilyPatients.AddRange(visibleClientPatients.Where(p => p.id_usuario != currentUserId));
+        }
+
+        patients.Clear();
+        if (isAdmin)
+        {
+            patients.AddRange(await dbContext.tbl_pacientes.AsNoTracking().Where(p => p.activo == true).OrderBy(p => p.apellidos).ThenBy(p => p.nombres).ToListAsync());
+        }
+        else if (isDoctor)
+        {
+            patients.AddRange(await dbContext.tbl_pacientes.AsNoTracking().Where(p => p.activo == true).OrderBy(p => p.apellidos).ThenBy(p => p.nombres).ToListAsync());
+        }
+        else if (linkedPatient is not null)
+        {
+            patients.Add(linkedPatient);
+        }
+
+        var appointmentsQuery = dbContext.tbl_citas
+            .AsNoTracking()
+            .Include(c => c.id_medicoNavigation).ThenInclude(m => m.id_usuarioNavigation)
+            .Include(c => c.id_pacienteNavigation)
+            .Include(c => c.id_estadoNavigation)
+            .Include(c => c.id_disponibilidadNavigation)
+            .AsQueryable();
+
+        if (isAdmin)
+        {
+        }
+        else if (isDoctor)
+        {
+            appointmentsQuery = appointmentsQuery.Where(c => c.id_medicoNavigation.id_usuario == currentUserId);
+        }
+        else
+        {
+            appointmentsQuery = appointmentsQuery.Where(c =>
+                c.id_pacienteNavigation.id_usuario == currentUserId ||
+                c.id_pacienteNavigation.id_usuario_registro == currentUserId);
+        }
+
+        var loadedAppointments = await appointmentsQuery
+            .OrderByDescending(c => c.fecha_cita)
+            .ThenByDescending(c => c.hora_inicio)
+            .ToListAsync();
+
+        appointments.Clear();
+        appointments.AddRange(loadedAppointments);
+
+        await LoadAvailabilityAsync(dbContext);
+
+        if (focusAppointmentId.HasValue)
+        {
+            await SelectAppointmentAsync(focusAppointmentId.Value, false);
+        }
+        else if (!isCreatingAppointment)
+        {
+            selectedAppointmentId = appointments.FirstOrDefault()?.id_cita ?? 0;
+            if (selectedAppointmentId > 0)
+            {
+                await SelectAppointmentAsync(selectedAppointmentId, false);
+            }
+            else
+            {
+                appointmentEditor = null;
+                selectedAppointment = null;
+                appointmentAuditEntries.Clear();
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadAvailabilityAsync(OpticaDbContext dbContext)
+    {
+        currentAvailabilityRows.Clear();
+        currentBlocks.Clear();
+
+        if (!CanManageAvailability || availabilityDoctorId <= 0)
+        {
+            return;
+        }
+
+        currentAvailabilityRows.AddRange(await dbContext.tbl_disponibilidad_medico
+            .AsNoTracking()
+            .Where(x => x.id_medico == availabilityDoctorId)
+            .OrderBy(x => x.dia_semana)
+            .ThenBy(x => x.hora_inicio)
+            .ToListAsync());
+
+        currentBlocks.AddRange(await dbContext.tbl_bloqueo_horarios
+            .AsNoTracking()
+            .Where(x => x.id_medico == availabilityDoctorId && x.activo == true)
+            .OrderByDescending(x => x.fecha_inicio)
+            .ToListAsync());
+    }
+
+    private async Task SelectAppointmentAsync(int appointmentId, bool clearMessages = true)
+    {
+        if (clearMessages)
+        {
+            statusMessage = null;
+            errorMessage = null;
+        }
+
+        selectedAppointmentId = appointmentId;
+        selectedAppointment = appointments.FirstOrDefault(a => a.id_cita == appointmentId);
+        appointmentEditor = BuildAppointmentEditor(selectedAppointment);
+        isCreatingAppointment = false;
+
+        await RebuildAvailableSlotsAsync();
+        await LoadAppointmentAuditAsync(appointmentId);
+    }
+
+    private async Task PrepareNewAppointmentAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!CanCreateAppointments)
+        {
+            errorMessage = "No tienes permiso para agendar citas.";
+            return;
+        }
+
+        var defaultDoctorId = isDoctor ? currentDoctorId : selectedDoctorFilter > 0 ? selectedDoctorFilter : doctors.FirstOrDefault()?.id_medico ?? 0;
+        var defaultPatientId = isClient ? linkedPatient?.id_paciente ?? 0 : 0;
+
+        appointmentEditor = new AppointmentEditorModel
+        {
+            IdMedico = defaultDoctorId,
+            IdPaciente = defaultPatientId,
+            FechaCita = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd"),
+            TipoCita = "Presencial",
+            Estado = "Programada",
+            TargetType = "self"
+        };
+
+        selectedAppointmentId = 0;
+        selectedAppointment = null;
+        isCreatingAppointment = true;
+        appointmentAuditEntries.Clear();
+
+        await RebuildAvailableSlotsAsync();
+    }
+
+    private async Task CancelAppointmentCreationAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+        isCreatingAppointment = false;
+
+        if (appointments.Count > 0)
+        {
+            var fallbackAppointmentId = selectedAppointmentId > 0
+                ? selectedAppointmentId
+                : FilteredAppointments.FirstOrDefault()?.id_cita ?? appointments.First().id_cita;
+
+            await SelectAppointmentAsync(fallbackAppointmentId, false);
+            return;
+        }
+
+        appointmentEditor = null;
+        selectedAppointment = null;
+        appointmentAuditEntries.Clear();
+    }
+
+    private async Task SaveLinkedPatientAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!isClient || currentUserId <= 0)
+        {
+            return;
+        }
+
+        selfPatientEditor.Cedula = selfPatientEditor.Cedula.Trim();
+        selfPatientEditor.Telefono = selfPatientEditor.Telefono.Trim();
+        selfPatientEditor.Direccion = selfPatientEditor.Direccion.Trim();
+
+        if (string.IsNullOrWhiteSpace(selfPatientEditor.Cedula))
+        {
+            errorMessage = "La cedula es obligatoria para vincular tu ficha de paciente.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == currentUserId);
+        if (user is null)
+        {
+            errorMessage = "No se encontro el usuario autenticado.";
+            return;
+        }
+
+        var normalizedCedula = selfPatientEditor.Cedula.ToLowerInvariant();
+        var existingPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.cedula.ToLower() == normalizedCedula);
+        if (existingPatient is not null && existingPatient.id_usuario.HasValue && existingPatient.id_usuario != currentUserId)
+        {
+            errorMessage = "La cedula ya esta vinculada a otro usuario.";
+            return;
+        }
+
+        var birthDate = DateOnly.TryParse(selfPatientEditor.FechaNacimiento, out var parsedBirthDate) ? (DateOnly?)parsedBirthDate : null;
+        var age = CalculateAge(birthDate);
+
+        if (existingPatient is null)
+        {
+            existingPatient = new tbl_paciente
+            {
+                codigo_paciente = GeneratePatientCode(),
+                cedula = selfPatientEditor.Cedula,
+                nombres = user.nombres,
+                apellidos = user.apellidos,
+                fecha_nacimiento = birthDate,
+                edad = age,
+                genero = NormalizeOptional(selfPatientEditor.Genero),
+                direccion = NormalizeOptional(selfPatientEditor.Direccion),
+                telefono = NormalizeOptional(selfPatientEditor.Telefono) ?? user.telefono,
+                email = user.email,
+                observaciones = NormalizeOptional(selfPatientEditor.Observaciones),
+                activo = true,
+                fecha_registro = DateTime.Now,
+                id_usuario_registro = currentUserId,
+                id_usuario = currentUserId
+            };
+
+            dbContext.tbl_pacientes.Add(existingPatient);
+        }
+        else
+        {
+            existingPatient.id_usuario = currentUserId;
+            if (!existingPatient.fecha_nacimiento.HasValue)
+            {
+                existingPatient.fecha_nacimiento = birthDate;
+            }
+
+            existingPatient.edad ??= age;
+            existingPatient.genero ??= NormalizeOptional(selfPatientEditor.Genero);
+            existingPatient.direccion ??= NormalizeOptional(selfPatientEditor.Direccion);
+            existingPatient.telefono ??= NormalizeOptional(selfPatientEditor.Telefono) ?? user.telefono;
+            existingPatient.email ??= user.email;
+            existingPatient.observaciones = string.Join(" | ", new[] { existingPatient.observaciones, NormalizeOptional(selfPatientEditor.Observaciones) }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        }
+
+        WriteAudit(dbContext, "Vincular paciente", $"PacienteId={existingPatient.id_paciente}; UsuarioId={currentUserId}; Cedula={existingPatient.cedula}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "Tu perfil ya quedo vinculado como paciente.";
+        await LoadAsync();
+    }
+
+    private async Task SaveAppointmentAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        if (!ValidateAppointmentEditor())
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var doctor = await dbContext.tbl_medico.Include(m => m.id_usuarioNavigation).FirstOrDefaultAsync(m => m.id_medico == appointmentEditor.IdMedico && m.activo == true);
+        if (doctor is null)
+        {
+            errorMessage = "Selecciona un medico valido.";
+            return;
+        }
+
+        var patient = await ResolveAppointmentPatientAsync(dbContext);
+        if (patient is null)
+        {
+            return;
+        }
+
+        if (isClient && patient.id_usuario != currentUserId && patient.id_usuario_registro != currentUserId)
+        {
+            errorMessage = "Solo puedes trabajar con tus propias citas o las de familiares registrados por ti.";
+            return;
+        }
+
+        if (isDoctor && doctor.id_usuario != currentUserId)
+        {
+            errorMessage = "Solo puedes usar tu propia agenda.";
+            return;
+        }
+
+        if (!TryParseSlot(appointmentEditor.SelectedSlotKey, out var startTime, out var endTime))
+        {
+            errorMessage = "Selecciona un horario valido.";
+            return;
+        }
+
+        var appointmentDate = DateOnly.Parse(appointmentEditor.FechaCita);
+        var availabilityId = await ResolveAvailabilityIdAsync(dbContext, doctor.id_medico, appointmentDate, startTime, endTime);
+        var conflictExists = await AppointmentConflictExistsAsync(dbContext, doctor.id_medico, appointmentDate, startTime, endTime, isCreatingAppointment ? null : appointmentEditor.IdCita);
+        if (conflictExists)
+        {
+            errorMessage = "Ese horario ya no esta disponible. Recarga los horarios e intenta otra vez.";
+            await RebuildAvailableSlotsAsync();
+            return;
+        }
+
+        if (isCreatingAppointment)
+        {
+            var programadaStateId = await GetStateIdAsync(dbContext, "Programada");
+            var entity = new tbl_citas
+            {
+                id_medico = doctor.id_medico,
+                id_paciente = patient.id_paciente,
+                id_disponibilidad = availabilityId,
+                fecha_cita = appointmentDate,
+                hora_inicio = startTime,
+                hora_fin = endTime,
+                tipo_cita = appointmentEditor.TipoCita,
+                motivo_cita = NormalizeOptional(appointmentEditor.Motivo),
+                descripcion_adicional = NormalizeOptional(appointmentEditor.Descripcion),
+                id_estado = programadaStateId,
+                notas_medico = CanWriteMedicalNotes ? NormalizeOptional(appointmentEditor.NotasMedico) : null,
+                fecha_creacion = DateTime.Now,
+                fecha_actualizacion = DateTime.Now,
+                usuario_creacion = GetCurrentActorLabel(),
+                usuario_actualizacion = GetCurrentActorLabel()
+            };
+
+            dbContext.tbl_citas.Add(entity);
+            await dbContext.SaveChangesAsync();
+
+            WriteAudit(dbContext, "Crear cita", $"CitaId={entity.id_cita}; PacienteId={entity.id_paciente}; DoctorId={entity.id_medico}; Fecha={entity.fecha_cita:yyyy-MM-dd}; Hora={entity.hora_inicio:HH\\:mm}");
+            await dbContext.SaveChangesAsync();
+
+            statusMessage = "La cita fue agendada correctamente.";
+            await LoadAsync(entity.id_cita);
+            return;
+        }
+
+        var appointmentEntity = await dbContext.tbl_citas.FirstOrDefaultAsync(c => c.id_cita == appointmentEditor.IdCita);
+        if (appointmentEntity is null || !CanAccessAppointment(appointmentEntity))
+        {
+            errorMessage = "No se encontro la cita seleccionada.";
+            return;
+        }
+
+        var scheduleChanged = appointmentEntity.id_medico != doctor.id_medico ||
+                              appointmentEntity.id_paciente != patient.id_paciente ||
+                              appointmentEntity.fecha_cita != appointmentDate ||
+                              appointmentEntity.hora_inicio != startTime ||
+                              appointmentEntity.hora_fin != endTime;
+
+        appointmentEntity.id_medico = doctor.id_medico;
+        appointmentEntity.id_paciente = patient.id_paciente;
+        appointmentEntity.id_disponibilidad = availabilityId;
+        appointmentEntity.fecha_cita = appointmentDate;
+        appointmentEntity.hora_inicio = startTime;
+        appointmentEntity.hora_fin = endTime;
+        appointmentEntity.tipo_cita = appointmentEditor.TipoCita;
+        appointmentEntity.motivo_cita = NormalizeOptional(appointmentEditor.Motivo);
+        appointmentEntity.descripcion_adicional = NormalizeOptional(appointmentEditor.Descripcion);
+        appointmentEntity.notas_medico = CanWriteMedicalNotes ? NormalizeOptional(appointmentEditor.NotasMedico) : appointmentEntity.notas_medico;
+        appointmentEntity.fecha_actualizacion = DateTime.Now;
+        appointmentEntity.usuario_actualizacion = GetCurrentActorLabel();
+
+        if (scheduleChanged)
+        {
+            appointmentEntity.id_estado = await GetStateIdAsync(dbContext, "Reprogramada");
+            appointmentEntity.recordatorio_24hrs = false;
+            appointmentEntity.recordatorio_1hr = false;
+            appointmentEntity.notificacion_enviada = false;
+        }
+
+        WriteAudit(
+            dbContext,
+            scheduleChanged ? "Reprogramar cita" : "Editar cita",
+            $"CitaId={appointmentEntity.id_cita}; PacienteId={appointmentEntity.id_paciente}; DoctorId={appointmentEntity.id_medico}; Fecha={appointmentEntity.fecha_cita:yyyy-MM-dd}; Hora={appointmentEntity.hora_inicio:HH\\:mm}");
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = scheduleChanged ? "La cita fue reprogramada correctamente." : "La cita fue actualizada correctamente.";
+        await LoadAsync(appointmentEntity.id_cita);
+    }
+
+    private async Task ChangeAppointmentStateAsync(string newState)
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (appointmentEditor is null || isCreatingAppointment || appointmentEditor.IdCita <= 0)
+        {
+            return;
+        }
+
+        if (newState == "Cancelada" && string.IsNullOrWhiteSpace(appointmentEditor.RazonCancelacion))
+        {
+            errorMessage = "Escribe una razon de cancelacion antes de continuar.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_citas.FirstOrDefaultAsync(c => c.id_cita == appointmentEditor.IdCita);
+        if (entity is null || !CanAccessAppointment(entity))
+        {
+            errorMessage = "No se encontro la cita seleccionada.";
+            return;
+        }
+
+        entity.id_estado = await GetStateIdAsync(dbContext, newState);
+        entity.fecha_actualizacion = DateTime.Now;
+        entity.usuario_actualizacion = GetCurrentActorLabel();
+
+        if (newState == "Confirmada")
+        {
+            entity.fecha_confirmacion = DateTime.Now;
+            entity.usuario_confirmacion = GetCurrentActorLabel();
+        }
+
+        if (newState == "Cancelada")
+        {
+            entity.razon_cancelacion = NormalizeOptional(appointmentEditor.RazonCancelacion);
+            entity.fecha_cancelacion = DateTime.Now;
+            entity.usuario_cancelacion = GetCurrentActorLabel();
+
+            dbContext.tbl_cancelaciones_paciente.Add(new tbl_cancelaciones_paciente
+            {
+                id_cita = entity.id_cita,
+                id_paciente = entity.id_paciente,
+                fecha_cancelacion = DateTime.Now,
+                razon_cancelacion = entity.razon_cancelacion,
+                quien_cancelo = isClient ? "Paciente" : isDoctor ? "Medico" : "Administrador",
+                usuario_cancelacion = GetCurrentActorLabel()
+            });
+        }
+
+        WriteAudit(dbContext, $"Cambiar estado cita a {newState}", $"CitaId={entity.id_cita}; Estado={newState}; PacienteId={entity.id_paciente}; DoctorId={entity.id_medico}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = newState == "Cancelada"
+            ? "La cita fue cancelada correctamente."
+            : $"La cita paso a estado {newState.ToLowerInvariant()}.";
+
+        await LoadAsync(entity.id_cita);
+    }
+
+    private async Task SaveAvailabilityAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!CanManageAvailability || availabilityDoctorId <= 0)
+        {
+            return;
+        }
+
+        if (!TimeOnly.TryParse(availabilityEditor.StartTime, out var startTime) || !TimeOnly.TryParse(availabilityEditor.EndTime, out var endTime) || startTime >= endTime)
+        {
+            errorMessage = "Verifica el rango horario de la disponibilidad.";
+            return;
+        }
+
+        TimeOnly? breakStart = TimeOnly.TryParse(availabilityEditor.BreakStart, out var parsedBreakStart) ? parsedBreakStart : null;
+        TimeOnly? breakEnd = TimeOnly.TryParse(availabilityEditor.BreakEnd, out var parsedBreakEnd) ? parsedBreakEnd : null;
+        if (breakStart.HasValue != breakEnd.HasValue)
+        {
+            errorMessage = "Completa ambas horas del descanso o deja ambas vacias.";
+            return;
+        }
+
+        if (breakStart.HasValue && breakEnd.HasValue && (breakStart.Value >= breakEnd.Value || breakStart.Value < startTime || breakEnd.Value > endTime))
+        {
+            errorMessage = "El descanso debe quedar dentro de la jornada.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_disponibilidad_medico entity;
+        if (availabilityEditor.IdDisponibilidad > 0)
+        {
+            entity = await dbContext.tbl_disponibilidad_medico.FirstOrDefaultAsync(x => x.id_disponibilidad == availabilityEditor.IdDisponibilidad && x.id_medico == availabilityDoctorId) ?? new tbl_disponibilidad_medico();
+        }
+        else
+        {
+            entity = new tbl_disponibilidad_medico();
+            dbContext.tbl_disponibilidad_medico.Add(entity);
+        }
+
+        entity.id_medico = availabilityDoctorId;
+        entity.dia_semana = availabilityEditor.DayOfWeek;
+        entity.nombre_dia = GetDayLabel(availabilityEditor.DayOfWeek);
+        entity.hora_inicio = startTime;
+        entity.hora_fin = endTime;
+        entity.permitir_descanso_medio_dia = breakStart.HasValue && breakEnd.HasValue;
+        entity.hora_descanso_inicio = breakStart;
+        entity.hora_descanso_fin = breakEnd;
+        entity.disponible = true;
+        entity.observaciones = NormalizeOptional(availabilityEditor.Observaciones);
+        entity.fecha_actualizacion = DateTime.Now;
+        entity.usuario_actualizacion = GetCurrentActorLabel();
+
+        await dbContext.SaveChangesAsync();
+        WriteAudit(dbContext, availabilityEditor.IdDisponibilidad > 0 ? "Editar disponibilidad" : "Crear disponibilidad", $"MedicoId={availabilityDoctorId}; DisponibilidadId={entity.id_disponibilidad}; Dia={entity.dia_semana}; HoraInicio={entity.hora_inicio:HH\\:mm}; HoraFin={entity.hora_fin:HH\\:mm}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "La disponibilidad fue guardada correctamente.";
+        PrepareNewAvailability();
+        await LoadAsync(selectedAppointmentId > 0 ? selectedAppointmentId : null);
+    }
+
+    private async Task DeleteAvailabilityAsync(int availabilityId)
+    {
+        if (!CanManageAvailability || availabilityId <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_disponibilidad_medico.FirstOrDefaultAsync(x => x.id_disponibilidad == availabilityId && x.id_medico == availabilityDoctorId);
+        if (entity is null)
+        {
+            return;
+        }
+
+        dbContext.tbl_disponibilidad_medico.Remove(entity);
+        WriteAudit(dbContext, "Eliminar disponibilidad", $"MedicoId={availabilityDoctorId}; DisponibilidadId={availabilityId}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "La disponibilidad fue eliminada.";
+        PrepareNewAvailability();
+        await LoadAsync(selectedAppointmentId > 0 ? selectedAppointmentId : null);
+    }
+
+    private async Task SaveBlockAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!CanManageAvailability || availabilityDoctorId <= 0)
+        {
+            return;
+        }
+
+        if (!DateOnly.TryParse(blockEditor.FechaInicio, out var startDate) || !DateOnly.TryParse(blockEditor.FechaFin, out var endDate) || startDate > endDate)
+        {
+            errorMessage = "Verifica el rango de fechas del bloqueo.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_bloqueo_horarios entity;
+        if (blockEditor.IdBloqueo > 0)
+        {
+            entity = await dbContext.tbl_bloqueo_horarios.FirstOrDefaultAsync(x => x.id_bloqueo == blockEditor.IdBloqueo && x.id_medico == availabilityDoctorId) ?? new tbl_bloqueo_horarios();
+        }
+        else
+        {
+            entity = new tbl_bloqueo_horarios();
+            dbContext.tbl_bloqueo_horarios.Add(entity);
+        }
+
+        entity.id_medico = availabilityDoctorId;
+        entity.fecha_inicio = startDate;
+        entity.fecha_fin = endDate;
+        entity.tipo_bloqueo = blockEditor.TipoBloqueo;
+        entity.razon_bloqueo = NormalizeOptional(blockEditor.Razon);
+        entity.activo = true;
+        entity.fecha_creacion ??= DateTime.Now;
+        entity.usuario_creacion = GetCurrentActorLabel();
+
+        await dbContext.SaveChangesAsync();
+        WriteAudit(dbContext, blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El bloqueo fue guardado correctamente.";
+        PrepareNewBlock();
+        await LoadAsync(selectedAppointmentId > 0 ? selectedAppointmentId : null);
+    }
+
+    private async Task DeleteBlockAsync(int blockId)
+    {
+        if (!CanManageAvailability || blockId <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_bloqueo_horarios.FirstOrDefaultAsync(x => x.id_bloqueo == blockId && x.id_medico == availabilityDoctorId);
+        if (entity is null)
+        {
+            return;
+        }
+
+        dbContext.tbl_bloqueo_horarios.Remove(entity);
+        WriteAudit(dbContext, "Eliminar bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={blockId}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El bloqueo fue eliminado.";
+        PrepareNewBlock();
+        await LoadAsync(selectedAppointmentId > 0 ? selectedAppointmentId : null);
+    }
+
+    private async Task LoadAppointmentAuditAsync(int appointmentId)
+    {
+        appointmentAuditEntries.Clear();
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var token = $"CitaId={appointmentId};";
+
+        appointmentAuditEntries.AddRange(await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.modulo == "Citas" && a.detalle != null && a.detalle.Contains(token))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync());
+    }
+
+    private async Task RebuildAvailableSlotsAsync()
+    {
+        availableSlots.Clear();
+
+        if (appointmentEditor is null || appointmentEditor.IdMedico <= 0 || !DateOnly.TryParse(appointmentEditor.FechaCita, out var appointmentDate))
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var doctor = await dbContext.tbl_medico.AsNoTracking().FirstOrDefaultAsync(m => m.id_medico == appointmentEditor.IdMedico && m.activo == true);
+        if (doctor is null)
+        {
+            return;
+        }
+
+        var dayOfWeek = ToDatabaseDayOfWeek(appointmentDate.DayOfWeek);
+        var schedules = await dbContext.tbl_disponibilidad_medico
+            .AsNoTracking()
+            .Where(x => x.id_medico == doctor.id_medico && x.dia_semana == dayOfWeek && x.disponible == true)
+            .OrderBy(x => x.hora_inicio)
+            .ToListAsync();
+
+        if (schedules.Count == 0)
+        {
+            return;
+        }
+
+        var isBlocked = await dbContext.tbl_bloqueo_horarios
+            .AsNoTracking()
+            .AnyAsync(x => x.id_medico == doctor.id_medico && x.activo == true && x.fecha_inicio <= appointmentDate && x.fecha_fin >= appointmentDate);
+
+        if (isBlocked)
+        {
+            return;
+        }
+
+        var durationMinutes = Math.Max(10, doctor.duracion_consulta_minutos ?? 30);
+        var busySlots = await dbContext.tbl_citas
+            .AsNoTracking()
+            .Include(c => c.id_estadoNavigation)
+            .Where(c => c.id_medico == doctor.id_medico && c.fecha_cita == appointmentDate && c.id_cita != appointmentEditor.IdCita)
+            .Where(c => c.id_estadoNavigation != null && c.id_estadoNavigation.nombre_estado != "Cancelada")
+            .Select(c => new { c.hora_inicio, c.hora_fin })
+            .ToListAsync();
+
+        foreach (var schedule in schedules)
+        {
+            var cursor = schedule.hora_inicio;
+            while (cursor.AddMinutes(durationMinutes) <= schedule.hora_fin)
+            {
+                var slotEnd = cursor.AddMinutes(durationMinutes);
+                var overlapsBreak = schedule.hora_descanso_inicio.HasValue &&
+                    schedule.hora_descanso_fin.HasValue &&
+                    cursor < schedule.hora_descanso_fin.Value &&
+                    slotEnd > schedule.hora_descanso_inicio.Value;
+
+                var overlapsAppointment = busySlots.Any(x => cursor < x.hora_fin && slotEnd > x.hora_inicio);
+                if (!overlapsBreak && !overlapsAppointment)
+                {
+                    var key = BuildSlotKey(cursor, slotEnd);
+                    availableSlots.Add(new SlotOption(key, $"{cursor:HH\\:mm} - {slotEnd:HH\\:mm}"));
+                }
+
+                cursor = cursor.AddMinutes(durationMinutes);
+            }
+        }
+
+        if (appointmentEditor.IdCita > 0 && !string.IsNullOrWhiteSpace(appointmentEditor.SelectedSlotKey) && availableSlots.All(x => x.Key != appointmentEditor.SelectedSlotKey))
+        {
+            if (TryParseSlot(appointmentEditor.SelectedSlotKey, out var currentStart, out var currentEnd))
+            {
+                availableSlots.Insert(0, new SlotOption(appointmentEditor.SelectedSlotKey, $"{currentStart:HH\\:mm} - {currentEnd:HH\\:mm} (actual)"));
+            }
+        }
+    }
+
+    private async Task<bool> AppointmentConflictExistsAsync(OpticaDbContext dbContext, int doctorId, DateOnly appointmentDate, TimeOnly startTime, TimeOnly endTime, int? currentAppointmentId)
+    {
+        return await dbContext.tbl_citas
+            .Include(c => c.id_estadoNavigation)
+            .AnyAsync(c =>
+                c.id_medico == doctorId &&
+                c.fecha_cita == appointmentDate &&
+                (!currentAppointmentId.HasValue || c.id_cita != currentAppointmentId.Value) &&
+                c.id_estadoNavigation != null &&
+                c.id_estadoNavigation.nombre_estado != "Cancelada" &&
+                startTime < c.hora_fin &&
+                endTime > c.hora_inicio);
+    }
+
+    private async Task<int?> ResolveAvailabilityIdAsync(OpticaDbContext dbContext, int doctorId, DateOnly appointmentDate, TimeOnly startTime, TimeOnly endTime)
+    {
+        var dayOfWeek = ToDatabaseDayOfWeek(appointmentDate.DayOfWeek);
+        return await dbContext.tbl_disponibilidad_medico
+            .Where(x =>
+                x.id_medico == doctorId &&
+                x.dia_semana == dayOfWeek &&
+                x.disponible == true &&
+                x.hora_inicio <= startTime &&
+                x.hora_fin >= endTime)
+            .Select(x => (int?)x.id_disponibilidad)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<int> GetStateIdAsync(OpticaDbContext dbContext, string stateName)
+    {
+        return await dbContext.tbl_estado_cita
+            .Where(s => s.nombre_estado == stateName)
+            .Select(s => s.id_estado)
+            .FirstAsync();
+    }
+
+    private void PrepareNewAvailability()
+    {
+        availabilityEditor = new AvailabilityEditor
+        {
+            DayOfWeek = 1
+        };
+    }
+
+    private void EditAvailability(tbl_disponibilidad_medico row)
+    {
+        availabilityEditor = new AvailabilityEditor
+        {
+            IdDisponibilidad = row.id_disponibilidad,
+            DayOfWeek = row.dia_semana,
+            StartTime = row.hora_inicio.ToString("HH:mm"),
+            EndTime = row.hora_fin.ToString("HH:mm"),
+            BreakStart = row.hora_descanso_inicio?.ToString("HH:mm") ?? string.Empty,
+            BreakEnd = row.hora_descanso_fin?.ToString("HH:mm") ?? string.Empty,
+            Observaciones = row.observaciones ?? string.Empty
+        };
+    }
+
+    private void PrepareNewBlock()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+        blockEditor = new BlockEditor
+        {
+            FechaInicio = today,
+            FechaFin = today,
+            TipoBloqueo = "Vacaciones"
+        };
+    }
+
+    private void EditBlock(tbl_bloqueo_horarios block)
+    {
+        blockEditor = new BlockEditor
+        {
+            IdBloqueo = block.id_bloqueo,
+            FechaInicio = block.fecha_inicio.ToString("yyyy-MM-dd"),
+            FechaFin = block.fecha_fin.ToString("yyyy-MM-dd"),
+            TipoBloqueo = block.tipo_bloqueo ?? "Otro",
+            Razon = block.razon_bloqueo ?? string.Empty
+        };
+    }
+
+    private async Task OnDoctorSelectionChanged(ChangeEventArgs args)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.IdMedico = int.TryParse(args.Value?.ToString(), out var parsedDoctorId) ? parsedDoctorId : 0;
+        await RebuildAvailableSlotsAsync();
+    }
+
+    private void OnSelfPatientBirthDateChanged(ChangeEventArgs args)
+    {
+        selfPatientEditor.FechaNacimiento = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task OnAppointmentTargetChanged(ChangeEventArgs args)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.TargetType = args.Value?.ToString() == "family" ? "family" : "self";
+        if (appointmentEditor.TargetType == "self")
+        {
+            appointmentEditor.FamilyPatientId = 0;
+            appointmentEditor.IdPaciente = linkedPatient?.id_paciente ?? 0;
+        }
+        else if (clientFamilyPatients.Any())
+        {
+            appointmentEditor.FamilyPatientId = clientFamilyPatients.First().id_paciente;
+            appointmentEditor.IdPaciente = appointmentEditor.FamilyPatientId;
+        }
+        else
+        {
+            appointmentEditor.FamilyPatientId = 0;
+            appointmentEditor.IdPaciente = 0;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnFamilyPatientSelectionChanged(ChangeEventArgs args)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.FamilyPatientId = int.TryParse(args.Value?.ToString(), out var parsedPatientId) ? parsedPatientId : 0;
+        appointmentEditor.IdPaciente = appointmentEditor.FamilyPatientId;
+
+        var selectedFamilyPatient = clientFamilyPatients.FirstOrDefault(p => p.id_paciente == appointmentEditor.FamilyPatientId);
+        if (selectedFamilyPatient is null)
+        {
+            appointmentEditor.FamilyCedula = string.Empty;
+            appointmentEditor.FamilyNames = string.Empty;
+            appointmentEditor.FamilyLastNames = string.Empty;
+            appointmentEditor.FamilyPhone = string.Empty;
+            appointmentEditor.FamilyBirthDate = string.Empty;
+            return;
+        }
+
+        appointmentEditor.FamilyCedula = selectedFamilyPatient.cedula;
+        appointmentEditor.FamilyNames = selectedFamilyPatient.nombres;
+        appointmentEditor.FamilyLastNames = selectedFamilyPatient.apellidos;
+        appointmentEditor.FamilyPhone = selectedFamilyPatient.telefono ?? string.Empty;
+        appointmentEditor.FamilyBirthDate = selectedFamilyPatient.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty;
+    }
+
+    private void OnFamilyBirthDateChanged(ChangeEventArgs args)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.FamilyBirthDate = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnDateFromFilterChanged(ChangeEventArgs args)
+    {
+        dateFromFilter = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnDateToFilterChanged(ChangeEventArgs args)
+    {
+        dateToFilter = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task OnAppointmentDateChanged(ChangeEventArgs args)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.FechaCita = args.Value?.ToString() ?? string.Empty;
+        await RebuildAvailableSlotsAsync();
+    }
+
+    private async Task OnAvailabilityDoctorChanged(ChangeEventArgs args)
+    {
+        availabilityDoctorId = int.TryParse(args.Value?.ToString(), out var parsedDoctorId) ? parsedDoctorId : availabilityDoctorId;
+        PrepareNewAvailability();
+        PrepareNewBlock();
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadAvailabilityAsync(dbContext);
+        StateHasChanged();
+    }
+
+    private void OnAvailabilityStartChanged(ChangeEventArgs args)
+    {
+        availabilityEditor.StartTime = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnAvailabilityEndChanged(ChangeEventArgs args)
+    {
+        availabilityEditor.EndTime = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnAvailabilityBreakStartChanged(ChangeEventArgs args)
+    {
+        availabilityEditor.BreakStart = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnAvailabilityBreakEndChanged(ChangeEventArgs args)
+    {
+        availabilityEditor.BreakEnd = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnBlockStartChanged(ChangeEventArgs args)
+    {
+        blockEditor.FechaInicio = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnBlockEndChanged(ChangeEventArgs args)
+    {
+        blockEditor.FechaFin = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedTemporalFilter = "upcoming";
+        selectedStatusFilter = string.Empty;
+        selectedDoctorFilter = isDoctor ? currentDoctorId : 0;
+        dateFromFilter = string.Empty;
+        dateToFilter = string.Empty;
+    }
+
+    private bool ValidateAppointmentEditor()
+    {
+        if (appointmentEditor is null)
+        {
+            errorMessage = "No hay una cita activa en edicion.";
+            return false;
+        }
+
+        appointmentEditor.Motivo = appointmentEditor.Motivo.Trim();
+        appointmentEditor.Descripcion = appointmentEditor.Descripcion.Trim();
+        appointmentEditor.NotasMedico = appointmentEditor.NotasMedico.Trim();
+        appointmentEditor.RazonCancelacion = appointmentEditor.RazonCancelacion.Trim();
+
+        if (appointmentEditor.IdMedico <= 0)
+        {
+            errorMessage = "Selecciona un medico.";
+            return false;
+        }
+
+        if ((isAdmin || isDoctor) && appointmentEditor.IdPaciente <= 0)
+        {
+            errorMessage = "Selecciona un paciente.";
+            return false;
+        }
+
+        if (isClient && appointmentEditor.TargetType == "family")
+        {
+            if (appointmentEditor.FamilyPatientId <= 0)
+            {
+                appointmentEditor.FamilyCedula = appointmentEditor.FamilyCedula.Trim();
+                appointmentEditor.FamilyNames = appointmentEditor.FamilyNames.Trim();
+                appointmentEditor.FamilyLastNames = appointmentEditor.FamilyLastNames.Trim();
+                appointmentEditor.FamilyPhone = appointmentEditor.FamilyPhone.Trim();
+
+                if (string.IsNullOrWhiteSpace(appointmentEditor.FamilyCedula) ||
+                    string.IsNullOrWhiteSpace(appointmentEditor.FamilyNames) ||
+                    string.IsNullOrWhiteSpace(appointmentEditor.FamilyLastNames))
+                {
+                    errorMessage = "Completa cedula, nombres y apellidos del familiar.";
+                    return false;
+                }
+            }
+        }
+
+        if (!DateOnly.TryParse(appointmentEditor.FechaCita, out var appointmentDate))
+        {
+            errorMessage = "La fecha de la cita no es valida.";
+            return false;
+        }
+
+        if (appointmentDate < DateOnly.FromDateTime(DateTime.Today))
+        {
+            errorMessage = "No se pueden agendar citas en fechas pasadas.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(appointmentEditor.SelectedSlotKey))
+        {
+            errorMessage = "Selecciona un horario disponible.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(appointmentEditor.Motivo))
+        {
+            errorMessage = "Escribe el motivo de la cita.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private string GetCurrentAppointmentPatientLabel()
+    {
+        if (appointmentEditor is null)
+        {
+            return linkedPatient is null ? "Sin paciente" : GetPatientDisplayName(linkedPatient);
+        }
+
+        if (!isClient)
+        {
+            var currentPatient = patients.FirstOrDefault(p => p.id_paciente == appointmentEditor.IdPaciente);
+            return currentPatient is null ? "Sin paciente seleccionado" : GetPatientDisplayName(currentPatient);
+        }
+
+        if (appointmentEditor.TargetType == "family")
+        {
+            if (appointmentEditor.FamilyPatientId > 0)
+            {
+                var familyPatient = clientFamilyPatients.FirstOrDefault(p => p.id_paciente == appointmentEditor.FamilyPatientId);
+                return familyPatient is null ? "Familiar seleccionado" : GetPatientDisplayName(familyPatient);
+            }
+
+            var familyName = $"{appointmentEditor.FamilyNames} {appointmentEditor.FamilyLastNames}".Trim();
+            return string.IsNullOrWhiteSpace(familyName) ? "Nuevo familiar" : familyName;
+        }
+
+        return linkedPatient is null
+            ? "Se generara tu ficha rapida de paciente"
+            : GetPatientDisplayName(linkedPatient);
+    }
+
+    private async Task<tbl_paciente?> ResolveAppointmentPatientAsync(OpticaDbContext dbContext)
+    {
+        if (appointmentEditor is null)
+        {
+            errorMessage = "No hay un paciente seleccionado.";
+            return null;
+        }
+
+        if (!isClient)
+        {
+            var selectedPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == appointmentEditor.IdPaciente && p.activo == true);
+            if (selectedPatient is null)
+            {
+                errorMessage = "Selecciona un paciente valido.";
+            }
+
+            return selectedPatient;
+        }
+
+        if (appointmentEditor.TargetType == "family")
+        {
+            if (appointmentEditor.FamilyPatientId > 0)
+            {
+                var familyPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p =>
+                    p.id_paciente == appointmentEditor.FamilyPatientId &&
+                    p.activo == true &&
+                    (p.id_usuario_registro == currentUserId || p.id_usuario == currentUserId));
+
+                if (familyPatient is null)
+                {
+                    errorMessage = "Selecciona un familiar valido.";
+                }
+
+                return familyPatient;
+            }
+
+            var normalizedCedula = appointmentEditor.FamilyCedula.Trim().ToLowerInvariant();
+            var existingFamilyPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.cedula.ToLower() == normalizedCedula);
+            if (existingFamilyPatient is not null && existingFamilyPatient.id_usuario_registro != currentUserId && existingFamilyPatient.id_usuario != currentUserId)
+            {
+                errorMessage = "La cedula del familiar ya pertenece a otra ficha registrada.";
+                return null;
+            }
+
+            if (existingFamilyPatient is not null)
+            {
+                existingFamilyPatient.nombres = appointmentEditor.FamilyNames.Trim();
+                existingFamilyPatient.apellidos = appointmentEditor.FamilyLastNames.Trim();
+                existingFamilyPatient.telefono = NormalizeOptional(appointmentEditor.FamilyPhone);
+                existingFamilyPatient.fecha_nacimiento = DateOnly.TryParse(appointmentEditor.FamilyBirthDate, out var existingBirthDate) ? existingBirthDate : existingFamilyPatient.fecha_nacimiento;
+                existingFamilyPatient.edad = CalculateAge(existingFamilyPatient.fecha_nacimiento);
+                existingFamilyPatient.activo = true;
+                existingFamilyPatient.id_usuario_registro ??= currentUserId;
+                return existingFamilyPatient;
+            }
+
+            var birthDate = DateOnly.TryParse(appointmentEditor.FamilyBirthDate, out var parsedBirthDate) ? (DateOnly?)parsedBirthDate : null;
+            var newFamilyPatient = new tbl_paciente
+            {
+                codigo_paciente = GeneratePatientCode(),
+                cedula = appointmentEditor.FamilyCedula.Trim(),
+                nombres = appointmentEditor.FamilyNames.Trim(),
+                apellidos = appointmentEditor.FamilyLastNames.Trim(),
+                fecha_nacimiento = birthDate,
+                edad = CalculateAge(birthDate),
+                telefono = NormalizeOptional(appointmentEditor.FamilyPhone),
+                activo = true,
+                fecha_registro = DateTime.Now,
+                id_usuario_registro = currentUserId
+            };
+
+            dbContext.tbl_pacientes.Add(newFamilyPatient);
+            return newFamilyPatient;
+        }
+
+        if (linkedPatient is not null)
+        {
+            var selfPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == linkedPatient.id_paciente && p.activo == true);
+            if (selfPatient is null)
+            {
+                errorMessage = "No se encontro tu ficha de paciente.";
+            }
+
+            return selfPatient;
+        }
+
+        var currentUser = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == currentUserId);
+        if (currentUser is null)
+        {
+            errorMessage = "No se encontro el usuario autenticado.";
+            return null;
+        }
+
+        var generatedCedula = $"TMPU{currentUserId:D8}";
+        var generatedPatient = new tbl_paciente
+        {
+            codigo_paciente = GeneratePatientCode(),
+            cedula = generatedCedula,
+            nombres = currentUser.nombres,
+            apellidos = currentUser.apellidos,
+            telefono = currentUser.telefono,
+            email = currentUser.email,
+            activo = true,
+            fecha_registro = DateTime.Now,
+            id_usuario_registro = currentUserId,
+            id_usuario = currentUserId,
+            observaciones = "Ficha rapida creada desde agenda de citas."
+        };
+
+        dbContext.tbl_pacientes.Add(generatedPatient);
+        return generatedPatient;
+    }
+
+    private void ExportAppointments()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedTemporalFilter))
+        {
+            query.Add($"period={Uri.EscapeDataString(selectedTemporalFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedStatusFilter))
+        {
+            query.Add($"status={Uri.EscapeDataString(selectedStatusFilter)}");
+        }
+
+        if (selectedDoctorFilter > 0)
+        {
+            query.Add($"doctorId={selectedDoctorFilter}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dateFromFilter))
+        {
+            query.Add($"dateFrom={Uri.EscapeDataString(dateFromFilter)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dateToFilter))
+        {
+            query.Add($"dateTo={Uri.EscapeDataString(dateToFilter)}");
+        }
+
+        var exportUrl = query.Count == 0
+            ? "/exports/appointments.csv"
+            : $"/exports/appointments.csv?{string.Join("&", query)}";
+
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private bool MatchesFilters(tbl_citas appointment)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var normalizedSearch = searchTerm.Trim().ToLowerInvariant();
+            var doctorName = GetDoctorDisplayName(appointment.id_medicoNavigation).ToLowerInvariant();
+            var patientName = GetPatientDisplayName(appointment.id_pacienteNavigation).ToLowerInvariant();
+            var statusName = appointment.id_estadoNavigation?.nombre_estado?.ToLowerInvariant() ?? string.Empty;
+            var typeName = appointment.tipo_cita?.ToLowerInvariant() ?? string.Empty;
+            var reason = appointment.motivo_cita?.ToLowerInvariant() ?? string.Empty;
+
+            if (!doctorName.Contains(normalizedSearch) &&
+                !patientName.Contains(normalizedSearch) &&
+                !statusName.Contains(normalizedSearch) &&
+                !typeName.Contains(normalizedSearch) &&
+                !reason.Contains(normalizedSearch))
+            {
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedStatusFilter) &&
+            !string.Equals(appointment.id_estadoNavigation?.nombre_estado, selectedStatusFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (selectedDoctorFilter > 0 && appointment.id_medico != selectedDoctorFilter)
+        {
+            return false;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        switch (selectedTemporalFilter)
+        {
+            case "upcoming" when appointment.fecha_cita < today:
+                return false;
+            case "past" when appointment.fecha_cita >= today:
+                return false;
+            case "today" when appointment.fecha_cita != today:
+                return false;
+        }
+
+        if (DateOnly.TryParse(dateFromFilter, out var dateFrom) && appointment.fecha_cita < dateFrom)
+        {
+            return false;
+        }
+
+        if (DateOnly.TryParse(dateToFilter, out var dateTo) && appointment.fecha_cita > dateTo)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointments"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        if (permission is null)
+        {
+            return new ModulePermissions();
+        }
+
+        return new ModulePermissions
+        {
+            CanView = permission.puede_ver,
+            CanCreate = permission.puede_crear,
+            CanEdit = permission.puede_editar,
+            CanDelete = permission.puede_eliminar
+        };
+    }
+
+    private bool CanAccessAppointment(tbl_citas appointment)
+    {
+        if (isAdmin)
+        {
+            return true;
+        }
+
+        if (isDoctor)
+        {
+            return appointment.id_medico == currentDoctorId;
+        }
+
+        return appointment.id_pacienteNavigation.id_usuario == currentUserId ||
+               appointment.id_pacienteNavigation.id_usuario_registro == currentUserId;
+    }
+
+    private static AppointmentEditorModel? BuildAppointmentEditor(tbl_citas? appointment)
+    {
+        if (appointment is null)
+        {
+            return null;
+        }
+
+        var isSelfAppointment = appointment.id_pacienteNavigation.id_usuario.HasValue;
+
+        return new AppointmentEditorModel
+        {
+            IdCita = appointment.id_cita,
+            IdMedico = appointment.id_medico,
+            IdPaciente = appointment.id_paciente,
+            FechaCita = appointment.fecha_cita.ToString("yyyy-MM-dd"),
+            SelectedSlotKey = BuildSlotKey(appointment.hora_inicio, appointment.hora_fin),
+            TipoCita = string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita!,
+            Motivo = appointment.motivo_cita ?? string.Empty,
+            Descripcion = appointment.descripcion_adicional ?? string.Empty,
+            Estado = appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado",
+            NotasMedico = appointment.notas_medico ?? string.Empty,
+            RazonCancelacion = appointment.razon_cancelacion ?? string.Empty,
+            TargetType = isSelfAppointment ? "self" : "family",
+            FamilyPatientId = isSelfAppointment ? 0 : appointment.id_paciente,
+            FamilyCedula = isSelfAppointment ? string.Empty : appointment.id_pacienteNavigation.cedula,
+            FamilyNames = isSelfAppointment ? string.Empty : appointment.id_pacienteNavigation.nombres,
+            FamilyLastNames = isSelfAppointment ? string.Empty : appointment.id_pacienteNavigation.apellidos,
+            FamilyPhone = isSelfAppointment ? string.Empty : appointment.id_pacienteNavigation.telefono ?? string.Empty,
+            FamilyBirthDate = isSelfAppointment ? string.Empty : appointment.id_pacienteNavigation.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty
+        };
+    }
+
+    private static string GetDoctorDisplayName(tbl_medico doctor)
+    {
+        var fullName = $"{doctor.id_usuarioNavigation.nombres} {doctor.id_usuarioNavigation.apellidos}".Trim();
+        return string.IsNullOrWhiteSpace(doctor.especialidad)
+            ? fullName
+            : $"{fullName} - {doctor.especialidad}";
+    }
+
+    private static string GetPatientDisplayName(tbl_paciente patient)
+    {
+        return $"{patient.nombres} {patient.apellidos}".Trim();
+    }
+
+    private static string GetAppointmentTitle(tbl_citas appointment)
+    {
+        return $"{GetPatientDisplayName(appointment.id_pacienteNavigation)}";
+    }
+
+    private static string BuildSlotKey(TimeOnly start, TimeOnly end) => $"{start:HH\\:mm}|{end:HH\\:mm}";
+
+    private static bool TryParseSlot(string? rawSlot, out TimeOnly start, out TimeOnly end)
+    {
+        start = default;
+        end = default;
+
+        if (string.IsNullOrWhiteSpace(rawSlot))
+        {
+            return false;
+        }
+
+        var parts = rawSlot.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 2 &&
+               TimeOnly.TryParse(parts[0], out start) &&
+               TimeOnly.TryParse(parts[1], out end) &&
+               start < end;
+    }
+
+    private static byte ToDatabaseDayOfWeek(DayOfWeek dayOfWeek) => dayOfWeek switch
+    {
+        DayOfWeek.Monday => 1,
+        DayOfWeek.Tuesday => 2,
+        DayOfWeek.Wednesday => 3,
+        DayOfWeek.Thursday => 4,
+        DayOfWeek.Friday => 5,
+        DayOfWeek.Saturday => 6,
+        _ => 7
+    };
+
+    private static string GetDayLabel(byte dayOfWeek)
+    {
+        return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Dia {dayOfWeek}";
+    }
+
+    private static string GetBreakLabel(tbl_disponibilidad_medico row)
+    {
+        if (!row.hora_descanso_inicio.HasValue || !row.hora_descanso_fin.HasValue)
+        {
+            return "Sin descanso";
+        }
+
+        return $"Descanso {row.hora_descanso_inicio:HH\\:mm}-{row.hora_descanso_fin:HH\\:mm}";
+    }
+
+    private static bool IsPendingState(string? stateName)
+    {
+        return stateName is "Programada" or "Confirmada" or "Reprogramada";
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static int? CalculateAge(DateOnly? birthDate)
+    {
+        if (!birthDate.HasValue)
+        {
+            return null;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var age = today.Year - birthDate.Value.Year;
+        if (birthDate.Value > today.AddYears(-age))
+        {
+            age--;
+        }
+
+        return age < 0 ? null : age;
+    }
+
+    private static string GeneratePatientCode()
+    {
+        return $"PAC-{DateTime.Now:yyyyMMddHHmmssfff}";
+    }
+
+    private string GetCurrentActorLabel()
+    {
+        return currentUserId > 0 ? currentUserId.ToString() : "SYSTEM";
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Citas",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class AppointmentEditorModel
+    {
+        public int IdCita { get; set; }
+        public int IdMedico { get; set; }
+        public int IdPaciente { get; set; }
+        public string TargetType { get; set; } = "self";
+        public int FamilyPatientId { get; set; }
+        public string FamilyCedula { get; set; } = string.Empty;
+        public string FamilyNames { get; set; } = string.Empty;
+        public string FamilyLastNames { get; set; } = string.Empty;
+        public string FamilyPhone { get; set; } = string.Empty;
+        public string FamilyBirthDate { get; set; } = string.Empty;
+        public string FechaCita { get; set; } = string.Empty;
+        public string SelectedSlotKey { get; set; } = string.Empty;
+        public string TipoCita { get; set; } = "Presencial";
+        public string Motivo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public string Estado { get; set; } = "Programada";
+        public string NotasMedico { get; set; } = string.Empty;
+        public string RazonCancelacion { get; set; } = string.Empty;
+    }
+
+    private sealed class LinkedPatientEditor
+    {
+        public string Cedula { get; set; } = string.Empty;
+        public string FechaNacimiento { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string Genero { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+    }
+
+    private sealed class AvailabilityEditor
+    {
+        public int IdDisponibilidad { get; set; }
+        public byte DayOfWeek { get; set; } = 1;
+        public string StartTime { get; set; } = "08:00";
+        public string EndTime { get; set; } = "17:00";
+        public string BreakStart { get; set; } = "12:00";
+        public string BreakEnd { get; set; } = "13:00";
+        public string Observaciones { get; set; } = string.Empty;
+    }
+
+    private sealed class BlockEditor
+    {
+        public int IdBloqueo { get; set; }
+        public string FechaInicio { get; set; } = string.Empty;
+        public string FechaFin { get; set; } = string.Empty;
+        public string TipoBloqueo { get; set; } = "Vacaciones";
+        public string Razon { get; set; } = string.Empty;
+    }
+
+    private sealed record DayOption(byte Value, string Label);
+    private sealed record SlotOption(string Key, string Label);
+}

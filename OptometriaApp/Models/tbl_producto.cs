@@ -15,6 +15,8 @@ public partial class tbl_producto
 
     public string nombre_producto { get; set; } = null!;
 
+    public string? tipo_item { get; set; }
+
     public string? descripcion { get; set; }
 
     public decimal? precio_costo { get; set; }

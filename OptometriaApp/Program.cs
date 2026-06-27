@@ -64,6 +64,7 @@ builder.Services.AddSingleton<IEmailBackgroundQueue>(sp => sp.GetRequiredService
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQueue>());
 builder.Services.AddScoped<MenuAccessService>();
 builder.Services.AddScoped<KardexService>();
+builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -78,6 +79,7 @@ await EnsureElectronicBillingSchemaAsync(app);
 await EnsureProductSchemaAsync(app);
 await EnsureSupplierSchemaAsync(app);
 await EnsureProcurementSchemaAsync(app);
+await EnsureAppointmentSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -1108,6 +1110,300 @@ app.MapGet("/exports/doctor-my-patients.csv", async (
         $"mis-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/appointments.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    var roleName = httpContext.User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var currentUserId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewAppointments = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointments"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewAppointments)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var period = httpContext.Request.Query["period"].ToString().Trim().ToLowerInvariant();
+    var status = httpContext.Request.Query["status"].ToString().Trim();
+    var doctorIdRaw = httpContext.Request.Query["doctorId"].ToString().Trim();
+    var dateFromRaw = httpContext.Request.Query["dateFrom"].ToString().Trim();
+    var dateToRaw = httpContext.Request.Query["dateTo"].ToString().Trim();
+    var selectedDoctorId = int.TryParse(doctorIdRaw, out var parsedDoctorId) ? parsedDoctorId : 0;
+    var isAdmin = roleId == 1 || roleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
+    var isDoctor = roleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
+        || roleName.Contains("medic", StringComparison.OrdinalIgnoreCase)
+        || roleName.Contains("optomet", StringComparison.OrdinalIgnoreCase);
+
+    var appointmentsQuery = dbContext.tbl_citas
+        .AsNoTracking()
+        .Include(c => c.id_medicoNavigation).ThenInclude(m => m.id_usuarioNavigation)
+        .Include(c => c.id_pacienteNavigation)
+        .Include(c => c.id_estadoNavigation)
+        .AsQueryable();
+
+    if (isAdmin)
+    {
+    }
+    else if (isDoctor)
+    {
+        appointmentsQuery = appointmentsQuery.Where(c => c.id_medicoNavigation.id_usuario == currentUserId);
+    }
+    else
+    {
+        appointmentsQuery = appointmentsQuery.Where(c =>
+            c.id_pacienteNavigation.id_usuario == currentUserId ||
+            c.id_pacienteNavigation.id_usuario_registro == currentUserId);
+    }
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        appointmentsQuery = appointmentsQuery.Where(c =>
+            c.id_pacienteNavigation.nombres.ToLower().Contains(loweredSearch) ||
+            c.id_pacienteNavigation.apellidos.ToLower().Contains(loweredSearch) ||
+            c.id_medicoNavigation.id_usuarioNavigation.nombres.ToLower().Contains(loweredSearch) ||
+            c.id_medicoNavigation.id_usuarioNavigation.apellidos.ToLower().Contains(loweredSearch) ||
+            (c.motivo_cita != null && c.motivo_cita.ToLower().Contains(loweredSearch)) ||
+            (c.tipo_cita != null && c.tipo_cita.ToLower().Contains(loweredSearch)) ||
+            (c.id_estadoNavigation != null && c.id_estadoNavigation.nombre_estado.ToLower().Contains(loweredSearch)));
+    }
+
+    if (!string.IsNullOrWhiteSpace(status))
+    {
+        var loweredStatus = status.ToLowerInvariant();
+        appointmentsQuery = appointmentsQuery.Where(c => c.id_estadoNavigation != null && c.id_estadoNavigation.nombre_estado.ToLower() == loweredStatus);
+    }
+
+    if (selectedDoctorId > 0)
+    {
+        appointmentsQuery = appointmentsQuery.Where(c => c.id_medico == selectedDoctorId);
+    }
+
+    if (DateOnly.TryParse(dateFromRaw, out var dateFrom))
+    {
+        appointmentsQuery = appointmentsQuery.Where(c => c.fecha_cita >= dateFrom);
+    }
+
+    if (DateOnly.TryParse(dateToRaw, out var dateTo))
+    {
+        appointmentsQuery = appointmentsQuery.Where(c => c.fecha_cita <= dateTo);
+    }
+
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    appointmentsQuery = period switch
+    {
+        "past" => appointmentsQuery.Where(c => c.fecha_cita < today),
+        "today" => appointmentsQuery.Where(c => c.fecha_cita == today),
+        "all" => appointmentsQuery,
+        _ => appointmentsQuery.Where(c => c.fecha_cita >= today)
+    };
+
+    var appointments = await appointmentsQuery
+        .OrderBy(c => c.fecha_cita)
+        .ThenBy(c => c.hora_inicio)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Fecha,HoraInicio,HoraFin,Estado,Tipo,Motivo,Paciente,Medico,RazonCancelacion,Creada,Actualizada");
+
+    foreach (var appointment in appointments)
+    {
+        var doctorName = $"{appointment.id_medicoNavigation.id_usuarioNavigation.nombres} {appointment.id_medicoNavigation.id_usuarioNavigation.apellidos}".Trim();
+        var patientName = $"{appointment.id_pacienteNavigation.nombres} {appointment.id_pacienteNavigation.apellidos}".Trim();
+
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(appointment.id_cita.ToString()),
+            EscapeCsv(appointment.fecha_cita.ToString("yyyy-MM-dd")),
+            EscapeCsv(appointment.hora_inicio.ToString("HH:mm")),
+            EscapeCsv(appointment.hora_fin.ToString("HH:mm")),
+            EscapeCsv(appointment.id_estadoNavigation?.nombre_estado),
+            EscapeCsv(appointment.tipo_cita),
+            EscapeCsv(appointment.motivo_cita),
+            EscapeCsv(patientName),
+            EscapeCsv(doctorName),
+            EscapeCsv(appointment.razon_cancelacion),
+            EscapeCsv(appointment.fecha_creacion?.ToString("yyyy-MM-dd HH:mm:ss")),
+            EscapeCsv(appointment.fecha_actualizacion?.ToString("yyyy-MM-dd HH:mm:ss"))));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = currentUserId,
+        accion = "Exportar CSV",
+        modulo = "Citas",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|period:{period}|status:{status}|doctorId:{doctorIdRaw}|dateFrom:{dateFromRaw}|dateTo:{dateToRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/appointment-availability.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    var roleName = httpContext.User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var currentUserId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewModule = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointment-availability"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewModule)
+    {
+        return Results.Forbid();
+    }
+
+    var requestedDoctorId = int.TryParse(httpContext.Request.Query["doctorId"].ToString(), out var parsedDoctorId) ? parsedDoctorId : 0;
+    var requestedDay = byte.TryParse(httpContext.Request.Query["day"].ToString(), out var parsedDay) ? parsedDay : (byte)0;
+    var requestedBlockType = httpContext.Request.Query["blockType"].ToString().Trim();
+    var isAdmin = roleId == 1 || roleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
+    var isDoctor = roleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
+        || roleName.Contains("medic", StringComparison.OrdinalIgnoreCase)
+        || roleName.Contains("optomet", StringComparison.OrdinalIgnoreCase);
+
+    var doctorId = requestedDoctorId;
+    if (!isAdmin && isDoctor)
+    {
+        doctorId = await dbContext.tbl_medico
+            .AsNoTracking()
+            .Where(m => m.id_usuario == currentUserId)
+            .Select(m => m.id_medico)
+            .FirstOrDefaultAsync();
+    }
+
+    if (doctorId <= 0)
+    {
+        return Results.File(
+            Encoding.UTF8.GetBytes("Tipo,Detalle\n"),
+            "text/csv; charset=utf-8",
+            $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    }
+
+    var availabilityQuery = dbContext.tbl_disponibilidad_medico
+        .AsNoTracking()
+        .Where(x => x.id_medico == doctorId);
+
+    if (requestedDay > 0)
+    {
+        availabilityQuery = availabilityQuery.Where(x => x.dia_semana == requestedDay);
+    }
+
+    var blockQuery = dbContext.tbl_bloqueo_horarios
+        .AsNoTracking()
+        .Where(x => x.id_medico == doctorId && x.activo == true);
+
+    if (!string.IsNullOrWhiteSpace(requestedBlockType))
+    {
+        var loweredBlockType = requestedBlockType.ToLowerInvariant();
+        blockQuery = blockQuery.Where(x => x.tipo_bloqueo != null && x.tipo_bloqueo.ToLower() == loweredBlockType);
+    }
+
+    var doctor = await dbContext.tbl_medico
+        .AsNoTracking()
+        .Include(m => m.id_usuarioNavigation)
+        .FirstOrDefaultAsync(m => m.id_medico == doctorId);
+
+    var availabilityRows = await availabilityQuery
+        .OrderBy(x => x.dia_semana)
+        .ThenBy(x => x.hora_inicio)
+        .ToListAsync();
+
+    var blocks = await blockQuery
+        .OrderByDescending(x => x.fecha_inicio)
+        .ToListAsync();
+
+    var doctorName = doctor is null
+        ? doctorId.ToString()
+        : $"{doctor.id_usuarioNavigation.nombres} {doctor.id_usuarioNavigation.apellidos}".Trim();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Tipo,Medico,Dia,HoraInicio,HoraFin,DescansoInicio,DescansoFin,FechaInicio,FechaFin,Clase,Razon,Observaciones");
+
+    foreach (var row in availabilityRows)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv("Disponibilidad"),
+            EscapeCsv(doctorName),
+            EscapeCsv(row.nombre_dia),
+            EscapeCsv(row.hora_inicio.ToString("HH:mm")),
+            EscapeCsv(row.hora_fin.ToString("HH:mm")),
+            EscapeCsv(row.hora_descanso_inicio?.ToString("HH:mm")),
+            EscapeCsv(row.hora_descanso_fin?.ToString("HH:mm")),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(row.observaciones)));
+    }
+
+    foreach (var block in blocks)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv("Bloqueo"),
+            EscapeCsv(doctorName),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(null),
+            EscapeCsv(block.fecha_inicio.ToString("yyyy-MM-dd")),
+            EscapeCsv(block.fecha_fin.ToString("yyyy-MM-dd")),
+            EscapeCsv(block.tipo_bloqueo),
+            EscapeCsv(block.razon_bloqueo),
+            EscapeCsv(null)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = currentUserId,
+        accion = "Exportar CSV",
+        modulo = "Disponibilidad medica",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=doctorId:{doctorId}|day:{requestedDay}|blockType:{requestedBlockType}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapGet("/exports/laboratories.csv", async (
     HttpContext httpContext,
     OpticaDbContext dbContext) =>
@@ -1483,6 +1779,7 @@ app.MapGet("/exports/products.csv", async (
     var search = httpContext.Request.Query["search"].ToString().Trim();
     var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
     var state = httpContext.Request.Query["state"].ToString().Trim();
+    var type = httpContext.Request.Query["type"].ToString().Trim();
     var categoryIdRaw = httpContext.Request.Query["categoryId"].ToString().Trim();
     var supplierIdRaw = httpContext.Request.Query["supplierId"].ToString().Trim();
 
@@ -1516,6 +1813,11 @@ app.MapGet("/exports/products.csv", async (
         productsQuery = productsQuery.Where(p => p.estado_producto == state);
     }
 
+    if (!string.IsNullOrWhiteSpace(type))
+    {
+        productsQuery = productsQuery.Where(p => (p.tipo_item ?? "Producto") == type);
+    }
+
     if (int.TryParse(categoryIdRaw, out var categoryId) && categoryId > 0)
     {
         productsQuery = productsQuery.Where(p => p.id_categoria == categoryId);
@@ -1532,7 +1834,7 @@ app.MapGet("/exports/products.csv", async (
         .ToListAsync();
 
     var csvBuilder = new StringBuilder();
-    csvBuilder.AppendLine("Id,Codigo,Nombre,Categoria,Proveedor,PrecioCosto,PrecioVenta,StockActual,StockMinimo,StockMaximo,Estado,EstadoProducto,CodigoBarras,Marca,Modelo");
+    csvBuilder.AppendLine("Id,Codigo,Nombre,TipoItem,Categoria,Proveedor,PrecioCosto,PrecioVenta,StockActual,StockMinimo,StockMaximo,Estado,EstadoProducto,CodigoBarras,Marca,Modelo");
 
     foreach (var product in products)
     {
@@ -1540,6 +1842,7 @@ app.MapGet("/exports/products.csv", async (
             EscapeCsv(product.id_producto.ToString()),
             EscapeCsv(product.codigo_producto),
             EscapeCsv(product.nombre_producto),
+            EscapeCsv(product.tipo_item ?? "Producto"),
             EscapeCsv(product.id_categoriaNavigation?.nombre),
             EscapeCsv(product.id_proveedorNavigation?.nombre),
             EscapeCsv(product.precio_costo?.ToString("0.00", CultureInfo.InvariantCulture)),
@@ -1560,7 +1863,7 @@ app.MapGet("/exports/products.csv", async (
         accion = "Exportar CSV",
         modulo = "Productos",
         fecha = DateTime.Now,
-        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|state:{state}|categoryId:{categoryIdRaw}|supplierId:{supplierIdRaw}"
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|state:{state}|type:{type}|categoryId:{categoryIdRaw}|supplierId:{supplierIdRaw}"
     });
 
     await dbContext.SaveChangesAsync();
@@ -2152,22 +2455,26 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Pacientes', '/patients', 'patients', 3, 1),
                 ('Ingresar pacientes', '/doctor/patient-entry', 'doctor-entry', 4, 1),
                 ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 5, 1),
-                ('Laboratorios', '/laboratories', 'lab', 6, 1),
-                ('Proveedores', '/suppliers', 'suppliers', 7, 1),
-                ('Productos', '/products', 'products', 8, 1),
-                ('Compras', '/purchases', 'purchases', 9, 1),
-                ('Ordenes de compra', '/purchase-orders', 'purchase-orders', 10, 1),
-                ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 11, 1),
-                ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 12, 1),
-                ('Inventarios', '/inventories', 'inventories', 13, 1),
-                ('Kardex', '/kardex', 'kardex', 14, 1),
-                ('Clientes', '/clients', 'clients', 15, 1),
-                ('Emisor', '/emisor', 'issuer', 16, 1),
-                ('Usuarios', '/users', 'users', 17, 1),
-                ('Roles', '/roles', 'roles', 18, 1),
-                ('Menus', '/menus', 'menu', 19, 1),
-                ('Registrar usuario', '/register', 'user-plus', 20, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 21, 1)
+                ('Citas y turnos', '/appointments', 'calendar-check', 6, 1),
+                ('Disponibilidad medica', '/appointment-availability', 'calendar-availability', 7, 1),
+                ('Medicos', '/doctors', 'doctor-profile', 8, 1),
+                ('Laboratorios', '/laboratories', 'lab', 9, 1),
+                ('Proveedores', '/suppliers', 'suppliers', 10, 1),
+                ('Productos', '/products', 'products', 11, 1),
+                ('Categorias de productos', '/product-categories', 'tags', 12, 1),
+                ('Compras', '/purchases', 'purchases', 13, 1),
+                ('Ordenes de compra', '/purchase-orders', 'purchase-orders', 14, 1),
+                ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 15, 1),
+                ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 16, 1),
+                ('Inventarios', '/inventories', 'inventories', 17, 1),
+                ('Kardex', '/kardex', 'kardex', 18, 1),
+                ('Clientes', '/clients', 'clients', 19, 1),
+                ('Emisor', '/emisor', 'issuer', 20, 1),
+                ('Usuarios', '/users', 'users', 21, 1),
+                ('Roles', '/roles', 'roles', 22, 1),
+                ('Menus', '/menus', 'menu', 23, 1),
+                ('Registrar usuario', '/register', 'user-plus', 24, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 25, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -2214,10 +2521,10 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                    CAST(0 AS BIT) AS puede_crear,
-                    CAST(0 AS BIT) AS puede_editar,
-                    CAST(0 AS BIT) AS puede_eliminar
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/appointments') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app m
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
@@ -2248,9 +2555,9 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                     r.id_rol,
                     m.id_menu,
                     CAST(1 AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_editar,
-                    CAST(CASE WHEN m.ruta = '/doctor/patient-entry' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                    CAST(CASE WHEN m.ruta IN ('/doctor/patient-entry', '/appointments', '/appointment-availability', '/doctors') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/doctor/patient-entry', '/appointments', '/appointment-availability', '/doctors') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta IN ('/doctor/patient-entry', '/appointments') THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_rol r
                 CROSS JOIN dbo.tbl_menu_app m
                 WHERE
@@ -2259,7 +2566,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                         OR LOWER(r.nombre) LIKE '%medic%'
                         OR LOWER(r.nombre) LIKE '%optomet%'
                     )
-                    AND m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/doctor/patient-entry', '/doctor/my-patients')
+                    AND m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/doctor/patient-entry', '/doctor/my-patients', '/appointments', '/appointment-availability', '/doctors')
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
             WHEN MATCHED THEN
@@ -2287,6 +2594,225 @@ static async Task EnsureUserProfileSchemaAsync(WebApplication app)
             ALTER TABLE dbo.tbl_usuario
             ADD fecha_nacimiento DATE NULL;
         END
+        """);
+}
+
+static async Task EnsureAppointmentSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF COL_LENGTH('dbo.tbl_paciente', 'id_usuario') IS NULL
+        BEGIN
+            ALTER TABLE dbo.tbl_paciente ADD id_usuario INT NULL;
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_paciente_tbl_usuario')
+        BEGIN
+            ALTER TABLE dbo.tbl_paciente
+            ADD CONSTRAINT FK_tbl_paciente_tbl_usuario FOREIGN KEY (id_usuario) REFERENCES dbo.tbl_usuario(id_usuario);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
+        BEGIN
+            CREATE UNIQUE NONCLUSTERED INDEX UQ_tbl_paciente_id_usuario ON dbo.tbl_paciente(id_usuario) WHERE id_usuario IS NOT NULL;
+        END;
+
+        IF OBJECT_ID('dbo.tbl_medico', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_medico
+            (
+                id_medico INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_usuario INT NOT NULL UNIQUE,
+                numero_licencia VARCHAR(50) NOT NULL UNIQUE,
+                especialidad VARCHAR(100) NULL,
+                cedula_profesional VARCHAR(50) NULL,
+                institucion_egreso VARCHAR(200) NULL,
+                anio_egreso INT NULL,
+                telefono_consultorio VARCHAR(20) NULL,
+                biografia VARCHAR(MAX) NULL,
+                certificaciones VARCHAR(MAX) NULL,
+                idiomas VARCHAR(200) NULL,
+                precio_consulta_base DECIMAL(10,2) NULL,
+                descuento_porcentaje DECIMAL(5,2) NULL,
+                aceptar_citas_telefonicas BIT NOT NULL CONSTRAINT DF_tbl_medico_tel DEFAULT (1),
+                aceptar_citas_presenciales BIT NOT NULL CONSTRAINT DF_tbl_medico_pre DEFAULT (1),
+                duracion_consulta_minutos INT NOT NULL CONSTRAINT DF_tbl_medico_duracion DEFAULT (30),
+                observaciones VARCHAR(MAX) NULL,
+                activo BIT NOT NULL CONSTRAINT DF_tbl_medico_activo DEFAULT (1),
+                fecha_creacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_medico_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_medico_fecha_actualizacion DEFAULT (GETDATE()),
+                usuario_creacion VARCHAR(100) NULL,
+                usuario_actualizacion VARCHAR(100) NULL,
+                CONSTRAINT fk_medico_usuario FOREIGN KEY (id_usuario) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_disponibilidad_medico', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_disponibilidad_medico
+            (
+                id_disponibilidad INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_medico INT NOT NULL,
+                dia_semana TINYINT NOT NULL,
+                nombre_dia VARCHAR(20) NULL,
+                hora_inicio TIME NOT NULL,
+                hora_fin TIME NOT NULL,
+                permitir_descanso_medio_dia BIT NOT NULL CONSTRAINT DF_tbl_disp_desc DEFAULT (0),
+                hora_descanso_inicio TIME NULL,
+                hora_descanso_fin TIME NULL,
+                disponible BIT NOT NULL CONSTRAINT DF_tbl_disp_estado DEFAULT (1),
+                observaciones VARCHAR(500) NULL,
+                fecha_creacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_disp_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_disp_fecha_actualizacion DEFAULT (GETDATE()),
+                usuario_actualizacion VARCHAR(100) NULL,
+                CONSTRAINT fk_disponibilidad_medico FOREIGN KEY (id_medico) REFERENCES dbo.tbl_medico(id_medico) ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT chk_disponibilidad_horas CHECK (hora_inicio < hora_fin)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_estado_cita', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_estado_cita
+            (
+                id_estado INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                nombre_estado VARCHAR(50) NOT NULL UNIQUE,
+                descripcion VARCHAR(255) NULL,
+                activo BIT NOT NULL CONSTRAINT DF_tbl_estado_cita_activo DEFAULT (1)
+            );
+        END;
+
+        MERGE dbo.tbl_estado_cita AS target
+        USING
+        (
+            VALUES
+                ('Programada', 'Cita agendada pero no confirmada'),
+                ('Confirmada', 'Cita confirmada por el paciente o el sistema'),
+                ('Realizada', 'Cita ya se llevo a cabo'),
+                ('Cancelada', 'Cita cancelada por el paciente o medico'),
+                ('No presento', 'Paciente no se presento a la cita'),
+                ('Reprogramada', 'Cita fue reprogramada para otra fecha'),
+                ('Pendiente pago', 'Cita realizada pero pendiente de pago')
+        ) AS source(nombre_estado, descripcion)
+        ON target.nombre_estado = source.nombre_estado
+        WHEN MATCHED THEN
+            UPDATE SET
+                target.descripcion = source.descripcion,
+                target.activo = 1
+        WHEN NOT MATCHED THEN
+            INSERT (nombre_estado, descripcion, activo)
+            VALUES (source.nombre_estado, source.descripcion, 1);
+
+        IF OBJECT_ID('dbo.tbl_citas', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_citas
+            (
+                id_cita INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_medico INT NOT NULL,
+                id_paciente INT NOT NULL,
+                id_disponibilidad INT NULL,
+                fecha_cita DATE NOT NULL,
+                hora_inicio TIME NOT NULL,
+                hora_fin TIME NOT NULL,
+                tipo_cita VARCHAR(50) NULL,
+                motivo_cita VARCHAR(255) NULL,
+                descripcion_adicional VARCHAR(MAX) NULL,
+                id_estado INT NOT NULL CONSTRAINT DF_tbl_citas_estado DEFAULT (1),
+                fecha_confirmacion DATETIME2 NULL,
+                usuario_confirmacion VARCHAR(100) NULL,
+                razon_cancelacion VARCHAR(500) NULL,
+                fecha_cancelacion DATETIME2 NULL,
+                usuario_cancelacion VARCHAR(100) NULL,
+                notificacion_enviada BIT NOT NULL CONSTRAINT DF_tbl_citas_notificacion DEFAULT (0),
+                fecha_notificacion_enviada DATETIME2 NULL,
+                tipo_notificacion VARCHAR(50) NULL,
+                recordatorio_24hrs BIT NOT NULL CONSTRAINT DF_tbl_citas_recordatorio_24 DEFAULT (0),
+                recordatorio_1hr BIT NOT NULL CONSTRAINT DF_tbl_citas_recordatorio_1 DEFAULT (0),
+                id_consulta INT NULL,
+                notas_medico VARCHAR(MAX) NULL,
+                fecha_creacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_citas_fecha_creacion DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_citas_fecha_actualizacion DEFAULT (GETDATE()),
+                usuario_creacion VARCHAR(100) NULL,
+                usuario_actualizacion VARCHAR(100) NULL,
+                CONSTRAINT fk_citas_medico FOREIGN KEY (id_medico) REFERENCES dbo.tbl_medico(id_medico),
+                CONSTRAINT fk_citas_paciente FOREIGN KEY (id_paciente) REFERENCES dbo.tbl_paciente(id_paciente),
+                CONSTRAINT fk_citas_disponibilidad FOREIGN KEY (id_disponibilidad) REFERENCES dbo.tbl_disponibilidad_medico(id_disponibilidad) ON DELETE SET NULL,
+                CONSTRAINT fk_citas_consulta FOREIGN KEY (id_consulta) REFERENCES dbo.tbl_consulta(id_consulta) ON DELETE SET NULL,
+                CONSTRAINT fk_citas_estado FOREIGN KEY (id_estado) REFERENCES dbo.tbl_estado_cita(id_estado),
+                CONSTRAINT chk_citas_horas CHECK (hora_inicio < hora_fin)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_bloqueo_horarios', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_bloqueo_horarios
+            (
+                id_bloqueo INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_medico INT NOT NULL,
+                fecha_inicio DATE NOT NULL,
+                fecha_fin DATE NOT NULL,
+                tipo_bloqueo VARCHAR(50) NULL,
+                razon_bloqueo VARCHAR(300) NULL,
+                activo BIT NOT NULL CONSTRAINT DF_tbl_bloqueo_horarios_activo DEFAULT (1),
+                fecha_creacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_bloqueo_horarios_fecha DEFAULT (GETDATE()),
+                usuario_creacion VARCHAR(100) NULL,
+                CONSTRAINT fk_bloqueo_medico FOREIGN KEY (id_medico) REFERENCES dbo.tbl_medico(id_medico) ON DELETE CASCADE,
+                CONSTRAINT chk_bloqueo_fechas CHECK (fecha_inicio <= fecha_fin)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_cancelaciones_paciente', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_cancelaciones_paciente
+            (
+                id_cancelacion INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_cita INT NOT NULL,
+                id_paciente INT NOT NULL,
+                fecha_cancelacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_cancelaciones_paciente_fecha DEFAULT (GETDATE()),
+                razon_cancelacion VARCHAR(500) NULL,
+                quien_cancelo VARCHAR(50) NULL,
+                penalizacion_aplicada BIT NOT NULL CONSTRAINT DF_tbl_cancelaciones_paciente_penal DEFAULT (0),
+                dias_espera_proxima_cita INT NULL,
+                usuario_cancelacion VARCHAR(100) NULL,
+                CONSTRAINT fk_cancelaciones_cita FOREIGN KEY (id_cita) REFERENCES dbo.tbl_citas(id_cita) ON DELETE CASCADE,
+                CONSTRAINT fk_cancelaciones_paciente FOREIGN KEY (id_paciente) REFERENCES dbo.tbl_paciente(id_paciente) ON DELETE CASCADE
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_medico_activo' AND object_id = OBJECT_ID('dbo.tbl_medico'))
+            CREATE NONCLUSTERED INDEX idx_medico_activo ON dbo.tbl_medico(activo);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_medico_especialidad' AND object_id = OBJECT_ID('dbo.tbl_medico'))
+            CREATE NONCLUSTERED INDEX idx_medico_especialidad ON dbo.tbl_medico(especialidad);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_disponibilidad_medico' AND object_id = OBJECT_ID('dbo.tbl_disponibilidad_medico'))
+            CREATE NONCLUSTERED INDEX idx_disponibilidad_medico ON dbo.tbl_disponibilidad_medico(id_medico);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_disponibilidad_dia' AND object_id = OBJECT_ID('dbo.tbl_disponibilidad_medico'))
+            CREATE NONCLUSTERED INDEX idx_disponibilidad_dia ON dbo.tbl_disponibilidad_medico(dia_semana);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_citas_medico' AND object_id = OBJECT_ID('dbo.tbl_citas'))
+            CREATE NONCLUSTERED INDEX idx_citas_medico ON dbo.tbl_citas(id_medico);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_citas_paciente' AND object_id = OBJECT_ID('dbo.tbl_citas'))
+            CREATE NONCLUSTERED INDEX idx_citas_paciente ON dbo.tbl_citas(id_paciente);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_citas_fecha' AND object_id = OBJECT_ID('dbo.tbl_citas'))
+            CREATE NONCLUSTERED INDEX idx_citas_fecha ON dbo.tbl_citas(fecha_cita);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_citas_estado' AND object_id = OBJECT_ID('dbo.tbl_citas'))
+            CREATE NONCLUSTERED INDEX idx_citas_estado ON dbo.tbl_citas(id_estado);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_citas_medico_fecha' AND object_id = OBJECT_ID('dbo.tbl_citas'))
+            CREATE NONCLUSTERED INDEX idx_citas_medico_fecha ON dbo.tbl_citas(id_medico, fecha_cita);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_bloqueo_medico' AND object_id = OBJECT_ID('dbo.tbl_bloqueo_horarios'))
+            CREATE NONCLUSTERED INDEX idx_bloqueo_medico ON dbo.tbl_bloqueo_horarios(id_medico);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_bloqueo_fechas' AND object_id = OBJECT_ID('dbo.tbl_bloqueo_horarios'))
+            CREATE NONCLUSTERED INDEX idx_bloqueo_fechas ON dbo.tbl_bloqueo_horarios(fecha_inicio, fecha_fin);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_cancelaciones_paciente' AND object_id = OBJECT_ID('dbo.tbl_cancelaciones_paciente'))
+            CREATE NONCLUSTERED INDEX idx_cancelaciones_paciente ON dbo.tbl_cancelaciones_paciente(id_paciente);
+
+        MERGE dbo.tbl_menu_app AS target
+        USING (VALUES ('Citas y turnos', '/appointments', 'calendar-check', 6, 1)) AS source(nombre, ruta, icono, orden, activo)
+        ON target.ruta = source.ruta
+        WHEN MATCHED THEN
+            UPDATE SET target.nombre = source.nombre, target.icono = source.icono, target.orden = source.orden, target.activo = source.activo
+        WHEN NOT MATCHED THEN
+            INSERT (nombre, ruta, icono, orden, activo) VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
         """);
 }
 
@@ -2445,6 +2971,8 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
     await dbContext.Database.ExecuteSqlRawAsync(
         """
         IF COL_LENGTH('dbo.tbl_producto', 'almacen') IS NULL ALTER TABLE dbo.tbl_producto ADD almacen VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_categoria_producto', 'activo') IS NULL ALTER TABLE dbo.tbl_categoria_producto ADD activo BIT NOT NULL CONSTRAINT DF_tbl_categoria_producto_activo DEFAULT (1);
+        UPDATE dbo.tbl_categoria_producto SET activo = 1 WHERE activo IS NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'pasillo') IS NULL ALTER TABLE dbo.tbl_producto ADD pasillo VARCHAR(10) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'estante') IS NULL ALTER TABLE dbo.tbl_producto ADD estante VARCHAR(10) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'nivel') IS NULL ALTER TABLE dbo.tbl_producto ADD nivel VARCHAR(10) NULL;
@@ -2462,6 +2990,7 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_producto', 'cuenta_contable') IS NULL ALTER TABLE dbo.tbl_producto ADD cuenta_contable VARCHAR(20) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'centro_costo') IS NULL ALTER TABLE dbo.tbl_producto ADD centro_costo VARCHAR(20) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'naturaleza_item') IS NULL ALTER TABLE dbo.tbl_producto ADD naturaleza_item VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'tipo_item') IS NULL ALTER TABLE dbo.tbl_producto ADD tipo_item VARCHAR(50) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'porcentaje_margen') IS NULL ALTER TABLE dbo.tbl_producto ADD porcentaje_margen DECIMAL(5,2) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'descuento_mayorista') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_mayorista DECIMAL(5,2) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'descuento_cliente_fijo') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_cliente_fijo DECIMAL(5,2) NULL;
@@ -2493,6 +3022,56 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_producto', 'usuario_creacion') IS NULL ALTER TABLE dbo.tbl_producto ADD usuario_creacion VARCHAR(100) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'notas_internas') IS NULL ALTER TABLE dbo.tbl_producto ADD notas_internas VARCHAR(MAX) NULL;
 
+        IF OBJECT_ID('dbo.tbl_tipo_item', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_tipo_item
+            (
+                id_tipo_item INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                nombre_tipo VARCHAR(50) NOT NULL UNIQUE,
+                descripcion VARCHAR(255) NULL
+            );
+        END;
+
+        MERGE dbo.tbl_tipo_item AS target
+        USING
+        (
+            VALUES
+                ('Producto', 'Articulos fisicos'),
+                ('Servicio', 'Servicios de la clinica')
+        ) AS source(nombre_tipo, descripcion)
+        ON target.nombre_tipo = source.nombre_tipo
+        WHEN MATCHED THEN
+            UPDATE SET target.descripcion = source.descripcion
+        WHEN NOT MATCHED THEN
+            INSERT (nombre_tipo, descripcion)
+            VALUES (source.nombre_tipo, source.descripcion);
+
+        UPDATE dbo.tbl_producto
+        SET tipo_item = 'Producto'
+        WHERE tipo_item IS NULL OR LTRIM(RTRIM(tipo_item)) = '';
+
+        IF NOT EXISTS
+        (
+            SELECT 1
+            FROM sys.check_constraints
+            WHERE name = 'CK_tipo_item'
+                AND parent_object_id = OBJECT_ID('dbo.tbl_producto')
+        )
+        BEGIN
+            ALTER TABLE dbo.tbl_producto
+            ADD CONSTRAINT CK_tipo_item CHECK (tipo_item IN ('Producto', 'Servicio'));
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_producto_tipo_item' AND object_id = OBJECT_ID('dbo.tbl_producto'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_tbl_producto_tipo_item ON dbo.tbl_producto(tipo_item);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_categoria_producto_activo' AND object_id = OBJECT_ID('dbo.tbl_categoria_producto'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_tbl_categoria_producto_activo ON dbo.tbl_categoria_producto(activo);
+        END;
+
         IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_producto_usuario_actualizacion')
         BEGIN
             ALTER TABLE dbo.tbl_producto
@@ -2505,6 +3084,20 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
             CREATE UNIQUE NONCLUSTERED INDEX UQ_tbl_producto_codigo_barras
             ON dbo.tbl_producto (codigo_barras)
             WHERE codigo_barras IS NOT NULL;
+        END;
+
+        DECLARE @tipoItemDefaultName sysname;
+        SELECT @tipoItemDefaultName = dc.name
+        FROM sys.default_constraints dc
+        INNER JOIN sys.columns c
+            ON c.default_object_id = dc.object_id
+        WHERE dc.parent_object_id = OBJECT_ID('dbo.tbl_producto')
+            AND c.name = 'tipo_item';
+
+        IF @tipoItemDefaultName IS NULL
+        BEGIN
+            ALTER TABLE dbo.tbl_producto
+            ADD CONSTRAINT DF_tbl_producto_tipo_item DEFAULT ('Producto') FOR tipo_item;
         END;
         """);
 }

@@ -1,0 +1,1131 @@
+@page "/doctors"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Medicos</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando medicos...</h1>
+        </div>
+    </section>
+}
+else if (!canViewDoctors)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Gestion de medicos</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Agenda medica</span>
+                <h1>@HeroTitle</h1>
+                <p>@HeroDescription</p>
+            </div>
+
+            <div class="workspace-actions">
+                @if (CanCreateDoctorProfile)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNewDoctor">
+                        <i class="bi bi-person-badge-fill" style="margin-right: 6px;"></i> Nueva ficha medica
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (selfManagedMode && CurrentSelfUser is not null && CurrentSelfUser.tbl_medico is null)
+        {
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Perfil pendiente</h2>
+                    <span>Necesario para citas</span>
+                </div>
+
+                <p>
+                    Tu usuario ya tiene rol medico, pero aun no tiene ficha profesional completada. Mientras siga pendiente,
+                    los pacientes no podran encontrarte para agendar citas.
+                </p>
+
+                <div class="workspace-actions">
+                    @if (CanCreateDoctorProfile)
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="PrepareNewDoctor">Completar mi ficha</button>
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Resumen</h2>
+                <span>@FilteredUsers.Count visibles</span>
+            </div>
+
+            <div class="user-summary-grid">
+                <div class="user-summary-card">
+                    <span class="eyebrow">Medicos</span>
+                    <strong>@medicalUsers.Count</strong>
+                    <p>Usuarios con rol medico o ficha ya creada.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Listos para agenda</span>
+                    <strong>@medicalUsers.Count(IsAvailableForAppointments)</strong>
+                    <p>Fichas activas visibles para que el paciente agende.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Pendientes</span>
+                    <strong>@medicalUsers.Count(u => u.tbl_medico is null)</strong>
+                    <p>Usuarios con rol medico aun sin completar ficha profesional.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredUsers.Count resultados</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="doctorSearch">Buscador</label>
+                    <input id="doctorSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, especialidad o licencia" />
+                </div>
+
+                <div>
+                    <label class="form-label" for="doctorProfileFilter">Ficha</label>
+                    <select id="doctorProfileFilter" class="form-select" @bind="selectedProfileFilter">
+                        <option value="all">Todas</option>
+                        <option value="configured">Con ficha</option>
+                        <option value="pending">Pendientes</option>
+                        <option value="available">Disponibles para agenda</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="doctorAccessFilter">Usuario</label>
+                    <select id="doctorAccessFilter" class="form-select" @bind="selectedAccessFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="doctorRecordFilter">Estado de ficha</label>
+                    <select id="doctorRecordFilter" class="form-select" @bind="selectedRecordFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Fichas activas</option>
+                        <option value="inactive">Fichas inactivas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Listado de medicos</h2>
+                <span>@FilteredUsers.Count registrados</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Nombre</th>
+                            <th>Rol</th>
+                            <th>Especialidad</th>
+                            <th>Licencia</th>
+                            <th>Estado de ficha</th>
+                            <th>Agenda</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredUsers.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No se encontraron medicos con los filtros seleccionados.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var user in FilteredUsers)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong style="color: var(--color-sage);">@user.usuario</strong>
+                                    </td>
+                                    <td>
+                                        <strong style="color: var(--color-ink);">@GetFullName(user)</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo" : user.email)</div>
+                                    </td>
+                                    <td>@(user.id_rolNavigation?.nombre ?? "Sin rol")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(user.tbl_medico?.especialidad) ? "-" : user.tbl_medico!.especialidad)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(user.tbl_medico?.numero_licencia) ? "-" : user.tbl_medico!.numero_licencia)</td>
+                                    <td>
+                                        @if (user.tbl_medico is null)
+                                        {
+                                            <span class="badge" style="background: rgba(254, 188, 100, 0.15) !important; color: #e09b3c !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Pendiente</span>
+                                        }
+                                        else if (user.tbl_medico.activo == true)
+                                        {
+                                            <span class="badge" style="background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Activa</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Inactiva</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (IsAvailableForAppointments(user))
+                                        {
+                                            <span class="badge" style="background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Visible</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">No visible</span>
+                                        }
+                                    </td>
+                                    <td style="text-align: right; padding-right: 1.2rem;">
+                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            @if (user.tbl_medico is null)
+                                            {
+                                                @if (permissions.CanCreate && CanManageUser(user))
+                                                {
+                                                    <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => PrepareEditDoctor(user)">
+                                                        Completar ficha
+                                                    </button>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                @if (permissions.CanEdit && CanManageUser(user))
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditDoctor(user)">
+                                                        <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
+                                                    </button>
+                                                }
+                                            }
+
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditDoctor(user)">
+                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoria
+                                            </button>
+
+                                            @if (CanToggleDoctorProfile(user))
+                                            {
+                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(user)">
+                                                    @(user.tbl_medico!.activo == true ? "Inactivar" : "Activar")
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+}
+
+@if (showFormModal && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card" style="max-width: 960px;">
+            <header class="custom-modal-header rose-header">
+                <h2>@EditorTitle</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">x</button>
+            </header>
+            <div class="custom-modal-body">
+                <div style="margin-bottom: 1rem; padding: 0.9rem 1rem; border-radius: 0.9rem; background: rgba(93, 161, 129, 0.08); border: 1px solid rgba(93, 161, 129, 0.14);">
+                    <strong style="display: block; color: var(--color-ink);">@editor.LinkedUserFullName</strong>
+                    <span style="display: block; font-size: 0.84rem; color: var(--color-taupe);">Usuario: @editor.LinkedUserName | Rol: @editor.LinkedRoleName</span>
+                </div>
+
+                @if (isCreatingNewDoctor && !selfManagedMode)
+                {
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label" for="doctorUser">Usuario con rol medico</label>
+                        <select id="doctorUser" class="form-select" value="@editor.IdUsuario" @onchange="OnEditorUserChanged" disabled="@(!permissions.CanCreate)">
+                            <option value="0">Selecciona</option>
+                            @foreach (var user in eligibleUsers.OrderBy(u => u.apellidos).ThenBy(u => u.nombres))
+                            {
+                                <option value="@user.id_usuario">@($"{GetFullName(user)} - {user.usuario}")</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="doctorLicense">Numero de licencia</label>
+                        <input id="doctorLicense" class="form-control" @bind="editor.NumeroLicencia" maxlength="50" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorSpecialty">Especialidad</label>
+                        <input id="doctorSpecialty" class="form-control" @bind="editor.Especialidad" maxlength="100" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorProfessionalId">Cedula profesional</label>
+                        <input id="doctorProfessionalId" class="form-control" @bind="editor.CedulaProfesional" maxlength="50" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorOfficePhone">Telefono consultorio</label>
+                        <input id="doctorOfficePhone" class="form-control" @bind="editor.TelefonoConsultorio" maxlength="20" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorSchool">Institucion de egreso</label>
+                        <input id="doctorSchool" class="form-control" @bind="editor.InstitucionEgreso" maxlength="200" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorGraduationYear">Año de egreso</label>
+                        <input id="doctorGraduationYear" type="number" class="form-control" @bind="editor.AnioEgreso" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorLanguages">Idiomas</label>
+                        <input id="doctorLanguages" class="form-control" @bind="editor.Idiomas" maxlength="200" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorDuration">Duracion consulta (min)</label>
+                        <input id="doctorDuration" type="number" class="form-control" @bind="editor.DuracionConsultaMinutos" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorPrice">Precio base</label>
+                        <input id="doctorPrice" type="number" step="0.01" class="form-control" @bind="editor.PrecioConsultaBase" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="doctorDiscount">Descuento (%)</label>
+                        <input id="doctorDiscount" type="number" step="0.01" class="form-control" @bind="editor.DescuentoPorcentaje" readonly="@(!CanModifyEditor)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label d-block">Acepta citas telefónicas</label>
+                        <div class="form-check form-switch">
+                            <input id="doctorPhoneAppointments" class="form-check-input" type="checkbox" @bind="editor.AceptarCitasTelefonicas" disabled="@(!CanModifyEditor)" />
+                            <label class="form-check-label" for="doctorPhoneAppointments">@((editor.AceptarCitasTelefonicas ? "Sí" : "No"))</label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label d-block">Acepta citas presenciales</label>
+                        <div class="form-check form-switch">
+                            <input id="doctorInPersonAppointments" class="form-check-input" type="checkbox" @bind="editor.AceptarCitasPresenciales" disabled="@(!CanModifyEditor)" />
+                            <label class="form-check-label" for="doctorInPersonAppointments">@((editor.AceptarCitasPresenciales ? "Sí" : "No"))</label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label d-block">Estado de ficha</label>
+                        <div class="form-check form-switch">
+                            <input id="doctorProfileStatus" class="form-check-input" type="checkbox" @bind="editor.Activo" disabled="@(!CanModifyEditor || selfManagedMode)" />
+                            <label class="form-check-label" for="doctorProfileStatus">@((editor.Activo ? "Activa" : "Inactiva"))</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <label class="form-label" for="doctorBio">Biografia</label>
+                    <textarea id="doctorBio" class="form-control" rows="3" @bind="editor.Biografia" readonly="@(!CanModifyEditor)"></textarea>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <label class="form-label" for="doctorCerts">Certificaciones</label>
+                    <textarea id="doctorCerts" class="form-control" rows="3" @bind="editor.Certificaciones" readonly="@(!CanModifyEditor)"></textarea>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <label class="form-label" for="doctorObservations">Observaciones</label>
+                    <textarea id="doctorObservations" class="form-control" rows="3" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cancelar</button>
+                @if (CanModifyEditor)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveDoctorAsync">Guardar cambios</button>
+                }
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showAuditModal && selectedUser is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card audit-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Historial de auditoria</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseAuditModal">x</button>
+            </header>
+            <div class="custom-modal-body">
+                <div style="margin-bottom: 1rem;">
+                    <strong style="font-size: 1.1rem; color: var(--color-ink);">@GetFullName(selectedUser)</strong>
+                    <span style="display: block; font-size: 0.85rem; color: var(--color-taupe);">@selectedUser.usuario</span>
+                </div>
+
+                @if (selectedUser.tbl_medico is null)
+                {
+                    <p>Este usuario aun no tiene ficha medica creada.</p>
+                }
+                else if (auditEntries.Count == 0)
+                {
+                    <p>No hay eventos registrados para este medico.</p>
+                }
+                else
+                {
+                    <div class="management-list">
+                        @foreach (var auditEntry in auditEntries)
+                        {
+                            <article class="management-list-item" style="border: 1px solid rgba(127, 105, 81, 0.08); border-radius: 0.8rem; padding: 0.95rem; margin-bottom: 0.6rem; background: #faf8f4;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                                    <strong style="color: var(--color-sage);">@auditEntry.accion</strong>
+                                    <span style="font-size: 0.78rem; color: var(--color-taupe);">@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                </div>
+                                <div style="font-size: 0.82rem; color: var(--color-ink); margin-bottom: 0.35rem;">@auditEntry.detalle</div>
+                                <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-taupe); opacity: 0.8;">@GetAuditActorLabel(auditEntry)</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="CloseAuditModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showAlertModal)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
+                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+            </header>
+            <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
+                    <i class="bi @(alertIsError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+                </div>
+                <p style="font-size: 1rem; color: var(--color-ink); line-height: 1.5; margin: 0;">@alertMessage</p>
+            </div>
+            <footer class="custom-modal-footer" style="justify-content: center;">
+                <button type="button" class="btn btn-primary" style="min-width: 120px;" @onclick="CloseAlertModal">Aceptar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<tbl_usuario> medicalUsers = [];
+    private readonly List<tbl_usuario> eligibleUsers = [];
+    private readonly List<tbl_log_auditoria> auditEntries = [];
+    private ModulePermissions permissions = new();
+    private DoctorEditorModel? editor;
+    private tbl_usuario? selectedUser;
+    private bool isLoading = true;
+    private bool canViewDoctors;
+    private bool isCreatingNewDoctor;
+    private bool isAdmin;
+    private bool isMedicalRoleUser;
+    private bool showFormModal;
+    private bool showAuditModal;
+    private bool showAlertModal;
+    private int currentUserId;
+    private int currentRoleId;
+    private string currentUserName = string.Empty;
+    private string currentRoleName = string.Empty;
+    private string searchTerm = string.Empty;
+    private string selectedProfileFilter = "all";
+    private string selectedAccessFilter = "all";
+    private string selectedRecordFilter = "all";
+    private string alertMessage = string.Empty;
+    private bool alertIsError;
+    private string? errorMessage;
+
+    private bool selfManagedMode => isMedicalRoleUser && !isAdmin;
+    private bool CanCreateDoctorProfile => permissions.CanCreate && eligibleUsers.Any();
+    private bool CanModifyEditor => editor is not null && (isCreatingNewDoctor ? permissions.CanCreate : permissions.CanEdit);
+    private string HeroTitle => selfManagedMode ? "Completa y mantiene tu ficha medica" : "Gestion de medicos";
+    private string HeroDescription => selfManagedMode
+        ? "Desde aqui completas tu perfil profesional para quedar visible en citas, horarios y agenda del paciente."
+        : "Administra medicos, valida que cada usuario con rol medico tenga su ficha profesional y controla si queda visible para agendamiento.";
+    private string EditorTitle => isCreatingNewDoctor ? "Nueva ficha medica" : "Detalle del medico";
+    private tbl_usuario? CurrentSelfUser => medicalUsers.FirstOrDefault(u => u.id_usuario == currentUserId);
+
+    private List<tbl_usuario> FilteredUsers => medicalUsers
+        .Where(MatchesFilters)
+        .OrderBy(u => u.apellidos)
+        .ThenBy(u => u.nombres)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveUserId = null)
+    {
+        isLoading = true;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        currentRoleName = authState.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+        currentUserName = authState.User.Identity?.Name ?? (currentUserId > 0 ? currentUserId.ToString() : "Sistema");
+        isAdmin = currentRoleId == 1 || currentRoleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
+        isMedicalRoleUser = IsMedicalRoleName(currentRoleName);
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewDoctors = permissions.CanView;
+
+        medicalUsers.Clear();
+        eligibleUsers.Clear();
+        auditEntries.Clear();
+
+        if (!canViewDoctors)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var loadedUsers = await dbContext.tbl_usuarios
+            .AsNoTracking()
+            .Include(u => u.id_rolNavigation)
+            .Include(u => u.tbl_medico)
+            .ToListAsync();
+
+        var filteredUsers = loadedUsers
+            .Where(u => u.tbl_medico is not null || IsMedicalRoleName(u.id_rolNavigation?.nombre))
+            .Where(u => !selfManagedMode || u.id_usuario == currentUserId)
+            .ToList();
+
+        medicalUsers.AddRange(filteredUsers);
+        eligibleUsers.AddRange(filteredUsers.Where(u => u.tbl_medico is null && IsMedicalRoleName(u.id_rolNavigation?.nombre)));
+
+        if (preserveUserId.HasValue)
+        {
+            selectedUser = medicalUsers.FirstOrDefault(u => u.id_usuario == preserveUserId.Value);
+            editor = BuildEditor(selectedUser);
+        }
+
+        isLoading = false;
+    }
+
+    private void PrepareNewDoctor()
+    {
+        errorMessage = null;
+        isCreatingNewDoctor = true;
+        selectedUser = null;
+        auditEntries.Clear();
+
+        var initialUser = selfManagedMode
+            ? eligibleUsers.FirstOrDefault(u => u.id_usuario == currentUserId)
+            : eligibleUsers.FirstOrDefault();
+
+        if (initialUser is null)
+        {
+            ShowAlert("No hay usuarios con rol medico pendientes de completar ficha.", true);
+            return;
+        }
+
+        editor = BuildNewEditor(initialUser);
+        showFormModal = true;
+    }
+
+    private void PrepareEditDoctor(tbl_usuario user)
+    {
+        errorMessage = null;
+
+        if (!CanManageUser(user))
+        {
+            ShowAlert("No tienes permiso para gestionar este medico.", true);
+            return;
+        }
+
+        selectedUser = user;
+        isCreatingNewDoctor = user.tbl_medico is null;
+        editor = user.tbl_medico is null ? BuildNewEditor(user) : BuildEditor(user);
+        showFormModal = true;
+    }
+
+    private async Task PrepareAuditDoctor(tbl_usuario user)
+    {
+        selectedUser = user;
+        auditEntries.Clear();
+
+        if (user.tbl_medico is not null)
+        {
+            await LoadAuditEntriesAsync(user.tbl_medico.id_medico);
+        }
+
+        showAuditModal = true;
+    }
+
+    private async Task SaveDoctorAsync()
+    {
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            ShowAlert(errorMessage ?? "Corrige los datos del formulario.", true);
+            return;
+        }
+
+        var currentEditor = editor!;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userEntity = await dbContext.tbl_usuarios
+            .Include(u => u.id_rolNavigation)
+            .Include(u => u.tbl_medico)
+            .FirstOrDefaultAsync(u => u.id_usuario == currentEditor.IdUsuario);
+
+        if (userEntity is null)
+        {
+            ShowAlert("No se encontro el usuario seleccionado.", true);
+            return;
+        }
+
+        if (!CanManageUser(userEntity))
+        {
+            ShowAlert("No tienes permiso para gestionar este medico.", true);
+            return;
+        }
+
+        if (!IsMedicalRoleName(userEntity.id_rolNavigation?.nombre))
+        {
+            ShowAlert("El usuario seleccionado no tiene un rol medico asignado.", true);
+            return;
+        }
+
+        if (await dbContext.tbl_medico.AnyAsync(m =>
+                m.id_medico != currentEditor.IdMedico &&
+                m.numero_licencia.ToLower() == currentEditor.NumeroLicencia.Trim().ToLower()))
+        {
+            ShowAlert("Ya existe un medico registrado con ese numero de licencia.", true);
+            return;
+        }
+
+        var now = DateTime.Now;
+        tbl_medico doctorEntity;
+
+        if (isCreatingNewDoctor)
+        {
+            if (!permissions.CanCreate)
+            {
+                ShowAlert("Tu rol no tiene permiso para crear fichas medicas.", true);
+                return;
+            }
+
+            if (userEntity.tbl_medico is not null)
+            {
+                ShowAlert("El usuario ya tiene una ficha medica asociada.", true);
+                return;
+            }
+
+            doctorEntity = new tbl_medico
+            {
+                id_usuario = userEntity.id_usuario,
+                fecha_creacion = now,
+                usuario_creacion = currentUserName
+            };
+
+            dbContext.tbl_medico.Add(doctorEntity);
+        }
+        else
+        {
+            if (!permissions.CanEdit)
+            {
+                ShowAlert("Tu rol no tiene permiso para editar fichas medicas.", true);
+                return;
+            }
+
+            doctorEntity = userEntity.tbl_medico
+                ?? throw new InvalidOperationException("No se encontro la ficha medica seleccionada.");
+        }
+
+        doctorEntity.numero_licencia = currentEditor.NumeroLicencia.Trim();
+        doctorEntity.especialidad = NormalizeOptional(currentEditor.Especialidad);
+        doctorEntity.cedula_profesional = NormalizeOptional(currentEditor.CedulaProfesional);
+        doctorEntity.institucion_egreso = NormalizeOptional(currentEditor.InstitucionEgreso);
+        doctorEntity.anio_egreso = ParseOptionalInt(currentEditor.AnioEgreso);
+        doctorEntity.telefono_consultorio = NormalizeOptional(currentEditor.TelefonoConsultorio);
+        doctorEntity.biografia = NormalizeOptional(currentEditor.Biografia);
+        doctorEntity.certificaciones = NormalizeOptional(currentEditor.Certificaciones);
+        doctorEntity.idiomas = NormalizeOptional(currentEditor.Idiomas);
+        doctorEntity.precio_consulta_base = ParseOptionalDecimal(currentEditor.PrecioConsultaBase);
+        doctorEntity.descuento_porcentaje = ParseOptionalDecimal(currentEditor.DescuentoPorcentaje);
+        doctorEntity.aceptar_citas_telefonicas = currentEditor.AceptarCitasTelefonicas;
+        doctorEntity.aceptar_citas_presenciales = currentEditor.AceptarCitasPresenciales;
+        doctorEntity.duracion_consulta_minutos = ParseOptionalInt(currentEditor.DuracionConsultaMinutos);
+        doctorEntity.observaciones = NormalizeOptional(currentEditor.Observaciones);
+        doctorEntity.activo = selfManagedMode ? true : currentEditor.Activo;
+        doctorEntity.fecha_actualizacion = now;
+        doctorEntity.usuario_actualizacion = currentUserName;
+
+        await dbContext.SaveChangesAsync();
+
+        WriteAudit(
+            dbContext,
+            isCreatingNewDoctor ? "Crear ficha medica" : "Editar ficha medica",
+            $"MedicoId={doctorEntity.id_medico}; UsuarioId={userEntity.id_usuario}; Licencia={doctorEntity.numero_licencia}; Especialidad={doctorEntity.especialidad ?? "Sin especialidad"}; Activo={(doctorEntity.activo == true ? "Si" : "No")}");
+
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert(
+            isCreatingNewDoctor ? "La ficha medica se creo correctamente." : "La ficha medica se guardo correctamente.",
+            false);
+
+        isCreatingNewDoctor = false;
+        showFormModal = false;
+        await LoadAsync(userEntity.id_usuario);
+    }
+
+    private async Task ToggleActiveAsync(tbl_usuario user)
+    {
+        if (!CanToggleDoctorProfile(user))
+        {
+            ShowAlert("No tienes permiso para activar o inactivar esta ficha medica.", true);
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userEntity = await dbContext.tbl_usuarios
+            .Include(u => u.tbl_medico)
+            .FirstOrDefaultAsync(u => u.id_usuario == user.id_usuario);
+
+        if (userEntity?.tbl_medico is null)
+        {
+            ShowAlert("No se encontro la ficha medica seleccionada.", true);
+            return;
+        }
+
+        userEntity.tbl_medico.activo = !(userEntity.tbl_medico.activo == true);
+        userEntity.tbl_medico.fecha_actualizacion = DateTime.Now;
+        userEntity.tbl_medico.usuario_actualizacion = currentUserName;
+
+        WriteAudit(
+            dbContext,
+            userEntity.tbl_medico.activo == true ? "Activar ficha medica" : "Inactivar ficha medica",
+            $"MedicoId={userEntity.tbl_medico.id_medico}; UsuarioId={userEntity.id_usuario}; Activo={(userEntity.tbl_medico.activo == true ? "Si" : "No")}");
+
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert(
+            userEntity.tbl_medico.activo == true ? "La ficha medica fue activada correctamente." : "La ficha medica fue inactivada correctamente.",
+            false);
+
+        await LoadAsync(userEntity.id_usuario);
+    }
+
+    private async Task LoadAuditEntriesAsync(int doctorId)
+    {
+        var token = $"MedicoId={doctorId};";
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entries = await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(a => a.id_usuarioNavigation)
+            .Where(a => a.modulo == "Medicos" && a.detalle != null && a.detalle.Contains(token))
+            .OrderByDescending(a => a.fecha)
+            .Take(20)
+            .ToListAsync();
+
+        auditEntries.Clear();
+        auditEntries.AddRange(entries);
+    }
+
+    private void OnEditorUserChanged(ChangeEventArgs args)
+    {
+        if (editor is null || !int.TryParse(args.Value?.ToString(), out var userId))
+        {
+            return;
+        }
+
+        var selected = eligibleUsers.FirstOrDefault(u => u.id_usuario == userId);
+        if (selected is null)
+        {
+            return;
+        }
+
+        editor.IdUsuario = selected.id_usuario;
+        editor.LinkedUserName = selected.usuario;
+        editor.LinkedUserFullName = GetFullName(selected);
+        editor.LinkedRoleName = selected.id_rolNavigation?.nombre ?? "Sin rol";
+    }
+
+    private void CloseFormModal()
+    {
+        showFormModal = false;
+        errorMessage = null;
+    }
+
+    private void CloseAuditModal()
+    {
+        showAuditModal = false;
+    }
+
+    private void ShowAlert(string message, bool isError)
+    {
+        alertMessage = message;
+        alertIsError = isError;
+        showAlertModal = true;
+    }
+
+    private void CloseAlertModal()
+    {
+        showAlertModal = false;
+        alertMessage = string.Empty;
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedProfileFilter = "all";
+        selectedAccessFilter = "all";
+        selectedRecordFilter = "all";
+    }
+
+    private bool MatchesFilters(tbl_usuario user)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var normalizedSearch = searchTerm.Trim().ToLowerInvariant();
+            var fullName = GetFullName(user).ToLowerInvariant();
+            var specialty = user.tbl_medico?.especialidad?.ToLowerInvariant() ?? string.Empty;
+            var license = user.tbl_medico?.numero_licencia?.ToLowerInvariant() ?? string.Empty;
+
+            if (!user.usuario.ToLowerInvariant().Contains(normalizedSearch) &&
+                !fullName.Contains(normalizedSearch) &&
+                !specialty.Contains(normalizedSearch) &&
+                !license.Contains(normalizedSearch))
+            {
+                return false;
+            }
+        }
+
+        if (selectedProfileFilter == "configured" && user.tbl_medico is null)
+        {
+            return false;
+        }
+
+        if (selectedProfileFilter == "pending" && user.tbl_medico is not null)
+        {
+            return false;
+        }
+
+        if (selectedProfileFilter == "available" && !IsAvailableForAppointments(user))
+        {
+            return false;
+        }
+
+        if (selectedAccessFilter == "active" && user.activo != true)
+        {
+            return false;
+        }
+
+        if (selectedAccessFilter == "inactive" && user.activo == true)
+        {
+            return false;
+        }
+
+        if (selectedRecordFilter == "active" && user.tbl_medico?.activo != true)
+        {
+            return false;
+        }
+
+        if (selectedRecordFilter == "inactive" && user.tbl_medico is not null && user.tbl_medico.activo == true)
+        {
+            return false;
+        }
+
+        if (selectedRecordFilter == "inactive" && user.tbl_medico is null)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidateEditor()
+    {
+        if (editor is null)
+        {
+            errorMessage = "No hay un medico seleccionado.";
+            return false;
+        }
+
+        editor.NumeroLicencia = editor.NumeroLicencia.Trim();
+        editor.Especialidad = editor.Especialidad.Trim();
+        editor.CedulaProfesional = editor.CedulaProfesional.Trim();
+        editor.InstitucionEgreso = editor.InstitucionEgreso.Trim();
+        editor.TelefonoConsultorio = editor.TelefonoConsultorio.Trim();
+        editor.Idiomas = editor.Idiomas.Trim();
+        editor.Biografia = editor.Biografia.Trim();
+        editor.Certificaciones = editor.Certificaciones.Trim();
+        editor.Observaciones = editor.Observaciones.Trim();
+
+        if (editor.IdUsuario <= 0)
+        {
+            errorMessage = "Selecciona un usuario con rol medico.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.NumeroLicencia))
+        {
+            errorMessage = "El numero de licencia es obligatorio.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.Especialidad))
+        {
+            errorMessage = "La especialidad es obligatoria para mostrar correctamente al medico en agenda.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.AnioEgreso))
+        {
+            var currentYear = DateTime.Today.Year + 1;
+            if (!int.TryParse(editor.AnioEgreso, out var graduationYear) || graduationYear < 1900 || graduationYear > currentYear)
+            {
+                errorMessage = "El anio de egreso no es valido.";
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.DuracionConsultaMinutos))
+        {
+            if (!int.TryParse(editor.DuracionConsultaMinutos, out var duration) || duration < 10 || duration > 480)
+            {
+                errorMessage = "La duracion de consulta debe estar entre 10 y 480 minutos.";
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.PrecioConsultaBase))
+        {
+            if (!decimal.TryParse(editor.PrecioConsultaBase, out var basePrice) || basePrice < 0)
+            {
+                errorMessage = "El precio base no es valido.";
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.DescuentoPorcentaje))
+        {
+            if (!decimal.TryParse(editor.DescuentoPorcentaje, out var discount) || discount < 0 || discount > 100)
+            {
+                errorMessage = "El descuento debe estar entre 0 y 100.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctors"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private bool CanManageUser(tbl_usuario user)
+    {
+        return !selfManagedMode || user.id_usuario == currentUserId;
+    }
+
+    private bool CanToggleDoctorProfile(tbl_usuario user)
+    {
+        return isAdmin && permissions.CanDelete && user.tbl_medico is not null;
+    }
+
+    private bool IsAvailableForAppointments(tbl_usuario user)
+    {
+        return user.activo == true && user.tbl_medico?.activo == true;
+    }
+
+    private static bool IsMedicalRoleName(string? roleName)
+    {
+        return !string.IsNullOrWhiteSpace(roleName) &&
+               (roleName.Contains("doctor", StringComparison.OrdinalIgnoreCase) ||
+                roleName.Contains("medic", StringComparison.OrdinalIgnoreCase) ||
+                roleName.Contains("optomet", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static DoctorEditorModel BuildNewEditor(tbl_usuario user)
+    {
+        return new DoctorEditorModel
+        {
+            IdUsuario = user.id_usuario,
+            LinkedUserName = user.usuario,
+            LinkedUserFullName = GetFullName(user),
+            LinkedRoleName = user.id_rolNavigation?.nombre ?? "Sin rol",
+            AceptarCitasTelefonicas = true,
+            AceptarCitasPresenciales = true,
+            DuracionConsultaMinutos = "30",
+            Activo = true
+        };
+    }
+
+    private static DoctorEditorModel? BuildEditor(tbl_usuario? user)
+    {
+        if (user?.tbl_medico is null)
+        {
+            return user is null ? null : BuildNewEditor(user);
+        }
+
+        return new DoctorEditorModel
+        {
+            IdMedico = user.tbl_medico.id_medico,
+            IdUsuario = user.id_usuario,
+            LinkedUserName = user.usuario,
+            LinkedUserFullName = GetFullName(user),
+            LinkedRoleName = user.id_rolNavigation?.nombre ?? "Sin rol",
+            NumeroLicencia = user.tbl_medico.numero_licencia,
+            Especialidad = user.tbl_medico.especialidad ?? string.Empty,
+            CedulaProfesional = user.tbl_medico.cedula_profesional ?? string.Empty,
+            InstitucionEgreso = user.tbl_medico.institucion_egreso ?? string.Empty,
+            AnioEgreso = user.tbl_medico.anio_egreso?.ToString() ?? string.Empty,
+            TelefonoConsultorio = user.tbl_medico.telefono_consultorio ?? string.Empty,
+            Biografia = user.tbl_medico.biografia ?? string.Empty,
+            Certificaciones = user.tbl_medico.certificaciones ?? string.Empty,
+            Idiomas = user.tbl_medico.idiomas ?? string.Empty,
+            PrecioConsultaBase = user.tbl_medico.precio_consulta_base?.ToString("0.##") ?? string.Empty,
+            DescuentoPorcentaje = user.tbl_medico.descuento_porcentaje?.ToString("0.##") ?? string.Empty,
+            AceptarCitasTelefonicas = user.tbl_medico.aceptar_citas_telefonicas != false,
+            AceptarCitasPresenciales = user.tbl_medico.aceptar_citas_presenciales != false,
+            DuracionConsultaMinutos = user.tbl_medico.duracion_consulta_minutos?.ToString() ?? "30",
+            Observaciones = user.tbl_medico.observaciones ?? string.Empty,
+            Activo = user.tbl_medico.activo != false
+        };
+    }
+
+    private static string GetFullName(tbl_usuario user)
+    {
+        return $"{user.nombres} {user.apellidos}".Trim();
+    }
+
+    private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)
+    {
+        return auditEntry.id_usuarioNavigation is null
+            ? "Responsable: Sistema"
+            : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static int? ParseOptionalInt(string? value)
+    {
+        return int.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private static decimal? ParseOptionalDecimal(string? value)
+    {
+        return decimal.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Medicos",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class DoctorEditorModel
+    {
+        public int IdMedico { get; set; }
+        public int IdUsuario { get; set; }
+        public string LinkedUserName { get; set; } = string.Empty;
+        public string LinkedUserFullName { get; set; } = string.Empty;
+        public string LinkedRoleName { get; set; } = string.Empty;
+        public string NumeroLicencia { get; set; } = string.Empty;
+        public string Especialidad { get; set; } = string.Empty;
+        public string CedulaProfesional { get; set; } = string.Empty;
+        public string InstitucionEgreso { get; set; } = string.Empty;
+        public string AnioEgreso { get; set; } = string.Empty;
+        public string TelefonoConsultorio { get; set; } = string.Empty;
+        public string Biografia { get; set; } = string.Empty;
+        public string Certificaciones { get; set; } = string.Empty;
+        public string Idiomas { get; set; } = string.Empty;
+        public string PrecioConsultaBase { get; set; } = string.Empty;
+        public string DescuentoPorcentaje { get; set; } = string.Empty;
+        public bool AceptarCitasTelefonicas { get; set; } = true;
+        public bool AceptarCitasPresenciales { get; set; } = true;
+        public string DuracionConsultaMinutos { get; set; } = "30";
+        public string Observaciones { get; set; } = string.Empty;
+        public bool Activo { get; set; } = true;
+    }
+}

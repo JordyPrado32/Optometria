@@ -1,0 +1,825 @@
+@page "/appointment-availability"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Disponibilidad medica</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando disponibilidad medica...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Disponibilidad medica</h1>
+            <p>Tu rol no tiene permiso para entrar a este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Agenda operativa</span>
+                <h1>@HeroTitle</h1>
+                <p>@HeroDescription</p>
+            </div>
+
+            <div class="workspace-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportAvailability">Exportar CSV</button>
+                @if (CanManageAvailability)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="PrepareNewAvailability">Nueva disponibilidad</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewBlock">Nuevo bloqueo</button>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        @if (isAdmin)
+        {
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Medico en contexto</h2>
+                    <span>@(SelectedDoctor is null ? "Sin seleccion" : "Agenda activa")</span>
+                </div>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="availabilityDoctorSelector">Medico</label>
+                        <select id="availabilityDoctorSelector" class="form-select" value="@availabilityDoctorId" @onchange="OnAvailabilityDoctorChanged">
+                            @foreach (var doctor in doctors)
+                            {
+                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Especialidad</label>
+                        <input class="form-control" value="@(SelectedDoctor?.especialidad ?? "Sin especialidad registrada")" readonly />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Licencia</label>
+                        <input class="form-control" value="@(SelectedDoctor?.numero_licencia ?? "Sin licencia")" readonly />
+                    </div>
+                </div>
+            </section>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>@FilteredAvailabilityRows.Count disponibilidades | @FilteredBlocks.Count bloqueos</span>
+            </div>
+
+            <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
+                Filtra solo lo que ya esta cargado para el medico activo. El cambio de medico se hace aparte para no mezclar contexto con filtros.
+            </p>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="dayFilter">Dia</label>
+                    <select id="dayFilter" class="form-select" @bind="selectedDayFilter">
+                        <option value="0">Todos</option>
+                        @foreach (var option in dayOptions)
+                        {
+                            <option value="@option.Value">@option.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="blockTypeFilter">Tipo de bloqueo</label>
+                    <select id="blockTypeFilter" class="form-select" @bind="selectedBlockTypeFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in blockTypeOptions)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+
+            @if (!doctors.Any())
+            {
+                <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
+                    No hay medicos disponibles para gestionar disponibilidad.
+                </div>
+            }
+        </section>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Panel operativo</h2>
+                <span>Edicion y consulta separadas</span>
+            </div>
+
+            <div class="user-summary-grid" style="margin-bottom: 1.25rem;">
+                <div class="user-summary-card">
+                    <span class="eyebrow">Disponibilidad</span>
+                    <strong>@FilteredAvailabilityRows.Count</strong>
+                    <p>Bloques activos de horario para el medico en contexto.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Bloqueos</span>
+                    <strong>@FilteredBlocks.Count</strong>
+                    <p>Ausencias y excepciones registradas con los filtros actuales.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Contexto</span>
+                    <strong>@(SelectedDoctor is null ? "Sin medico" : GetDoctorShortName(SelectedDoctor))</strong>
+                    <p>@(SelectedDoctor?.especialidad ?? "Selecciona o verifica el medico activo para trabajar con claridad.")</p>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.35rem;">
+                <section style="display: grid; gap: 1rem; align-content: start;">
+                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(93, 161, 129, 0.16); background: rgba(93, 161, 129, 0.05);">
+                        <div class="management-card-header" style="margin-bottom: 0.9rem;">
+                            <h2>Editor de disponibilidad</h2>
+                            <span>@(availabilityEditor.IdDisponibilidad > 0 ? "Edicion activa" : "Nuevo registro")</span>
+                        </div>
+
+                        <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
+                            Define la jornada semanal, descanso y observaciones antes de guardar.
+                        </p>
+
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label" for="availabilityDay">Dia</label>
+                                <select id="availabilityDay" class="form-select" @bind="availabilityEditor.DayOfWeek" disabled="@(!CanManageAvailability)">
+                                    @foreach (var option in dayOptions)
+                                    {
+                                        <option value="@option.Value">@option.Label</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="availabilityStart">Hora inicio</label>
+                                <input id="availabilityStart" type="time" class="form-control" value="@availabilityEditor.StartTime" @onchange="OnAvailabilityStartChanged" readonly="@(!CanManageAvailability)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="availabilityEnd">Hora fin</label>
+                                <input id="availabilityEnd" type="time" class="form-control" value="@availabilityEditor.EndTime" @onchange="OnAvailabilityEndChanged" readonly="@(!CanManageAvailability)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="availabilityBreakStart">Descanso inicio</label>
+                                <input id="availabilityBreakStart" type="time" class="form-control" value="@availabilityEditor.BreakStart" @onchange="OnAvailabilityBreakStartChanged" readonly="@(!CanManageAvailability)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="availabilityBreakEnd">Descanso fin</label>
+                                <input id="availabilityBreakEnd" type="time" class="form-control" value="@availabilityEditor.BreakEnd" @onchange="OnAvailabilityBreakEndChanged" readonly="@(!CanManageAvailability)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="availabilityNotes">Observaciones</label>
+                                <input id="availabilityNotes" class="form-control" @bind="availabilityEditor.Observaciones" maxlength="500" readonly="@(!CanManageAvailability)" />
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            @if (CanManageAvailability)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SaveAvailabilityAsync">Guardar disponibilidad</button>
+                                <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewAvailability">Limpiar</button>
+                            }
+                        </div>
+                    </div>
+
+                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(127, 105, 81, 0.1); background: #fcfbf8;">
+                        <div class="management-card-header" style="margin-bottom: 0.9rem;">
+                            <h2>Disponibilidad registrada</h2>
+                            <span>@FilteredAvailabilityRows.Count filas</span>
+                        </div>
+
+                        <div class="management-list">
+                            @if (FilteredAvailabilityRows.Count == 0)
+                            {
+                                <p>No hay disponibilidad registrada para el medico y filtros seleccionados.</p>
+                            }
+                            else
+                            {
+                                @foreach (var row in FilteredAvailabilityRows)
+                                {
+                                    <article class="management-list-item availability-row">
+                                        <strong>@(row.nombre_dia ?? GetDayLabel(row.dia_semana))</strong>
+                                        <span>@($"{row.hora_inicio:HH\\:mm} - {row.hora_fin:HH\\:mm}")</span>
+                                        <span>@GetBreakLabel(row)</span>
+                                        <span>@(string.IsNullOrWhiteSpace(row.observaciones) ? "Sin observaciones" : row.observaciones)</span>
+                                        @if (CanManageAvailability)
+                                        {
+                                            <div class="workspace-actions">
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => EditAvailability(row)">Editar</button>
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => DeleteAvailabilityAsync(row.id_disponibilidad)">Eliminar</button>
+                                            </div>
+                                        }
+                                    </article>
+                                }
+                            }
+                        </div>
+                    </div>
+                </section>
+
+                <section style="display: grid; gap: 1rem; align-content: start;">
+                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(224, 155, 60, 0.16); background: rgba(254, 188, 100, 0.06);">
+                        <div class="management-card-header" style="margin-bottom: 0.9rem;">
+                            <h2>Editor de bloqueos</h2>
+                            <span>@(blockEditor.IdBloqueo > 0 ? "Edicion activa" : "Nuevo registro")</span>
+                        </div>
+
+                        <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
+                            Registra vacaciones, ausencias o mantenimientos que deban cerrar agenda temporalmente.
+                        </p>
+
+                        <div class="management-form-grid">
+                            <div>
+                                <label class="form-label" for="blockStart">Fecha inicio</label>
+                                <input id="blockStart" type="date" class="form-control" value="@blockEditor.FechaInicio" @onchange="OnBlockStartChanged" readonly="@(!CanManageAvailability)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="blockEnd">Fecha fin</label>
+                                <input id="blockEnd" type="date" class="form-control" value="@blockEditor.FechaFin" @onchange="OnBlockEndChanged" readonly="@(!CanManageAvailability)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="blockType">Tipo</label>
+                                <select id="blockType" class="form-select" @bind="blockEditor.TipoBloqueo" disabled="@(!CanManageAvailability)">
+                                    @foreach (var option in blockTypeOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="blockReason">Razon</label>
+                                <input id="blockReason" class="form-control" @bind="blockEditor.Razon" maxlength="300" readonly="@(!CanManageAvailability)" />
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            @if (CanManageAvailability)
+                            {
+                                <button type="button" class="btn btn-primary" @onclick="SaveBlockAsync">Guardar bloqueo</button>
+                                <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewBlock">Limpiar</button>
+                            }
+                        </div>
+                    </div>
+
+                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(127, 105, 81, 0.1); background: #fcfbf8;">
+                        <div class="management-card-header" style="margin-bottom: 0.9rem;">
+                            <h2>Bloqueos registrados</h2>
+                            <span>@FilteredBlocks.Count filas</span>
+                        </div>
+
+                        <div class="management-list">
+                            @if (FilteredBlocks.Count == 0)
+                            {
+                                <p>No hay bloqueos registrados para el medico y filtros seleccionados.</p>
+                            }
+                            else
+                            {
+                                @foreach (var block in FilteredBlocks)
+                                {
+                                    <article class="management-list-item availability-row">
+                                        <strong>@block.tipo_bloqueo</strong>
+                                        <span>@($"{block.fecha_inicio:yyyy-MM-dd} al {block.fecha_fin:yyyy-MM-dd}")</span>
+                                        <span>@(string.IsNullOrWhiteSpace(block.razon_bloqueo) ? "Sin razon" : block.razon_bloqueo)</span>
+                                        @if (CanManageAvailability)
+                                        {
+                                            <div class="workspace-actions">
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => EditBlock(block)">Editar</button>
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => DeleteBlockAsync(block.id_bloqueo)">Eliminar</button>
+                                            </div>
+                                        }
+                                    </article>
+                                }
+                            }
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_medico> doctors = [];
+    private readonly List<tbl_disponibilidad_medico> currentAvailabilityRows = [];
+    private readonly List<tbl_bloqueo_horarios> currentBlocks = [];
+    private ModulePermissions permissions = new();
+    private AvailabilityEditor availabilityEditor = new();
+    private BlockEditor blockEditor = new();
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool isAdmin;
+    private bool isDoctor;
+    private int currentUserId;
+    private int currentRoleId;
+    private int currentDoctorId;
+    private int availabilityDoctorId;
+    private byte selectedDayFilter;
+    private string selectedBlockTypeFilter = string.Empty;
+    private string currentRoleName = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Mantenimiento", "Otro"];
+    private static readonly DayOption[] dayOptions =
+    [
+        new((byte)1, "Lunes"),
+        new((byte)2, "Martes"),
+        new((byte)3, "Miercoles"),
+        new((byte)4, "Jueves"),
+        new((byte)5, "Viernes"),
+        new((byte)6, "Sabado"),
+        new((byte)7, "Domingo")
+    ];
+
+    private bool CanManageAvailability => permissions.CanEdit && (isAdmin || isDoctor);
+    private tbl_medico? SelectedDoctor => doctors.FirstOrDefault(d => d.id_medico == availabilityDoctorId);
+    private string HeroTitle => isAdmin ? "Disponibilidad y bloqueos de todos los medicos" : "Mi disponibilidad y ausencias";
+    private string HeroDescription => isAdmin
+        ? "Administra horarios semanales, descansos y bloqueos de todo el equipo medico en una sola vista operativa."
+        : "Mantiene tus horarios de atencion y tus ausencias fuera del flujo de citas para trabajar con mas claridad.";
+
+    private List<tbl_disponibilidad_medico> FilteredAvailabilityRows => currentAvailabilityRows
+        .Where(x => selectedDayFilter == 0 || x.dia_semana == selectedDayFilter)
+        .OrderBy(x => x.dia_semana)
+        .ThenBy(x => x.hora_inicio)
+        .ToList();
+
+    private List<tbl_bloqueo_horarios> FilteredBlocks => currentBlocks
+        .Where(x => string.IsNullOrWhiteSpace(selectedBlockTypeFilter) || string.Equals(x.tipo_bloqueo, selectedBlockTypeFilter, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(x => x.fecha_inicio)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        PrepareNewAvailability();
+        PrepareNewBlock();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        currentRoleName = authState.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+        isAdmin = currentRoleId == 1 || currentRoleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
+        isDoctor = currentRoleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
+            || currentRoleName.Contains("medic", StringComparison.OrdinalIgnoreCase)
+            || currentRoleName.Contains("optomet", StringComparison.OrdinalIgnoreCase);
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        doctors.Clear();
+        doctors.AddRange(await dbContext.tbl_medico
+            .AsNoTracking()
+            .Include(m => m.id_usuarioNavigation)
+            .Where(m => m.activo == true && m.id_usuarioNavigation.activo == true)
+            .OrderBy(m => m.id_usuarioNavigation.apellidos)
+            .ThenBy(m => m.id_usuarioNavigation.nombres)
+            .ToListAsync());
+
+        if (isDoctor)
+        {
+            currentDoctorId = doctors.FirstOrDefault(d => d.id_usuario == currentUserId)?.id_medico ?? 0;
+        }
+
+        availabilityDoctorId = currentDoctorId > 0 ? currentDoctorId : availabilityDoctorId > 0 ? availabilityDoctorId : doctors.FirstOrDefault()?.id_medico ?? 0;
+        await LoadAvailabilityAsync(dbContext);
+        isLoading = false;
+    }
+
+    private async Task LoadAvailabilityAsync(OpticaDbContext dbContext)
+    {
+        currentAvailabilityRows.Clear();
+        currentBlocks.Clear();
+
+        if (availabilityDoctorId <= 0)
+        {
+            return;
+        }
+
+        currentAvailabilityRows.AddRange(await dbContext.tbl_disponibilidad_medico
+            .AsNoTracking()
+            .Where(x => x.id_medico == availabilityDoctorId)
+            .OrderBy(x => x.dia_semana)
+            .ThenBy(x => x.hora_inicio)
+            .ToListAsync());
+
+        currentBlocks.AddRange(await dbContext.tbl_bloqueo_horarios
+            .AsNoTracking()
+            .Where(x => x.id_medico == availabilityDoctorId && x.activo == true)
+            .OrderByDescending(x => x.fecha_inicio)
+            .ToListAsync());
+    }
+
+    private async Task SaveAvailabilityAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!CanManageAvailability || availabilityDoctorId <= 0)
+        {
+            return;
+        }
+
+        if (!TimeOnly.TryParse(availabilityEditor.StartTime, out var startTime) || !TimeOnly.TryParse(availabilityEditor.EndTime, out var endTime) || startTime >= endTime)
+        {
+            errorMessage = "Verifica el rango horario de la disponibilidad.";
+            return;
+        }
+
+        TimeOnly? breakStart = TimeOnly.TryParse(availabilityEditor.BreakStart, out var parsedBreakStart) ? parsedBreakStart : null;
+        TimeOnly? breakEnd = TimeOnly.TryParse(availabilityEditor.BreakEnd, out var parsedBreakEnd) ? parsedBreakEnd : null;
+        if (breakStart.HasValue != breakEnd.HasValue)
+        {
+            errorMessage = "Completa ambas horas del descanso o deja ambas vacias.";
+            return;
+        }
+
+        if (breakStart.HasValue && breakEnd.HasValue && (breakStart.Value >= breakEnd.Value || breakStart.Value < startTime || breakEnd.Value > endTime))
+        {
+            errorMessage = "El descanso debe quedar dentro de la jornada.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_disponibilidad_medico entity;
+        if (availabilityEditor.IdDisponibilidad > 0)
+        {
+            entity = await dbContext.tbl_disponibilidad_medico.FirstOrDefaultAsync(x => x.id_disponibilidad == availabilityEditor.IdDisponibilidad && x.id_medico == availabilityDoctorId)
+                ?? new tbl_disponibilidad_medico();
+        }
+        else
+        {
+            entity = new tbl_disponibilidad_medico();
+            dbContext.tbl_disponibilidad_medico.Add(entity);
+        }
+
+        entity.id_medico = availabilityDoctorId;
+        entity.dia_semana = availabilityEditor.DayOfWeek;
+        entity.nombre_dia = GetDayLabel(availabilityEditor.DayOfWeek);
+        entity.hora_inicio = startTime;
+        entity.hora_fin = endTime;
+        entity.permitir_descanso_medio_dia = breakStart.HasValue && breakEnd.HasValue;
+        entity.hora_descanso_inicio = breakStart;
+        entity.hora_descanso_fin = breakEnd;
+        entity.disponible = true;
+        entity.observaciones = NormalizeOptional(availabilityEditor.Observaciones);
+        entity.fecha_actualizacion = DateTime.Now;
+        entity.usuario_actualizacion = GetCurrentActorLabel();
+
+        await dbContext.SaveChangesAsync();
+        WriteAudit(dbContext, availabilityEditor.IdDisponibilidad > 0 ? "Editar disponibilidad" : "Crear disponibilidad", $"MedicoId={availabilityDoctorId}; DisponibilidadId={entity.id_disponibilidad}; Dia={entity.dia_semana}; HoraInicio={entity.hora_inicio:HH\\:mm}; HoraFin={entity.hora_fin:HH\\:mm}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "La disponibilidad fue guardada correctamente.";
+        PrepareNewAvailability();
+        await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadAvailabilityAsync(refreshContext);
+    }
+
+    private async Task DeleteAvailabilityAsync(int availabilityId)
+    {
+        if (!CanManageAvailability || availabilityId <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_disponibilidad_medico.FirstOrDefaultAsync(x => x.id_disponibilidad == availabilityId && x.id_medico == availabilityDoctorId);
+        if (entity is null)
+        {
+            return;
+        }
+
+        dbContext.tbl_disponibilidad_medico.Remove(entity);
+        WriteAudit(dbContext, "Eliminar disponibilidad", $"MedicoId={availabilityDoctorId}; DisponibilidadId={availabilityId}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "La disponibilidad fue eliminada.";
+        PrepareNewAvailability();
+        await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadAvailabilityAsync(refreshContext);
+    }
+
+    private async Task SaveBlockAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!CanManageAvailability || availabilityDoctorId <= 0)
+        {
+            return;
+        }
+
+        if (!DateOnly.TryParse(blockEditor.FechaInicio, out var startDate) || !DateOnly.TryParse(blockEditor.FechaFin, out var endDate) || startDate > endDate)
+        {
+            errorMessage = "Verifica el rango de fechas del bloqueo.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_bloqueo_horarios entity;
+        if (blockEditor.IdBloqueo > 0)
+        {
+            entity = await dbContext.tbl_bloqueo_horarios.FirstOrDefaultAsync(x => x.id_bloqueo == blockEditor.IdBloqueo && x.id_medico == availabilityDoctorId)
+                ?? new tbl_bloqueo_horarios();
+        }
+        else
+        {
+            entity = new tbl_bloqueo_horarios
+            {
+                fecha_creacion = DateTime.Now,
+                usuario_creacion = GetCurrentActorLabel()
+            };
+            dbContext.tbl_bloqueo_horarios.Add(entity);
+        }
+
+        entity.id_medico = availabilityDoctorId;
+        entity.fecha_inicio = startDate;
+        entity.fecha_fin = endDate;
+        entity.tipo_bloqueo = blockEditor.TipoBloqueo;
+        entity.razon_bloqueo = NormalizeOptional(blockEditor.Razon);
+        entity.activo = true;
+
+        await dbContext.SaveChangesAsync();
+        WriteAudit(dbContext, blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El bloqueo fue guardado correctamente.";
+        PrepareNewBlock();
+        await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadAvailabilityAsync(refreshContext);
+    }
+
+    private async Task DeleteBlockAsync(int blockId)
+    {
+        if (!CanManageAvailability || blockId <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_bloqueo_horarios.FirstOrDefaultAsync(x => x.id_bloqueo == blockId && x.id_medico == availabilityDoctorId);
+        if (entity is null)
+        {
+            return;
+        }
+
+        dbContext.tbl_bloqueo_horarios.Remove(entity);
+        WriteAudit(dbContext, "Eliminar bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={blockId}");
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "El bloqueo fue eliminado.";
+        PrepareNewBlock();
+        await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadAvailabilityAsync(refreshContext);
+    }
+
+    private async Task OnAvailabilityDoctorChanged(ChangeEventArgs args)
+    {
+        availabilityDoctorId = int.TryParse(args.Value?.ToString(), out var parsedDoctorId) ? parsedDoctorId : availabilityDoctorId;
+        PrepareNewAvailability();
+        PrepareNewBlock();
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadAvailabilityAsync(dbContext);
+        StateHasChanged();
+    }
+
+    private void OnAvailabilityStartChanged(ChangeEventArgs args) => availabilityEditor.StartTime = args.Value?.ToString() ?? string.Empty;
+    private void OnAvailabilityEndChanged(ChangeEventArgs args) => availabilityEditor.EndTime = args.Value?.ToString() ?? string.Empty;
+    private void OnAvailabilityBreakStartChanged(ChangeEventArgs args) => availabilityEditor.BreakStart = args.Value?.ToString() ?? string.Empty;
+    private void OnAvailabilityBreakEndChanged(ChangeEventArgs args) => availabilityEditor.BreakEnd = args.Value?.ToString() ?? string.Empty;
+    private void OnBlockStartChanged(ChangeEventArgs args) => blockEditor.FechaInicio = args.Value?.ToString() ?? string.Empty;
+    private void OnBlockEndChanged(ChangeEventArgs args) => blockEditor.FechaFin = args.Value?.ToString() ?? string.Empty;
+
+    private void ClearFilters()
+    {
+        selectedDayFilter = 0;
+        selectedBlockTypeFilter = string.Empty;
+    }
+
+    private void PrepareNewAvailability()
+    {
+        availabilityEditor = new AvailabilityEditor
+        {
+            DayOfWeek = 1
+        };
+    }
+
+    private void EditAvailability(tbl_disponibilidad_medico row)
+    {
+        availabilityEditor = new AvailabilityEditor
+        {
+            IdDisponibilidad = row.id_disponibilidad,
+            DayOfWeek = row.dia_semana,
+            StartTime = row.hora_inicio.ToString("HH:mm"),
+            EndTime = row.hora_fin.ToString("HH:mm"),
+            BreakStart = row.hora_descanso_inicio?.ToString("HH:mm") ?? string.Empty,
+            BreakEnd = row.hora_descanso_fin?.ToString("HH:mm") ?? string.Empty,
+            Observaciones = row.observaciones ?? string.Empty
+        };
+    }
+
+    private void PrepareNewBlock()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+        blockEditor = new BlockEditor
+        {
+            FechaInicio = today,
+            FechaFin = today,
+            TipoBloqueo = "Vacaciones"
+        };
+    }
+
+    private void EditBlock(tbl_bloqueo_horarios block)
+    {
+        blockEditor = new BlockEditor
+        {
+            IdBloqueo = block.id_bloqueo,
+            FechaInicio = block.fecha_inicio.ToString("yyyy-MM-dd"),
+            FechaFin = block.fecha_fin.ToString("yyyy-MM-dd"),
+            TipoBloqueo = block.tipo_bloqueo ?? "Otro",
+            Razon = block.razon_bloqueo ?? string.Empty
+        };
+    }
+
+    private void ExportAvailability()
+    {
+        var query = new List<string> { $"doctorId={availabilityDoctorId}" };
+
+        if (selectedDayFilter > 0)
+        {
+            query.Add($"day={selectedDayFilter}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedBlockTypeFilter))
+        {
+            query.Add($"blockType={Uri.EscapeDataString(selectedBlockTypeFilter)}");
+        }
+
+        NavigationManager.NavigateTo($"/exports/appointment-availability.csv?{string.Join("&", query)}", forceLoad: true);
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointment-availability"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private static string GetDoctorDisplayName(tbl_medico doctor)
+    {
+        var fullName = $"{doctor.id_usuarioNavigation.nombres} {doctor.id_usuarioNavigation.apellidos}".Trim();
+        return string.IsNullOrWhiteSpace(doctor.especialidad)
+            ? fullName
+            : $"{fullName} - {doctor.especialidad}";
+    }
+
+    private static string GetDoctorShortName(tbl_medico doctor)
+    {
+        return $"{doctor.id_usuarioNavigation.nombres} {doctor.id_usuarioNavigation.apellidos}".Trim();
+    }
+
+    private static string GetDayLabel(byte dayOfWeek)
+    {
+        return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Dia {dayOfWeek}";
+    }
+
+    private static string GetBreakLabel(tbl_disponibilidad_medico row)
+    {
+        if (!row.hora_descanso_inicio.HasValue || !row.hora_descanso_fin.HasValue)
+        {
+            return "Sin descanso";
+        }
+
+        return $"Descanso {row.hora_descanso_inicio:HH\\:mm}-{row.hora_descanso_fin:HH\\:mm}";
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private string GetCurrentActorLabel()
+    {
+        return currentUserId > 0 ? currentUserId.ToString() : "SYSTEM";
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = "Disponibilidad medica",
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class AvailabilityEditor
+    {
+        public int IdDisponibilidad { get; set; }
+        public byte DayOfWeek { get; set; } = 1;
+        public string StartTime { get; set; } = "08:00";
+        public string EndTime { get; set; } = "17:00";
+        public string BreakStart { get; set; } = "12:00";
+        public string BreakEnd { get; set; } = "13:00";
+        public string Observaciones { get; set; } = string.Empty;
+    }
+
+    private sealed class BlockEditor
+    {
+        public int IdBloqueo { get; set; }
+        public string FechaInicio { get; set; } = string.Empty;
+        public string FechaFin { get; set; } = string.Empty;
+        public string TipoBloqueo { get; set; } = "Vacaciones";
+        public string Razon { get; set; } = string.Empty;
+    }
+
+    private sealed record DayOption(byte Value, string Label);
+}

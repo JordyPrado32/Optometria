@@ -31,6 +31,7 @@ public partial class OpticaDbContext
         ConfigureNavigationEntities(modelBuilder);
         ConfigureElectronicBillingEntities(modelBuilder);
         ConfigureProcurementEntities(modelBuilder);
+        ConfigureAppointmentEntities(modelBuilder);
     }
 
     internal static void ConfigureNavigationEntities(ModelBuilder modelBuilder)

@@ -116,6 +116,7 @@ public partial class OpticaDbContext : DbContext
             entity.ToTable("tbl_categoria_producto");
 
             entity.Property(e => e.descripcion).IsUnicode(false);
+            entity.Property(e => e.activo).HasDefaultValue(true);
             entity.Property(e => e.nombre)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -607,6 +608,10 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.talla)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.tipo_item)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("Producto");
             entity.Property(e => e.tiempo_entrega_dias);
             entity.Property(e => e.tratamiento_lente)
                 .HasMaxLength(200)

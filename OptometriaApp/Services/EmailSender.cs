@@ -59,4 +59,51 @@ Si no solicitaste este acceso, ignora este correo y avisa al administrador.
         cancellationToken.ThrowIfCancellationRequested();
         await client.SendMailAsync(message);
     }
+
+    public async Task SendAppointmentReminderAsync(
+        string destinationEmail,
+        string destinationName,
+        string doctorName,
+        DateOnly appointmentDate,
+        TimeOnly startTime,
+        string appointmentType,
+        string statusLabel,
+        string reminderWindow,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured())
+        {
+            throw new InvalidOperationException("SMTP no configurado. Completa la seccion Smtp en appsettings.json.");
+        }
+
+        using var message = new MailMessage
+        {
+            From = new MailAddress(settings.FromAddress, settings.FromName),
+            Subject = $"Recordatorio de cita optometrica ({reminderWindow})",
+            Body = $"""
+Hola {destinationName},
+
+Te recordamos que tienes una cita {reminderWindow} con el profesional {doctorName}.
+
+Fecha: {appointmentDate:yyyy-MM-dd}
+Hora: {startTime:HH\:mm}
+Tipo: {appointmentType}
+Estado actual: {statusLabel}
+
+Si necesitas reprogramarla o cancelarla, ingresa al sistema cuanto antes.
+""",
+            IsBodyHtml = false
+        };
+
+        message.To.Add(destinationEmail);
+
+        using var client = new SmtpClient(settings.Host, settings.Port)
+        {
+            EnableSsl = settings.EnableSsl,
+            Credentials = new NetworkCredential(settings.UserName, settings.Password)
+        };
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await client.SendMailAsync(message);
+    }
 }
