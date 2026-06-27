@@ -63,6 +63,7 @@ builder.Services.AddSingleton<EmailBackgroundQueue>();
 builder.Services.AddSingleton<IEmailBackgroundQueue>(sp => sp.GetRequiredService<EmailBackgroundQueue>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQueue>());
 builder.Services.AddScoped<MenuAccessService>();
+builder.Services.AddScoped<KardexService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -1942,6 +1943,133 @@ app.MapGet("/exports/inventories.csv", async (
         $"inventarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/kardex.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canView = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/kardex"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canView)
+    {
+        return Results.Forbid();
+    }
+
+    var search = httpContext.Request.Query["search"].ToString().Trim();
+    var type = httpContext.Request.Query["type"].ToString().Trim();
+    var status = httpContext.Request.Query["status"].ToString().Trim();
+    var productIdRaw = httpContext.Request.Query["productId"].ToString().Trim();
+    var fromRaw = httpContext.Request.Query["from"].ToString().Trim();
+    var toRaw = httpContext.Request.Query["to"].ToString().Trim();
+
+    var userProductIds = await dbContext.tbl_movimiento_inventarios
+        .AsNoTracking()
+        .Where(x => x.id_usuario == userId)
+        .Select(x => x.id_producto)
+        .Distinct()
+        .ToListAsync();
+
+    var kardexQuery = dbContext.tbl_kardex
+        .AsNoTracking()
+        .Include(x => x.id_productoNavigation)
+        .Where(x => userProductIds.Contains(x.id_producto))
+        .AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var loweredSearch = search.ToLowerInvariant();
+        kardexQuery = kardexQuery.Where(x =>
+            x.id_productoNavigation.nombre_producto.ToLower().Contains(loweredSearch) ||
+            (x.comprobante_numero != null && x.comprobante_numero.ToLower().Contains(loweredSearch)) ||
+            (x.tipo_referencia != null && x.tipo_referencia.ToLower().Contains(loweredSearch)) ||
+            (x.numero_lote != null && x.numero_lote.ToLower().Contains(loweredSearch)) ||
+            (x.descripcion_movimiento != null && x.descripcion_movimiento.ToLower().Contains(loweredSearch)));
+    }
+
+    if (!string.IsNullOrWhiteSpace(type))
+    {
+        kardexQuery = kardexQuery.Where(x => x.tipo_movimiento == type);
+    }
+
+    if (!string.IsNullOrWhiteSpace(status))
+    {
+        kardexQuery = kardexQuery.Where(x => x.estado_kardex == status);
+    }
+
+    if (int.TryParse(productIdRaw, out var productId) && productId > 0)
+    {
+        kardexQuery = kardexQuery.Where(x => x.id_producto == productId);
+    }
+
+    if (DateOnly.TryParse(fromRaw, out var fromDate))
+    {
+        var fromDateTime = fromDate.ToDateTime(TimeOnly.MinValue);
+        kardexQuery = kardexQuery.Where(x => x.fecha_movimiento >= fromDateTime);
+    }
+
+    if (DateOnly.TryParse(toRaw, out var toDate))
+    {
+        var toDateTime = toDate.ToDateTime(TimeOnly.MaxValue);
+        kardexQuery = kardexQuery.Where(x => x.fecha_movimiento <= toDateTime);
+    }
+
+    var rows = await kardexQuery
+        .OrderByDescending(x => x.fecha_movimiento)
+        .ThenByDescending(x => x.id_kardex)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Id,Fecha,Producto,Movimiento,Cantidad,CostoUnitario,CostoTotal,StockAnterior,StockNuevo,SaldoNuevo,PromedioPonderado,Referencia,Estado");
+
+    foreach (var item in rows)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(item.id_kardex.ToString()),
+            EscapeCsv(item.fecha_movimiento?.ToString("yyyy-MM-dd HH:mm")),
+            EscapeCsv(item.id_productoNavigation?.nombre_producto),
+            EscapeCsv(item.tipo_movimiento),
+            EscapeCsv(item.cantidad_movimiento.ToString()),
+            EscapeCsv(item.costo_unitario?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.costo_total?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.stock_anterior?.ToString()),
+            EscapeCsv(item.stock_nuevo?.ToString()),
+            EscapeCsv(item.saldo_nuevo_dinero?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.precio_promedio_ponderado?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(item.comprobante_numero ?? item.tipo_referencia),
+            EscapeCsv(item.estado_kardex)));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = "Exportar CSV",
+        modulo = "Kardex",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|type:{type}|status:{status}|productId:{productIdRaw}|from:{fromRaw}|to:{toRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -2032,13 +2160,14 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 11, 1),
                 ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 12, 1),
                 ('Inventarios', '/inventories', 'inventories', 13, 1),
-                ('Clientes', '/clients', 'clients', 14, 1),
-                ('Emisor', '/emisor', 'issuer', 15, 1),
-                ('Usuarios', '/users', 'users', 16, 1),
-                ('Roles', '/roles', 'roles', 17, 1),
-                ('Menus', '/menus', 'menu', 18, 1),
-                ('Registrar usuario', '/register', 'user-plus', 19, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 20, 1)
+                ('Kardex', '/kardex', 'kardex', 14, 1),
+                ('Clientes', '/clients', 'clients', 15, 1),
+                ('Emisor', '/emisor', 'issuer', 16, 1),
+                ('Usuarios', '/users', 'users', 17, 1),
+                ('Roles', '/roles', 'roles', 18, 1),
+                ('Menus', '/menus', 'menu', 19, 1),
+                ('Registrar usuario', '/register', 'user-plus', 20, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 21, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN

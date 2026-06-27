@@ -47,12 +47,13 @@ USING
         ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 10, 1),
         ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 11, 1),
         ('Inventarios', '/inventories', 'inventories', 12, 1),
-        ('Clientes', '/clients', 'clients', 13, 1),
-        ('Emisor', '/emisor', 'issuer', 14, 1),
-        ('Roles', '/roles', 'roles', 15, 1),
-        ('Menus', '/menus', 'menu', 16, 1),
-        ('Registrar usuario', '/register', 'user-plus', 17, 1),
-        ('Seguridad', '/setup-2fa', 'shield', 18, 1)
+        ('Kardex', '/kardex', 'kardex', 13, 1),
+        ('Clientes', '/clients', 'clients', 14, 1),
+        ('Emisor', '/emisor', 'issuer', 15, 1),
+        ('Roles', '/roles', 'roles', 16, 1),
+        ('Menus', '/menus', 'menu', 17, 1),
+        ('Registrar usuario', '/register', 'user-plus', 18, 1),
+        ('Seguridad', '/setup-2fa', 'shield', 19, 1)
 ) AS source(nombre, ruta, icono, orden, activo)
 ON target.ruta = source.ruta
 WHEN MATCHED THEN

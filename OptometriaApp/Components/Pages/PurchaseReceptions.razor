@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject KardexService KardexService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Recepciones de compra</PageTitle>
@@ -201,6 +202,7 @@ else
         if (duplicate) { ShowAlert("El numero de recepcion ya existe.", true); return; }
 
         tbl_recepcion_compra entity;
+        List<int>? affectedProductIds = null;
         if (isCreating)
         {
             entity = new tbl_recepcion_compra { id_usuario_recibe = currentUserId, fecha_recepcion = DateTime.Now, activo = true };
@@ -220,6 +222,7 @@ else
         if (isCreating)
         {
             var order = await db.tbl_orden_compra.Include(x => x.tbl_detalle_orden_compra).FirstAsync(x => x.id_orden_compra == editor.IdOrdenCompra && x.id_usuario_solicita == currentUserId);
+            affectedProductIds = order.tbl_detalle_orden_compra.Select(x => x.id_producto).Distinct().ToList();
             var totalReceived = 0;
             foreach (var line in order.tbl_detalle_orden_compra.Where(x => (x.cantidad_pendiente ?? 0) > 0))
             {
@@ -309,6 +312,10 @@ else
         }
 
         await db.SaveChangesAsync();
+        if (isCreating && affectedProductIds is not null && affectedProductIds.Count > 0)
+        {
+            await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Recepcion de compra");
+        }
         CloseForm();
         ShowAlert("Recepcion guardada.", false);
         await LoadAsync();

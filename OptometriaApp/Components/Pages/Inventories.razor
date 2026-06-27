@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject KardexService KardexService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Inventarios</PageTitle>
@@ -266,6 +267,7 @@ else
 
         WriteAudit(db, isCreating ? "Crear movimiento inventario" : "Editar movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
         await db.SaveChangesAsync();
+        await KardexService.RebuildForProductAsync(editor.IdProducto, currentUserId, isCreating ? "Movimiento manual" : "Edicion movimiento manual");
         CloseForm();
         ShowAlert("Movimiento guardado.", false);
         await LoadAsync();
@@ -275,9 +277,11 @@ else
     {
         await using var db = await DbContextFactory.CreateDbContextAsync();
         var entity = await db.tbl_movimiento_inventarios.FirstAsync(x => x.id_movimiento_inventario == item.id_movimiento_inventario && x.id_usuario == currentUserId);
+        var productId = entity.id_producto;
         WriteAudit(db, "Eliminar movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
         db.tbl_movimiento_inventarios.Remove(entity);
         await db.SaveChangesAsync();
+        await KardexService.RebuildForProductAsync(productId, currentUserId, "Eliminacion movimiento manual");
         ShowAlert("Movimiento eliminado.", false);
         await LoadAsync();
     }

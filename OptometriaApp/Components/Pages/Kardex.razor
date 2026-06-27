@@ -1,0 +1,521 @@
+@page "/kardex"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject KardexService KardexService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Kardex</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando kardex...</h1></div></section>
+}
+else if (!canView)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para este modulo.</p></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Inventario valorizado</span>
+                <h1>Kardex por promedio ponderado</h1>
+                <p>Consulta entradas, salidas, ajustes, saldo valorizado y costo promedio con trazabilidad util para operacion y auditoria.</p>
+            </div>
+            <div class="workspace-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportKardex">Exportar Excel</button>
+                @if (permissions.CanEdit)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="RebuildVisibleAsync">Recalcular visible</button>
+                    <button type="button" class="btn btn-primary" @onclick="RebuildAllAsync">Recalcular todo</button>
+                }
+            </div>
+        </div>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>@FilteredEntries.Count registros</span>
+            </div>
+            <div style="display:grid; grid-template-columns: minmax(220px, 1.8fr) repeat(5, minmax(120px, 1fr)); gap:0.75rem; align-items:end; margin-top:1rem;">
+                <div>
+                    <label class="form-label">Buscar</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Producto, comprobante, referencia o lote" />
+                </div>
+                <div>
+                    <label class="form-label">Producto</label>
+                    <select class="form-select" @bind="productFilter">
+                        <option value="">Todos</option>
+                        @foreach (var product in products.OrderBy(x => x.nombre_producto))
+                        {
+                            <option value="@product.id_producto.ToString()">@product.nombre_producto</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" @bind="typeFilter">
+                        <option value="">Todos</option>
+                        @foreach (var option in movementTypes)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" @bind="statusFilter">
+                        <option value="">Todos</option>
+                        <option value="Registrado">Registrado</option>
+                        <option value="Observado">Observado</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" @bind="fromDate" />
+                </div>
+                <div>
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" @bind="toDate" />
+                </div>
+            </div>
+
+            <div class="management-actions" style="margin-top:1rem; justify-content:space-between; align-items:center;">
+                <div style="display:flex; gap:0.75rem; flex-wrap:wrap; color:var(--color-taupe); font-size:0.88rem;">
+                    <span>Productos: <strong>@FilteredProductSummaries.Count</strong></span>
+                    <span>Saldo: <strong>@CurrentBalanceDisplay</strong></span>
+                    <span>Promedio: <strong>@CurrentAverageDisplay</strong></span>
+                </div>
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top:1.5rem;">
+            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; padding-bottom:0.75rem; border-bottom:1px solid rgba(127,105,81,0.12);">
+                <button type="button"
+                        class="btn @(activeSheet == "resumen" ? "btn-primary" : "btn-outline-primary")"
+                        style="padding:0.45rem 0.85rem !important;"
+                        @onclick='() => SelectSheet("resumen")'>
+                    Resumen
+                </button>
+                @foreach (var summary in FilteredProductSummaries)
+                {
+                    <button type="button"
+                            class="btn @(activeSheet == GetProductSheetKey(summary.ProductId) ? "btn-primary" : "btn-outline-primary")"
+                            style="padding:0.45rem 0.85rem !important;"
+                            title="@summary.ProductName"
+                            @onclick="() => SelectSheet(GetProductSheetKey(summary.ProductId))">
+                        @summary.ProductName
+                    </button>
+                }
+            </div>
+
+            @if (ActiveSheetIsSummary)
+            {
+                <div class="table-responsive" style="margin-top:1rem;">
+                    <table class="table table-sm table-hover" style="font-size:0.88rem;">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Ultimo movimiento</th>
+                                <th>Stock actual</th>
+                                <th>Saldo valorizado</th>
+                                <th>Promedio ponderado</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (FilteredProductSummaries.Count == 0)
+                            {
+                                <tr><td colspan="6" style="text-align:center; padding:2rem;">No hay resumen para los filtros actuales.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var summary in FilteredProductSummaries)
+                                {
+                                    <tr style="cursor:pointer;" @onclick="() => SelectSheet(GetProductSheetKey(summary.ProductId))">
+                                        <td><strong>@summary.ProductName</strong></td>
+                                        <td>@summary.LastMovementDate.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@summary.CurrentStock</td>
+                                        <td>@summary.CurrentBalance.ToString("0.00")</td>
+                                        <td>@summary.WeightedAverage.ToString("0.00")</td>
+                                        <td>@summary.Status</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1rem; padding:0.75rem 0.9rem; background:rgba(255,255,255,0.55); border:1px solid rgba(127,105,81,0.08); border-radius:10px;">
+                    <div>
+                        <strong>@ActiveProductSummary?.ProductName</strong>
+                        <div style="font-size:0.82rem; color:var(--color-taupe);">Ultimo movimiento @ActiveProductSummary?.LastMovementDate.ToString("yyyy-MM-dd HH:mm")</div>
+                    </div>
+                    <div style="display:flex; gap:1.25rem; flex-wrap:wrap; font-size:0.86rem;">
+                        <span>Stock <strong>@(ActiveProductSummary?.CurrentStock ?? 0)</strong></span>
+                        <span>Saldo <strong>@(ActiveProductSummary?.CurrentBalance.ToString("0.00") ?? "0.00")</strong></span>
+                        <span>Promedio <strong>@(ActiveProductSummary?.WeightedAverage.ToString("0.00") ?? "0.00")</strong></span>
+                        <span>Estado <strong>@(ActiveProductSummary?.Status ?? "-")</strong></span>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="margin-top:1rem;">
+                    <table class="table table-sm table-hover" style="font-size:0.84rem; white-space:nowrap;">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Movimiento</th>
+                                <th>Cantidad</th>
+                                <th>Costo unit.</th>
+                                <th>Costo total</th>
+                                <th>Stock anterior</th>
+                                <th>Stock nuevo</th>
+                                <th>Saldo anterior</th>
+                                <th>Saldo nuevo</th>
+                                <th>Promedio</th>
+                                <th>Comprobante</th>
+                                <th>Lote</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (ActiveSheetEntries.Count == 0)
+                            {
+                                <tr><td colspan="13" style="text-align:center; padding:2rem;">No hay lineas de kardex para esta pestaña.</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var item in ActiveSheetEntries)
+                                {
+                                    <tr>
+                                        <td>@item.fecha_movimiento?.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@item.tipo_movimiento</td>
+                                        <td>@item.cantidad_movimiento</td>
+                                        <td>@(item.costo_unitario?.ToString("0.00") ?? "0.00")</td>
+                                        <td>@(item.costo_total?.ToString("0.00") ?? "0.00")</td>
+                                        <td>@(item.stock_anterior ?? 0)</td>
+                                        <td>@(item.stock_nuevo ?? 0)</td>
+                                        <td>@(item.saldo_anterior_dinero?.ToString("0.00") ?? "0.00")</td>
+                                        <td>@(item.saldo_nuevo_dinero?.ToString("0.00") ?? "0.00")</td>
+                                        <td>@(item.precio_promedio_ponderado?.ToString("0.00") ?? "0.00")</td>
+                                        <td>@(item.comprobante_numero ?? item.tipo_referencia ?? "-")</td>
+                                        <td>@(item.numero_lote ?? "-")</td>
+                                        <td>@item.estado_kardex</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            
+            <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--color-taupe);">
+                Vista pensada como hoja tabulada: resumen general y una pestaña por producto para lectura de secuencia, saldos y promedio ponderado.
+            </div>
+        </section>
+    </section>
+}
+
+@if (showAlert)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")"><h2>@(alertIsError ? "Error" : "Ok")</h2></header>
+            <div class="custom-modal-body"><p>@alertMessage</p></div>
+            <footer class="custom-modal-footer" style="justify-content:center;"><button class="btn btn-primary" @onclick="() => showAlert = false">Aceptar</button></footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<tbl_kardex> entries = [];
+    private readonly List<tbl_producto> products = [];
+    private readonly List<string> movementTypes = [];
+    private Permissions permissions = new();
+    private bool isLoading = true;
+    private bool canView;
+    private bool showAlert;
+    private bool alertIsError;
+    private int currentUserId;
+    private int currentRoleId;
+    private string searchTerm = string.Empty;
+    private string productFilter = string.Empty;
+    private string typeFilter = string.Empty;
+    private string statusFilter = string.Empty;
+    private string alertMessage = string.Empty;
+    private string activeSheet = "resumen";
+    private DateOnly? fromDate;
+    private DateOnly? toDate;
+
+    private List<tbl_kardex> FilteredEntries => entries.Where(MatchesFilters).OrderByDescending(x => x.fecha_movimiento).ThenByDescending(x => x.id_kardex).ToList();
+    private List<ProductKardexSummary> FilteredProductSummaries => BuildProductSummaries();
+    private bool ActiveSheetIsSummary => NormalizeActiveSheet() == "resumen";
+    private ProductKardexSummary? ActiveProductSummary => ActiveSheetIsSummary ? null : FilteredProductSummaries.FirstOrDefault(x => GetProductSheetKey(x.ProductId) == NormalizeActiveSheet());
+    private List<tbl_kardex> ActiveSheetEntries => ActiveSheetIsSummary
+        ? FilteredEntries
+        : FilteredEntries.Where(x => ActiveProductSummary is not null && x.id_producto == ActiveProductSummary.ProductId)
+            .OrderByDescending(x => x.fecha_movimiento)
+            .ThenByDescending(x => x.id_kardex)
+            .ToList();
+    private string CurrentAverageDisplay => FilteredProductSummaries.Count == 1 ? FilteredProductSummaries[0].WeightedAverage.ToString("0.00") : "Mixto";
+    private string CurrentBalanceDisplay => FilteredProductSummaries.Count == 1 ? FilteredProductSummaries[0].CurrentBalance.ToString("0.00") : FilteredProductSummaries.Sum(x => x.CurrentBalance).ToString("0.00");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : 0;
+        currentRoleId = int.TryParse(auth.User.FindFirst("RoleId")?.Value, out var rid) ? rid : 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetPermissionsAsync(db);
+        canView = permissions.CanView;
+        if (!canView)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var productIds = await db.tbl_movimiento_inventarios
+            .AsNoTracking()
+            .Where(x => x.id_usuario == currentUserId)
+            .Select(x => x.id_producto)
+            .Distinct()
+            .ToListAsync();
+
+        products.Clear();
+        products.AddRange(await db.tbl_productos.AsNoTracking()
+            .Where(x => productIds.Contains(x.id_producto))
+            .OrderBy(x => x.nombre_producto)
+            .ToListAsync());
+
+        entries.Clear();
+        entries.AddRange(await db.tbl_kardex.AsNoTracking()
+            .Include(x => x.id_productoNavigation)
+            .Where(x => productIds.Contains(x.id_producto))
+            .OrderByDescending(x => x.fecha_movimiento)
+            .ThenByDescending(x => x.id_kardex)
+            .ToListAsync());
+
+        movementTypes.Clear();
+        movementTypes.AddRange(entries.Select(x => x.tipo_movimiento).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).Cast<string>());
+        EnsureActiveSheet();
+
+        isLoading = false;
+    }
+
+    private bool MatchesFilters(tbl_kardex item)
+    {
+        if (int.TryParse(productFilter, out var productId) && productId > 0 && item.id_producto != productId)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(typeFilter) && !string.Equals(item.tipo_movimiento, typeFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(statusFilter) && !string.Equals(item.estado_kardex, statusFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var movementDate = item.fecha_movimiento?.Date;
+        if (fromDate.HasValue && movementDate.HasValue && movementDate.Value < fromDate.Value.ToDateTime(TimeOnly.MinValue).Date)
+        {
+            return false;
+        }
+
+        if (toDate.HasValue && movementDate.HasValue && movementDate.Value > toDate.Value.ToDateTime(TimeOnly.MinValue).Date)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var search = searchTerm.Trim().ToLowerInvariant();
+        return (item.id_productoNavigation?.nombre_producto.ToLowerInvariant().Contains(search) ?? false) ||
+               (item.comprobante_numero?.ToLowerInvariant().Contains(search) ?? false) ||
+               (item.tipo_referencia?.ToLowerInvariant().Contains(search) ?? false) ||
+               (item.numero_lote?.ToLowerInvariant().Contains(search) ?? false) ||
+               (item.descripcion_movimiento?.ToLowerInvariant().Contains(search) ?? false);
+    }
+
+    private List<ProductKardexSummary> BuildProductSummaries()
+    {
+        return FilteredEntries
+            .GroupBy(x => new { x.id_producto, ProductName = x.id_productoNavigation?.nombre_producto ?? $"Producto {x.id_producto}" })
+            .Select(group =>
+            {
+                var last = group
+                    .OrderByDescending(x => x.fecha_movimiento)
+                    .ThenByDescending(x => x.id_kardex)
+                    .First();
+
+                return new ProductKardexSummary
+                {
+                    ProductId = group.Key.id_producto,
+                    ProductName = group.Key.ProductName,
+                    LastMovementDate = last.fecha_movimiento ?? DateTime.MinValue,
+                    CurrentStock = last.stock_nuevo ?? 0,
+                    CurrentBalance = last.saldo_nuevo_dinero ?? 0m,
+                    WeightedAverage = last.precio_promedio_ponderado ?? 0m,
+                    Status = last.estado_kardex ?? "Registrado"
+                };
+            })
+            .OrderBy(x => x.ProductName)
+            .ToList();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        productFilter = string.Empty;
+        typeFilter = string.Empty;
+        statusFilter = string.Empty;
+        fromDate = null;
+        toDate = null;
+        activeSheet = "resumen";
+    }
+
+    private async Task RebuildAllAsync()
+    {
+        var result = await KardexService.RebuildForUserScopeAsync(currentUserId, currentUserId, "Recalculo total desde modulo Kardex");
+        await LoadAsync();
+        ShowAlert($"Kardex recalculado. Productos: {result.ProductsProcessed}, lineas: {result.LinesGenerated}, observados: {result.ObservedLines}.", false);
+    }
+
+    private async Task RebuildVisibleAsync()
+    {
+        List<int> productIds = int.TryParse(productFilter, out var productId) && productId > 0
+            ? [productId]
+            : FilteredEntries.Select(x => x.id_producto).Distinct().ToList();
+
+        var result = await KardexService.RebuildForProductsAsync(productIds, currentUserId, "Recalculo visible desde modulo Kardex");
+        await LoadAsync();
+        ShowAlert($"Kardex visible recalculado. Productos: {result.ProductsProcessed}, lineas: {result.LinesGenerated}, observados: {result.ObservedLines}.", false);
+    }
+
+    private void ExportKardex()
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query.Add($"search={Uri.EscapeDataString(searchTerm)}");
+        }
+        if (!string.IsNullOrWhiteSpace(productFilter))
+        {
+            query.Add($"productId={Uri.EscapeDataString(productFilter)}");
+        }
+        if (!string.IsNullOrWhiteSpace(typeFilter))
+        {
+            query.Add($"type={Uri.EscapeDataString(typeFilter)}");
+        }
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+        {
+            query.Add($"status={Uri.EscapeDataString(statusFilter)}");
+        }
+        if (fromDate.HasValue)
+        {
+            query.Add($"from={Uri.EscapeDataString(fromDate.Value.ToString("yyyy-MM-dd"))}");
+        }
+        if (toDate.HasValue)
+        {
+            query.Add($"to={Uri.EscapeDataString(toDate.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        var exportUrl = query.Count == 0 ? "/exports/kardex.csv" : $"/exports/kardex.csv?{string.Join("&", query)}";
+        NavigationManager.NavigateTo(exportUrl, forceLoad: true);
+    }
+
+    private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
+    {
+        var permission = await db.tbl_rol_menu_permisos.AsNoTracking()
+            .Where(p => p.id_rol == currentRoleId)
+            .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/kardex"), p => p.id_menu, m => m.id_menu, (p, _) => p)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new Permissions()
+            : new Permissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private void ShowAlert(string message, bool isError)
+    {
+        alertMessage = message;
+        alertIsError = isError;
+        showAlert = true;
+    }
+
+    private void SelectSheet(string sheetKey)
+    {
+        activeSheet = sheetKey;
+        EnsureActiveSheet();
+    }
+
+    private void EnsureActiveSheet()
+    {
+        if (FilteredProductSummaries.Count == 0)
+        {
+            activeSheet = "resumen";
+            return;
+        }
+
+        if (activeSheet == "resumen")
+        {
+            return;
+        }
+
+        var exists = FilteredProductSummaries.Any(x => GetProductSheetKey(x.ProductId) == activeSheet);
+        if (!exists)
+        {
+            activeSheet = GetProductSheetKey(FilteredProductSummaries[0].ProductId);
+        }
+    }
+
+    private string NormalizeActiveSheet()
+    {
+        EnsureActiveSheet();
+        return activeSheet;
+    }
+
+    private static string GetProductSheetKey(int productId) => $"product-{productId}";
+
+    private sealed class Permissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class ProductKardexSummary
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public DateTime LastMovementDate { get; set; }
+        public int CurrentStock { get; set; }
+        public decimal CurrentBalance { get; set; }
+        public decimal WeightedAverage { get; set; }
+        public string Status { get; set; } = "Registrado";
+    }
+}
