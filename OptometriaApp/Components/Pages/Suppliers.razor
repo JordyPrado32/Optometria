@@ -325,7 +325,7 @@ else
 
                     <div>
                         <label class="form-label">Estado</label>
-                        <select class="form-select" @bind="editor.EsActivo" disabled="@(!CanModifyEditor)">
+                        <select class="form-select" @bind="EditorEsActivoValue" disabled="@(!CanModifyEditor)">
                             <option value="true">Activo</option>
                             <option value="false">Inactivo</option>
                         </select>
@@ -537,6 +537,18 @@ else
     {
         errorMessage = null;
         showFormModal = false;
+    }
+
+    private string EditorEsActivoValue
+    {
+        get => editor?.EsActivo == true ? "true" : "false";
+        set
+        {
+            if (editor is not null)
+            {
+                editor.EsActivo = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
     }
 
     private async Task SaveSupplierAsync()

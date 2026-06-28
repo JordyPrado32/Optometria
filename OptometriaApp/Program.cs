@@ -55,6 +55,30 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.AccessDeniedPath = "/";
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnValidatePrincipal = async context =>
+            {
+                var rawUserId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!int.TryParse(rawUserId, out var userId) || userId <= 0)
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    return;
+                }
+
+                var dbContext = context.HttpContext.RequestServices.GetRequiredService<OpticaDbContext>();
+                var userExists = await dbContext.tbl_usuarios
+                    .AsNoTracking()
+                    .AnyAsync(u => u.id_usuario == userId && u.activo == true);
+
+                if (!userExists)
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                }
+            }
+        };
     });
 builder.Services.AddScoped<IPasswordHasher<tbl_usuario>, PasswordHasher<tbl_usuario>>();
 builder.Services.AddScoped<AuthenticatorService>();

@@ -203,16 +203,23 @@ else
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
                 <h2>@EditorTitle</h2>
-                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">Los campos marcados con * son obligatorios.</p>
+
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label">Codigo</label>
+                        <label class="form-label">Codigo *</label>
                         <input class="form-control" @bind="editor.CodigoProducto" readonly="@(!CanModifyEditor)" maxlength="50" />
                     </div>
                     <div>
-                        <label class="form-label">Nombre</label>
+                        <label class="form-label">Nombre *</label>
                         <input class="form-control" @bind="editor.NombreProducto" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
                     <div class="patient-form-span">
@@ -449,7 +456,7 @@ else
                     </div>
                     <div>
                         <label class="form-label">Activo</label>
-                        <select class="form-select" @bind="editor.Activo" disabled="@(!CanModifyEditor)">
+                        <select class="form-select" @bind="EditorActivoValue" disabled="@(!CanModifyEditor)">
                             <option value="true">Activo</option>
                             <option value="false">Inactivo</option>
                         </select>
@@ -478,9 +485,9 @@ else
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveProductAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveProductWithHandlingAsync">Guardar cambios</button>
                 }
-                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
             </footer>
         </div>
     </div>
@@ -676,6 +683,24 @@ else
         alertMessage = string.Empty;
     }
 
+    private void CloseFormModal()
+    {
+        errorMessage = null;
+        showFormModal = false;
+    }
+
+    private string EditorActivoValue
+    {
+        get => editor?.Activo == true ? "true" : "false";
+        set
+        {
+            if (editor is not null)
+            {
+                editor.Activo = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
     private async Task SaveProductAsync()
     {
         errorMessage = null;
@@ -760,6 +785,102 @@ else
         showFormModal = false;
         isCreatingNewProduct = false;
         await LoadAsync(productEntity.id_producto);
+    }
+
+    private async Task SaveProductWithHandlingAsync()
+    {
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            return;
+        }
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var normalizedCode = editor!.CodigoProducto.Trim().ToLowerInvariant();
+            var normalizedBarcode = editor.CodigoBarras.Trim().ToLowerInvariant();
+
+            var codeExists = await dbContext.tbl_productos
+                .AnyAsync(p => p.id_producto != editor.IdProducto && p.codigo_producto.ToLower() == normalizedCode);
+
+            if (codeExists)
+            {
+                errorMessage = "Ya existe un producto con el mismo codigo.";
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedBarcode))
+            {
+                var barcodeExists = await dbContext.tbl_productos
+                    .AnyAsync(p => p.id_producto != editor.IdProducto && p.codigo_barras != null && p.codigo_barras.ToLower() == normalizedBarcode);
+
+                if (barcodeExists)
+                {
+                    errorMessage = "El codigo de barras ya existe.";
+                    return;
+                }
+            }
+
+            tbl_producto? productEntity;
+            if (isCreatingNewProduct)
+            {
+                if (!permissions.CanCreate)
+                {
+                    errorMessage = "Tu rol no tiene permiso para crear productos.";
+                    return;
+                }
+
+                productEntity = new tbl_producto
+                {
+                    fecha_creacion = DateTime.Now,
+                    usuario_creacion = currentUserName
+                };
+                dbContext.tbl_productos.Add(productEntity);
+            }
+            else
+            {
+                if (!permissions.CanEdit)
+                {
+                    errorMessage = "Tu rol no tiene permiso para editar productos.";
+                    return;
+                }
+
+                productEntity = await dbContext.tbl_productos.FirstOrDefaultAsync(p => p.id_producto == editor.IdProducto);
+                if (productEntity is null)
+                {
+                    errorMessage = "No se encontro el producto seleccionado.";
+                    return;
+                }
+            }
+
+            ApplyEditorToEntity(productEntity);
+            productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
+
+            await dbContext.SaveChangesAsync();
+
+            WriteAudit(
+                dbContext,
+                isCreatingNewProduct ? "Crear producto" : "Editar producto",
+                $"ProductoId={productEntity.id_producto}; Codigo={productEntity.codigo_producto}; Nombre={productEntity.nombre_producto}; EstadoProducto={productEntity.estado_producto}");
+
+            await dbContext.SaveChangesAsync();
+
+            ShowAlert(
+                isCreatingNewProduct
+                    ? "El producto se creo correctamente."
+                    : "La informacion del producto se guardo correctamente.",
+                false);
+
+            showFormModal = false;
+            isCreatingNewProduct = false;
+            await LoadAsync(productEntity.id_producto);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
     }
 
     private async Task DeleteProductAsync(tbl_producto product)
@@ -1156,6 +1277,16 @@ else
         return auditEntry.id_usuarioNavigation is null
             ? "Responsable: Sistema"
             : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
