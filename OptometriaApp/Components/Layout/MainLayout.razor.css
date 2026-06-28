@@ -94,21 +94,158 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.3rem;
+    padding: 0.8rem 1.4rem;
     border: 1px solid rgba(127, 105, 81, 0.12);
     border-radius: 1.5rem;
     background: rgba(255, 250, 244, 0.72);
     box-shadow: 0 14px 30px rgba(127, 105, 81, 0.06);
 }
 
-.app-header-copy {
-    display: grid;
-    gap: 0.2rem;
+.app-header-left {
+    display: flex;
+    align-items: center;
 }
 
-.app-header-copy strong {
-    color: var(--color-taupe-deep);
-    font-size: 1.05rem;
+.header-page-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-taupe-deep, #7F6951);
+    letter-spacing: -0.01em;
+}
+
+.app-header-right {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+}
+
+.header-notification-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-taupe-deep, #7F6951);
+    font-size: 1.25rem;
+    cursor: pointer;
+    position: relative;
+    padding: 0.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.header-notification-btn:hover {
+    color: var(--color-sage, #5DA181);
+    transform: scale(1.05);
+}
+
+.notification-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-apricot, #FEBC64);
+    border-radius: 50%;
+    border: 1.5px solid #fff;
+}
+
+.header-profile-divider {
+    width: 1px;
+    height: 24px;
+    background-color: rgba(127, 105, 81, 0.15);
+}
+
+.header-user-profile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none !important;
+    color: var(--color-ink, #3c342e);
+    transition: opacity 0.2s ease;
+}
+
+.header-user-profile:hover {
+    opacity: 0.85;
+}
+
+.header-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-sage, #5DA181);
+    box-shadow: 0 2px 8px rgba(93, 161, 129, 0.15);
+}
+
+.header-username {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--color-ink, #3c342e);
+}
+
+.header-user-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.header-userrole {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-taupe, #7F6951);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 1px;
+}
+
+.header-logout-btn {
+    background: transparent;
+    border: none;
+    color: #dc3545;
+    font-size: 1.55rem;
+    cursor: pointer;
+    padding: 0.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, transform 0.2s ease;
+    text-decoration: none !important;
+}
+
+.header-logout-btn:hover {
+    color: #bd2130;
+    transform: scale(1.1);
+}
+
+.app-footer {
+    margin-top: auto;
+    padding: 1.5rem 0 0.5rem 0;
+    border-top: 1px solid rgba(127, 105, 81, 0.08);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.footer-content {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    color: var(--color-taupe, #7F6951);
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.footer-brand {
+    font-weight: 700;
+    color: var(--color-sage, #5DA181);
+}
+
+.footer-divider {
+    color: rgba(127, 105, 81, 0.3);
+}
+
+.footer-copy {
+    color: var(--color-taupe, #7F6951);
 }
 
 .app-main {

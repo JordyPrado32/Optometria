@@ -55,30 +55,32 @@ else
                 <span>@FilteredSuppliers.Count resultados</span>
             </div>
 
-            <div class="management-form-grid">
+            <div class="filters-row-2">
                 <div>
                     <label class="form-label" for="supplierSearch">Buscador</label>
                     <input id="supplierSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, razon social, RUC, telefono, correo o ciudad" />
                 </div>
 
-                <div>
-                    <label class="form-label" for="supplierStatus">Estado</label>
-                    <select id="supplierStatus" class="form-select" @bind="selectedStatusFilter">
-                        <option value="all">Todos</option>
-                        <option value="active">Activos</option>
-                        <option value="inactive">Inactivos</option>
-                    </select>
-                </div>
+                <div class="filter-selects-col-2">
+                    <div>
+                        <label class="form-label" for="supplierStatus">Estado</label>
+                        <select id="supplierStatus" class="form-select" @bind="selectedStatusFilter">
+                            <option value="all">Todos</option>
+                            <option value="active">Activos</option>
+                            <option value="inactive">Inactivos</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="supplierRating">Calificacion</label>
-                    <select id="supplierRating" class="form-select" @bind="selectedRatingFilter">
-                        <option value="">Todas</option>
-                        @foreach (var option in ratingOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
+                    <div>
+                        <label class="form-label" for="supplierRating">Calificacion</label>
+                        <select id="supplierRating" class="form-select" @bind="selectedRatingFilter">
+                            <option value="">Todas</option>
+                            @foreach (var option in ratingOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
                 </div>
             </div>
 

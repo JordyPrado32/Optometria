@@ -61,41 +61,43 @@ else
                 <span>@FilteredUsers.Count resultados</span>
             </div>
 
-            <div class="management-form-grid">
+            <div class="filters-row">
                 <div>
                     <label class="form-label" for="userSearch">Buscador</label>
                     <input id="userSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, correo o teléfono" />
                 </div>
 
-                <div>
-                    <label class="form-label" for="roleFilter">Rol</label>
-                    <select id="roleFilter" class="form-select" @bind="selectedRoleFilter">
-                        <option value="">Todos</option>
-                        @foreach (var role in roles)
-                        {
-                            <option value="@role.id_rol.ToString()">@role.nombre</option>
-                        }
-                    </select>
-                </div>
+                <div class="filter-selects-col">
+                    <div>
+                        <label class="form-label" for="roleFilter">Rol</label>
+                        <select id="roleFilter" class="form-select" @bind="selectedRoleFilter">
+                            <option value="">Todos</option>
+                            @foreach (var role in roles)
+                            {
+                                <option value="@role.id_rol.ToString()">@role.nombre</option>
+                            }
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="statusFilter">Estado</label>
-                    <select id="statusFilter" class="form-select" @bind="selectedStatusFilter">
-                        <option value="all">Todos</option>
-                        <option value="active">Activos</option>
-                        <option value="inactive">Inactivos</option>
-                        <option value="blocked">Bloqueados</option>
-                    </select>
-                </div>
+                    <div>
+                        <label class="form-label" for="statusFilter">Estado</label>
+                        <select id="statusFilter" class="form-select" @bind="selectedStatusFilter">
+                            <option value="all">Todos</option>
+                            <option value="active">Activos</option>
+                            <option value="inactive">Inactivos</option>
+                            <option value="blocked">Bloqueados</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="passwordFilter">Clave</label>
-                    <select id="passwordFilter" class="form-select" @bind="selectedPasswordFilter">
-                        <option value="all">Todas</option>
-                        <option value="current">Vigente</option>
-                        <option value="expired">Vencida</option>
-                        <option value="mustchange">Cambio obligatorio</option>
-                    </select>
+                    <div>
+                        <label class="form-label" for="passwordFilter">Clave</label>
+                        <select id="passwordFilter" class="form-select" @bind="selectedPasswordFilter">
+                            <option value="all">Todas</option>
+                            <option value="current">Vigente</option>
+                            <option value="expired">Vencida</option>
+                            <option value="mustchange">Cambio obligatorio</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
