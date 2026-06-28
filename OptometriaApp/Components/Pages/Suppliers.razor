@@ -174,12 +174,19 @@ else
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
                 <h2>@EditorTitle</h2>
-                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">Los campos marcados con * son obligatorios.</p>
+
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label">Nombre</label>
+                        <label class="form-label">Nombre *</label>
                         <input class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
 
@@ -331,9 +338,9 @@ else
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveSupplierAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveSupplierWithHandlingAsync">Guardar cambios</button>
                 }
-                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
             </footer>
         </div>
     </div>
@@ -524,6 +531,12 @@ else
         alertMessage = string.Empty;
     }
 
+    private void CloseFormModal()
+    {
+        errorMessage = null;
+        showFormModal = false;
+    }
+
     private async Task SaveSupplierAsync()
     {
         errorMessage = null;
@@ -608,6 +621,102 @@ else
         showFormModal = false;
         isCreatingNewSupplier = false;
         await LoadAsync(supplierEntity.id_proveedor);
+    }
+
+    private async Task SaveSupplierWithHandlingAsync()
+    {
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            return;
+        }
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            tbl_proveedor? supplierEntity;
+
+            if (isCreatingNewSupplier)
+            {
+                if (!permissions.CanCreate)
+                {
+                    errorMessage = "Tu rol no tiene permiso para crear proveedores.";
+                    return;
+                }
+
+                supplierEntity = new tbl_proveedor
+                {
+                    fecha_registro = DateTime.Now,
+                    id_usuario_registro = currentUserId > 0 ? currentUserId : null
+                };
+                dbContext.tbl_proveedors.Add(supplierEntity);
+            }
+            else
+            {
+                if (!permissions.CanEdit)
+                {
+                    errorMessage = "Tu rol no tiene permiso para editar proveedores.";
+                    return;
+                }
+
+                supplierEntity = await dbContext.tbl_proveedors.FirstOrDefaultAsync(s => s.id_proveedor == editor!.IdProveedor);
+                if (supplierEntity is null)
+                {
+                    errorMessage = "No se encontro el proveedor seleccionado.";
+                    return;
+                }
+            }
+
+            supplierEntity.nombre = editor!.Nombre.Trim();
+            supplierEntity.razon_social = NormalizeOptional(editor.RazonSocial);
+            supplierEntity.ruc = NormalizeOptional(editor.Ruc);
+            supplierEntity.tipo_identificacion = NormalizeOptional(editor.TipoIdentificacion);
+            supplierEntity.nombre_comercial = NormalizeOptional(editor.NombreComercial);
+            supplierEntity.telefono = NormalizeOptional(editor.Telefono);
+            supplierEntity.email = NormalizeOptional(editor.Email);
+            supplierEntity.direccion = NormalizeOptional(editor.Direccion);
+            supplierEntity.ciudad = NormalizeOptional(editor.Ciudad);
+            supplierEntity.provincia = NormalizeOptional(editor.Provincia);
+            supplierEntity.codigo_postal = NormalizeOptional(editor.CodigoPostal);
+            supplierEntity.contacto_nombre = NormalizeOptional(editor.ContactoNombre);
+            supplierEntity.contacto_telefono = NormalizeOptional(editor.ContactoTelefono);
+            supplierEntity.contacto_correo = NormalizeOptional(editor.ContactoCorreo);
+            supplierEntity.dias_credito_promedio = editor.DiasCreditoPromedio;
+            supplierEntity.saldo_pendiente = editor.SaldoPendiente;
+            supplierEntity.limite_credito = editor.LimiteCredito;
+            supplierEntity.condicion_pago = NormalizeOptional(editor.CondicionPago);
+            supplierEntity.banco_nombre = NormalizeOptional(editor.BancoNombre);
+            supplierEntity.cuenta_bancaria = NormalizeOptional(editor.CuentaBancaria);
+            supplierEntity.tipo_cuenta = NormalizeOptional(editor.TipoCuenta);
+            supplierEntity.calificacion = NormalizeOptional(editor.Calificacion);
+            supplierEntity.tiempo_entrega_promedio = editor.TiempoEntregaPromedio;
+            supplierEntity.es_activo = editor.EsActivo;
+            supplierEntity.observaciones = NormalizeOptional(editor.Observaciones);
+            supplierEntity.fecha_actualizacion = DateTime.Now;
+            supplierEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
+
+            await dbContext.SaveChangesAsync();
+
+            WriteAudit(
+                dbContext,
+                isCreatingNewSupplier ? "Crear proveedor" : "Editar proveedor",
+                $"ProveedorId={supplierEntity.id_proveedor}; Nombre={supplierEntity.nombre}; Ruc={supplierEntity.ruc}; RazonSocial={supplierEntity.razon_social}; Estado={(supplierEntity.es_activo ?? true ? "Activo" : "Inactivo")}");
+
+            await dbContext.SaveChangesAsync();
+
+            ShowAlert(isCreatingNewSupplier
+                ? "El proveedor se creo correctamente."
+                : "La informacion del proveedor se guardo correctamente.", false);
+
+            showFormModal = false;
+            isCreatingNewSupplier = false;
+            await LoadAsync(supplierEntity.id_proveedor);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
     }
 
     private async Task DeleteSupplierAsync(tbl_proveedor supplier)
@@ -876,6 +985,16 @@ else
             fecha = DateTime.Now,
             detalle = detail
         });
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private sealed class ModulePermissions

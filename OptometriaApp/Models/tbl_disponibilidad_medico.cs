@@ -9,7 +9,7 @@ public partial class tbl_disponibilidad_medico
 
     public int id_medico { get; set; }
 
-    public byte dia_semana { get; set; }
+    public int dia_semana { get; set; }
 
     public string? nombre_dia { get; set; }
 

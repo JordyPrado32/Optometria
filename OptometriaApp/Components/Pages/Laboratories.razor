@@ -171,12 +171,19 @@ else
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
                 <h2>@EditorTitle</h2>
-                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">Los campos marcados con * son obligatorios.</p>
+
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="labName">Nombre</label>
+                        <label class="form-label" for="labName">Nombre *</label>
                         <input id="labName" class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
 
@@ -204,9 +211,9 @@ else
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveLaboratoryAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveLaboratoryWithHandlingAsync">Guardar cambios</button>
                 }
-                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
             </footer>
         </div>
     </div>
@@ -492,13 +499,18 @@ else
         alertMessage = string.Empty;
     }
 
+    private void CloseFormModal()
+    {
+        errorMessage = null;
+        showFormModal = false;
+    }
+
     private async Task SaveLaboratoryAsync()
     {
         errorMessage = null;
 
         if (!ValidateEditor())
         {
-            ShowAlert(errorMessage ?? "Error de validación.", true);
             return;
         }
 
@@ -554,6 +566,80 @@ else
         showFormModal = false;
         isCreatingNewLaboratory = false;
         await LoadAsync(laboratoryEntity.id_laboratorio);
+    }
+
+    private async Task SaveLaboratoryWithHandlingAsync()
+    {
+        errorMessage = null;
+
+        if (!ValidateEditor())
+        {
+            return;
+        }
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            tbl_laboratorio? laboratoryEntity;
+
+            if (isCreatingNewLaboratory)
+            {
+                if (!permissions.CanCreate)
+                {
+                    errorMessage = "Tu rol no tiene permiso para crear laboratorios.";
+                    return;
+                }
+
+                laboratoryEntity = new tbl_laboratorio
+                {
+                    activo = true
+                };
+
+                dbContext.tbl_laboratorios.Add(laboratoryEntity);
+            }
+            else
+            {
+                if (!permissions.CanEdit)
+                {
+                    errorMessage = "Tu rol no tiene permiso para editar laboratorios.";
+                    return;
+                }
+
+                laboratoryEntity = await dbContext.tbl_laboratorios.FirstOrDefaultAsync(l => l.id_laboratorio == editor!.IdLaboratorio);
+                if (laboratoryEntity is null)
+                {
+                    errorMessage = "No se encontro el laboratorio seleccionado.";
+                    return;
+                }
+            }
+
+            laboratoryEntity.nombre = editor!.Nombre.Trim();
+            laboratoryEntity.correo = NormalizeOptional(editor.Correo);
+            laboratoryEntity.whatsapp = NormalizeOptional(editor.Whatsapp);
+            laboratoryEntity.persona_contacto = NormalizeOptional(editor.PersonaContacto);
+            laboratoryEntity.direccion = NormalizeOptional(editor.Direccion);
+
+            await dbContext.SaveChangesAsync();
+
+            WriteAudit(
+                dbContext,
+                isCreatingNewLaboratory ? "Crear laboratorio" : "Editar laboratorio",
+                $"LaboratorioId={laboratoryEntity.id_laboratorio}; Nombre={laboratoryEntity.nombre}; Correo={laboratoryEntity.correo}");
+
+            await dbContext.SaveChangesAsync();
+
+            ShowAlert(isCreatingNewLaboratory
+                ? "El laboratorio se creo correctamente."
+                : "La informacion del laboratorio se guardo correctamente.", false);
+
+            showFormModal = false;
+            isCreatingNewLaboratory = false;
+            await LoadAsync(laboratoryEntity.id_laboratorio);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
     }
 
     private async Task ToggleActiveAsync(tbl_laboratorio lab)
@@ -790,6 +876,16 @@ else
             fecha = DateTime.Now,
             detalle = detail
         });
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private sealed class ModulePermissions

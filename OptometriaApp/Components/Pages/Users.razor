@@ -256,6 +256,7 @@ else
                                class="form-control"
                                value="@editor.FechaNacimiento"
                                @onchange="OnBirthDateChanged"
+                               max="@TodayDateIso"
                                readonly="@(!CanModifyEditor)" />
                     </div>
 
@@ -502,6 +503,7 @@ else
     private bool showAlertModal;
     private string alertMessage = string.Empty;
     private bool alertIsError;
+    private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
     private tbl_usuario? selectedUser;
 
     private List<tbl_usuario> FilteredUsers => users
@@ -1071,6 +1073,14 @@ else
             !DateOnly.TryParse(editor.FechaNacimiento, out _))
         {
             errorMessage = "La fecha de nacimiento no es valida.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) &&
+            DateOnly.TryParse(editor.FechaNacimiento, out var birthDate) &&
+            birthDate > DateOnly.FromDateTime(DateTime.Today))
+        {
+            errorMessage = "La fecha de nacimiento no puede estar en el futuro.";
             return false;
         }
 

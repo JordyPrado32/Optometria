@@ -208,6 +208,7 @@ else
                                        class="form-control"
                                        value="@editor.FechaNacimiento"
                                        @onchange="OnBirthDateChanged"
+                                       max="@TodayDateIso"
                                        readonly="@(!CanModifyEditor)" />
                             </div>
 
@@ -363,6 +364,7 @@ else
     private string selectedCivilStatusFilter = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
     private static readonly string[] civilStatusOptions = ["Soltero(a)", "Casado(a)", "Union libre", "Divorciado(a)", "Viudo(a)"];

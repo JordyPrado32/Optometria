@@ -81,7 +81,7 @@ else
 
                     <div>
                         <label class="form-label" for="selfPatientBirthDate">Fecha de nacimiento</label>
-                        <input id="selfPatientBirthDate" type="date" class="form-control" value="@selfPatientEditor.FechaNacimiento" @onchange="OnSelfPatientBirthDateChanged" />
+                        <input id="selfPatientBirthDate" type="date" class="form-control" value="@selfPatientEditor.FechaNacimiento" @onchange="OnSelfPatientBirthDateChanged" max="@TodayDateIso" />
                     </div>
 
                     <div>
@@ -416,7 +416,7 @@ else
 
                                 <div>
                                     <label class="form-label" for="familyBirthDate">Fecha nacimiento</label>
-                                    <input id="familyBirthDate" type="date" class="form-control" value="@appointmentEditor.FamilyBirthDate" @onchange="OnFamilyBirthDateChanged" readonly="@(!CanEditAppointments)" />
+                                    <input id="familyBirthDate" type="date" class="form-control" value="@appointmentEditor.FamilyBirthDate" @onchange="OnFamilyBirthDateChanged" readonly="@(!CanEditAppointments)" max="@TodayDateIso" />
                                 </div>
                             }
 
@@ -573,6 +573,7 @@ else
     private string dateToFilter = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private static readonly string[] appointmentTypeOptions = ["Presencial", "Telefonica", "Virtual"];
     private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
@@ -896,6 +897,12 @@ else
         }
 
         var birthDate = DateOnly.TryParse(selfPatientEditor.FechaNacimiento, out var parsedBirthDate) ? (DateOnly?)parsedBirthDate : null;
+        if (birthDate.HasValue && birthDate.Value > DateOnly.FromDateTime(DateTime.Today))
+        {
+            errorMessage = "La fecha de nacimiento no puede estar en el futuro.";
+            return;
+        }
+
         var age = CalculateAge(birthDate);
 
         if (existingPatient is null)
@@ -1663,6 +1670,21 @@ else
                     return false;
                 }
             }
+
+            if (!string.IsNullOrWhiteSpace(appointmentEditor.FamilyBirthDate))
+            {
+                if (!DateOnly.TryParse(appointmentEditor.FamilyBirthDate, out var familyBirthDate))
+                {
+                    errorMessage = "La fecha de nacimiento del familiar no es valida.";
+                    return false;
+                }
+
+                if (familyBirthDate > DateOnly.FromDateTime(DateTime.Today))
+                {
+                    errorMessage = "La fecha de nacimiento del familiar no puede estar en el futuro.";
+                    return false;
+                }
+            }
         }
 
         if (!DateOnly.TryParse(appointmentEditor.FechaCita, out var appointmentDate))
@@ -2048,7 +2070,7 @@ else
                start < end;
     }
 
-    private static byte ToDatabaseDayOfWeek(DayOfWeek dayOfWeek) => dayOfWeek switch
+    private static int ToDatabaseDayOfWeek(DayOfWeek dayOfWeek) => dayOfWeek switch
     {
         DayOfWeek.Monday => 1,
         DayOfWeek.Tuesday => 2,
@@ -2059,7 +2081,7 @@ else
         _ => 7
     };
 
-    private static string GetDayLabel(byte dayOfWeek)
+    private static string GetDayLabel(int dayOfWeek)
     {
         return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Dia {dayOfWeek}";
     }
@@ -2166,7 +2188,7 @@ else
     private sealed class AvailabilityEditor
     {
         public int IdDisponibilidad { get; set; }
-        public byte DayOfWeek { get; set; } = 1;
+        public int DayOfWeek { get; set; } = 1;
         public string StartTime { get; set; } = "08:00";
         public string EndTime { get; set; } = "17:00";
         public string BreakStart { get; set; } = "12:00";
@@ -2183,6 +2205,6 @@ else
         public string Razon { get; set; } = string.Empty;
     }
 
-    private sealed record DayOption(byte Value, string Label);
+    private sealed record DayOption(int Value, string Label);
     private sealed record SlotOption(string Key, string Label);
 }
