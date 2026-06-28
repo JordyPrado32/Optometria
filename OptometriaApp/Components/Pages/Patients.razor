@@ -56,41 +56,43 @@ else
                 <span>@FilteredPatients.Count resultados</span>
             </div>
 
-            <div class="management-form-grid">
+            <div class="filters-row">
                 <div>
                     <label class="form-label" for="patientSearch">Buscador</label>
                     <input id="patientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Código, cédula, nombre, correo o teléfono" />
                 </div>
 
-                <div>
-                    <label class="form-label" for="patientStatus">Estado</label>
-                    <select id="patientStatus" class="form-select" @bind="selectedStatusFilter">
-                        <option value="all">Todos</option>
-                        <option value="active">Activos</option>
-                        <option value="inactive">Inactivos</option>
-                    </select>
-                </div>
+                <div class="filter-selects-col">
+                    <div>
+                        <label class="form-label" for="patientStatus">Estado</label>
+                        <select id="patientStatus" class="form-select" @bind="selectedStatusFilter">
+                            <option value="all">Todos</option>
+                            <option value="active">Activos</option>
+                            <option value="inactive">Inactivos</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="patientGender">Género</label>
-                    <select id="patientGender" class="form-select" @bind="selectedGenderFilter">
-                        <option value="">Todos</option>
-                        @foreach (var option in genderOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
-                </div>
+                    <div>
+                        <label class="form-label" for="patientGender">Género</label>
+                        <select id="patientGender" class="form-select" @bind="selectedGenderFilter">
+                            <option value="">Todos</option>
+                            @foreach (var option in genderOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="patientCivilStatus">Estado civil</label>
-                    <select id="patientCivilStatus" class="form-select" @bind="selectedCivilStatusFilter">
-                        <option value="">Todos</option>
-                        @foreach (var option in civilStatusOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
+                    <div>
+                        <label class="form-label" for="patientCivilStatus">Estado civil</label>
+                        <select id="patientCivilStatus" class="form-select" @bind="selectedCivilStatusFilter">
+                            <option value="">Todos</option>
+                            @foreach (var option in civilStatusOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -219,8 +221,8 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="patientBirthDate">Fecha de nacimiento</label>
-                        <input id="patientBirthDate" type="date" class="form-control" value="@editor.FechaNacimiento" @onchange="OnBirthDateChanged" readonly="@(!CanModifyEditor)" />
+                        <label class="form-label" for="patientBirthDate">Fecha de nacimiento <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
+                        <input id="patientBirthDate" type="date" class="form-control" value="@editor.FechaNacimiento" @onchange="OnBirthDateChanged" readonly="@(!CanModifyEditor)" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
                     </div>
 
                     <div>
@@ -607,126 +609,149 @@ else
             return;
         }
 
-        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var normalizedCedula = editor!.Cedula.Trim().ToLowerInvariant();
-        var normalizedEmail = editor.Email.Trim().ToLowerInvariant();
-        var normalizedCode = editor.CodigoPaciente.Trim().ToLowerInvariant();
-
-        var cedulaExists = await dbContext.tbl_pacientes
-            .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.cedula.ToLower() == normalizedCedula);
-
-        if (cedulaExists)
+        try
         {
-            ShowAlert("La cédula ya está registrada para otro paciente.", true);
-            return;
-        }
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var normalizedCedula = editor!.Cedula.Trim().ToLowerInvariant();
+            var normalizedEmail = editor.Email.Trim().ToLowerInvariant();
+            var normalizedCode = editor.CodigoPaciente.Trim().ToLowerInvariant();
 
-        if (!string.IsNullOrWhiteSpace(normalizedEmail))
-        {
-            var emailExists = await dbContext.tbl_pacientes
-                .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.email != null && p.email.ToLower() == normalizedEmail);
+            var cedulaExists = await dbContext.tbl_pacientes
+                .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.cedula.ToLower() == normalizedCedula);
 
-            if (emailExists)
+            if (cedulaExists)
             {
-                ShowAlert("El correo ya está registrado para otro paciente.", true);
-                return;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(normalizedCode))
-        {
-            var codeExists = await dbContext.tbl_pacientes
-                .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.codigo_paciente != null && p.codigo_paciente.ToLower() == normalizedCode);
-
-            if (codeExists)
-            {
-                ShowAlert("El código del paciente ya existe.", true);
-                return;
-            }
-        }
-
-        var birthDate = ParseBirthDate(editor.FechaNacimiento);
-        var age = CalculateAge(birthDate);
-
-        if (isCreatingNewPatient)
-        {
-            if (!permissions.CanCreate)
-            {
-                ShowAlert("Tu rol no tiene permiso para crear pacientes.", true);
+                ShowAlert("La cédula ya está registrada para otro paciente.", true);
                 return;
             }
 
-            var newPatient = new tbl_paciente
+            if (!string.IsNullOrWhiteSpace(normalizedEmail))
             {
-                codigo_paciente = ResolvePatientCode(editor.CodigoPaciente),
-                cedula = editor.Cedula.Trim(),
-                nombres = editor.Nombres.Trim(),
-                apellidos = editor.Apellidos.Trim(),
-                fecha_nacimiento = birthDate,
-                edad = age,
-                genero = NormalizeOptional(editor.Genero),
-                estado_civil = NormalizeOptional(editor.EstadoCivil),
-                ocupacion = NormalizeOptional(editor.Ocupacion),
-                direccion = NormalizeOptional(editor.Direccion),
-                telefono = NormalizeOptional(editor.Telefono),
-                email = NormalizeOptional(editor.Email),
-                observaciones = NormalizeOptional(editor.Observaciones),
-                activo = true,
-                fecha_registro = DateTime.Now,
-                id_usuario_registro = currentUserId > 0 ? currentUserId : null
-            };
+                var emailExists = await dbContext.tbl_pacientes
+                    .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.email != null && p.email.ToLower() == normalizedEmail);
 
-            dbContext.tbl_pacientes.Add(newPatient);
-            await dbContext.SaveChangesAsync();
+                if (emailExists)
+                {
+                    ShowAlert("El correo ya está registrado para otro paciente.", true);
+                    return;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedCode))
+            {
+                var codeExists = await dbContext.tbl_pacientes
+                    .AnyAsync(p => p.id_paciente != editor.IdPaciente && p.codigo_paciente != null && p.codigo_paciente.ToLower() == normalizedCode);
+
+                if (codeExists)
+                {
+                    ShowAlert("El código del paciente ya existe.", true);
+                    return;
+                }
+            }
+
+            var birthDate = ParseBirthDate(editor.FechaNacimiento);
+            var age = CalculateAge(birthDate);
+
+            // Validar que el usuario de registro realmente exista en la base de datos
+            int? validUserId = null;
+            if (currentUserId > 0)
+            {
+                var userExists = await dbContext.tbl_usuarios.AnyAsync(u => u.id_usuario == currentUserId);
+                if (userExists)
+                {
+                    validUserId = currentUserId;
+                }
+            }
+
+            if (isCreatingNewPatient)
+            {
+                if (!permissions.CanCreate)
+                {
+                    ShowAlert("Tu rol no tiene permiso para crear pacientes.", true);
+                    return;
+                }
+
+                var newPatient = new tbl_paciente
+                {
+                    codigo_paciente = ResolvePatientCode(editor.CodigoPaciente),
+                    cedula = editor.Cedula.Trim(),
+                    nombres = editor.Nombres.Trim(),
+                    apellidos = editor.Apellidos.Trim(),
+                    fecha_nacimiento = birthDate,
+                    edad = age,
+                    genero = NormalizeOptional(editor.Genero),
+                    estado_civil = NormalizeOptional(editor.EstadoCivil),
+                    ocupacion = NormalizeOptional(editor.Ocupacion),
+                    direccion = NormalizeOptional(editor.Direccion),
+                    telefono = NormalizeOptional(editor.Telefono),
+                    email = NormalizeOptional(editor.Email),
+                    observaciones = NormalizeOptional(editor.Observaciones),
+                    activo = true,
+                    fecha_registro = DateTime.Now,
+                    id_usuario_registro = validUserId
+                };
+
+                dbContext.tbl_pacientes.Add(newPatient);
+                await dbContext.SaveChangesAsync();
+
+                WriteAudit(
+                    dbContext,
+                    "Crear paciente",
+                    $"PacienteId={newPatient.id_paciente}; Cedula={newPatient.cedula}; Nombre={newPatient.nombres} {newPatient.apellidos}; Codigo={newPatient.codigo_paciente}");
+
+                await dbContext.SaveChangesAsync();
+                ShowAlert("El paciente se registró correctamente.", false);
+                showFormModal = false;
+                await LoadAsync();
+                return;
+            }
+
+            if (!permissions.CanEdit)
+            {
+                ShowAlert("Tu rol no tiene permiso para editar pacientes.", true);
+                return;
+            }
+
+            var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
+            if (patientEntity is null)
+            {
+                ShowAlert("No se encontró el paciente seleccionado.", true);
+                return;
+            }
+
+            patientEntity.codigo_paciente = ResolvePatientCode(editor.CodigoPaciente);
+            patientEntity.cedula = editor.Cedula.Trim();
+            patientEntity.nombres = editor.Nombres.Trim();
+            patientEntity.apellidos = editor.Apellidos.Trim();
+            patientEntity.fecha_nacimiento = birthDate;
+            patientEntity.edad = age;
+            patientEntity.genero = NormalizeOptional(editor.Genero);
+            patientEntity.estado_civil = NormalizeOptional(editor.EstadoCivil);
+            patientEntity.ocupacion = NormalizeOptional(editor.Ocupacion);
+            patientEntity.direccion = NormalizeOptional(editor.Direccion);
+            patientEntity.telefono = NormalizeOptional(editor.Telefono);
+            patientEntity.email = NormalizeOptional(editor.Email);
+            patientEntity.observaciones = NormalizeOptional(editor.Observaciones);
 
             WriteAudit(
                 dbContext,
-                "Crear paciente",
-                $"PacienteId={newPatient.id_paciente}; Cedula={newPatient.cedula}; Nombre={newPatient.nombres} {newPatient.apellidos}; Codigo={newPatient.codigo_paciente}");
+                "Editar paciente",
+                $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Nombre={patientEntity.nombres} {patientEntity.apellidos}");
 
             await dbContext.SaveChangesAsync();
-            ShowAlert("El paciente se registró correctamente.", false);
+            ShowAlert("La información del paciente se guardó correctamente.", false);
             showFormModal = false;
             await LoadAsync();
-            return;
         }
-
-        if (!permissions.CanEdit)
+        catch (DbUpdateException dbEx)
         {
-            ShowAlert("Tu rol no tiene permiso para editar pacientes.", true);
-            return;
+            var innerMsg = dbEx.InnerException?.Message ?? dbEx.Message;
+            ShowAlert($"Error de base de datos al guardar: {innerMsg}", true);
         }
-
-        var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
-        if (patientEntity is null)
+        catch (Exception ex)
         {
-            ShowAlert("No se encontró el paciente seleccionado.", true);
-            return;
+            ShowAlert($"Ocurrió un error inesperado al guardar los cambios: {ex.Message}", true);
         }
-
-        patientEntity.codigo_paciente = ResolvePatientCode(editor.CodigoPaciente);
-        patientEntity.cedula = editor.Cedula.Trim();
-        patientEntity.nombres = editor.Nombres.Trim();
-        patientEntity.apellidos = editor.Apellidos.Trim();
-        patientEntity.fecha_nacimiento = birthDate;
-        patientEntity.edad = age;
-        patientEntity.genero = NormalizeOptional(editor.Genero);
-        patientEntity.estado_civil = NormalizeOptional(editor.EstadoCivil);
-        patientEntity.ocupacion = NormalizeOptional(editor.Ocupacion);
-        patientEntity.direccion = NormalizeOptional(editor.Direccion);
-        patientEntity.telefono = NormalizeOptional(editor.Telefono);
-        patientEntity.email = NormalizeOptional(editor.Email);
-        patientEntity.observaciones = NormalizeOptional(editor.Observaciones);
-
-        WriteAudit(
-            dbContext,
-            "Editar paciente",
-            $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Nombre={patientEntity.nombres} {patientEntity.apellidos}");
-
-        await dbContext.SaveChangesAsync();
-        ShowAlert("La información del paciente se guardó correctamente.", false);
-        showFormModal = false;
-        await LoadAsync();
     }
 
     private async Task ToggleActiveAsync(tbl_paciente patient)
@@ -737,26 +762,33 @@ else
             return;
         }
 
-        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == patient.id_paciente);
-        if (patientEntity is null)
+        try
         {
-            ShowAlert("No se encontró el paciente seleccionado.", true);
-            return;
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == patient.id_paciente);
+            if (patientEntity is null)
+            {
+                ShowAlert("No se encontró el paciente seleccionado.", true);
+                return;
+            }
+
+            patientEntity.activo = !(patientEntity.activo ?? false);
+            WriteAudit(
+                dbContext,
+                patientEntity.activo == true ? "Reactivar paciente" : "Inactivar paciente",
+                $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Activo={(patientEntity.activo == true ? "Si" : "No")}");
+
+            await dbContext.SaveChangesAsync();
+            ShowAlert(patientEntity.activo == true
+                ? "El paciente fue reactivado correctamente."
+                : "El paciente fue inactivado correctamente.", false);
+
+            await LoadAsync();
         }
-
-        patientEntity.activo = !(patientEntity.activo ?? false);
-        WriteAudit(
-            dbContext,
-            patientEntity.activo == true ? "Reactivar paciente" : "Inactivar paciente",
-            $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Activo={(patientEntity.activo == true ? "Si" : "No")}");
-
-        await dbContext.SaveChangesAsync();
-        ShowAlert(patientEntity.activo == true
-            ? "El paciente fue reactivado correctamente."
-            : "El paciente fue inactivado correctamente.", false);
-
-        await LoadAsync();
+        catch (Exception ex)
+        {
+            ShowAlert($"Ocurrió un error al cambiar el estado del paciente: {ex.Message}", true);
+        }
     }
 
     private void ClearFilters()
@@ -819,7 +851,16 @@ else
             return;
         }
 
-        editor.FechaNacimiento = args.Value?.ToString() ?? string.Empty;
+        var inputVal = args.Value?.ToString() ?? string.Empty;
+        if (DateOnly.TryParse(inputVal, out var birthDate) && birthDate > DateOnly.FromDateTime(DateTime.Today))
+        {
+            ShowAlert("La fecha de nacimiento no puede estar en el futuro.", true);
+            editor.FechaNacimiento = string.Empty;
+            editor.Edad = null;
+            return;
+        }
+
+        editor.FechaNacimiento = inputVal;
         editor.Edad = CalculateAge(ParseBirthDate(editor.FechaNacimiento));
     }
 
@@ -1077,9 +1118,10 @@ else
 
     private void WriteAudit(OpticaDbContext dbContext, string action, string detail)
     {
+        var validUserId = (currentUserId > 0 && dbContext.tbl_usuarios.Any(u => u.id_usuario == currentUserId)) ? (int?)currentUserId : null;
         dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
         {
-            id_usuario = currentUserId > 0 ? currentUserId : null,
+            id_usuario = validUserId,
             accion = action,
             modulo = "Pacientes",
             fecha = DateTime.Now,

@@ -1,8 +1,7 @@
 .app-nav-shell {
     position: relative;
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     height: 100%;
     width: 100%;
@@ -29,9 +28,8 @@
 }
 
 .app-nav {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
-    gap: 1.5rem;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     width: 100%;
 }
