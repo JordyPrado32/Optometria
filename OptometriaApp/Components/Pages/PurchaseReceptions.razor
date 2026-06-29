@@ -32,30 +32,32 @@ else
 
         <section class="management-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredReceptions.Count resultados</span></div>
-            <div class="management-form-grid">
+            <div class="filters-row-2">
                 <div>
                     <label class="form-label">Buscar</label>
                     <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Numero recepcion, orden o guia" />
                 </div>
-                <div>
-                    <label class="form-label">Estado</label>
-                    <select class="form-select" @bind="stateFilter">
-                        <option value="">Todos</option>
-                        @foreach (var option in stateOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Orden</label>
-                    <select class="form-select" @bind="orderFilter">
-                        <option value="">Todas</option>
-                        @foreach (var order in availableOrders.OrderByDescending(o => o.fecha_orden))
-                        {
-                            <option value="@order.id_orden_compra.ToString()">@order.numero_orden</option>
-                        }
-                    </select>
+                <div class="filter-selects-col-2">
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="stateFilter">
+                            <option value="">Todos</option>
+                            @foreach (var option in stateOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Orden</label>
+                        <select class="form-select" @bind="orderFilter">
+                            <option value="">Todas</option>
+                            @foreach (var order in availableOrders.OrderByDescending(o => o.fecha_orden))
+                            {
+                                <option value="@order.id_orden_compra.ToString()">@order.numero_orden</option>
+                            }
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="management-actions" style="margin-top: 1rem;">

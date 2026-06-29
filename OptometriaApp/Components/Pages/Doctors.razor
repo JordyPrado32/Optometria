@@ -103,38 +103,40 @@ else
                 <span>@FilteredUsers.Count resultados</span>
             </div>
 
-            <div class="management-form-grid">
+            <div class="filters-row">
                 <div>
                     <label class="form-label" for="doctorSearch">Buscador</label>
                     <input id="doctorSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, especialidad o licencia" />
                 </div>
 
-                <div>
-                    <label class="form-label" for="doctorProfileFilter">Ficha</label>
-                    <select id="doctorProfileFilter" class="form-select" @bind="selectedProfileFilter">
-                        <option value="all">Todas</option>
-                        <option value="configured">Con ficha</option>
-                        <option value="pending">Pendientes</option>
-                        <option value="available">Disponibles para agenda</option>
-                    </select>
-                </div>
+                <div class="filter-selects-col">
+                    <div>
+                        <label class="form-label" for="doctorProfileFilter">Ficha</label>
+                        <select id="doctorProfileFilter" class="form-select" @bind="selectedProfileFilter">
+                            <option value="all">Todas</option>
+                            <option value="configured">Con ficha</option>
+                            <option value="pending">Pendientes</option>
+                            <option value="available">Disponibles para agenda</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="doctorAccessFilter">Usuario</label>
-                    <select id="doctorAccessFilter" class="form-select" @bind="selectedAccessFilter">
-                        <option value="all">Todos</option>
-                        <option value="active">Activos</option>
-                        <option value="inactive">Inactivos</option>
-                    </select>
-                </div>
+                    <div>
+                        <label class="form-label" for="doctorAccessFilter">Usuario</label>
+                        <select id="doctorAccessFilter" class="form-select" @bind="selectedAccessFilter">
+                            <option value="all">Todos</option>
+                            <option value="active">Activos</option>
+                            <option value="inactive">Inactivos</option>
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="doctorRecordFilter">Estado de ficha</label>
-                    <select id="doctorRecordFilter" class="form-select" @bind="selectedRecordFilter">
-                        <option value="all">Todos</option>
-                        <option value="active">Fichas activas</option>
-                        <option value="inactive">Fichas inactivas</option>
-                    </select>
+                    <div>
+                        <label class="form-label" for="doctorRecordFilter">Estado de ficha</label>
+                        <select id="doctorRecordFilter" class="form-select" @bind="selectedRecordFilter">
+                            <option value="all">Todos</option>
+                            <option value="active">Fichas activas</option>
+                            <option value="inactive">Fichas inactivas</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

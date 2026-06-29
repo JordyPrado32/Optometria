@@ -54,30 +54,32 @@ else
                 <span>@FilteredClients.Count resultados</span>
             </div>
 
-            <div class="management-form-grid">
+            <div class="filters-row-2">
                 <div>
                     <label class="form-label" for="clientSearch">Buscador</label>
                     <input id="clientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Identificacion, razon social, nombres, ciudad o correo" />
                 </div>
 
-                <div>
-                    <label class="form-label" for="clientType">Tipo de cliente</label>
-                    <select id="clientType" class="form-select" @bind="selectedTypeFilter">
-                        <option value="">Todos</option>
-                        @foreach (var option in clientTypeOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
-                </div>
+                <div class="filter-selects-col-2">
+                    <div>
+                        <label class="form-label" for="clientType">Tipo de cliente</label>
+                        <select id="clientType" class="form-select" @bind="selectedTypeFilter">
+                            <option value="">Todos</option>
+                            @foreach (var option in clientTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
 
-                <div>
-                    <label class="form-label" for="clientStatus">Estado</label>
-                    <select id="clientStatus" class="form-select" @bind="selectedStatusFilter">
-                        <option value="all">Todos</option>
-                        <option value="active">Activos</option>
-                        <option value="inactive">Inactivos</option>
-                    </select>
+                    <div>
+                        <label class="form-label" for="clientStatus">Estado</label>
+                        <select id="clientStatus" class="form-select" @bind="selectedStatusFilter">
+                            <option value="all">Todos</option>
+                            <option value="active">Activos</option>
+                            <option value="inactive">Inactivos</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

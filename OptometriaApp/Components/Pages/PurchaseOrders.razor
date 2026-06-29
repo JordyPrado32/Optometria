@@ -38,30 +38,32 @@ else
                 <h2>Filtros</h2>
                 <span>@FilteredOrders.Count resultados</span>
             </div>
-            <div class="management-form-grid">
+            <div class="filters-row-2">
                 <div>
                     <label class="form-label">Buscar</label>
                     <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Numero, proveedor o referencia" />
                 </div>
-                <div>
-                    <label class="form-label">Estado</label>
-                    <select class="form-select" @bind="stateFilter">
-                        <option value="">Todos</option>
-                        @foreach (var option in stateOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Proveedor</label>
-                    <select class="form-select" @bind="supplierFilter">
-                        <option value="">Todos</option>
-                        @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
-                        {
-                            <option value="@supplier.id_proveedor.ToString()">@supplier.nombre</option>
-                        }
-                    </select>
+                <div class="filter-selects-col-2">
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="stateFilter">
+                            <option value="">Todos</option>
+                            @foreach (var option in stateOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" @bind="supplierFilter">
+                            <option value="">Todos</option>
+                            @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
+                            {
+                                <option value="@supplier.id_proveedor.ToString()">@supplier.nombre</option>
+                            }
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="management-actions" style="margin-top: 1rem;">
