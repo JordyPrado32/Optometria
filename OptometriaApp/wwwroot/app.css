@@ -1733,3 +1733,52 @@ textarea.form-control:focus,
         grid-template-columns: 1fr !important;
     }
 }
+
+.appointment-filters-grid-all {
+    display: grid;
+    grid-template-columns: 2.2fr 1.8fr 1fr 1fr 1.1fr 1.1fr;
+    gap: 0.8rem;
+    align-items: end;
+}
+
+.appointment-filters-grid-doctor {
+    display: grid;
+    grid-template-columns: 3fr 1.1fr 1.1fr 1.2fr 1.2fr;
+    gap: 0.8rem;
+    align-items: end;
+}
+
+@media (max-width: 1024px) {
+    .appointment-filters-grid-all {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+    .appointment-filters-grid-doctor {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .appointment-filters-grid-all,
+    .appointment-filters-grid-doctor {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+.product-filters-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+    gap: 0.8rem;
+    align-items: end;
+}
+
+@media (max-width: 1100px) {
+    .product-filters-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .product-filters-grid {
+        grid-template-columns: 1fr !important;
+    }
+}

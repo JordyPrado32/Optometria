@@ -34,7 +34,7 @@ else
             <div class="workspace-actions">
                 @if (IsEntryMode && permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewPatient">Nuevo paciente</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="OpenNewPatientModal">Nuevo paciente</button>
                 }
 
                 <button type="button" class="btn btn-primary" @onclick="ExportPatients">Exportar CSV</button>
@@ -100,250 +100,239 @@ else
             </div>
         </section>
 
-        <div class="management-grid">
-            <aside class="management-card management-list-card">
-                <div class="management-card-header">
-                    <h2>@ListTitle</h2>
-                    <span>@FilteredPatients.Count visibles</span>
-                </div>
+        <!-- Patients Table -->
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>@ListTitle</h2>
+                <span>@FilteredPatients.Count registros</span>
+            </div>
 
-                <div class="management-list">
-                    @if (FilteredPatients.Count == 0)
-                    {
-                        <p>No hay pacientes asignados que coincidan con los filtros actuales.</p>
-                    }
-                    else
-                    {
-                        @foreach (var patient in FilteredPatients)
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Cédula</th>
+                            <th>Paciente</th>
+                            <th>Teléfono</th>
+                            <th>Correo</th>
+                            <th>Estado</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredPatients.Count == 0)
                         {
-                            <button type="button"
-                                    class="management-list-item patient-explorer-item @(selectedPatientId == patient.id_paciente && !isCreatingNewPatient ? "is-active" : string.Empty)"
-                                    @onclick="() => SelectPatientAsync(patient.id_paciente)">
-                                <div class="patient-explorer-head">
-                                    <strong>@($"{patient.nombres} {patient.apellidos}")</strong>
-                                    <span>@(string.IsNullOrWhiteSpace(patient.codigo_paciente) ? "Sin codigo" : patient.codigo_paciente)</span>
-                                </div>
-                                <div class="patient-explorer-meta">
-                                    <span>@patient.cedula</span>
-                                    <span>@(patient.activo == true ? "Activo" : "Inactivo")</span>
-                                </div>
-                                <div class="patient-explorer-copy">
-                                    <span>@(string.IsNullOrWhiteSpace(patient.email) ? "Sin correo" : patient.email)</span>
-                                    <span>@(string.IsNullOrWhiteSpace(patient.telefono) ? "Sin telefono" : patient.telefono)</span>
-                                </div>
-                            </button>
-                        }
-                    }
-                </div>
-            </aside>
-
-            <div class="management-stack">
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Resumen del paciente</h2>
-                        <span>@EditorSubtitle</span>
-                    </div>
-
-                    @if (editor is null)
-                    {
-                        <p>@EmptySelectionMessage</p>
-                    }
-                    else
-                    {
-                        <div class="user-summary-grid">
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Identificacion</span>
-                                <strong>@editor.FullName</strong>
-                                <p>@editor.Cedula</p>
-                            </div>
-
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Seguimiento</span>
-                                <strong>@editor.CodigoPaciente</strong>
-                                <p>@GetAgeSummary()</p>
-                            </div>
-
-                            <div class="user-summary-card">
-                                <span class="eyebrow">Asignacion</span>
-                                <strong>@editor.TotalConsultas</strong>
-                                <p>@GetConsultationSummary()</p>
-                            </div>
-                        </div>
-                    }
-                </section>
-
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>@EditorTitle</h2>
-                        <span>@(CanModifyEditor ? "Edicion habilitada" : "Solo lectura")</span>
-                    </div>
-
-                    @if (editor is not null)
-                    {
-                        <div class="management-form-grid">
-                            <div>
-                                <label class="form-label" for="doctorPatientCode">Codigo paciente</label>
-                                <input id="doctorPatientCode" class="form-control" @bind="editor.CodigoPaciente" readonly="@(!CanModifyEditor)" maxlength="30" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientDocument">Cedula</label>
-                                <input id="doctorPatientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientNames">Nombres</label>
-                                <input id="doctorPatientNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="100" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientLastNames">Apellidos</label>
-                                <input id="doctorPatientLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="100" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientBirthDate">Fecha de nacimiento</label>
-                                <input id="doctorPatientBirthDate"
-                                       type="date"
-                                       class="form-control"
-                                       value="@editor.FechaNacimiento"
-                                       @onchange="OnBirthDateChanged"
-                                       max="@TodayDateIso"
-                                       readonly="@(!CanModifyEditor)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientAge">Edad</label>
-                                <input id="doctorPatientAge" class="form-control" value="@GetCalculatedAgeText()" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientGenderField">Genero</label>
-                                <select id="doctorPatientGenderField" class="form-select" @bind="editor.Genero" disabled="@(!CanModifyEditor)">
-                                    <option value="">Selecciona</option>
-                                    @foreach (var option in genderOptions)
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientCivilStatusField">Estado civil</label>
-                                <select id="doctorPatientCivilStatusField" class="form-select" @bind="editor.EstadoCivil" disabled="@(!CanModifyEditor)">
-                                    <option value="">Selecciona</option>
-                                    @foreach (var option in civilStatusOptions)
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientOccupation">Ocupacion</label>
-                                <input id="doctorPatientOccupation" class="form-control" @bind="editor.Ocupacion" readonly="@(!CanModifyEditor)" maxlength="100" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientPhone">Telefono</label>
-                                <input id="doctorPatientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="doctorPatientEmail">Correo</label>
-                                <input id="doctorPatientEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
-                            </div>
-                        </div>
-
-                        <div class="management-form-grid patient-form-block">
-                            <div class="patient-form-span">
-                                <label class="form-label" for="doctorPatientAddress">Direccion</label>
-                                <input id="doctorPatientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
-                            </div>
-
-                            <div class="patient-form-span">
-                                <label class="form-label" for="doctorPatientObservations">Observaciones</label>
-                                <textarea id="doctorPatientObservations" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions">
-                            @if (CanModifyEditor)
-                            {
-                                <button type="button" class="btn btn-primary" @onclick="SavePatientAsync">Guardar cambios</button>
-                            }
-
-                            @if (IsEntryMode && !isCreatingNewPatient && permissions.CanDelete)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick="ToggleActiveAsync">
-                                    @(editor.Activo ? "Inactivar paciente" : "Reactivar paciente")
-                                </button>
-                            }
-                        </div>
-                    }
-                </section>
-
-                @if (editor is not null && !isCreatingNewPatient)
-                {
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Ficha de control</h2>
-                            <span>Solo lectura</span>
-                        </div>
-
-                        <div class="user-audit-grid">
-                            <div>
-                                <label class="form-label">Fecha de registro</label>
-                                <input class="form-control" value="@editor.FechaRegistro" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Usuario registro</label>
-                                <input class="form-control" value="@editor.UsuarioRegistro" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Consultas contigo</label>
-                                <input class="form-control" value="@editor.TotalConsultas" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Ultima consulta</label>
-                                <input class="form-control" value="@editor.UltimaConsulta" readonly />
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Auditoria</h2>
-                            <span>@auditEntries.Count eventos</span>
-                        </div>
-
-                        @if (auditEntries.Count == 0)
-                        {
-                            <p>No hay eventos registrados para este paciente.</p>
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No se encontraron pacientes con los filtros actuales.
+                                </td>
+                            </tr>
                         }
                         else
                         {
-                            <div class="management-list">
-                                @foreach (var auditEntry in auditEntries)
-                                {
-                                    <article class="management-list-item">
-                                        <strong>@auditEntry.accion</strong>
-                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
-                                        <span>@GetAuditActorLabel(auditEntry)</span>
-                                        <span>@auditEntry.detalle</span>
-                                    </article>
-                                }
-                            </div>
+                            @foreach (var patient in FilteredPatients)
+                            {
+                                <tr>
+                                    <td><span style="font-family: monospace; font-size: 0.85rem;">@(string.IsNullOrWhiteSpace(patient.codigo_paciente) ? "-" : patient.codigo_paciente)</span></td>
+                                    <td>@patient.cedula</td>
+                                    <td><strong style="color: var(--color-ink);">@($"{patient.nombres} {patient.apellidos}")</strong></td>
+                                    <td>@(string.IsNullOrWhiteSpace(patient.telefono) ? "-" : patient.telefono)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(patient.email) ? "-" : patient.email)</td>
+                                    <td>
+                                        @if (patient.activo == true)
+                                        {
+                                            <span class="badge" style="background: rgba(93,161,129,0.15) !important; color: #5DA181 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;">Activo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge" style="background: rgba(127,105,81,0.12) !important; color: #7F6951 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;">Inactivo</span>
+                                        }
+                                    </td>
+                                    <td style="text-align: right; padding-right: 1.2rem;">
+                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
+                                                    @onclick="() => OpenEditPatientModal(patient.id_paciente)">
+                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> @(IsEntryMode ? "Editar" : "Ver")
+                                            </button>
+                                            @if (IsEntryMode && permissions.CanDelete)
+                                            {
+                                                @if (patient.activo == true)
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary"
+                                                            style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.2) !important; color: var(--color-taupe) !important;"
+                                                            @onclick="() => ToggleActiveFromTableAsync(patient.id_paciente)">
+                                                        Desactivar
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="btn btn-primary"
+                                                            style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; background-color: var(--color-sage) !important; border-color: var(--color-sage) !important;"
+                                                            @onclick="() => ToggleActiveFromTableAsync(patient.id_paciente)">
+                                                        Activar
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
-                    </section>
-                }
+                    </tbody>
+                </table>
             </div>
-        </div>
+        </section>
     </section>
 }
+
+<!-- Patient Form Modal -->
+@if (showFormModal && editor is not null)
+{
+    <div class="custom-modal-overlay" @onclick="ClosePatientModal">
+        <div class="custom-modal-card form-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@EditorTitle</h2>
+                <button type="button" class="btn-close-modal" @onclick="ClosePatientModal">×</button>
+            </header>
+
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert" style="margin-bottom: 1rem;">@errorMessage</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(statusMessage))
+                {
+                    <div class="alert alert-success" role="alert" style="margin-bottom: 1rem;">@statusMessage</div>
+                }
+
+                @if (!isCreatingNewPatient)
+                {
+                    <div class="user-summary-grid" style="margin-bottom: 1.2rem;">
+                        <div class="user-summary-card">
+                            <span class="eyebrow">Identificacion</span>
+                            <strong>@editor.FullName</strong>
+                            <p>@editor.Cedula</p>
+                        </div>
+                        <div class="user-summary-card">
+                            <span class="eyebrow">Seguimiento</span>
+                            <strong>@editor.CodigoPaciente</strong>
+                            <p>@GetAgeSummary()</p>
+                        </div>
+                        <div class="user-summary-card">
+                            <span class="eyebrow">Asignacion</span>
+                            <strong>@editor.TotalConsultas</strong>
+                            <p>@GetConsultationSummary()</p>
+                        </div>
+                    </div>
+                }
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientCode">Codigo paciente</label>
+                        <input id="modalDoctorPatientCode" class="form-control" @bind="editor.CodigoPaciente" readonly="@(!CanModifyEditor)" maxlength="30" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientDocument">Cedula</label>
+                        <input id="modalDoctorPatientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientNames">Nombres</label>
+                        <input id="modalDoctorPatientNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientLastNames">Apellidos</label>
+                        <input id="modalDoctorPatientLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientBirthDate">Fecha de nacimiento</label>
+                        <input id="modalDoctorPatientBirthDate" type="date" class="form-control" value="@editor.FechaNacimiento" @onchange="OnBirthDateChanged" max="@TodayDateIso" readonly="@(!CanModifyEditor)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientAge">Edad</label>
+                        <input id="modalDoctorPatientAge" class="form-control" value="@GetCalculatedAgeText()" readonly />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientGenderField">Genero</label>
+                        <select id="modalDoctorPatientGenderField" class="form-select" @bind="editor.Genero" disabled="@(!CanModifyEditor)">
+                            <option value="">Selecciona</option>
+                            @foreach (var option in genderOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientCivilStatusField">Estado civil</label>
+                        <select id="modalDoctorPatientCivilStatusField" class="form-select" @bind="editor.EstadoCivil" disabled="@(!CanModifyEditor)">
+                            <option value="">Selecciona</option>
+                            @foreach (var option in civilStatusOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientOccupation">Ocupacion</label>
+                        <input id="modalDoctorPatientOccupation" class="form-control" @bind="editor.Ocupacion" readonly="@(!CanModifyEditor)" maxlength="100" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientPhone">Telefono</label>
+                        <input id="modalDoctorPatientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="modalDoctorPatientEmail">Correo</label>
+                        <input id="modalDoctorPatientEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
+                    </div>
+                </div>
+
+                <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
+                    <div class="patient-form-span">
+                        <label class="form-label" for="modalDoctorPatientAddress">Direccion</label>
+                        <input id="modalDoctorPatientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                    </div>
+                    <div class="patient-form-span">
+                        <label class="form-label" for="modalDoctorPatientObservations">Observaciones</label>
+                        <textarea id="modalDoctorPatientObservations" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                    </div>
+                </div>
+
+                @if (!isCreatingNewPatient)
+                {
+                    <div class="user-audit-grid" style="margin-top: 1.2rem;">
+                        <div>
+                            <label class="form-label">Fecha de registro</label>
+                            <input class="form-control" value="@editor.FechaRegistro" readonly />
+                        </div>
+                        <div>
+                            <label class="form-label">Usuario registro</label>
+                            <input class="form-control" value="@editor.UsuarioRegistro" readonly />
+                        </div>
+                        <div>
+                            <label class="form-label">Consultas contigo</label>
+                            <input class="form-control" value="@editor.TotalConsultas" readonly />
+                        </div>
+                        <div>
+                            <label class="form-label">Ultima consulta</label>
+                            <input class="form-control" value="@editor.UltimaConsulta" readonly />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <footer class="custom-modal-footer">
+                @if (CanModifyEditor)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveAndClosePatientAsync">Guardar cambios</button>
+                }
+                <button type="button" class="btn btn-outline-primary" @onclick="ClosePatientModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+
 
 @code {
     [Parameter] public string Mode { get; set; } = "entry";
@@ -355,6 +344,7 @@ else
     private bool isLoading = true;
     private bool canViewModule;
     private bool isCreatingNewPatient;
+    private bool showFormModal;
     private int selectedPatientId;
     private int currentUserId;
     private int currentRoleId;
@@ -398,6 +388,44 @@ else
         currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
 
         await LoadAsync();
+    }
+
+    private async Task OpenEditPatientModal(int patientId)
+    {
+        await SelectPatientAsync(patientId);
+        showFormModal = true;
+    }
+
+    private async Task OpenNewPatientModal()
+    {
+        PrepareNewPatient();
+        showFormModal = true;
+        await Task.CompletedTask;
+    }
+
+    private void ClosePatientModal()
+    {
+        showFormModal = false;
+        if (isCreatingNewPatient)
+        {
+            isCreatingNewPatient = false;
+            editor = null;
+        }
+    }
+
+    private async Task SaveAndClosePatientAsync()
+    {
+        await SavePatientAsync();
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            showFormModal = false;
+        }
+    }
+
+    private async Task ToggleActiveFromTableAsync(int patientId)
+    {
+        await SelectPatientAsync(patientId);
+        await ToggleActiveAsync();
     }
 
     private async Task LoadAsync(int? preserveSelectedPatientId = null)

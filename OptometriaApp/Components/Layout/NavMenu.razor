@@ -1,5 +1,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject MenuAccessService MenuAccessService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
 
 <div class="app-nav-shell">
     <button type="button" class="app-nav-toggle" @onclick="ToggleMenu" aria-label="Abrir menu">
@@ -10,33 +12,65 @@
 
     <nav class="app-nav @(menuOpen ? "is-open" : string.Empty)">
         <div class="app-nav-scroll">
-            @foreach (var section in menuSections)
-            {
-                <div class="app-nav-section">
-                    <div class="app-nav-section-title">@section.Key</div>
-                    <div class="app-nav-links">
-                        @foreach (var menu in section.Value)
-                        {
-                            <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+            <div class="app-nav-links">
+                @foreach (var item in RenderItems)
+                {
+                    @if (item.IsPurchasesGroup)
+                    {
+                        <div class="app-nav-group @(purchasesExpanded ? "is-expanded" : "")">
+                            <button type="button" class="app-nav-link app-nav-group-trigger" @onclick="TogglePurchases">
                                 <span class="app-nav-link-mark">
-                                    <i class="@GetMenuIconClass(menu.Ruta)"></i>
+                                    <i class="bi bi-bag-check-fill"></i>
                                 </span>
                                 <span class="app-nav-link-copy">
-                                    <strong>@menu.Nombre</strong>
+                                    <strong>Compras</strong>
                                 </span>
-                            </NavLink>
-                        }
-                    </div>
-                </div>
-            }
-        </div>
+                                <span class="app-nav-group-chevron">
+                                    <i class="bi @(purchasesExpanded ? "bi-dash-lg" : "bi-plus-lg")"></i>
+                                </span>
+                            </button>
 
+                            <div class="app-nav-group-children">
+                                @foreach (var child in childMenus)
+                                {
+                                    <NavLink class="app-nav-link app-nav-child-link" href="@child.Ruta" Match="NavLinkMatch.Prefix">
+                                        <span class="app-nav-link-copy">
+                                            <span>@child.Nombre</span>
+                                        </span>
+                                    </NavLink>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <NavLink class="app-nav-link" href="@item.MenuItem!.Ruta" Match="@(item.MenuItem.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                            <span class="app-nav-link-mark">
+                                <i class="@GetMenuIconClass(item.MenuItem.Ruta)"></i>
+                            </span>
+                            <span class="app-nav-link-copy">
+                                <strong>@item.MenuItem.Nombre</strong>
+                            </span>
+                        </NavLink>
+                    }
+                }
+            </div>
+        </div>
     </nav>
 </div>
 
 @code {
-    private readonly List<AppMenuItem> sortedMenus = [];
-    private readonly List<KeyValuePair<string, List<AppMenuItem>>> menuSections = [];
+    public class NavigationItemWrapper
+    {
+        public AppMenuItem? MenuItem { get; set; }
+        public bool IsPurchasesGroup { get; set; }
+        public int Order { get; set; }
+    }
+
+    private readonly List<NavigationItemWrapper> RenderItems = [];
+    private readonly List<AppMenuItem> childMenus = [];
+    private AppMenuItem? purchasesParentMenu;
+    private bool purchasesExpanded;
     private bool menuOpen;
     private string UserName { get; set; } = "Cuenta";
     private string RoleName { get; set; } = "Sesion";
@@ -53,15 +87,65 @@
         int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
 
         var rawMenus = await MenuAccessService.GetMenusForRoleAsync(roleId);
-        sortedMenus.AddRange(rawMenus.OrderBy(m => GetRouteOrder(m.Ruta)));
-        menuSections.AddRange(sortedMenus
-            .GroupBy(m => GetMenuCategory(m.Ruta))
-            .Select(g => new KeyValuePair<string, List<AppMenuItem>>(g.Key, g.ToList())));
+
+        // Find purchases parent
+        purchasesParentMenu = rawMenus.FirstOrDefault(m => m.Ruta.Equals("/purchases", StringComparison.OrdinalIgnoreCase));
+
+        // Find child menus
+        var childPaths = new[] { "/purchase-orders", "/purchase-receptions", "/purchase-liquidations", "/inventories", "/kardex" };
+        var rawChildren = rawMenus.Where(m => childPaths.Contains(m.Ruta.ToLowerInvariant())).ToList();
+
+        // Main list (filter out children and parent)
+        var mainList = rawMenus.Where(m => 
+            !childPaths.Contains(m.Ruta.ToLowerInvariant()) && 
+            !m.Ruta.Equals("/purchases", StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+
+        childMenus.AddRange(rawChildren.OrderBy(m => GetRouteOrder(m.Ruta)));
+
+        // Populate wrapper items
+        foreach (var menu in mainList)
+        {
+            RenderItems.Add(new NavigationItemWrapper 
+            { 
+                MenuItem = menu, 
+                IsPurchasesGroup = false, 
+                Order = GetRouteOrder(menu.Ruta) 
+            });
+        }
+
+        if (purchasesParentMenu is not null || childMenus.Any())
+        {
+            RenderItems.Add(new NavigationItemWrapper 
+            { 
+                MenuItem = purchasesParentMenu ?? new AppMenuItem { Nombre = "Compras", Ruta = "/purchases" }, 
+                IsPurchasesGroup = true, 
+                Order = GetRouteOrder("/purchases") 
+            });
+        }
+
+        // Sort items by route order
+        var sorted = RenderItems.OrderBy(item => item.Order).ToList();
+        RenderItems.Clear();
+        RenderItems.AddRange(sorted);
+
+        // Auto-expand purchases group if we are currently on one of the child pages
+        var currentUri = NavigationManager.Uri;
+        var relativePath = "/" + NavigationManager.ToBaseRelativePath(currentUri).ToLowerInvariant();
+        if (childPaths.Any(p => relativePath.Contains(p)))
+        {
+            purchasesExpanded = true;
+        }
     }
 
     private void ToggleMenu()
     {
         menuOpen = !menuOpen;
+    }
+
+    private void TogglePurchases()
+    {
+        purchasesExpanded = !purchasesExpanded;
     }
 
     private static int GetRouteOrder(string route) => route switch

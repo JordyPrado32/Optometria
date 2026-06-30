@@ -126,11 +126,25 @@ else
                 <span>@FilteredAppointments.Count resultados</span>
             </div>
 
-            <div class="management-form-grid">
+            <div class="@(isDoctor ? "appointment-filters-grid-doctor" : "appointment-filters-grid-all")">
                 <div>
                     <label class="form-label" for="appointmentSearch">Busqueda</label>
                     <input id="appointmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Paciente, doctor, motivo o tipo" />
                 </div>
+
+                @if (!isDoctor)
+                {
+                    <div>
+                        <label class="form-label" for="appointmentDoctorFilter">Medico</label>
+                        <select id="appointmentDoctorFilter" class="form-select" @bind="selectedDoctorFilter">
+                            <option value="0">Todos</option>
+                            @foreach (var doctor in doctors)
+                            {
+                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                            }
+                        </select>
+                    </div>
+                }
 
                 <div>
                     <label class="form-label" for="appointmentScope">Periodo</label>
@@ -152,20 +166,6 @@ else
                         }
                     </select>
                 </div>
-
-                @if (!isDoctor)
-                {
-                    <div>
-                        <label class="form-label" for="appointmentDoctorFilter">Medico</label>
-                        <select id="appointmentDoctorFilter" class="form-select" @bind="selectedDoctorFilter">
-                            <option value="0">Todos</option>
-                            @foreach (var doctor in doctors)
-                            {
-                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
-                            }
-                        </select>
-                    </div>
-                }
 
                 <div>
                     <label class="form-label" for="appointmentDateFrom">Desde</label>
@@ -190,351 +190,335 @@ else
             }
         </section>
 
-        <div class="management-grid appointments-grid">
-            <aside class="management-card management-list-card">
-                <div class="management-card-header">
-                    <h2>Agenda</h2>
-                    <span>@CurrentEditorModeLabel</span>
-                </div>
+        <!-- Appointments Table -->
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Agenda de citas</h2>
+                <span>@FilteredAppointments.Count registros</span>
+            </div>
 
-                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.88rem;">
-                    @(isCreatingAppointment
-                        ? "Estas creando una nueva cita. La lista sigue visible para que compares horarios, pero el formulario actual esta en modo creacion."
-                        : "Selecciona una cita para verla o editarla. El panel derecho cambia de forma segun el modo activo.")
-                </p>
-
-                <div class="management-list">
-                    @if (FilteredAppointments.Count == 0)
-                    {
-                        <p>No hay citas que coincidan con los filtros actuales.</p>
-                    }
-                    else
-                    {
-                        @foreach (var appointment in FilteredAppointments)
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Hora</th>
+                            <th>Paciente</th>
+                            @if (!isDoctor)
+                            {
+                                <th>Médico</th>
+                            }
+                            <th>Tipo</th>
+                            <th>Motivo</th>
+                            <th>Estado</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredAppointments.Count == 0)
                         {
-                            <button type="button"
-                                    class="management-list-item appointment-list-item @(selectedAppointmentId == appointment.id_cita && !isCreatingAppointment ? "is-active" : string.Empty)"
-                                    @onclick="() => SelectAppointmentAsync(appointment.id_cita)">
-                                <div class="patient-explorer-head">
-                                    <strong>@GetAppointmentTitle(appointment)</strong>
-                                    <span>@appointment.fecha_cita.ToString("yyyy-MM-dd")</span>
-                                </div>
-                                <div class="patient-explorer-meta">
-                                    <span>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</span>
-                                    <span>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
-                                </div>
-                                <div class="patient-explorer-copy">
-                                    <span>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
-                                    <span>@(string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita)</span>
-                                </div>
-                            </button>
-                        }
-                    }
-                </div>
-            </aside>
-
-            <div class="management-stack">
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Resumen</h2>
-                        <span>@CurrentEditorModeLabel</span>
-                    </div>
-
-                    <div class="user-summary-grid">
-                        <div class="user-summary-card">
-                            <span class="eyebrow">Citas</span>
-                            <strong>@appointments.Count</strong>
-                            <p>Total segun tu alcance actual.</p>
-                        </div>
-
-                        <div class="user-summary-card">
-                            <span class="eyebrow">Pendientes</span>
-                            <strong>@appointments.Count(a => IsPendingState(a.id_estadoNavigation?.nombre_estado))</strong>
-                            <p>Programadas, confirmadas o reprogramadas.</p>
-                        </div>
-
-                        <div class="user-summary-card">
-                            <span class="eyebrow">Recordatorios</span>
-                            <strong>@appointments.Count(a => a.notificacion_enviada == true)</strong>
-                            <p>Eventos con correo de recordatorio enviado.</p>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>@EditorTitle</h2>
-                        <span>@EditorStatusLabel</span>
-                    </div>
-
-                    @if (appointmentEditor is null)
-                    {
-                        <p>Selecciona una cita para ver su detalle o crea una nueva.</p>
-                    }
-                    else
-                    {
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; padding: 1rem; border-radius: 1rem; border: 1px solid rgba(93, 161, 129, 0.16); background: @(isCreatingAppointment ? "rgba(93, 161, 129, 0.08)" : "rgba(127, 105, 81, 0.06)");">
-                            <div>
-                                <span class="eyebrow">@CurrentEditorModeLabel</span>
-                                <strong style="display: block; color: var(--color-ink); margin-top: 0.2rem;">@EditorTitle</strong>
-                                <p style="margin: 0.35rem 0 0; color: var(--color-taupe); font-size: 0.9rem;">@EditorDescription</p>
-                            </div>
-
-                            <div style="text-align: right; min-width: 180px;">
-                                <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: var(--color-taupe-deep) !important; padding: 0.35rem 0.7rem; border-radius: 2rem;">
-                                    Estado: @appointmentEditor.Estado
-                                </span>
-
-                                @if (isCreatingAppointment)
-                                {
-                                    <div style="margin-top: 0.7rem;">
-                                        <button type="button" class="btn btn-outline-primary" @onclick="CancelAppointmentCreationAsync">Cancelar nueva cita</button>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="management-form-grid">
-                            <div>
-                                <label class="form-label" for="appointmentDoctor">Medico</label>
-                                <select id="appointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
-                                    <option value="0">Selecciona</option>
-                                    @foreach (var doctor in doctors)
-                                    {
-                                        <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
-                                    }
-                                </select>
-                                @if (!doctors.Any())
-                                {
-                                    <small style="display: block; margin-top: 0.35rem; color: #a66a24;">No hay medicos disponibles para asignar.</small>
-                                }
-                            </div>
-
-                            @if (isAdmin || isDoctor)
-                            {
-                                <div>
-                                    <label class="form-label" for="appointmentPatient">Paciente</label>
-                                    <select id="appointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
-                                        <option value="0">Selecciona</option>
-                                        @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
-                                        {
-                                            <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
-                                        }
-                                    </select>
-                                </div>
-                            }
-                            else
-                            {
-                                <div>
-                                    <label class="form-label" for="appointmentTarget">La cita es para</label>
-                                    <select id="appointmentTarget" class="form-select" value="@appointmentEditor.TargetType" @onchange="OnAppointmentTargetChanged" disabled="@(!CanEditAppointments)">
-                                        <option value="self">Mi usuario</option>
-                                        <option value="family">Un familiar</option>
-                                    </select>
-                                </div>
-                            }
-
-                            @if (isClient)
-                            {
-                                <div>
-                                    <label class="form-label">Paciente</label>
-                                    <input class="form-control" value="@CurrentPatientLabel" readonly />
-                                </div>
-                            }
-
-                            <div>
-                                <label class="form-label" for="appointmentDate">Fecha</label>
-                                <input id="appointmentDate" type="date" class="form-control" value="@appointmentEditor.FechaCita" @onchange="OnAppointmentDateChanged" readonly="@(!CanEditAppointments)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="appointmentSlot">Horario disponible</label>
-                                <select id="appointmentSlot" class="form-select" @bind="appointmentEditor.SelectedSlotKey" disabled="@(!CanEditAppointments)">
-                                    <option value="">Selecciona</option>
-                                    @foreach (var slot in availableSlots)
-                                    {
-                                        <option value="@slot.Key">@slot.Label</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="appointmentType">Tipo</label>
-                                <select id="appointmentType" class="form-select" @bind="appointmentEditor.TipoCita" disabled="@(!CanEditAppointments)">
-                                    @foreach (var option in appointmentTypeOptions)
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label">Estado</label>
-                                <input class="form-control" value="@appointmentEditor.Estado" readonly />
-                            </div>
-                        </div>
-
-                        <div class="management-form-grid patient-form-block">
-                            @if (isClient && appointmentEditor.TargetType == "family")
-                            {
-                                <div class="patient-form-span">
-                                    <label class="form-label" for="familyPatientSelect">Familiar</label>
-                                    <select id="familyPatientSelect" class="form-select" value="@appointmentEditor.FamilyPatientId" @onchange="OnFamilyPatientSelectionChanged" disabled="@(!CanEditAppointments)">
-                                        <option value="0">Registrar nuevo familiar</option>
-                                        @foreach (var familyPatient in clientFamilyPatients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
-                                        {
-                                            <option value="@familyPatient.id_paciente">@GetPatientDisplayName(familyPatient)</option>
-                                        }
-                                    </select>
-                                    @if (!clientFamilyPatients.Any())
-                                    {
-                                        <small style="display: block; margin-top: 0.35rem; color: var(--color-taupe);">Todavia no tienes familiares registrados. Puedes crear el primero aqui.</small>
-                                    }
-                                </div>
-                            }
-
-                            @if (isClient && appointmentEditor.TargetType == "family" && appointmentEditor.FamilyPatientId <= 0)
-                            {
-                                <div>
-                                    <label class="form-label" for="familyCedula">Cedula familiar</label>
-                                    <input id="familyCedula" class="form-control" @bind="appointmentEditor.FamilyCedula" maxlength="20" readonly="@(!CanEditAppointments)" />
-                                </div>
-
-                                <div>
-                                    <label class="form-label" for="familyNames">Nombres</label>
-                                    <input id="familyNames" class="form-control" @bind="appointmentEditor.FamilyNames" maxlength="100" readonly="@(!CanEditAppointments)" />
-                                </div>
-
-                                <div>
-                                    <label class="form-label" for="familyLastNames">Apellidos</label>
-                                    <input id="familyLastNames" class="form-control" @bind="appointmentEditor.FamilyLastNames" maxlength="100" readonly="@(!CanEditAppointments)" />
-                                </div>
-
-                                <div>
-                                    <label class="form-label" for="familyPhone">Telefono</label>
-                                    <input id="familyPhone" class="form-control" @bind="appointmentEditor.FamilyPhone" maxlength="20" readonly="@(!CanEditAppointments)" />
-                                </div>
-
-                                <div>
-                                    <label class="form-label" for="familyBirthDate">Fecha nacimiento</label>
-                                    <input id="familyBirthDate" type="date" class="form-control" value="@appointmentEditor.FamilyBirthDate" @onchange="OnFamilyBirthDateChanged" readonly="@(!CanEditAppointments)" max="@TodayDateIso" />
-                                </div>
-                            }
-
-                            <div class="patient-form-span">
-                                <label class="form-label" for="appointmentReason">Motivo</label>
-                                <input id="appointmentReason" class="form-control" @bind="appointmentEditor.Motivo" maxlength="255" readonly="@(!CanEditAppointments)" />
-                            </div>
-
-                            <div class="patient-form-span">
-                                <label class="form-label" for="appointmentDescription">Descripcion adicional</label>
-                                <textarea id="appointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
-                            </div>
-
-                            @if (CanWriteMedicalNotes)
-                            {
-                                <div class="patient-form-span">
-                                    <label class="form-label" for="appointmentNotes">Notas medicas</label>
-                                    <textarea id="appointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico" readonly="@(!CanWriteMedicalNotes)"></textarea>
-                                </div>
-                            }
-
-                            <div class="patient-form-span">
-                                <label class="form-label" for="appointmentCancelReason">Razon de cancelacion</label>
-                                <textarea id="appointmentCancelReason" class="form-control" rows="2" @bind="appointmentEditor.RazonCancelacion" readonly="@(!CanCancelAppointments)"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions">
-                            @if (CanEditAppointments)
-                            {
-                                <button type="button" class="btn btn-primary" @onclick="SaveAppointmentAsync">
-                                    @(isCreatingAppointment ? "Agendar cita" : "Guardar cambios")
-                                </button>
-                            }
-
-                            @if (!isCreatingAppointment && CanConfirmAppointments)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Confirmada")'>Confirmar</button>
-                            }
-
-                            @if (!isCreatingAppointment && CanCloseAppointments)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Realizada")'>Marcar realizada</button>
-                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("No presento")'>No presento</button>
-                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Pendiente pago")'>Pendiente pago</button>
-                            }
-
-                            @if (!isCreatingAppointment && CanCancelAppointments)
-                            {
-                                <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Cancelada")'>Cancelar cita</button>
-                            }
-                        </div>
-                    }
-                </section>
-
-                @if (selectedAppointmentId > 0 && selectedAppointment is not null)
-                {
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Seguimiento</h2>
-                            <span>Solo lectura</span>
-                        </div>
-
-                        <div class="user-audit-grid">
-                            <div>
-                                <label class="form-label">Creada</label>
-                                <input class="form-control" value="@(selectedAppointment.fecha_creacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin dato")" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Ultima actualizacion</label>
-                                <input class="form-control" value="@(selectedAppointment.fecha_actualizacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin dato")" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Recordatorio 24h</label>
-                                <input class="form-control" value="@(selectedAppointment.recordatorio_24hrs == true ? "Enviado" : "Pendiente")" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Recordatorio 1h</label>
-                                <input class="form-control" value="@(selectedAppointment.recordatorio_1hr == true ? "Enviado" : "Pendiente")" readonly />
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="management-card">
-                        <div class="management-card-header">
-                            <h2>Auditoria</h2>
-                            <span>@appointmentAuditEntries.Count eventos</span>
-                        </div>
-
-                        @if (appointmentAuditEntries.Count == 0)
-                        {
-                            <p>No hay eventos registrados para esta cita.</p>
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No hay citas que coincidan con los filtros actuales.
+                                </td>
+                            </tr>
                         }
                         else
                         {
-                            <div class="management-list">
-                                @foreach (var auditEntry in appointmentAuditEntries)
+                            @foreach (var appointment in FilteredAppointments)
+                            {
+                                var stateName = appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado";
+                                var stateColor = stateName switch
                                 {
-                                    <article class="management-list-item">
-                                        <strong>@auditEntry.accion</strong>
-                                        <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
-                                        <span>@(auditEntry.id_usuarioNavigation?.usuario ?? "Sistema")</span>
-                                        <span>@auditEntry.detalle</span>
-                                    </article>
-                                }
-                            </div>
+                                    "Confirmada" => "#5DA181",
+                                    "Programada" => "#e09b3c",
+                                    "Reprogramada" => "#7F6951",
+                                    "Cancelada" => "#dc3545",
+                                    "Realizada" => "#5DA181",
+                                    _ => "#7F6951"
+                                };
+                                var stateBg = stateName switch
+                                {
+                                    "Confirmada" => "rgba(93,161,129,0.12)",
+                                    "Programada" => "rgba(254,188,100,0.15)",
+                                    "Reprogramada" => "rgba(127,105,81,0.12)",
+                                    "Cancelada" => "rgba(220,53,69,0.1)",
+                                    "Realizada" => "rgba(93,161,129,0.12)",
+                                    _ => "rgba(127,105,81,0.1)"
+                                };
+                                <tr>
+                                    <td><strong>@appointment.fecha_cita.ToString("yyyy-MM-dd")</strong></td>
+                                    <td style="font-family: monospace; font-size: 0.85rem;">@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</td>
+                                    <td><strong style="color: var(--color-ink);">@GetPatientDisplayName(appointment.id_pacienteNavigation)</strong></td>
+                                    @if (!isDoctor)
+                                    {
+                                        <td>@GetDoctorDisplayName(appointment.id_medicoNavigation)</td>
+                                    }
+                                    <td>@(string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita)</td>
+                                    <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(appointment.motivo_cita ?? "-")</td>
+                                    <td>
+                                        <span class="badge" style="background: @stateBg !important; color: @stateColor !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;">
+                                            @stateName
+                                        </span>
+                                    </td>
+                                    <td style="text-align: right; padding-right: 1.2rem;">
+                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
+                                                    @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
+                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Ver/Editar
+                                            </button>
+                                            @if (CanConfirmAppointments && IsPendingState(stateName))
+                                            {
+                                                <button type="button" class="btn btn-outline-primary"
+                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
+                                                        @onclick="() => QuickConfirmAsync(appointment.id_cita)">
+                                                    <i class="bi bi-check2-circle" style="margin-right: 4px;"></i> Confirmar
+                                                </button>
+                                            }
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
+                                                    @onclick="() => OpenAuditModal(appointment.id_cita)">
+                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoría
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
-                    </section>
-                }
-
+                    </tbody>
+                </table>
             </div>
-        </div>
+        </section>
     </section>
 }
+
+<!-- Form Modal -->
+@if (showFormModal && appointmentEditor is not null)
+{
+    <div class="custom-modal-overlay" @onclick="CloseFormModal">
+        <div class="custom-modal-card form-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@EditorTitle</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
+            </header>
+
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert" style="margin-bottom: 1rem;">@errorMessage</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(statusMessage))
+                {
+                    <div class="alert alert-success" role="alert" style="margin-bottom: 1rem;">@statusMessage</div>
+                }
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="modalAppointmentDoctor">Medico</label>
+                        <select id="modalAppointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
+                            <option value="0">Selecciona</option>
+                            @foreach (var doctor in doctors)
+                            {
+                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (isAdmin || isDoctor)
+                    {
+                        <div>
+                            <label class="form-label" for="modalAppointmentPatient">Paciente</label>
+                            <select id="modalAppointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
+                                <option value="0">Selecciona</option>
+                                @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                {
+                                    <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <div>
+                            <label class="form-label" for="modalAppointmentTarget">La cita es para</label>
+                            <select id="modalAppointmentTarget" class="form-select" value="@appointmentEditor.TargetType" @onchange="OnAppointmentTargetChanged" disabled="@(!CanEditAppointments)">
+                                <option value="self">Mi usuario</option>
+                                <option value="family">Un familiar</option>
+                            </select>
+                        </div>
+                    }
+
+                    @if (isClient)
+                    {
+                        <div>
+                            <label class="form-label">Paciente</label>
+                            <input class="form-control" value="@CurrentPatientLabel" readonly />
+                        </div>
+                    }
+
+                    <div>
+                        <label class="form-label" for="modalAppointmentDate">Fecha</label>
+                        <input id="modalAppointmentDate" type="date" class="form-control" value="@appointmentEditor.FechaCita" @onchange="OnAppointmentDateChanged" readonly="@(!CanEditAppointments)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="modalAppointmentSlot">Horario disponible</label>
+                        <select id="modalAppointmentSlot" class="form-select" @bind="appointmentEditor.SelectedSlotKey" disabled="@(!CanEditAppointments)">
+                            <option value="">Selecciona</option>
+                            @foreach (var slot in availableSlots)
+                            {
+                                <option value="@slot.Key">@slot.Label</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="modalAppointmentType">Tipo</label>
+                        <select id="modalAppointmentType" class="form-select" @bind="appointmentEditor.TipoCita" disabled="@(!CanEditAppointments)">
+                            @foreach (var option in appointmentTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <input class="form-control" value="@appointmentEditor.Estado" readonly />
+                    </div>
+                </div>
+
+                @if (isClient && appointmentEditor.TargetType == "family")
+                {
+                    <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
+                        <div class="patient-form-span">
+                            <label class="form-label" for="modalFamilyPatientSelect">Familiar</label>
+                            <select id="modalFamilyPatientSelect" class="form-select" value="@appointmentEditor.FamilyPatientId" @onchange="OnFamilyPatientSelectionChanged" disabled="@(!CanEditAppointments)">
+                                <option value="0">Registrar nuevo familiar</option>
+                                @foreach (var familyPatient in clientFamilyPatients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                {
+                                    <option value="@familyPatient.id_paciente">@GetPatientDisplayName(familyPatient)</option>
+                                }
+                            </select>
+                        </div>
+
+                        @if (appointmentEditor.FamilyPatientId <= 0)
+                        {
+                            <div>
+                                <label class="form-label" for="modalFamilyCedula">Cedula familiar</label>
+                                <input id="modalFamilyCedula" class="form-control" @bind="appointmentEditor.FamilyCedula" maxlength="20" readonly="@(!CanEditAppointments)" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="modalFamilyNames">Nombres</label>
+                                <input id="modalFamilyNames" class="form-control" @bind="appointmentEditor.FamilyNames" maxlength="100" readonly="@(!CanEditAppointments)" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="modalFamilyLastNames">Apellidos</label>
+                                <input id="modalFamilyLastNames" class="form-control" @bind="appointmentEditor.FamilyLastNames" maxlength="100" readonly="@(!CanEditAppointments)" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="modalFamilyPhone">Telefono</label>
+                                <input id="modalFamilyPhone" class="form-control" @bind="appointmentEditor.FamilyPhone" maxlength="20" readonly="@(!CanEditAppointments)" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="modalFamilyBirthDate">Fecha nacimiento</label>
+                                <input id="modalFamilyBirthDate" type="date" class="form-control" value="@appointmentEditor.FamilyBirthDate" @onchange="OnFamilyBirthDateChanged" readonly="@(!CanEditAppointments)" max="@TodayDateIso" />
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
+                    <div class="patient-form-span">
+                        <label class="form-label" for="modalAppointmentReason">Motivo</label>
+                        <input id="modalAppointmentReason" class="form-control" @bind="appointmentEditor.Motivo" maxlength="255" readonly="@(!CanEditAppointments)" />
+                    </div>
+
+                    <div class="patient-form-span">
+                        <label class="form-label" for="modalAppointmentDescription">Descripcion adicional</label>
+                        <textarea id="modalAppointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
+                    </div>
+
+                    @if (CanWriteMedicalNotes)
+                    {
+                        <div class="patient-form-span">
+                            <label class="form-label" for="modalAppointmentNotes">Notas medicas</label>
+                            <textarea id="modalAppointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico"></textarea>
+                        </div>
+                    }
+
+                    <div class="patient-form-span">
+                        <label class="form-label" for="modalAppointmentCancelReason">Razon de cancelacion</label>
+                        <textarea id="modalAppointmentCancelReason" class="form-control" rows="2" @bind="appointmentEditor.RazonCancelacion" readonly="@(!CanCancelAppointments)"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="custom-modal-footer">
+                @if (CanEditAppointments)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveAndCloseAppointmentAsync">
+                        @(isCreatingAppointment ? "Agendar cita" : "Guardar cambios")
+                    </button>
+                }
+                @if (!isCreatingAppointment && CanConfirmAppointments)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Confirmada")'>Confirmar</button>
+                }
+                @if (!isCreatingAppointment && CanCloseAppointments)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Realizada")'>Marcar realizada</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("No presento")'>No presento</button>
+                }
+                @if (!isCreatingAppointment && CanCancelAppointments)
+                {
+                    <button type="button" class="btn btn-outline-primary" style="color: #dc3545 !important; border-color: rgba(220,53,69,0.3) !important;"
+                            @onclick='() => ChangeAppointmentStateAsync("Cancelada")'>Cancelar cita</button>
+                }
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+<!-- Audit Modal -->
+@if (showAuditModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseAuditModal">
+        <div class="custom-modal-card" style="max-width: 680px;" @onclick:stopPropagation="true">
+            <header class="custom-modal-header" style="background: linear-gradient(135deg, rgba(254,188,100,0.18) 0%, rgba(254,188,100,0.06) 100%);">
+                <h2>Auditoría de cita</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseAuditModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                @if (appointmentAuditEntries.Count == 0)
+                {
+                    <p style="color: var(--color-taupe); text-align: center; padding: 1.5rem 0;">No hay eventos registrados para esta cita.</p>
+                }
+                else
+                {
+                    <div class="management-list">
+                        @foreach (var auditEntry in appointmentAuditEntries)
+                        {
+                            <article class="management-list-item">
+                                <strong>@auditEntry.accion</strong>
+                                <span>@(auditEntry.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span>
+                                <span>@(auditEntry.id_usuarioNavigation?.usuario ?? "Sistema")</span>
+                                <span>@auditEntry.detalle</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseAuditModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+
 
 @code {
     private readonly List<tbl_citas> appointments = [];
@@ -560,6 +544,8 @@ else
     private bool isDoctor;
     private bool isClient;
     private bool isCreatingAppointment;
+    private bool showFormModal;
+    private bool showAuditModal;
     private int selectedAppointmentId;
     private int currentUserId;
     private int currentRoleId;
@@ -858,6 +844,57 @@ else
         appointmentEditor = null;
         selectedAppointment = null;
         appointmentAuditEntries.Clear();
+    }
+
+    private async Task OpenNewAppointmentModal()
+    {
+        await PrepareNewAppointmentAsync();
+        showFormModal = true;
+    }
+
+    private async Task OpenEditAppointmentModal(int appointmentId)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        await SelectAppointmentAsync(appointmentId);
+        showFormModal = true;
+    }
+
+    private async Task OpenAuditModal(int appointmentId)
+    {
+        await LoadAppointmentAuditAsync(appointmentId);
+        showAuditModal = true;
+    }
+
+    private void CloseFormModal()
+    {
+        showFormModal = false;
+        if (isCreatingAppointment)
+        {
+            isCreatingAppointment = false;
+            appointmentEditor = null;
+        }
+    }
+
+    private void CloseAuditModal()
+    {
+        showAuditModal = false;
+        appointmentAuditEntries.Clear();
+    }
+
+    private async Task SaveAndCloseAppointmentAsync()
+    {
+        await SaveAppointmentAsync();
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            showFormModal = false;
+        }
+    }
+
+    private async Task QuickConfirmAsync(int appointmentId)
+    {
+        await SelectAppointmentAsync(appointmentId, false);
+        await ChangeAppointmentStateAsync("Confirmada");
     }
 
     private async Task SaveLinkedPatientAsync()
