@@ -7,21 +7,21 @@ public partial class tbl_abono
 {
     public int id_abono { get; set; }
 
-    public int id_venta { get; set; }
-
-    public int id_usuario { get; set; }
-
-    public int id_metodo_pago { get; set; }
-
-    public decimal monto { get; set; }
+    public int id_cta_cobrar { get; set; }
 
     public DateTime? fecha_abono { get; set; }
 
-    public string? concepto { get; set; }
+    public decimal monto_abono { get; set; }
 
-    public virtual tbl_metodo_pago id_metodo_pagoNavigation { get; set; } = null!;
+    public int? metodo_pago_id { get; set; }
 
-    public virtual tbl_usuario id_usuarioNavigation { get; set; } = null!;
+    public string? referencia_pago { get; set; }
 
-    public virtual tbl_venta id_ventaNavigation { get; set; } = null!;
+    public string? usuario_registro { get; set; }
+
+    public DateTime? fecha_registro { get; set; }
+
+    public virtual tbl_cta_cobrar id_cta_cobrarNavigation { get; set; } = null!;
+
+    public virtual tbl_metodo_pago? metodo_pagoNavigation { get; set; }
 }

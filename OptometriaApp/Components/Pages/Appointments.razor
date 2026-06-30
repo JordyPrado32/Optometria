@@ -6,6 +6,7 @@
 @using OptometriaApp.Data
 @using OptometriaApp.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
 
@@ -1134,6 +1135,15 @@ else
                 quien_cancelo = isClient ? "Paciente" : isDoctor ? "Medico" : "Administrador",
                 usuario_cancelacion = GetCurrentActorLabel()
             });
+        }
+
+        if (newState is "Realizada" or "Pendiente pago")
+        {
+            await BillingDraftService.EnsureAppointmentBillingEntriesAsync(
+                dbContext,
+                entity.id_cita,
+                currentUserId,
+                GetCurrentActorLabel());
         }
 
         WriteAudit(dbContext, $"Cambiar estado cita a {newState}", $"CitaId={entity.id_cita}; Estado={newState}; PacienteId={entity.id_paciente}; DoctorId={entity.id_medico}");

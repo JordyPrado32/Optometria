@@ -151,9 +151,14 @@ else
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
                 <h2>@EditorTitle</h2>
-                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">x</button>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">x</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
                 <div class="management-form-grid">
                     <div>
                         <label class="form-label" for="categoryName">Nombre</label>
@@ -162,7 +167,7 @@ else
 
                     <div>
                         <label class="form-label" for="categoryStatusField">Estado</label>
-                        <select id="categoryStatusField" class="form-select" @bind="editor.Activo" disabled="@(!CanModifyEditor)">
+                        <select id="categoryStatusField" class="form-select" @bind="EditorActivoValue" disabled="@(!CanModifyEditor)">
                             <option value="true">Activa</option>
                             <option value="false">Inactiva</option>
                         </select>
@@ -175,10 +180,10 @@ else
                 </div>
             </div>
             <footer class="custom-modal-footer">
-                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cancelar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cancelar</button>
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveCategoryAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveCategoryWithHandlingAsync">Guardar cambios</button>
                 }
             </footer>
         </div>
@@ -274,6 +279,17 @@ else
 
     private string EditorTitle => isCreatingNewCategory ? "Nueva categoria" : "Detalle de la categoria";
     private bool CanModifyEditor => isCreatingNewCategory ? permissions.CanCreate : permissions.CanEdit;
+    private string EditorActivoValue
+    {
+        get => editor?.Activo == true ? "true" : "false";
+        set
+        {
+            if (editor is not null)
+            {
+                editor.Activo = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -352,6 +368,12 @@ else
         alertMessage = string.Empty;
     }
 
+    private void CloseFormModal()
+    {
+        errorMessage = null;
+        showFormModal = false;
+    }
+
     private async Task SaveCategoryAsync()
     {
         errorMessage = null;
@@ -418,6 +440,18 @@ else
         showFormModal = false;
         isCreatingNewCategory = false;
         await LoadAsync(categoryEntity.id_categoria);
+    }
+
+    private async Task SaveCategoryWithHandlingAsync()
+    {
+        try
+        {
+            await SaveCategoryAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
     }
 
     private async Task ToggleActiveAsync(tbl_categoria_producto category)
@@ -590,6 +624,16 @@ else
         return auditEntry.id_usuarioNavigation is null
             ? "Responsable: Sistema"
             : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private void WriteAudit(OpticaDbContext dbContext, string action, string detail)

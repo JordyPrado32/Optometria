@@ -129,9 +129,14 @@ else
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
                 <h2>@EditorTitle</h2>
-                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
                 <div class="management-form-grid">
                     <div>
                         <label class="form-label" for="issuerRuc">RUC</label>
@@ -240,9 +245,9 @@ else
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveIssuerAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveIssuerWithHandlingAsync">Guardar cambios</button>
                 }
-                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
             </footer>
         </div>
     </div>
@@ -409,6 +414,12 @@ else
         alertMessage = string.Empty;
     }
 
+    private void CloseFormModal()
+    {
+        errorMessage = null;
+        showFormModal = false;
+    }
+
     private async Task SaveIssuerAsync()
     {
         errorMessage = null;
@@ -517,6 +528,18 @@ else
         showFormModal = false;
         isCreatingNewIssuer = false;
         await LoadAsync(issuerEntity.emisor_id);
+    }
+
+    private async Task SaveIssuerWithHandlingAsync()
+    {
+        try
+        {
+            await SaveIssuerAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
     }
 
     private async Task DeleteIssuerAsync(EmisorEntity item)
@@ -763,6 +786,16 @@ else
         return auditEntry.id_usuarioNavigation is null
             ? "Responsable: Sistema"
             : $"Responsable: {auditEntry.id_usuarioNavigation.usuario}";
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private void WriteAudit(OpticaDbContext dbContext, string action, string detail)

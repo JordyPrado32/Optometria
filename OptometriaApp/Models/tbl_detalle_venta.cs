@@ -23,6 +23,10 @@ public partial class tbl_detalle_venta
 
     public decimal? total_item { get; set; }
 
+    public string? origen_tipo { get; set; }
+
+    public int? origen_id { get; set; }
+
     public virtual tbl_producto id_productoNavigation { get; set; } = null!;
 
     public virtual tbl_venta id_ventaNavigation { get; set; } = null!;

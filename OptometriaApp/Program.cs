@@ -88,6 +88,7 @@ builder.Services.AddSingleton<IEmailBackgroundQueue>(sp => sp.GetRequiredService
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQueue>());
 builder.Services.AddScoped<MenuAccessService>();
 builder.Services.AddScoped<KardexService>();
+builder.Services.AddScoped<BillingDraftService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddRazorComponents()
@@ -2494,11 +2495,12 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Kardex', '/kardex', 'kardex', 18, 1),
                 ('Clientes', '/clients', 'clients', 19, 1),
                 ('Emisor', '/emisor', 'issuer', 20, 1),
-                ('Usuarios', '/users', 'users', 21, 1),
-                ('Roles', '/roles', 'roles', 22, 1),
-                ('Menus', '/menus', 'menu', 23, 1),
-                ('Registrar usuario', '/register', 'user-plus', 24, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 25, 1)
+                ('Facturas', '/invoices', 'invoice', 21, 1),
+                ('Usuarios', '/users', 'users', 22, 1),
+                ('Roles', '/roles', 'roles', 23, 1),
+                ('Menus', '/menus', 'menu', 24, 1),
+                ('Registrar usuario', '/register', 'user-plus', 25, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 26, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -2545,9 +2547,9 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/appointments') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/appointments', '/invoices') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                     CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app m
             ) AS source
@@ -2984,6 +2986,7 @@ static async Task EnsureElectronicBillingSchemaAsync(WebApplication app)
         BEGIN
             CREATE NONCLUSTERED INDEX IX_clients_razon_social ON dbo.clients (razon_social);
         END;
+
         """);
 }
 

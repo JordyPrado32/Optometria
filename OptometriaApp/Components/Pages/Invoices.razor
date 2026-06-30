@@ -1,0 +1,782 @@
+@page "/invoices"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject BillingDraftService BillingDraftService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Facturas</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando facturas...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Facturas</h1>
+            <p>Tu rol no tiene permiso para entrar a este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Facturacion</span>
+                <h1>Facturas y pendientes</h1>
+                <p>Consolida servicios pendientes de citas, agrega productos y emite la factura con impuestos, forma de pago y credito.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Cabecera</h2>
+                <span>Numero @invoiceNumberPreview</span>
+            </div>
+
+            <div class="management-form-grid">
+                <div>
+                    <label class="form-label" for="invoicePatient">Paciente</label>
+                    <select id="invoicePatient" class="form-select" value="@selectedPatientId" @onchange="OnPatientChanged" disabled="@(!canEditModule)">
+                        <option value="0">Selecciona</option>
+                        @foreach (var patient in patients)
+                        {
+                            <option value="@patient.id_paciente">@GetPatientLabel(patient)</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="invoiceClient">Cliente</label>
+                    <select id="invoiceClient" class="form-select" value="@selectedClientId" @onchange="OnClientChanged" disabled="@(!canEditModule)">
+                        <option value="0">Selecciona</option>
+                        @foreach (var client in clients)
+                        {
+                            <option value="@client.cliente_id">@GetClientLabel(client)</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Numero factura</label>
+                    <input class="form-control" value="@invoiceNumberPreview" readonly />
+                </div>
+
+                <div>
+                    <label class="form-label">Forma de pago</label>
+                    <select class="form-select" @bind="paymentForm" disabled="@(!canEditModule)">
+                        @foreach (var method in paymentMethods)
+                        {
+                            <option value="@method">@method</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Dias de credito</label>
+                    <input type="number" class="form-control" @bind="creditDays" min="0" readonly="@(!canEditModule)" />
+                </div>
+
+                <div>
+                    <label class="form-label">Impuesto %</label>
+                    <input type="number" step="0.01" class="form-control" @bind="taxRate" min="0" readonly="@(!canEditModule)" />
+                </div>
+
+                <div>
+                    <label class="form-label">Valor cobrado</label>
+                    <input type="number" step="0.01" class="form-control" @bind="paidAmount" min="0" readonly="@(!canEditModule)" />
+                </div>
+            </div>
+
+            <div class="management-form-grid" style="margin-top: 1rem;">
+                <div class="patient-form-span">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-control" rows="3" @bind="invoiceNotes" readonly="@(!canEditModule)"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <div class="management-grid" style="margin-top: 1.5rem;">
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Cliente</h2>
+                    <span>@(billingClient is null ? "Sin cliente" : $"Cliente #{billingClient.cliente_id}")</span>
+                </div>
+
+                @if (selectedPatient is null)
+                {
+                    <p>Selecciona un paciente para preparar la factura.</p>
+                }
+                else
+                {
+                    <div class="management-form-grid">
+                        <div>
+                            <label class="form-label">Paciente</label>
+                            <input class="form-control" value="@GetPatientLabel(selectedPatient)" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Identificacion</label>
+                            <input class="form-control" value="@(billingClient?.numero_identificacion ?? selectedPatient.cedula)" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Razon social</label>
+                            <input class="form-control" value="@(billingClient?.razon_social ?? GetPatientFullName(selectedPatient))" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Telefono</label>
+                            <input class="form-control" value="@(billingClient?.telefono ?? selectedPatient.telefono ?? string.Empty)" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Correo</label>
+                            <input class="form-control" value="@(billingClient?.correo_electronico ?? selectedPatient.email ?? string.Empty)" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Condicion</label>
+                            <input class="form-control" value="@(billingClient?.condicion_pago ?? "Contado")" readonly />
+                        </div>
+                    </div>
+
+                    <div class="workspace-actions" style="margin-top: 1rem;">
+                        <a class="btn btn-outline-primary" href="/clients">Administrar clientes</a>
+                    </div>
+                }
+            </section>
+
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Agregar producto</h2>
+                    <span>Manual</span>
+                </div>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label">Producto o servicio</label>
+                        <select class="form-select" @bind="lineEditor.ProductId" disabled="@(!canEditModule)">
+                            <option value="0">Selecciona</option>
+                            @foreach (var product in products)
+                            {
+                                <option value="@product.id_producto">@($"{product.nombre_producto} ({product.codigo_producto})")</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" class="form-control" @bind="lineEditor.Quantity" min="1" readonly="@(!canEditModule)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Precio unitario</label>
+                        <input type="number" step="0.01" class="form-control" @bind="lineEditor.UnitPrice" min="0" readonly="@(!canEditModule)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Descuento</label>
+                        <input type="number" step="0.01" class="form-control" @bind="lineEditor.Discount" min="0" readonly="@(!canEditModule)" />
+                    </div>
+
+                    <div class="patient-form-span">
+                        <label class="form-label">Concepto</label>
+                        <input class="form-control" @bind="lineEditor.Concept" readonly="@(!canEditModule)" />
+                    </div>
+                </div>
+
+                <div class="workspace-actions" style="margin-top: 1rem;">
+                    <button type="button" class="btn btn-primary" @onclick="AddManualLineAsync" disabled="@(!canEditModule)">Agregar a la factura</button>
+                </div>
+            </section>
+        </div>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Detalle de factura</h2>
+                <span>@draftLines.Count lineas</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Origen</th>
+                            <th>Concepto</th>
+                            <th>Cantidad</th>
+                            <th>Precio</th>
+                            <th>Descuento</th>
+                            <th>Total</th>
+                            <th style="text-align: right;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (draftLines.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">No hay productos pendientes para facturar.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var line in draftLines)
+                            {
+                                <tr>
+                                    <td>@GetOriginLabel(line)</td>
+                                    <td>
+                                        <strong>@(line.concepto_item ?? line.id_productoNavigation.nombre_producto)</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@line.id_productoNavigation.codigo_producto</div>
+                                    </td>
+                                    <td>@line.cantidad</td>
+                                    <td>@((line.precio_unitario ?? 0).ToString("0.00"))</td>
+                                    <td>@((line.descuento ?? 0).ToString("0.00"))</td>
+                                    <td>@((line.total_item ?? 0).ToString("0.00"))</td>
+                                    <td style="text-align: right;">
+                                        <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => RemoveLineAsync(line.id_detalle_venta)" disabled="@(!canEditModule)">
+                                            Quitar
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Totales</h2>
+                <span>@(draftSale is null ? "Sin borrador" : $"Venta #{draftSale.id_venta}")</span>
+            </div>
+
+            <div class="user-summary-grid">
+                <div class="user-summary-card">
+                    <span class="eyebrow">Subtotal</span>
+                    <strong>@subtotalPreview.ToString("0.00")</strong>
+                    <p>Suma base antes de impuestos.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Impuestos</span>
+                    <strong>@taxPreview.ToString("0.00")</strong>
+                    <p>@taxRate.ToString("0.##")% configurado.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Total</span>
+                    <strong>@totalPreview.ToString("0.00")</strong>
+                    <p>Valor total de la factura.</p>
+                </div>
+
+                <div class="user-summary-card">
+                    <span class="eyebrow">Saldo</span>
+                    <strong>@balancePreview.ToString("0.00")</strong>
+                    <p>Pendiente segun pago y credito.</p>
+                </div>
+            </div>
+
+            <div class="workspace-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-primary" @onclick="FinalizeInvoiceAsync" disabled="@(!canEditModule)">Emitir factura</button>
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_paciente> patients = [];
+    private readonly List<ClientEntity> clients = [];
+    private readonly List<tbl_producto> products = [];
+    private readonly List<string> paymentMethods = [];
+    private readonly List<tbl_detalle_venta> draftLines = [];
+    private ModulePermissions permissions = new();
+    private tbl_paciente? selectedPatient;
+    private ClientEntity? billingClient;
+    private tbl_venta? draftSale;
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool canEditModule;
+    private int currentUserId;
+    private int currentRoleId;
+    private int selectedPatientId;
+    private int selectedClientId;
+    private string? statusMessage;
+    private string? errorMessage;
+    private string invoiceNumberPreview = "000000001";
+    private string paymentForm = "Efectivo";
+    private int creditDays;
+    private decimal taxRate;
+    private decimal paidAmount;
+    private string invoiceNotes = string.Empty;
+    private decimal subtotalPreview;
+    private decimal taxPreview;
+    private decimal totalPreview;
+    private decimal balancePreview;
+    private ManualLineEditor lineEditor = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? patientId = null)
+    {
+        isLoading = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+        currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+        canEditModule = permissions.CanCreate || permissions.CanEdit;
+
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        patients.Clear();
+        patients.AddRange(await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.apellidos)
+            .ThenBy(x => x.nombres)
+            .ToListAsync());
+
+        clients.Clear();
+        clients.AddRange(await dbContext.clients
+            .AsNoTracking()
+            .Where(x => x.estado && x.id_usuario_creacion == currentUserId)
+            .OrderBy(x => x.razon_social)
+            .ThenBy(x => x.numero_identificacion)
+            .ToListAsync());
+
+        products.Clear();
+        products.AddRange(await dbContext.tbl_productos
+            .AsNoTracking()
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.tipo_item)
+            .ThenBy(x => x.nombre_producto)
+            .ToListAsync());
+
+        paymentMethods.Clear();
+        paymentMethods.AddRange(await dbContext.tbl_metodo_pagos
+            .AsNoTracking()
+            .OrderBy(x => x.nombre)
+            .Select(x => x.nombre)
+            .ToListAsync());
+
+        if (paymentMethods.Count == 0)
+        {
+            paymentMethods.AddRange(["Efectivo", "Tarjeta", "Transferencia", "Credito"]);
+        }
+
+        invoiceNumberPreview = await BillingDraftService.GenerateNextInvoiceNumberAsync(dbContext);
+
+        selectedPatientId = patientId ?? selectedPatientId;
+        if (selectedPatientId > 0)
+        {
+            await LoadPatientDraftAsync(dbContext, selectedPatientId);
+        }
+        else
+        {
+            selectedPatient = null;
+            billingClient = null;
+            draftSale = null;
+            draftLines.Clear();
+            selectedClientId = 0;
+            RecalculatePreview();
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadPatientDraftAsync(OpticaDbContext dbContext, int patientId)
+    {
+        selectedPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(x => x.id_paciente == patientId);
+        if (selectedPatient is null)
+        {
+            selectedPatientId = 0;
+            billingClient = null;
+            draftSale = null;
+            draftLines.Clear();
+            RecalculatePreview();
+            return;
+        }
+
+        draftSale = await BillingDraftService.GetOrCreateDraftSaleAsync(dbContext, selectedPatient.id_paciente, null, currentUserId);
+        draftSale = await dbContext.tbl_venta
+            .Include(x => x.tbl_detalle_venta)
+            .ThenInclude(x => x.id_productoNavigation)
+            .FirstAsync(x => x.id_venta == draftSale.id_venta);
+
+        selectedClientId = draftSale.id_cliente_facturacion ?? 0;
+        billingClient = selectedClientId > 0
+            ? clients.FirstOrDefault(x => x.cliente_id == selectedClientId)
+            : null;
+
+        paymentForm = draftSale.forma_pago ?? paymentMethods.First();
+        creditDays = draftSale.dias_credito ?? 0;
+        taxRate = draftSale.porcentaje_impuesto ?? 0;
+        paidAmount = draftSale.valor_cobrado ?? 0;
+        invoiceNotes = draftSale.observaciones_factura ?? string.Empty;
+
+        draftLines.Clear();
+        draftLines.AddRange(draftSale.tbl_detalle_venta.OrderByDescending(x => x.origen_tipo).ThenBy(x => x.id_detalle_venta));
+        await BillingDraftService.RecalculateSaleAsync(dbContext, draftSale);
+        RecalculatePreview();
+    }
+
+    private async Task OnPatientChanged(ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out var patientId))
+        {
+            patientId = 0;
+        }
+
+        selectedPatientId = patientId;
+        await LoadAsync(patientId);
+    }
+
+    private async Task OnClientChanged(ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out var clientId))
+        {
+            clientId = 0;
+        }
+
+        selectedClientId = clientId;
+        billingClient = clients.FirstOrDefault(x => x.cliente_id == clientId);
+
+        if (draftSale is null)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var sale = await dbContext.tbl_venta.FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
+        if (sale is null)
+        {
+            return;
+        }
+
+        sale.id_cliente_facturacion = clientId > 0 ? clientId : null;
+        await dbContext.SaveChangesAsync();
+        draftSale.id_cliente_facturacion = sale.id_cliente_facturacion;
+    }
+
+    private async Task AddManualLineAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!canEditModule || draftSale is null || selectedPatient is null)
+        {
+            return;
+        }
+
+        if (lineEditor.ProductId <= 0 || lineEditor.Quantity <= 0)
+        {
+            errorMessage = "Selecciona un producto valido y una cantidad mayor a cero.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var sale = await dbContext.tbl_venta.Include(x => x.tbl_detalle_venta).FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
+        var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == lineEditor.ProductId && x.activo == true);
+        if (sale is null || product is null)
+        {
+            errorMessage = "No se encontro el borrador o el producto seleccionado.";
+            return;
+        }
+
+        var unitPrice = lineEditor.UnitPrice > 0 ? lineEditor.UnitPrice : product.precio_venta;
+        var concept = string.IsNullOrWhiteSpace(lineEditor.Concept) ? product.nombre_producto : lineEditor.Concept.Trim();
+
+        var newLine = new tbl_detalle_venta
+        {
+            id_venta = sale.id_venta,
+            id_producto = product.id_producto,
+            cantidad = lineEditor.Quantity,
+            precio_unitario = unitPrice,
+            descuento = lineEditor.Discount,
+            concepto_item = concept,
+            total_item = Math.Max(0m, (unitPrice * lineEditor.Quantity) - lineEditor.Discount)
+        };
+
+        sale.tbl_detalle_venta.Add(newLine);
+        dbContext.tbl_detalle_venta.Add(newLine);
+
+        sale.porcentaje_impuesto = taxRate;
+        sale.forma_pago = paymentForm;
+        sale.dias_credito = creditDays;
+        sale.observaciones_factura = NormalizeOptional(invoiceNotes);
+        sale.valor_cobrado = paidAmount;
+
+        await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
+        await dbContext.SaveChangesAsync();
+
+        lineEditor = new ManualLineEditor();
+        statusMessage = "La linea fue agregada al borrador de factura.";
+        await LoadAsync(selectedPatient.id_paciente);
+    }
+
+    private async Task RemoveLineAsync(int lineId)
+    {
+        if (!canEditModule || draftSale is null || lineId <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var sale = await dbContext.tbl_venta.Include(x => x.tbl_detalle_venta).FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
+        var line = await dbContext.tbl_detalle_venta.FirstOrDefaultAsync(x => x.id_detalle_venta == lineId && x.id_venta == draftSale.id_venta);
+        if (sale is null || line is null)
+        {
+            return;
+        }
+
+        dbContext.tbl_detalle_venta.Remove(line);
+        await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "La linea fue retirada del borrador.";
+        await LoadAsync(selectedPatientId);
+    }
+
+    private async Task FinalizeInvoiceAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!canEditModule || draftSale is null || selectedPatient is null || billingClient is null)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var sale = await dbContext.tbl_venta
+            .Include(x => x.tbl_detalle_venta)
+            .FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
+
+        if (sale is null)
+        {
+            errorMessage = "No se encontro el borrador de factura.";
+            return;
+        }
+
+        if (!sale.tbl_detalle_venta.Any())
+        {
+            errorMessage = "Agrega al menos una linea antes de emitir la factura.";
+            return;
+        }
+
+        var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == billingClient.cliente_id);
+        if (client is null)
+        {
+            errorMessage = "No se encontro el cliente de facturacion.";
+            return;
+        }
+
+        sale.id_cliente_facturacion = client.cliente_id;
+        sale.id_usuario = currentUserId;
+        sale.forma_pago = paymentForm;
+        sale.dias_credito = creditDays;
+        sale.porcentaje_impuesto = taxRate;
+        sale.observaciones_factura = NormalizeOptional(invoiceNotes);
+        sale.valor_cobrado = paidAmount;
+        sale.fecha_venta = DateTime.Now;
+
+        await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
+
+        var invoiceNumber = await BillingDraftService.GenerateNextInvoiceNumberAsync(dbContext);
+        sale.estado = (sale.saldo_pendiente ?? 0) > 0 ? "Credito" : "Facturada";
+
+        var comprobante = new tbl_comprobante
+        {
+            id_venta = sale.id_venta,
+            tipo_comprobante = "Factura",
+            numero_comprobante = invoiceNumber,
+            secuencial = long.Parse(invoiceNumber),
+            estado_comprobante = "Emitido",
+            fecha_emision = DateTime.Now
+        };
+        dbContext.tbl_comprobantes.Add(comprobante);
+        await dbContext.SaveChangesAsync();
+
+        var currentBalance = sale.saldo_pendiente ?? 0m;
+        var accountReceivable = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_venta == sale.id_venta);
+        if (currentBalance > 0)
+        {
+            var dueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(Math.Max(0, creditDays)));
+            if (accountReceivable is null)
+            {
+                dbContext.tbl_cta_cobrar.Add(new tbl_cta_cobrar
+                {
+                    id_cliente = client.cliente_id,
+                    id_venta = sale.id_venta,
+                    id_comprobante = comprobante.id_comprobante,
+                    monto_total = sale.total ?? 0,
+                    saldo = currentBalance,
+                    fecha_emision = DateTime.Now,
+                    fecha_vencimiento = dueDate,
+                    estado = "Pendiente",
+                    fecha_creacion = DateTime.Now,
+                    usuario_creacion = GetCurrentActorLabel()
+                });
+            }
+            else
+            {
+                accountReceivable.id_cliente = client.cliente_id;
+                accountReceivable.id_comprobante = comprobante.id_comprobante;
+                accountReceivable.monto_total = sale.total ?? 0;
+                accountReceivable.saldo = currentBalance;
+                accountReceivable.fecha_vencimiento = dueDate;
+                accountReceivable.estado = "Pendiente";
+                accountReceivable.usuario_creacion ??= GetCurrentActorLabel();
+            }
+        }
+        else if (accountReceivable is not null)
+        {
+            accountReceivable.id_comprobante = comprobante.id_comprobante;
+            accountReceivable.monto_total = sale.total ?? 0;
+            accountReceivable.saldo = 0;
+            accountReceivable.estado = "Pagada";
+        }
+
+        client.condicion_pago = currentBalance > 0 ? "Credito" : paymentForm;
+        client.dias_plazo = currentBalance > 0 ? creditDays : 0;
+        var otherOutstandingBalance = await dbContext.tbl_cta_cobrar
+            .Where(x => x.id_cliente == client.cliente_id && x.estado == "Pendiente" && x.id_venta != sale.id_venta)
+            .Select(x => x.saldo)
+            .DefaultIfEmpty(0m)
+            .SumAsync();
+        client.saldo_deudor = otherOutstandingBalance + currentBalance;
+        client.fecha_actualizacion = DateTime.Now;
+        client.id_usuario_actualizacion = currentUserId;
+
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = $"Factura {invoiceNumber} emitida correctamente.";
+        selectedPatientId = selectedPatient.id_paciente;
+        await LoadAsync(selectedPatientId);
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(x => x.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/invoices"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        if (permission is null)
+        {
+            return new ModulePermissions();
+        }
+
+        return new ModulePermissions
+        {
+            CanView = permission.puede_ver,
+            CanCreate = permission.puede_crear,
+            CanEdit = permission.puede_editar,
+            CanDelete = permission.puede_eliminar
+        };
+    }
+
+    private void RecalculatePreview()
+    {
+        subtotalPreview = draftSale?.subtotal ?? 0;
+        taxPreview = draftSale?.impuesto_total ?? 0;
+        totalPreview = draftSale?.total ?? 0;
+        balancePreview = draftSale?.saldo_pendiente ?? 0;
+    }
+
+    private string GetOriginLabel(tbl_detalle_venta line)
+    {
+        return string.IsNullOrWhiteSpace(line.origen_tipo)
+            ? "Manual"
+            : $"{line.origen_tipo} #{line.origen_id}";
+    }
+
+    private string GetPatientLabel(tbl_paciente patient)
+    {
+        return $"{patient.apellidos} {patient.nombres} - {patient.cedula}".Trim();
+    }
+
+    private string GetPatientFullName(tbl_paciente patient)
+    {
+        return $"{patient.nombres} {patient.apellidos}".Trim();
+    }
+
+    private string GetClientLabel(ClientEntity client)
+    {
+        return $"{client.razon_social} - {client.numero_identificacion}".Trim();
+    }
+
+    private string GetCurrentActorLabel()
+    {
+        return $"USER_{currentUserId}";
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class ManualLineEditor
+    {
+        public int ProductId { get; set; }
+        public int Quantity { get; set; } = 1;
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public string Concept { get; set; } = string.Empty;
+    }
+}

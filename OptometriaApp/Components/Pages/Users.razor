@@ -222,9 +222,14 @@ else
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
                 <h2>@EditorTitle</h2>
-                <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
                 <div class="management-form-grid">
                     <div>
                         <label class="form-label" for="editNames">Nombres</label>
@@ -302,13 +307,13 @@ else
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveUserAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveUserWithHandlingAsync">Guardar cambios</button>
                 }
                 @if (!isCreatingNewUser && permissions.CanEdit)
                 {
                     <button type="button" class="btn btn-outline-primary" @onclick="() => DisableMfaAsync(selectedUser)" disabled="@(!editor.TwoFactorEnabled)">Desactivar MFA</button>
                 }
-                <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
             </footer>
         </div>
     </div>
@@ -614,6 +619,12 @@ else
         alertMessage = string.Empty;
     }
 
+    private void CloseFormModal()
+    {
+        errorMessage = null;
+        showFormModal = false;
+    }
+
     private async Task SaveUserAsync()
     {
         errorMessage = null;
@@ -743,6 +754,18 @@ else
         ShowAlert("La información del usuario se guardó correctamente.", false);
         showFormModal = false;
         await LoadAsync(userEntity.id_usuario);
+    }
+
+    private async Task SaveUserWithHandlingAsync()
+    {
+        try
+        {
+            await SaveUserAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
     }
 
     private async Task ResetPasswordAsync(tbl_usuario user)
@@ -1210,6 +1233,16 @@ else
     private static DateOnly? ParseBirthDate(string? rawBirthDate)
     {
         return DateOnly.TryParse(rawBirthDate, out var birthDate) ? birthDate : null;
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private static bool IsValidEmail(string email)

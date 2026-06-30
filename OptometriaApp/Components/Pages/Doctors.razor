@@ -263,6 +263,11 @@ else
                 <button type="button" class="btn-close-modal" @onclick="CloseFormModal">x</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
                 <div style="margin-bottom: 1rem; padding: 0.9rem 1rem; border-radius: 0.9rem; background: rgba(93, 161, 129, 0.08); border: 1px solid rgba(93, 161, 129, 0.14);">
                     <strong style="display: block; color: var(--color-ink);">@editor.LinkedUserFullName</strong>
                     <span style="display: block; font-size: 0.84rem; color: var(--color-taupe);">Usuario: @editor.LinkedUserName | Rol: @editor.LinkedRoleName</span>
@@ -377,7 +382,7 @@ else
                 <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cancelar</button>
                 @if (CanModifyEditor)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="SaveDoctorAsync">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveDoctorWithHandlingAsync">Guardar cambios</button>
                 }
             </footer>
         </div>
@@ -716,6 +721,18 @@ else
         await LoadAsync(userEntity.id_usuario);
     }
 
+    private async Task SaveDoctorWithHandlingAsync()
+    {
+        try
+        {
+            await SaveDoctorAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = GetInnermostMessage(ex);
+        }
+    }
+
     private async Task ToggleActiveAsync(tbl_usuario user)
     {
         if (!CanToggleDoctorProfile(user))
@@ -805,6 +822,16 @@ else
         alertMessage = message;
         alertIsError = isError;
         showAlertModal = true;
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        while (ex.InnerException is not null)
+        {
+            ex = ex.InnerException;
+        }
+
+        return ex.Message;
     }
 
     private void CloseAlertModal()

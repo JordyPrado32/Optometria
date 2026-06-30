@@ -10,19 +10,25 @@
 
     <nav class="app-nav @(menuOpen ? "is-open" : string.Empty)">
         <div class="app-nav-scroll">
-            <div class="app-nav-links">
-                @foreach (var menu in sortedMenus)
-                {
-                    <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                        <span class="app-nav-link-mark">
-                            <i class="@GetMenuIconClass(menu.Ruta)"></i>
-                        </span>
-                        <span class="app-nav-link-copy">
-                            <strong>@menu.Nombre</strong>
-                        </span>
-                    </NavLink>
-                }
-            </div>
+            @foreach (var section in menuSections)
+            {
+                <div class="app-nav-section">
+                    <div class="app-nav-section-title">@section.Key</div>
+                    <div class="app-nav-links">
+                        @foreach (var menu in section.Value)
+                        {
+                            <NavLink class="app-nav-link" href="@menu.Ruta" Match="@(menu.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                                <span class="app-nav-link-mark">
+                                    <i class="@GetMenuIconClass(menu.Ruta)"></i>
+                                </span>
+                                <span class="app-nav-link-copy">
+                                    <strong>@menu.Nombre</strong>
+                                </span>
+                            </NavLink>
+                        }
+                    </div>
+                </div>
+            }
         </div>
 
     </nav>
@@ -30,6 +36,7 @@
 
 @code {
     private readonly List<AppMenuItem> sortedMenus = [];
+    private readonly List<KeyValuePair<string, List<AppMenuItem>>> menuSections = [];
     private bool menuOpen;
     private string UserName { get; set; } = "Cuenta";
     private string RoleName { get; set; } = "Sesion";
@@ -47,6 +54,9 @@
 
         var rawMenus = await MenuAccessService.GetMenusForRoleAsync(roleId);
         sortedMenus.AddRange(rawMenus.OrderBy(m => GetRouteOrder(m.Ruta)));
+        menuSections.AddRange(sortedMenus
+            .GroupBy(m => GetMenuCategory(m.Ruta))
+            .Select(g => new KeyValuePair<string, List<AppMenuItem>>(g.Key, g.ToList())));
     }
 
     private void ToggleMenu()
@@ -82,6 +92,14 @@
         "/setup-2fa" => 24,
         "/profile" => 25,
         _ => 100
+    };
+
+    private static string GetMenuCategory(string route) => route switch
+    {
+        "/dashboard" or "/patients" or "/doctor/patient-entry" or "/doctor/my-patients" or "/appointments" or "/appointment-availability" or "/doctors" or "/laboratories" => "Clinica",
+        "/clients" or "/emisor" or "/invoices" => "Comercial",
+        "/products" or "/product-categories" or "/suppliers" or "/purchases" or "/purchase-orders" or "/purchase-receptions" or "/purchase-liquidations" or "/inventories" or "/kardex" => "Inventario",
+        _ => "Configuracion"
     };
 
     private static string GetMenuIconClass(string route) => route switch
