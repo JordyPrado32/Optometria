@@ -264,6 +264,22 @@ else
                         <input type="number" step="0.01" min="0" class="form-control" @bind="editor.PrecioVenta" readonly="@(!CanModifyEditor)" />
                     </div>
                     <div>
+                        <label class="form-label">Tiene IVA</label>
+                        <select class="form-select" @bind="EditorTieneIvaValue" disabled="@(!CanModifyEditor)">
+                            <option value="true">Si</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">IVA %</label>
+                        <select class="form-select" @bind="editor.PorcentajeIva" disabled="@(!CanModifyEditor || !editor.TieneIva)">
+                            @foreach (var percentage in ivaPercentageOptions)
+                            {
+                                <option value="@percentage">@($"{percentage:0}%")</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
                         <label class="form-label">Stock actual</label>
                         <input type="number" class="form-control" @bind="editor.StockActual" readonly="@(!CanModifyEditor)" />
                     </div>
@@ -558,6 +574,7 @@ else
     private readonly string[] productTypeOptions = ["Producto", "Servicio"];
     private readonly string[] movementFrequencyOptions = ["Alta", "Media", "Baja"];
     private readonly string[] natureOptions = ["Bien", "Servicio", "Mixto"];
+    private readonly decimal[] ivaPercentageOptions = [5m, 8m, 13m, 15m];
     private List<tbl_log_auditoria> auditEntries = [];
     private ProductEditorModel? editor;
     private ModulePermissions permissions = new();
@@ -697,6 +714,31 @@ else
             if (editor is not null)
             {
                 editor.Activo = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    private string EditorTieneIvaValue
+    {
+        get => editor?.TieneIva == true ? "true" : "false";
+        set
+        {
+            if (editor is null)
+            {
+                return;
+            }
+
+            editor.TieneIva = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            if (editor.TieneIva)
+            {
+                if (!ivaPercentageOptions.Contains(editor.PorcentajeIva))
+                {
+                    editor.PorcentajeIva = ivaPercentageOptions[0];
+                }
+            }
+            else
+            {
+                editor.PorcentajeIva = 0;
             }
         }
     }
@@ -931,6 +973,8 @@ else
         entity.descripcion = NormalizeOptional(editor.Descripcion);
         entity.precio_costo = editor.PrecioCosto;
         entity.precio_venta = editor.PrecioVenta;
+        entity.tiene_iva = editor.TieneIva;
+        entity.porcentaje_iva = editor.TieneIva ? editor.PorcentajeIva : 0;
         entity.stock_actual = editor.StockActual;
         entity.stock_minimo = editor.StockMinimo;
         entity.activo = editor.Activo;
@@ -1131,6 +1175,12 @@ else
             return false;
         }
 
+        if (editor.PorcentajeIva < 0)
+        {
+            errorMessage = "El porcentaje de IVA no puede ser negativo.";
+            return false;
+        }
+
         if (editor.StockActual < 0 || editor.StockMinimo < 0 || editor.StockMaximo < 0 || editor.PuntoReorden < 0 || editor.CantidadEmpaque < 0)
         {
             errorMessage = "Los campos de inventario no pueden ser negativos.";
@@ -1191,6 +1241,8 @@ else
             EsPromocion = false,
             EstadoProducto = "Disponible",
             TipoItem = "Producto",
+            TieneIva = false,
+            PorcentajeIva = 0,
             NaturalezaItem = "Bien",
             MovimientoFrecuencia = "Media",
             UsuarioCreacion = currentUserName
@@ -1215,6 +1267,8 @@ else
             Descripcion = product.descripcion ?? string.Empty,
             PrecioCosto = product.precio_costo ?? 0,
             PrecioVenta = product.precio_venta,
+            TieneIva = product.tiene_iva ?? false,
+            PorcentajeIva = product.porcentaje_iva ?? 0,
             StockActual = product.stock_actual ?? 0,
             StockMinimo = product.stock_minimo ?? 0,
             Activo = product.activo ?? true,
@@ -1320,6 +1374,8 @@ else
         public string Descripcion { get; set; } = string.Empty;
         public decimal PrecioCosto { get; set; }
         public decimal PrecioVenta { get; set; }
+        public bool TieneIva { get; set; }
+        public decimal PorcentajeIva { get; set; }
         public int StockActual { get; set; }
         public int StockMinimo { get; set; }
         public bool Activo { get; set; } = true;

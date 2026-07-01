@@ -11,6 +11,104 @@
 
 <PageTitle>Facturas</PageTitle>
 
+<style>
+    .invoice-workspace {
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .invoice-sheet-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, rgba(93, 161, 129, 0.12), rgba(254, 188, 100, 0.08));
+        border-bottom: 1px solid rgba(127, 105, 81, 0.12);
+    }
+
+    .invoice-sheet-body {
+        padding: 1.5rem;
+    }
+
+    .invoice-toolbar-grid,
+    .invoice-party-grid,
+    .invoice-editor-grid,
+    .invoice-upsert-grid,
+    .invoice-bottom-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .invoice-toolbar-grid,
+    .invoice-editor-grid,
+    .invoice-upsert-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .invoice-party-grid,
+    .invoice-bottom-grid {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .invoice-section {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.72);
+    }
+
+    .invoice-block-title {
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+        margin-bottom: 0.85rem;
+    }
+
+    .invoice-summary-table td {
+        padding: 0.45rem 0;
+        border: none;
+    }
+
+    .invoice-summary-table td:last-child {
+        text-align: right;
+        font-weight: 700;
+        color: var(--color-ink);
+    }
+
+    .invoice-lines-table th,
+    .invoice-lines-table td {
+        vertical-align: middle;
+    }
+
+    .invoice-line-editor,
+    .invoice-product-upsert {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px dashed rgba(127, 105, 81, 0.18);
+    }
+
+    .invoice-kpi {
+        text-align: right;
+    }
+
+    .invoice-kpi strong {
+        display: block;
+        font-size: 1.5rem;
+        color: var(--color-ink);
+    }
+
+    @@media (max-width: 768px) {
+        .invoice-sheet-header {
+            flex-direction: column;
+        }
+
+        .invoice-kpi {
+            text-align: left;
+        }
+    }
+</style>
+
 @if (isLoading)
 {
     <section class="management-shell">
@@ -35,8 +133,8 @@ else
         <div class="management-hero">
             <div>
                 <span class="eyebrow">Facturacion</span>
-                <h1>Facturas y pendientes</h1>
-                <p>Consolida servicios pendientes de citas, agrega productos y emite la factura con impuestos, forma de pago y credito.</p>
+                <h1>Factura tradicional</h1>
+                <p>Prepara una factura clasica con cabecera, cliente, tabla de items, totales y upserts inline sin salir del flujo.</p>
             </div>
         </div>
 
@@ -50,257 +148,330 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Cabecera</h2>
-                <span>Numero @invoiceNumberPreview</span>
-            </div>
-
-            <div class="management-form-grid">
+        <section class="management-card invoice-workspace">
+            <div class="invoice-sheet-header">
                 <div>
-                    <label class="form-label" for="invoicePatient">Paciente</label>
-                    <select id="invoicePatient" class="form-select" value="@selectedPatientId" @onchange="OnPatientChanged" disabled="@(!canEditModule)">
-                        <option value="0">Selecciona</option>
-                        @foreach (var patient in patients)
-                        {
-                            <option value="@patient.id_paciente">@GetPatientLabel(patient)</option>
-                        }
-                    </select>
+                    <span class="eyebrow">Documento de venta</span>
+                    <h2 style="margin: 0.35rem 0 0.45rem;">Factura #@invoiceNumberPreview</h2>
+                    <p style="margin: 0; color: var(--color-taupe);">Fecha de trabajo: @InvoiceDateLabel</p>
                 </div>
 
-                <div>
-                    <label class="form-label" for="invoiceClient">Cliente</label>
-                    <select id="invoiceClient" class="form-select" value="@selectedClientId" @onchange="OnClientChanged" disabled="@(!canEditModule)">
-                        <option value="0">Selecciona</option>
-                        @foreach (var client in clients)
-                        {
-                            <option value="@client.cliente_id">@GetClientLabel(client)</option>
-                        }
-                    </select>
-                </div>
-
-                <div>
-                    <label class="form-label">Numero factura</label>
-                    <input class="form-control" value="@invoiceNumberPreview" readonly />
-                </div>
-
-                <div>
-                    <label class="form-label">Forma de pago</label>
-                    <select class="form-select" @bind="paymentForm" disabled="@(!canEditModule)">
-                        @foreach (var method in paymentMethods)
-                        {
-                            <option value="@method">@method</option>
-                        }
-                    </select>
-                </div>
-
-                <div>
-                    <label class="form-label">Dias de credito</label>
-                    <input type="number" class="form-control" @bind="creditDays" min="0" readonly="@(!canEditModule)" />
-                </div>
-
-                <div>
-                    <label class="form-label">Impuesto %</label>
-                    <input type="number" step="0.01" class="form-control" @bind="taxRate" min="0" readonly="@(!canEditModule)" />
-                </div>
-
-                <div>
-                    <label class="form-label">Valor cobrado</label>
-                    <input type="number" step="0.01" class="form-control" @bind="paidAmount" min="0" readonly="@(!canEditModule)" />
+                <div class="invoice-kpi">
+                    <span class="eyebrow">Total actual</span>
+                    <strong>@totalPreview.ToString("0.00")</strong>
+                    <span style="color: var(--color-taupe);">Saldo: @balancePreview.ToString("0.00")</span>
                 </div>
             </div>
 
-            <div class="management-form-grid" style="margin-top: 1rem;">
-                <div class="patient-form-span">
-                    <label class="form-label">Observaciones</label>
-                    <textarea class="form-control" rows="3" @bind="invoiceNotes" readonly="@(!canEditModule)"></textarea>
-                </div>
-            </div>
-        </section>
-
-        <div class="management-grid" style="margin-top: 1.5rem;">
-            <section class="management-card">
-                <div class="management-card-header">
-                    <h2>Cliente</h2>
-                    <span>@(billingClient is null ? "Sin cliente" : $"Cliente #{billingClient.cliente_id}")</span>
-                </div>
-
-                @if (selectedPatient is null)
-                {
-                    <p>Selecciona un paciente para preparar la factura.</p>
-                }
-                else
-                {
-                    <div class="management-form-grid">
-                        <div>
-                            <label class="form-label">Paciente</label>
-                            <input class="form-control" value="@GetPatientLabel(selectedPatient)" readonly />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Identificacion</label>
-                            <input class="form-control" value="@(billingClient?.numero_identificacion ?? selectedPatient.cedula)" readonly />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Razon social</label>
-                            <input class="form-control" value="@(billingClient?.razon_social ?? GetPatientFullName(selectedPatient))" readonly />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Telefono</label>
-                            <input class="form-control" value="@(billingClient?.telefono ?? selectedPatient.telefono ?? string.Empty)" readonly />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Correo</label>
-                            <input class="form-control" value="@(billingClient?.correo_electronico ?? selectedPatient.email ?? string.Empty)" readonly />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Condicion</label>
-                            <input class="form-control" value="@(billingClient?.condicion_pago ?? "Contado")" readonly />
-                        </div>
-                    </div>
-
-                    <div class="workspace-actions" style="margin-top: 1rem;">
-                        <a class="btn btn-outline-primary" href="/clients">Administrar clientes</a>
-                    </div>
-                }
-            </section>
-
-            <section class="management-card">
-                <div class="management-card-header">
-                    <h2>Agregar producto</h2>
-                    <span>Manual</span>
-                </div>
-
-                <div class="management-form-grid">
+            <div class="invoice-sheet-body">
+                <div class="invoice-toolbar-grid">
                     <div>
-                        <label class="form-label">Producto o servicio</label>
-                        <select class="form-select" @bind="lineEditor.ProductId" disabled="@(!canEditModule)">
+                        <label class="form-label" for="invoicePatient">Paciente</label>
+                        <select id="invoicePatient" class="form-select" value="@selectedPatientId" @onchange="OnPatientChanged" disabled="@(!canEditModule)">
                             <option value="0">Selecciona</option>
-                            @foreach (var product in products)
+                            @foreach (var patient in patients)
                             {
-                                <option value="@product.id_producto">@($"{product.nombre_producto} ({product.codigo_producto})")</option>
+                                <option value="@patient.id_paciente">@GetPatientLabel(patient)</option>
                             }
                         </select>
                     </div>
 
                     <div>
-                        <label class="form-label">Cantidad</label>
-                        <input type="number" class="form-control" @bind="lineEditor.Quantity" min="1" readonly="@(!canEditModule)" />
+                        <label class="form-label" for="invoiceClient">Cliente</label>
+                        <select id="invoiceClient" class="form-select" value="@selectedClientId" @onchange="OnClientChanged" disabled="@(!canEditModule)">
+                            <option value="0">Selecciona</option>
+                            @foreach (var client in clients)
+                            {
+                                <option value="@client.cliente_id">@GetClientLabel(client)</option>
+                            }
+                        </select>
                     </div>
 
                     <div>
-                        <label class="form-label">Precio unitario</label>
-                        <input type="number" step="0.01" class="form-control" @bind="lineEditor.UnitPrice" min="0" readonly="@(!canEditModule)" />
+                        <label class="form-label">Forma de pago</label>
+                        <select class="form-select" @bind="paymentForm" disabled="@(!canEditModule)">
+                            @foreach (var method in paymentMethods)
+                            {
+                                <option value="@method">@method</option>
+                            }
+                        </select>
                     </div>
 
                     <div>
-                        <label class="form-label">Descuento</label>
-                        <input type="number" step="0.01" class="form-control" @bind="lineEditor.Discount" min="0" readonly="@(!canEditModule)" />
+                        <label class="form-label">Dias de credito</label>
+                        <input type="number" class="form-control" @bind="creditDays" min="0" readonly="@(!canEditModule)" />
                     </div>
 
-                    <div class="patient-form-span">
-                        <label class="form-label">Concepto</label>
-                        <input class="form-control" @bind="lineEditor.Concept" readonly="@(!canEditModule)" />
+                    <div>
+                        <label class="form-label">Impuesto promedio %</label>
+                        <input class="form-control" value="@taxRate.ToString("0.##")" readonly />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Valor cobrado</label>
+                        <input type="number" step="0.01" class="form-control" @bind="paidAmount" min="0" readonly="@(!canEditModule)" />
                     </div>
                 </div>
 
-                <div class="workspace-actions" style="margin-top: 1rem;">
-                    <button type="button" class="btn btn-primary" @onclick="AddManualLineAsync" disabled="@(!canEditModule)">Agregar a la factura</button>
-                </div>
-            </section>
-        </div>
-
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
-                <h2>Detalle de factura</h2>
-                <span>@draftLines.Count lineas</span>
-            </div>
-
-            <div class="table-responsive" style="margin-top: 1rem;">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Origen</th>
-                            <th>Concepto</th>
-                            <th>Cantidad</th>
-                            <th>Precio</th>
-                            <th>Descuento</th>
-                            <th>Total</th>
-                            <th style="text-align: right;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (draftLines.Count == 0)
+                <div class="invoice-party-grid" style="margin-top: 1.25rem;">
+                    <section class="invoice-section">
+                        <div class="invoice-block-title">Facturar a</div>
+                        @if (billingClient is null && selectedPatient is null)
                         {
-                            <tr>
-                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">No hay productos pendientes para facturar.</td>
-                            </tr>
+                            <p style="margin: 0;">Selecciona un cliente y, si quieres cargar pendientes, un paciente origen.</p>
                         }
                         else
                         {
-                            @foreach (var line in draftLines)
-                            {
-                                <tr>
-                                    <td>@GetOriginLabel(line)</td>
-                                    <td>
-                                        <strong>@(line.concepto_item ?? line.id_productoNavigation.nombre_producto)</strong>
-                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@line.id_productoNavigation.codigo_producto</div>
-                                    </td>
-                                    <td>@line.cantidad</td>
-                                    <td>@((line.precio_unitario ?? 0).ToString("0.00"))</td>
-                                    <td>@((line.descuento ?? 0).ToString("0.00"))</td>
-                                    <td>@((line.total_item ?? 0).ToString("0.00"))</td>
-                                    <td style="text-align: right;">
-                                        <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => RemoveLineAsync(line.id_detalle_venta)" disabled="@(!canEditModule)">
-                                            Quitar
-                                        </button>
-                                    </td>
-                                </tr>
-                            }
+                            <div class="invoice-toolbar-grid">
+                                <div>
+                                    <label class="form-label">Paciente origen</label>
+                                    <input class="form-control" value="@(selectedPatient is null ? "Varios / no definido" : GetPatientLabel(selectedPatient))" readonly />
+                                </div>
+                                <div>
+                                    <label class="form-label">Identificacion</label>
+                                    <input class="form-control" value="@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? string.Empty)" readonly />
+                                </div>
+                                <div>
+                                    <label class="form-label">Razon social</label>
+                                    <input class="form-control" value="@(billingClient?.razon_social ?? (selectedPatient is null ? string.Empty : GetPatientFullName(selectedPatient)))" readonly />
+                                </div>
+                                <div>
+                                    <label class="form-label">Telefono</label>
+                                    <input class="form-control" value="@(billingClient?.telefono ?? selectedPatient?.telefono ?? string.Empty)" readonly />
+                                </div>
+                                <div>
+                                    <label class="form-label">Correo</label>
+                                    <input class="form-control" value="@(billingClient?.correo_electronico ?? selectedPatient?.email ?? string.Empty)" readonly />
+                                </div>
+                                <div>
+                                    <label class="form-label">Condicion</label>
+                                    <input class="form-control" value="@(billingClient?.condicion_pago ?? "Contado")" readonly />
+                                </div>
+                            </div>
                         }
-                    </tbody>
-                </table>
-            </div>
-        </section>
+                    </section>
 
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
-                <h2>Totales</h2>
-                <span>@(draftSale is null ? "Sin borrador" : $"Venta #{draftSale.id_venta}")</span>
-            </div>
+                    <section class="invoice-section">
+                        <div class="invoice-block-title">Resumen del documento</div>
+                        <table class="table invoice-summary-table" style="margin-bottom: 0;">
+                            <tbody>
+                                <tr><td>Numero factura</td><td>@invoiceNumberPreview</td></tr>
+                                <tr><td>Lineas cargadas</td><td>@draftLines.Count</td></tr>
+                                <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
+                                <tr><td>Impuestos</td><td>@taxPreview.ToString("0.00")</td></tr>
+                                <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
+                            </tbody>
+                        </table>
 
-            <div class="user-summary-grid">
-                <div class="user-summary-card">
-                    <span class="eyebrow">Subtotal</span>
-                    <strong>@subtotalPreview.ToString("0.00")</strong>
-                    <p>Suma base antes de impuestos.</p>
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            <a class="btn btn-outline-primary" href="/clients">Administrar clientes</a>
+                        </div>
+                    </section>
                 </div>
 
-                <div class="user-summary-card">
-                    <span class="eyebrow">Impuestos</span>
-                    <strong>@taxPreview.ToString("0.00")</strong>
-                    <p>@taxRate.ToString("0.##")% configurado.</p>
-                </div>
+                <section class="invoice-section" style="margin-top: 1.25rem;">
+                    <div class="management-card-header">
+                        <h2>Detalle de factura</h2>
+                        <span>@draftLines.Count lineas</span>
+                    </div>
 
-                <div class="user-summary-card">
-                    <span class="eyebrow">Total</span>
-                    <strong>@totalPreview.ToString("0.00")</strong>
-                    <p>Valor total de la factura.</p>
-                </div>
+                    <div class="table-responsive" style="margin-top: 1rem;">
+                        <table class="table table-hover invoice-lines-table">
+                            <thead>
+                                <tr>
+                                    <th>Codigo</th>
+                                    <th>Concepto</th>
+                                    <th>Origen</th>
+                                    <th>IVA</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio</th>
+                                    <th>Descuento</th>
+                                    <th>Total</th>
+                                    <th style="text-align: right;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (draftLines.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--color-taupe);">No hay lineas en la factura.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var line in draftLines)
+                                    {
+                                        <tr>
+                                            <td>@line.id_productoNavigation.codigo_producto</td>
+                                            <td>
+                                                <strong>@(line.concepto_item ?? line.id_productoNavigation.nombre_producto)</strong>
+                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@line.id_productoNavigation.nombre_producto</div>
+                                            </td>
+                                            <td>@GetOriginLabel(line)</td>
+                                            <td>@GetLineTaxLabel(line)</td>
+                                            <td>@line.cantidad</td>
+                                            <td>@((line.precio_unitario ?? 0).ToString("0.00"))</td>
+                                            <td>@((line.descuento ?? 0).ToString("0.00"))</td>
+                                            <td>@((line.total_item ?? 0).ToString("0.00"))</td>
+                                            <td style="text-align: right;">
+                                                <div style="display: inline-flex; gap: 0.5rem;">
+                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => BeginLineEdit(line)" disabled="@(!canEditModule)">
+                                                        Editar
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => RemoveLineAsync(line.id_detalle_venta)" disabled="@(!canEditModule)">
+                                                        Quitar
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
 
-                <div class="user-summary-card">
-                    <span class="eyebrow">Saldo</span>
-                    <strong>@balancePreview.ToString("0.00")</strong>
-                    <p>Pendiente segun pago y credito.</p>
-                </div>
-            </div>
+                    <div class="invoice-line-editor">
+                        <div class="invoice-block-title">@(lineEditor.LineId > 0 ? "Editar linea" : "Nueva linea")</div>
 
-            <div class="workspace-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-primary" @onclick="FinalizeInvoiceAsync" disabled="@(!canEditModule)">Emitir factura</button>
+                        <div class="invoice-editor-grid">
+                            <div>
+                                <label class="form-label">Producto o servicio</label>
+                                <select class="form-select" value="@lineEditor.ProductId" @onchange="OnManualProductChanged" disabled="@(!canEditModule)">
+                                    <option value="0">Selecciona</option>
+                                    @foreach (var product in products)
+                                    {
+                                        <option value="@product.id_producto">@($"{product.codigo_producto} - {product.nombre_producto}")</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Cantidad</label>
+                                <input type="number" class="form-control" @bind="lineEditor.Quantity" min="1" readonly="@(!canEditModule)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Precio unitario</label>
+                                <input type="number" step="0.01" class="form-control" @bind="lineEditor.UnitPrice" min="0" readonly="@(!canEditModule)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Descuento</label>
+                                <input type="number" step="0.01" class="form-control" @bind="lineEditor.Discount" min="0" readonly="@(!canEditModule)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">IVA del producto</label>
+                                <input class="form-control" value="@(SelectedManualProduct is null ? "Selecciona un producto" : GetProductTaxLabel(SelectedManualProduct))" readonly />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Total de linea</label>
+                                <input class="form-control" value="@LineEditorTotal.ToString("0.00")" readonly />
+                            </div>
+
+                            <div style="grid-column: 1 / -1;">
+                                <label class="form-label">Concepto</label>
+                                <input class="form-control" @bind="lineEditor.Concept" readonly="@(!canEditModule)" />
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            <button type="button" class="btn btn-primary" @onclick="SaveLineAsync" disabled="@(!canEditModule)">@LineActionLabel</button>
+                            <button type="button" class="btn btn-outline-primary" @onclick="ResetLineEditor" disabled="@(!canEditModule)">Limpiar</button>
+                            <button type="button" class="btn btn-outline-primary" @onclick="ToggleProductUpsertForm" disabled="@(!canEditModule)">Upsert producto</button>
+                        </div>
+                    </div>
+
+                    @if (showProductUpsertForm)
+                    {
+                        <div class="invoice-product-upsert">
+                            <div class="invoice-block-title">@(productUpsertEditor.IdProducto > 0 ? "Editar producto" : "Crear producto rapido")</div>
+
+                            <div class="invoice-upsert-grid">
+                                <div>
+                                    <label class="form-label">Codigo *</label>
+                                    <input class="form-control" @bind="productUpsertEditor.CodigoProducto" maxlength="50" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label">Nombre *</label>
+                                    <input class="form-control" @bind="productUpsertEditor.NombreProducto" maxlength="150" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label">Tipo item</label>
+                                    <select class="form-select" @bind="productUpsertEditor.TipoItem">
+                                        <option value="Producto">Producto</option>
+                                        <option value="Servicio">Servicio</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="form-label">Categoria *</label>
+                                    <select class="form-select" @bind="productUpsertEditor.IdCategoria">
+                                        <option value="0">Selecciona</option>
+                                        @foreach (var category in categories.OrderBy(x => x.nombre))
+                                        {
+                                            <option value="@category.id_categoria">@category.nombre</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="form-label">Precio venta</label>
+                                    <input type="number" step="0.01" min="0" class="form-control" @bind="productUpsertEditor.PrecioVenta" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label">Tiene IVA</label>
+                                    <select class="form-select" @bind="ProductUpsertTieneIvaValue">
+                                        <option value="true">Si</option>
+                                        <option value="false">No</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="form-label">IVA %</label>
+                                    <select class="form-select" @bind="productUpsertEditor.PorcentajeIva" disabled="@(!productUpsertEditor.TieneIva)">
+                                        @foreach (var percentage in ivaPercentageOptions)
+                                        {
+                                            <option value="@percentage">@($"{percentage:0}%")</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="workspace-actions" style="margin-top: 1rem;">
+                                <button type="button" class="btn btn-primary" @onclick="SaveQuickProductAsync">@ProductUpsertActionLabel</button>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <div class="invoice-bottom-grid" style="margin-top: 1.25rem;">
+                    <section class="invoice-section">
+                        <div class="invoice-block-title">Observaciones</div>
+                        <textarea class="form-control" rows="7" @bind="invoiceNotes" readonly="@(!canEditModule)"></textarea>
+                    </section>
+
+                    <section class="invoice-section">
+                        <div class="invoice-block-title">Totales</div>
+                        <table class="table invoice-summary-table" style="margin-bottom: 1rem;">
+                            <tbody>
+                                <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
+                                <tr><td>Impuestos</td><td>@taxPreview.ToString("0.00")</td></tr>
+                                <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
+                                <tr><td>Valor cobrado</td><td>@paidAmount.ToString("0.00")</td></tr>
+                                <tr><td>Saldo pendiente</td><td>@balancePreview.ToString("0.00")</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="workspace-actions">
+                            <button type="button" class="btn btn-primary" @onclick="FinalizeInvoiceAsync" disabled="@(!canEditModule)">Emitir factura</button>
+                        </div>
+                    </section>
+                </div>
             </div>
         </section>
     </section>
@@ -310,6 +481,7 @@ else
     private readonly List<tbl_paciente> patients = [];
     private readonly List<ClientEntity> clients = [];
     private readonly List<tbl_producto> products = [];
+    private readonly List<tbl_categoria_producto> categories = [];
     private readonly List<string> paymentMethods = [];
     private readonly List<tbl_detalle_venta> draftLines = [];
     private ModulePermissions permissions = new();
@@ -335,7 +507,16 @@ else
     private decimal taxPreview;
     private decimal totalPreview;
     private decimal balancePreview;
+    private readonly decimal[] ivaPercentageOptions = [5m, 8m, 13m, 15m];
     private ManualLineEditor lineEditor = new();
+    private ProductUpsertEditor productUpsertEditor = new();
+    private bool showProductUpsertForm;
+
+    private tbl_producto? SelectedManualProduct => products.FirstOrDefault(x => x.id_producto == lineEditor.ProductId);
+    private string InvoiceDateLabel => (draftSale?.fecha_venta ?? DateTime.Now).ToString("yyyy-MM-dd HH:mm");
+    private decimal LineEditorTotal => Math.Max(0m, (lineEditor.UnitPrice * lineEditor.Quantity) - lineEditor.Discount);
+    private string LineActionLabel => lineEditor.LineId > 0 ? "Actualizar linea" : "Agregar linea";
+    private string ProductUpsertActionLabel => productUpsertEditor.IdProducto > 0 ? "Actualizar producto" : "Guardar producto";
 
     protected override async Task OnInitializedAsync()
     {
@@ -381,6 +562,13 @@ else
             .ThenBy(x => x.numero_identificacion)
             .ToListAsync());
 
+        categories.Clear();
+        categories.AddRange(await dbContext.tbl_categoria_productos
+            .AsNoTracking()
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.nombre)
+            .ToListAsync());
+
         products.Clear();
         products.AddRange(await dbContext.tbl_productos
             .AsNoTracking()
@@ -404,57 +592,83 @@ else
         invoiceNumberPreview = await BillingDraftService.GenerateNextInvoiceNumberAsync(dbContext);
 
         selectedPatientId = patientId ?? selectedPatientId;
-        if (selectedPatientId > 0)
-        {
-            await LoadPatientDraftAsync(dbContext, selectedPatientId);
-        }
-        else
-        {
-            selectedPatient = null;
-            billingClient = null;
-            draftSale = null;
-            draftLines.Clear();
-            selectedClientId = 0;
-            RecalculatePreview();
-        }
+        await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
 
         isLoading = false;
     }
 
-    private async Task LoadPatientDraftAsync(OpticaDbContext dbContext, int patientId)
+    private async Task LoadCurrentDraftContextAsync(OpticaDbContext dbContext, int patientId, int clientId)
     {
-        selectedPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(x => x.id_paciente == patientId);
-        if (selectedPatient is null)
+        selectedPatient = patientId > 0
+            ? await dbContext.tbl_pacientes.FirstOrDefaultAsync(x => x.id_paciente == patientId)
+            : null;
+
+        billingClient = clientId > 0
+            ? clients.FirstOrDefault(x => x.cliente_id == clientId)
+            : null;
+
+        if (selectedPatient is null && billingClient is null)
         {
-            selectedPatientId = 0;
-            billingClient = null;
             draftSale = null;
             draftLines.Clear();
+            showProductUpsertForm = false;
+            ResetLineEditor();
             RecalculatePreview();
             return;
         }
 
-        draftSale = await BillingDraftService.GetOrCreateDraftSaleAsync(dbContext, selectedPatient.id_paciente, null, currentUserId);
-        draftSale = await dbContext.tbl_venta
-            .Include(x => x.tbl_detalle_venta)
-            .ThenInclude(x => x.id_productoNavigation)
-            .FirstAsync(x => x.id_venta == draftSale.id_venta);
+        try
+        {
+            draftSale = await BillingDraftService.GetOrCreateDraftSaleAsync(
+                dbContext,
+                selectedPatient?.id_paciente,
+                billingClient?.cliente_id,
+                currentUserId);
 
-        selectedClientId = draftSale.id_cliente_facturacion ?? 0;
-        billingClient = selectedClientId > 0
-            ? clients.FirstOrDefault(x => x.cliente_id == selectedClientId)
-            : null;
+            draftSale = await dbContext.tbl_venta
+                .Include(x => x.tbl_detalle_venta)
+                .ThenInclude(x => x.id_productoNavigation)
+                .FirstAsync(x => x.id_venta == draftSale.id_venta);
 
-        paymentForm = draftSale.forma_pago ?? paymentMethods.First();
-        creditDays = draftSale.dias_credito ?? 0;
-        taxRate = draftSale.porcentaje_impuesto ?? 0;
-        paidAmount = draftSale.valor_cobrado ?? 0;
-        invoiceNotes = draftSale.observaciones_factura ?? string.Empty;
+            selectedClientId = draftSale.id_cliente_facturacion ?? selectedClientId;
+            if (selectedClientId > 0)
+            {
+                billingClient = clients.FirstOrDefault(x => x.cliente_id == selectedClientId);
+            }
 
-        draftLines.Clear();
-        draftLines.AddRange(draftSale.tbl_detalle_venta.OrderByDescending(x => x.origen_tipo).ThenBy(x => x.id_detalle_venta));
-        await BillingDraftService.RecalculateSaleAsync(dbContext, draftSale);
-        RecalculatePreview();
+            paymentForm = draftSale.forma_pago ?? paymentMethods.First();
+            creditDays = draftSale.dias_credito ?? 0;
+            taxRate = draftSale.porcentaje_impuesto ?? 0;
+            paidAmount = draftSale.valor_cobrado ?? 0;
+            invoiceNotes = draftSale.observaciones_factura ?? string.Empty;
+
+            draftLines.Clear();
+            draftLines.AddRange(draftSale.tbl_detalle_venta.OrderByDescending(x => x.origen_tipo).ThenBy(x => x.id_detalle_venta));
+            await BillingDraftService.RecalculateSaleAsync(dbContext, draftSale);
+            showProductUpsertForm = false;
+            ResetLineEditor();
+            RecalculatePreview();
+        }
+        catch (InvalidOperationException)
+        {
+            draftSale = null;
+            draftLines.Clear();
+            showProductUpsertForm = false;
+            ResetLineEditor();
+            RecalculatePreview();
+        }
+    }
+
+    private Task OnManualProductChanged(ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out var productId))
+        {
+            productId = 0;
+        }
+
+        lineEditor.ProductId = productId;
+        ApplySelectedProductDefaults();
+        return Task.CompletedTask;
     }
 
     private async Task OnPatientChanged(ChangeEventArgs args)
@@ -470,6 +684,9 @@ else
 
     private async Task OnClientChanged(ChangeEventArgs args)
     {
+        statusMessage = null;
+        errorMessage = null;
+
         if (!int.TryParse(args.Value?.ToString(), out var clientId))
         {
             clientId = 0;
@@ -477,6 +694,13 @@ else
 
         selectedClientId = clientId;
         billingClient = clients.FirstOrDefault(x => x.cliente_id == clientId);
+        if (billingClient is not null)
+        {
+            creditDays = Math.Max(0, billingClient.dias_plazo);
+            paymentForm = string.IsNullOrWhiteSpace(billingClient.condicion_pago)
+                ? paymentForm
+                : billingClient.condicion_pago!;
+        }
 
         if (draftSale is null)
         {
@@ -487,57 +711,156 @@ else
         var sale = await dbContext.tbl_venta.FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
         if (sale is null)
         {
+            await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
             return;
         }
 
         sale.id_cliente_facturacion = clientId > 0 ? clientId : null;
+        sale.dias_credito = creditDays;
+        sale.forma_pago = paymentForm;
         await dbContext.SaveChangesAsync();
         draftSale.id_cliente_facturacion = sale.id_cliente_facturacion;
+        draftSale.dias_credito = sale.dias_credito;
+        draftSale.forma_pago = sale.forma_pago;
+        await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
     }
 
-    private async Task AddManualLineAsync()
+    private async Task SaveLineAsync()
     {
         statusMessage = null;
         errorMessage = null;
 
-        if (!canEditModule || draftSale is null || selectedPatient is null)
+        if (!canEditModule)
         {
             return;
         }
 
-        if (lineEditor.ProductId <= 0 || lineEditor.Quantity <= 0)
+        var requestedProductId = lineEditor.ProductId;
+        var requestedQuantity = lineEditor.Quantity;
+        var requestedUnitPrice = lineEditor.UnitPrice;
+        var requestedDiscount = lineEditor.Discount;
+        var requestedConcept = lineEditor.Concept?.Trim() ?? string.Empty;
+        var requestedLineId = lineEditor.LineId;
+
+        if (billingClient is null && selectedClientId <= 0 && selectedPatientId <= 0)
+        {
+            errorMessage = "Selecciona un cliente o un paciente antes de agregar lineas a la factura.";
+            return;
+        }
+
+        if (requestedProductId <= 0 || requestedQuantity <= 0)
         {
             errorMessage = "Selecciona un producto valido y una cantidad mayor a cero.";
             return;
         }
 
+        if (requestedUnitPrice < 0 || requestedDiscount < 0)
+        {
+            errorMessage = "Precio y descuento no pueden ser negativos.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(requestedConcept))
+        {
+            errorMessage = "Ingresa un concepto para la linea.";
+            return;
+        }
+
+        if (requestedDiscount > requestedUnitPrice * requestedQuantity && requestedUnitPrice > 0)
+        {
+            errorMessage = "El descuento no puede ser mayor al valor bruto de la linea.";
+            return;
+        }
+
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var sale = await dbContext.tbl_venta.Include(x => x.tbl_detalle_venta).FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
-        var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == lineEditor.ProductId && x.activo == true);
+
+        if (selectedPatient is null && selectedPatientId > 0)
+        {
+            selectedPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(x => x.id_paciente == selectedPatientId);
+        }
+
+        if ((billingClient is null || selectedClientId <= 0) && selectedPatient is not null)
+        {
+            selectedClientId = await BillingDraftService.EnsureBillingClientAsync(dbContext, selectedPatient, currentUserId);
+            billingClient = await dbContext.clients.AsNoTracking().FirstOrDefaultAsync(x => x.cliente_id == selectedClientId);
+        }
+
+        if (selectedClientId <= 0 && billingClient?.cliente_id > 0)
+        {
+            selectedClientId = billingClient.cliente_id;
+        }
+
+        if (draftSale is null && selectedPatientId <= 0)
+        {
+            errorMessage = "Selecciona un paciente antes de iniciar un nuevo borrador de factura.";
+            return;
+        }
+
+        tbl_venta ensuredDraft;
+        try
+        {
+            ensuredDraft = await BillingDraftService.GetOrCreateDraftSaleAsync(
+                dbContext,
+                selectedPatientId > 0 ? selectedPatientId : null,
+                selectedClientId > 0 ? selectedClientId : null,
+                currentUserId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            errorMessage = ex.Message;
+            return;
+        }
+
+        draftSale = ensuredDraft;
+
+        var sale = await dbContext.tbl_venta
+            .Include(x => x.tbl_detalle_venta)
+            .FirstOrDefaultAsync(x => x.id_venta == ensuredDraft.id_venta);
+        var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == requestedProductId && x.activo == true);
         if (sale is null || product is null)
         {
             errorMessage = "No se encontro el borrador o el producto seleccionado.";
             return;
         }
 
-        var unitPrice = lineEditor.UnitPrice > 0 ? lineEditor.UnitPrice : product.precio_venta;
-        var concept = string.IsNullOrWhiteSpace(lineEditor.Concept) ? product.nombre_producto : lineEditor.Concept.Trim();
+        var unitPrice = requestedUnitPrice > 0 ? requestedUnitPrice : product.precio_venta;
+        var concept = string.IsNullOrWhiteSpace(requestedConcept) ? product.nombre_producto : requestedConcept;
+        var lineTotal = Math.Max(0m, (unitPrice * requestedQuantity) - requestedDiscount);
+        var isEditing = requestedLineId > 0;
 
-        var newLine = new tbl_detalle_venta
+        if (isEditing)
         {
-            id_venta = sale.id_venta,
-            id_producto = product.id_producto,
-            cantidad = lineEditor.Quantity,
-            precio_unitario = unitPrice,
-            descuento = lineEditor.Discount,
-            concepto_item = concept,
-            total_item = Math.Max(0m, (unitPrice * lineEditor.Quantity) - lineEditor.Discount)
-        };
+            var existingLine = sale.tbl_detalle_venta.FirstOrDefault(x => x.id_detalle_venta == requestedLineId);
+            if (existingLine is null)
+            {
+                errorMessage = "No se encontro la linea seleccionada para editar.";
+                return;
+            }
 
-        sale.tbl_detalle_venta.Add(newLine);
-        dbContext.tbl_detalle_venta.Add(newLine);
+            existingLine.id_producto = product.id_producto;
+            existingLine.cantidad = requestedQuantity;
+            existingLine.precio_unitario = unitPrice;
+            existingLine.descuento = requestedDiscount;
+            existingLine.concepto_item = concept;
+            existingLine.total_item = lineTotal;
+        }
+        else
+        {
+            var newLine = new tbl_detalle_venta
+            {
+                id_venta = sale.id_venta,
+                id_producto = product.id_producto,
+                cantidad = requestedQuantity,
+                precio_unitario = unitPrice,
+                descuento = requestedDiscount,
+                concepto_item = concept,
+                total_item = lineTotal
+            };
 
-        sale.porcentaje_impuesto = taxRate;
+            sale.tbl_detalle_venta.Add(newLine);
+            dbContext.tbl_detalle_venta.Add(newLine);
+        }
+
         sale.forma_pago = paymentForm;
         sale.dias_credito = creditDays;
         sale.observaciones_factura = NormalizeOptional(invoiceNotes);
@@ -546,9 +869,9 @@ else
         await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
         await dbContext.SaveChangesAsync();
 
-        lineEditor = new ManualLineEditor();
-        statusMessage = "La linea fue agregada al borrador de factura.";
-        await LoadAsync(selectedPatient.id_paciente);
+        ResetLineEditor();
+        statusMessage = isEditing ? "La linea fue actualizada correctamente." : "La linea fue agregada al borrador de factura.";
+        await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
     }
 
     private async Task RemoveLineAsync(int lineId)
@@ -570,6 +893,11 @@ else
         await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
         await dbContext.SaveChangesAsync();
 
+        if (lineEditor.LineId == lineId)
+        {
+            ResetLineEditor();
+        }
+
         statusMessage = "La linea fue retirada del borrador.";
         await LoadAsync(selectedPatientId);
     }
@@ -579,8 +907,38 @@ else
         statusMessage = null;
         errorMessage = null;
 
-        if (!canEditModule || draftSale is null || selectedPatient is null || billingClient is null)
+        if (!canEditModule)
         {
+            return;
+        }
+
+        if (billingClient is null)
+        {
+            errorMessage = "Selecciona un cliente para poder emitir la factura.";
+            return;
+        }
+
+        if (draftSale is null)
+        {
+            errorMessage = "No existe un borrador de factura para emitir.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(paymentForm))
+        {
+            errorMessage = "Selecciona una forma de pago.";
+            return;
+        }
+
+        if (creditDays < 0)
+        {
+            errorMessage = "Los dias de credito no pueden ser negativos.";
+            return;
+        }
+
+        if (paidAmount < 0)
+        {
+            errorMessage = "El valor cobrado no puede ser negativo.";
             return;
         }
 
@@ -612,7 +970,6 @@ else
         sale.id_usuario = currentUserId;
         sale.forma_pago = paymentForm;
         sale.dias_credito = creditDays;
-        sale.porcentaje_impuesto = taxRate;
         sale.observaciones_factura = NormalizeOptional(invoiceNotes);
         sale.valor_cobrado = paidAmount;
         sale.fecha_venta = DateTime.Now;
@@ -688,8 +1045,7 @@ else
         await dbContext.SaveChangesAsync();
 
         statusMessage = $"Factura {invoiceNumber} emitida correctamente.";
-        selectedPatientId = selectedPatient.id_paciente;
-        await LoadAsync(selectedPatientId);
+        await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
     }
 
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
@@ -725,10 +1081,179 @@ else
 
     private void RecalculatePreview()
     {
+        taxRate = draftSale?.porcentaje_impuesto ?? 0;
         subtotalPreview = draftSale?.subtotal ?? 0;
         taxPreview = draftSale?.impuesto_total ?? 0;
         totalPreview = draftSale?.total ?? 0;
         balancePreview = draftSale?.saldo_pendiente ?? 0;
+    }
+
+    private void ToggleProductUpsertForm()
+    {
+        showProductUpsertForm = !showProductUpsertForm;
+        if (showProductUpsertForm)
+        {
+            PrepareQuickProductUpsert();
+        }
+    }
+
+    private void BeginLineEdit(tbl_detalle_venta line)
+    {
+        lineEditor = new ManualLineEditor
+        {
+            LineId = line.id_detalle_venta,
+            ProductId = line.id_producto,
+            Quantity = line.cantidad,
+            UnitPrice = line.precio_unitario ?? 0,
+            Discount = line.descuento ?? 0,
+            Concept = line.concepto_item ?? line.id_productoNavigation.nombre_producto
+        };
+    }
+
+    private void ResetLineEditor()
+    {
+        lineEditor = new ManualLineEditor();
+    }
+
+    private void PrepareQuickProductUpsert()
+    {
+        var selectedProduct = SelectedManualProduct;
+        if (selectedProduct is null)
+        {
+            productUpsertEditor = new ProductUpsertEditor
+            {
+                TipoItem = "Producto",
+                PrecioVenta = lineEditor.UnitPrice,
+                NombreProducto = lineEditor.Concept,
+                PorcentajeIva = ivaPercentageOptions[0]
+            };
+            return;
+        }
+
+        productUpsertEditor = new ProductUpsertEditor
+        {
+            IdProducto = selectedProduct.id_producto,
+            IdCategoria = selectedProduct.id_categoria ?? 0,
+            CodigoProducto = selectedProduct.codigo_producto,
+            NombreProducto = selectedProduct.nombre_producto,
+            TipoItem = selectedProduct.tipo_item ?? "Producto",
+            PrecioVenta = lineEditor.UnitPrice > 0 ? lineEditor.UnitPrice : selectedProduct.precio_venta,
+            TieneIva = selectedProduct.tiene_iva ?? false,
+            PorcentajeIva = selectedProduct.tiene_iva == true && ivaPercentageOptions.Contains(selectedProduct.porcentaje_iva ?? 0m)
+                ? selectedProduct.porcentaje_iva ?? 0m
+                : (selectedProduct.tiene_iva == true ? ivaPercentageOptions[0] : 0m)
+        };
+    }
+
+    private string ProductUpsertTieneIvaValue
+    {
+        get => productUpsertEditor.TieneIva ? "true" : "false";
+        set
+        {
+            productUpsertEditor.TieneIva = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            if (productUpsertEditor.TieneIva)
+            {
+                if (!ivaPercentageOptions.Contains(productUpsertEditor.PorcentajeIva))
+                {
+                    productUpsertEditor.PorcentajeIva = ivaPercentageOptions[0];
+                }
+            }
+            else
+            {
+                productUpsertEditor.PorcentajeIva = 0;
+            }
+        }
+    }
+
+    private async Task SaveQuickProductAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!canEditModule)
+        {
+            return;
+        }
+
+        productUpsertEditor.CodigoProducto = productUpsertEditor.CodigoProducto.Trim();
+        productUpsertEditor.NombreProducto = productUpsertEditor.NombreProducto.Trim();
+
+        if (string.IsNullOrWhiteSpace(productUpsertEditor.CodigoProducto) || string.IsNullOrWhiteSpace(productUpsertEditor.NombreProducto))
+        {
+            errorMessage = "Completa el codigo y el nombre del producto.";
+            return;
+        }
+
+        if (productUpsertEditor.IdCategoria <= 0)
+        {
+            errorMessage = "Selecciona una categoria para el producto.";
+            return;
+        }
+
+        if (productUpsertEditor.PrecioVenta < 0 || productUpsertEditor.PorcentajeIva < 0)
+        {
+            errorMessage = "Precio e IVA no pueden ser negativos.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        tbl_producto? product = null;
+
+        if (productUpsertEditor.IdProducto > 0)
+        {
+            product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == productUpsertEditor.IdProducto);
+        }
+
+        product ??= await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.codigo_producto == productUpsertEditor.CodigoProducto);
+
+        if (product is null)
+        {
+            product = new tbl_producto
+            {
+                codigo_producto = productUpsertEditor.CodigoProducto,
+                activo = true,
+                fecha_creacion = DateTime.Now,
+                usuario_creacion = GetCurrentActorLabel()
+            };
+            dbContext.tbl_productos.Add(product);
+        }
+
+        product.codigo_producto = productUpsertEditor.CodigoProducto;
+        product.nombre_producto = productUpsertEditor.NombreProducto;
+        product.tipo_item = string.IsNullOrWhiteSpace(productUpsertEditor.TipoItem) ? "Producto" : productUpsertEditor.TipoItem;
+        product.id_categoria = productUpsertEditor.IdCategoria;
+        product.precio_venta = productUpsertEditor.PrecioVenta;
+        product.tiene_iva = productUpsertEditor.TieneIva;
+        product.porcentaje_iva = productUpsertEditor.TieneIva ? productUpsertEditor.PorcentajeIva : 0;
+        product.naturaleza_item ??= string.Equals(product.tipo_item, "Servicio", StringComparison.OrdinalIgnoreCase) ? "Servicio" : "Bien";
+        product.stock_actual ??= 0;
+        product.stock_minimo ??= 0;
+        product.activo = true;
+        product.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
+
+        await dbContext.SaveChangesAsync();
+
+        lineEditor.ProductId = product.id_producto;
+        lineEditor.UnitPrice = product.precio_venta;
+        lineEditor.Concept = product.nombre_producto;
+
+        showProductUpsertForm = false;
+        await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
+        lineEditor.ProductId = product.id_producto;
+        ApplySelectedProductDefaults();
+        statusMessage = $"Producto {product.codigo_producto} guardado correctamente.";
+    }
+
+    private void ApplySelectedProductDefaults()
+    {
+        var product = SelectedManualProduct;
+        if (product is null)
+        {
+            return;
+        }
+
+        lineEditor.UnitPrice = product.precio_venta;
+        lineEditor.Concept = product.nombre_producto;
     }
 
     private string GetOriginLabel(tbl_detalle_venta line)
@@ -736,6 +1261,11 @@ else
         return string.IsNullOrWhiteSpace(line.origen_tipo)
             ? "Manual"
             : $"{line.origen_tipo} #{line.origen_id}";
+    }
+
+    private string GetLineTaxLabel(tbl_detalle_venta line)
+    {
+        return GetProductTaxLabel(line.id_productoNavigation);
     }
 
     private string GetPatientLabel(tbl_paciente patient)
@@ -751,6 +1281,13 @@ else
     private string GetClientLabel(ClientEntity client)
     {
         return $"{client.razon_social} - {client.numero_identificacion}".Trim();
+    }
+
+    private static string GetProductTaxLabel(tbl_producto product)
+    {
+        return (product.tiene_iva ?? false)
+            ? $"Si, {((product.porcentaje_iva ?? 0m).ToString("0.##"))}%"
+            : "No";
     }
 
     private string GetCurrentActorLabel()
@@ -773,10 +1310,23 @@ else
 
     private sealed class ManualLineEditor
     {
+        public int LineId { get; set; }
         public int ProductId { get; set; }
         public int Quantity { get; set; } = 1;
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
         public string Concept { get; set; } = string.Empty;
+    }
+
+    private sealed class ProductUpsertEditor
+    {
+        public int IdProducto { get; set; }
+        public int IdCategoria { get; set; }
+        public string CodigoProducto { get; set; } = string.Empty;
+        public string NombreProducto { get; set; } = string.Empty;
+        public string TipoItem { get; set; } = "Producto";
+        public decimal PrecioVenta { get; set; }
+        public bool TieneIva { get; set; }
+        public decimal PorcentajeIva { get; set; }
     }
 }

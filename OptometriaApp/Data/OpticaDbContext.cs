@@ -674,6 +674,9 @@ public partial class OpticaDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.precio_costo).HasColumnType("decimal(10, 2)");
             entity.Property(e => e.precio_venta).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.porcentaje_iva)
+                .HasDefaultValue(0.00m)
+                .HasColumnType("decimal(5, 2)");
             entity.Property(e => e.peso_unitario).HasColumnType("decimal(10, 4)");
             entity.Property(e => e.porcentaje_descuento_promo).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.porcentaje_margen).HasColumnType("decimal(5, 2)");
@@ -695,6 +698,7 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.talla)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.tiene_iva).HasDefaultValue(false);
             entity.Property(e => e.tipo_item)
                 .HasMaxLength(50)
                 .IsUnicode(false)

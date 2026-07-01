@@ -23,6 +23,10 @@ public partial class tbl_producto
 
     public decimal precio_venta { get; set; }
 
+    public bool? tiene_iva { get; set; }
+
+    public decimal? porcentaje_iva { get; set; }
+
     public int? stock_actual { get; set; }
 
     public int? stock_minimo { get; set; }

@@ -142,17 +142,34 @@ public sealed class BillingDraftService
         return client.cliente_id;
     }
 
-    public async Task<tbl_venta> GetOrCreateDraftSaleAsync(OpticaDbContext dbContext, int patientId, int? clientId, int actorUserId)
+    public async Task<tbl_venta> GetOrCreateDraftSaleAsync(OpticaDbContext dbContext, int? patientId, int? clientId, int actorUserId)
     {
-        var draft = await dbContext.tbl_venta
-            .Include(x => x.tbl_detalle_venta)
-            .FirstOrDefaultAsync(x => x.id_paciente == patientId && (x.estado == "Pendiente" || x.estado == "Borrador"));
+        tbl_venta? draft = null;
+
+        if (clientId.HasValue && clientId.Value > 0)
+        {
+            draft = await dbContext.tbl_venta
+                .Include(x => x.tbl_detalle_venta)
+                .FirstOrDefaultAsync(x => x.id_cliente_facturacion == clientId.Value && (x.estado == "Pendiente" || x.estado == "Borrador"));
+        }
+
+        if (draft is null && patientId.HasValue && patientId.Value > 0)
+        {
+            draft = await dbContext.tbl_venta
+                .Include(x => x.tbl_detalle_venta)
+                .FirstOrDefaultAsync(x => x.id_paciente == patientId.Value && (x.estado == "Pendiente" || x.estado == "Borrador"));
+        }
 
         if (draft is not null)
         {
             if (clientId.HasValue)
             {
                 draft.id_cliente_facturacion = clientId.Value;
+            }
+
+             if (draft.id_paciente <= 0 && patientId.HasValue && patientId.Value > 0)
+            {
+                draft.id_paciente = patientId.Value;
             }
 
             draft.id_usuario = actorUserId;
@@ -164,9 +181,14 @@ public sealed class BillingDraftService
             return draft;
         }
 
+        if (!patientId.HasValue || patientId.Value <= 0)
+        {
+            throw new InvalidOperationException("Se requiere al menos un paciente para iniciar un nuevo borrador de factura.");
+        }
+
         draft = new tbl_venta
         {
-            id_paciente = patientId,
+            id_paciente = patientId.Value,
             id_usuario = actorUserId,
             id_cliente_facturacion = clientId,
             fecha_venta = DateTime.Now,
@@ -190,21 +212,38 @@ public sealed class BillingDraftService
 
     public async Task RecalculateSaleAsync(OpticaDbContext dbContext, tbl_venta sale)
     {
-        if (!dbContext.Entry(sale).Collection(x => x.tbl_detalle_venta).IsLoaded)
-        {
-            await dbContext.Entry(sale).Collection(x => x.tbl_detalle_venta).LoadAsync();
-        }
+        var lineSnapshots = await dbContext.tbl_detalle_venta
+            .Where(x => x.id_venta == sale.id_venta)
+            .Select(x => new
+            {
+                BaseAmount = x.total_item ?? ((x.precio_unitario ?? 0m) * x.cantidad) - (x.descuento ?? 0m),
+                Discount = x.descuento ?? 0m,
+                HasTax = x.id_productoNavigation.tiene_iva ?? false,
+                TaxRate = x.id_productoNavigation.porcentaje_iva ?? 0m
+            })
+            .ToListAsync();
 
-        var subtotal = sale.tbl_detalle_venta.Sum(x => x.total_item ?? ((x.precio_unitario ?? 0m) * x.cantidad) - (x.descuento ?? 0m));
-        var discount = sale.tbl_detalle_venta.Sum(x => x.descuento ?? 0m);
-        var taxRate = sale.porcentaje_impuesto ?? 0m;
+        var subtotal = lineSnapshots.Sum(x => x.BaseAmount);
+        var discount = lineSnapshots.Sum(x => x.Discount);
         var taxableBase = Math.Max(0m, subtotal);
-        var tax = Math.Round(taxableBase * (taxRate / 100m), 2, MidpointRounding.AwayFromZero);
+        var tax = lineSnapshots.Sum(x =>
+        {
+            if (!x.HasTax || x.BaseAmount <= 0m)
+            {
+                return 0m;
+            }
+
+            return Math.Round(x.BaseAmount * (x.TaxRate / 100m), 2, MidpointRounding.AwayFromZero);
+        });
         var total = taxableBase + tax;
         var collected = Math.Min(sale.valor_cobrado ?? 0m, total);
+        var effectiveTaxRate = taxableBase > 0m
+            ? Math.Round((tax * 100m) / taxableBase, 2, MidpointRounding.AwayFromZero)
+            : 0m;
 
         sale.subtotal = taxableBase;
         sale.descuento_total = discount;
+        sale.porcentaje_impuesto = effectiveTaxRate;
         sale.impuesto_total = tax;
         sale.total = total;
         sale.valor_cobrado = collected;
@@ -285,6 +324,8 @@ public sealed class BillingDraftService
             tipo_item = "Servicio",
             naturaleza_item = "Servicio",
             precio_venta = 0,
+            tiene_iva = false,
+            porcentaje_iva = 0,
             stock_actual = 0,
             activo = true,
             fecha_creacion = DateTime.Now,

@@ -182,9 +182,11 @@ else
                     <div class="alert alert-danger" role="alert">@errorMessage</div>
                 }
 
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">Los campos marcados con * son obligatorios.</p>
+
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="clientTipo">Tipo de cliente</label>
+                        <label class="form-label" for="clientTipo">Tipo de cliente *</label>
                         <select id="clientTipo" class="form-select" @bind="editor.TipoCliente" disabled="@(!CanModifyEditor)">
                             @foreach (var option in clientTypeOptions)
                             {
@@ -194,7 +196,7 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientTipoId">Tipo de identificacion</label>
+                        <label class="form-label" for="clientTipoId">Tipo de identificacion *</label>
                         <select id="clientTipoId" class="form-select" @bind="editor.TipoIdentificacion" disabled="@(!CanModifyEditor)">
                             @foreach (var option in identificationOptions)
                             {
@@ -204,27 +206,27 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientNumeroId">Numero de identificacion</label>
+                        <label class="form-label" for="clientNumeroId">Numero de identificacion *</label>
                         <input id="clientNumeroId" class="form-control" @bind="editor.NumeroIdentificacion" readonly="@(!CanModifyEditor)" maxlength="20" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientRazonSocial">Razon social</label>
+                        <label class="form-label" for="clientRazonSocial">@BusinessNameLabel</label>
                         <input id="clientRazonSocial" class="form-control" @bind="editor.RazonSocial" readonly="@(!CanModifyEditor)" maxlength="300" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientNombres">Nombres</label>
+                        <label class="form-label" for="clientNombres">@FirstNameLabel</label>
                         <input id="clientNombres" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="200" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientApellidos">Apellidos</label>
+                        <label class="form-label" for="clientApellidos">@LastNameLabel</label>
                         <input id="clientApellidos" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="200" />
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label" for="clientNombreComercial">Nombre comercial</label>
+                        <label class="form-label" for="clientNombreComercial">@CommercialNameLabel</label>
                         <input id="clientNombreComercial" class="form-control" @bind="editor.NombreComercial" readonly="@(!CanModifyEditor)" maxlength="300" />
                     </div>
 
@@ -451,6 +453,11 @@ else
 
     private string EditorTitle => isCreatingNewClient ? "Nuevo cliente" : "Detalle del cliente";
     private bool CanModifyEditor => isCreatingNewClient ? permissions.CanCreate : permissions.CanEdit;
+    private bool IsCompanyEditor => string.Equals(editor?.TipoCliente, "Empresa", StringComparison.OrdinalIgnoreCase);
+    private string BusinessNameLabel => IsCompanyEditor ? "Razon social *" : "Razon social";
+    private string FirstNameLabel => IsCompanyEditor ? "Nombres" : "Nombres *";
+    private string LastNameLabel => IsCompanyEditor ? "Apellidos" : "Apellidos *";
+    private string CommercialNameLabel => IsCompanyEditor ? "Nombre comercial *" : "Nombre comercial";
 
     protected override async Task OnInitializedAsync()
     {
@@ -781,15 +788,34 @@ else
 
         editor.NumeroIdentificacion = editor.NumeroIdentificacion.Trim();
         editor.RazonSocial = editor.RazonSocial.Trim();
+        editor.Nombres = editor.Nombres.Trim();
+        editor.Apellidos = editor.Apellidos.Trim();
+        editor.NombreComercial = editor.NombreComercial.Trim();
         editor.PaisCodigo = editor.PaisCodigo.Trim().ToUpperInvariant();
 
         if (string.IsNullOrWhiteSpace(editor.TipoCliente) ||
             string.IsNullOrWhiteSpace(editor.TipoIdentificacion) ||
-            string.IsNullOrWhiteSpace(editor.NumeroIdentificacion) ||
-            string.IsNullOrWhiteSpace(editor.RazonSocial))
+            string.IsNullOrWhiteSpace(editor.NumeroIdentificacion))
         {
             errorMessage = "Completa los campos obligatorios del cliente.";
             return false;
+        }
+
+        if (IsCompanyEditor)
+        {
+            if (string.IsNullOrWhiteSpace(editor.RazonSocial) || string.IsNullOrWhiteSpace(editor.NombreComercial))
+            {
+                errorMessage = "Para empresas, razon social y nombre comercial son obligatorios.";
+                return false;
+            }
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(editor.Nombres) || string.IsNullOrWhiteSpace(editor.Apellidos))
+            {
+                errorMessage = "Para personas, nombres y apellidos son obligatorios.";
+                return false;
+            }
         }
 
         if (editor.NumeroIdentificacion.Length > 20 || editor.RazonSocial.Length > 300 || editor.PaisCodigo.Length != 2)
