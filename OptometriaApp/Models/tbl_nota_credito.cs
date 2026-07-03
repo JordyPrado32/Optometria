@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace OptometriaApp.Models;
 
@@ -16,6 +17,8 @@ public partial class tbl_nota_credito
 
     public decimal monto_total { get; set; }
 
+    public string tipo_nota { get; set; } = "Total";
+
     public string? motivo { get; set; }
 
     public string estado { get; set; } = null!;
@@ -23,6 +26,8 @@ public partial class tbl_nota_credito
     public string? usuario_creacion { get; set; }
 
     public DateTime fecha_creacion { get; set; }
+
+    public virtual ICollection<tbl_detalle_nota_credito> tbl_detalle_nota_credito { get; set; } = new List<tbl_detalle_nota_credito>();
 
     public virtual tbl_comprobante? id_comprobante_relacionadoNavigation { get; set; }
 

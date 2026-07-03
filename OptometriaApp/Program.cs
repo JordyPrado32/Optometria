@@ -89,6 +89,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQue
 builder.Services.AddScoped<MenuAccessService>();
 builder.Services.AddScoped<KardexService>();
 builder.Services.AddScoped<BillingDraftService>();
+builder.Services.AddScoped<AccountStatementService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddRazorComponents()
@@ -2402,6 +2403,43 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+app.MapGet("/account-statements/{accountId:int}/print", async (
+    int accountId,
+    ClaimsPrincipal user,
+    AccountStatementService statementService,
+    CancellationToken cancellationToken) =>
+{
+    var currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+    var currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+    var statement = await statementService.BuildAsync(accountId, currentUserId, currentRoleId, cancellationToken);
+    if (statement is null)
+    {
+        return Results.NotFound();
+    }
+
+    var html = statementService.BuildPrintableHtml(statement);
+    return Results.Content(html, "text/html; charset=utf-8");
+}).RequireAuthorization("OperationalAccess");
+
+app.MapGet("/exports/account-statements/{accountId:int}.pdf", async (
+    int accountId,
+    ClaimsPrincipal user,
+    AccountStatementService statementService,
+    CancellationToken cancellationToken) =>
+{
+    var currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+    var currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+    var statement = await statementService.BuildAsync(accountId, currentUserId, currentRoleId, cancellationToken);
+    if (statement is null)
+    {
+        return Results.NotFound();
+    }
+
+    var pdf = statementService.BuildPdf(statement);
+    var fileName = $"{Regex.Replace(statement.InvoiceNumber, "[^A-Za-z0-9_-]", "_")}-estado-cuenta.pdf";
+    return Results.File(pdf, "application/pdf", fileName);
+}).RequireAuthorization("OperationalAccess");
+
 app.Run();
 
 static async Task EnsureSecuritySchemaAsync(WebApplication app)
@@ -2496,11 +2534,14 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Clientes', '/clients', 'clients', 19, 1),
                 ('Emisor', '/emisor', 'issuer', 20, 1),
                 ('Facturas', '/invoices', 'invoice', 21, 1),
-                ('Usuarios', '/users', 'users', 22, 1),
-                ('Roles', '/roles', 'roles', 23, 1),
-                ('Menus', '/menus', 'menu', 24, 1),
-                ('Registrar usuario', '/register', 'user-plus', 25, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 26, 1)
+                ('Mis facturas', '/my-invoices', 'receipt', 22, 1),
+                ('Mis notas de credito', '/my-credit-notes', 'arrow-counterclockwise', 23, 1),
+                ('Cuentas por cobrar', '/accounts-receivable', 'cash-coin', 24, 1),
+                ('Usuarios', '/users', 'users', 25, 1),
+                ('Roles', '/roles', 'roles', 26, 1),
+                ('Menus', '/menus', 'menu', 27, 1),
+                ('Registrar usuario', '/register', 'user-plus', 28, 1),
+                ('Seguridad', '/setup-2fa', 'shield', 29, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -2547,9 +2588,9 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/appointments', '/invoices') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/appointments', '/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                     CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app m
             ) AS source

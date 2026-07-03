@@ -1,0 +1,1070 @@
+@page "/accounts-receivable"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AccountStatementService AccountStatementService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Cuentas por cobrar</PageTitle>
+
+<style>
+    .receivable-grid {
+        display: grid;
+        gap: 1.5rem;
+        grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
+        align-items: start;
+    }
+
+    .receivable-kpis {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .receivable-kpi {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.78);
+    }
+
+    .receivable-kpi span {
+        display: block;
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+    }
+
+    .receivable-kpi strong {
+        display: block;
+        margin-top: 0.35rem;
+        font-size: 1.5rem;
+        color: var(--color-ink);
+    }
+
+    .receivable-detail-card {
+        position: sticky;
+        top: 1rem;
+    }
+
+    .receivable-detail-block {
+        padding: 1rem 0;
+        border-top: 1px solid rgba(127, 105, 81, 0.12);
+    }
+
+    .receivable-detail-block:first-of-type {
+        padding-top: 0;
+        border-top: none;
+    }
+
+    .receivable-meta-grid {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .receivable-meta-grid label {
+        display: block;
+        font-size: 0.78rem;
+        color: var(--color-taupe);
+        margin-bottom: 0.2rem;
+    }
+
+    .receivable-meta-grid strong,
+    .receivable-meta-grid span {
+        color: var(--color-ink);
+    }
+
+    @@media (max-width: 1100px) {
+        .receivable-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .receivable-detail-card {
+            position: static;
+        }
+    }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando cuentas por cobrar...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Cuentas por cobrar</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Cartera</span>
+                <h1>Cuentas por cobrar</h1>
+                <p>Consulta facturas a credito, filtra cartera por cliente o vencimiento y registra abonos sin salir del flujo comercial.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Resumen de cartera</h2>
+                <span>@FilteredAccounts.Count cuentas visibles</span>
+            </div>
+
+            <div class="receivable-kpis" style="margin-top: 1rem;">
+                <div class="receivable-kpi">
+                    <span>Saldo pendiente</span>
+                    <strong>@PortfolioBalance.ToString("0.00")</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>Vencidas</span>
+                    <strong>@OverdueAccountsCount</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>Abonado</span>
+                    <strong>@PortfolioCollected.ToString("0.00")</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>Cliente, estado y vencimiento</span>
+            </div>
+
+            <div class="filters-row-2" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label" for="receivableSearch">Buscador</label>
+                    <input id="receivableSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Cliente, factura, paciente o referencia" />
+                </div>
+
+                <div class="filter-selects-col-2">
+                    <div>
+                        <label class="form-label" for="receivableClient">Cliente</label>
+                        <select id="receivableClient" class="form-select" @bind="selectedClientFilter">
+                            <option value="0">Todos</option>
+                            @foreach (var client in clientFilters)
+                            {
+                                <option value="@client.Id">@client.Label</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="receivableState">Estado</label>
+                        <select id="receivableState" class="form-select" @bind="selectedStateFilter">
+                            <option value="Todos">Todos</option>
+                            <option value="Pendiente">Pendiente</option>
+                            <option value="Vencida">Vencida</option>
+                            <option value="Pagada">Pagada</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters-row-2" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label" for="receivableDue">Vencimiento</label>
+                    <select id="receivableDue" class="form-select" @bind="selectedDueFilter">
+                        <option value="Todos">Todos</option>
+                        <option value="Vencidas">Vencidas</option>
+                        <option value="Hoy">Vencen hoy</option>
+                        <option value="Proximos7">Proximos 7 dias</option>
+                        <option value="SinFecha">Sin fecha</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <div class="receivable-grid" style="margin-top: 1.5rem;">
+            <section class="management-card">
+                <div class="management-card-header">
+                    <h2>Listado de cartera</h2>
+                    <span>@FilteredAccounts.Count resultados</span>
+                </div>
+
+                <div class="table-responsive" style="margin-top: 1rem;">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Factura</th>
+                                <th>Cliente</th>
+                                <th>Estado</th>
+                                <th>Vence</th>
+                                <th>Total</th>
+                                <th>Saldo</th>
+                                <th style="text-align: right; padding-right: 1.2rem;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (FilteredAccounts.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">No hay cuentas por cobrar con los filtros actuales.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var item in FilteredAccounts)
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong style="color: var(--color-sage);">@(string.IsNullOrWhiteSpace(item.InvoiceNumber) ? $"Venta #{item.SaleId}" : item.InvoiceNumber)</strong>
+                                            <div style="font-size: 0.78rem; color: var(--color-taupe);">@item.PatientName</div>
+                                        </td>
+                                        <td>
+                                            <strong>@item.ClientName</strong>
+                                            <div style="font-size: 0.78rem; color: var(--color-taupe);">@item.ClientDocument</div>
+                                        </td>
+                                        <td>@((MarkupString)RenderStatusBadge(item.DisplayStatus))</td>
+                                        <td>
+                                            @if (item.DueDate is null)
+                                            {
+                                                <span>-</span>
+                                            }
+                                            else
+                                            {
+                                                <strong>@item.DueDate.Value.ToString("yyyy-MM-dd")</strong>
+                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@GetDueCaption(item)</div>
+                                            }
+                                        </td>
+                                        <td>@item.TotalAmount.ToString("0.00")</td>
+                                        <td>
+                                            <strong style="color: @(item.Balance > 0 ? "var(--color-ink)" : "var(--color-sage)")">@item.Balance.ToString("0.00")</strong>
+                                            <div style="font-size: 0.78rem; color: var(--color-taupe);">Abonado: @item.PaidAmount.ToString("0.00")</div>
+                                        </td>
+                                        <td style="text-align: right; padding-right: 1.2rem;">
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => SelectAccount(item.Id)">
+                                                Ver detalle
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="management-card receivable-detail-card">
+                <div class="management-card-header">
+                    <h2>Detalle</h2>
+                    <span>@(selectedAccount is null ? "Sin seleccion" : selectedAccount.DisplayStatus)</span>
+                </div>
+
+                @if (selectedAccount is null)
+                {
+                    <p style="margin-top: 1rem; color: var(--color-taupe);">Selecciona una cuenta del listado para ver su saldo, vencimiento y abonos registrados.</p>
+                }
+                else
+                {
+                    <div class="receivable-detail-block" style="margin-top: 1rem;">
+                        <div class="receivable-meta-grid">
+                            <div>
+                                <label>Factura</label>
+                                <strong>@(string.IsNullOrWhiteSpace(selectedAccount.InvoiceNumber) ? $"Venta #{selectedAccount.SaleId}" : selectedAccount.InvoiceNumber)</strong>
+                            </div>
+                            <div>
+                                <label>Cliente</label>
+                                <span>@selectedAccount.ClientName</span>
+                            </div>
+                            <div>
+                                <label>Paciente</label>
+                                <span>@selectedAccount.PatientName</span>
+                            </div>
+                            <div>
+                                <label>Dias de credito</label>
+                                <span>@selectedAccount.CreditDays</span>
+                            </div>
+                            <div>
+                                <label>Emision</label>
+                                <span>@selectedAccount.IssueDate.ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                            <div>
+                                <label>Vencimiento</label>
+                                <span>@(selectedAccount.DueDate?.ToString("yyyy-MM-dd") ?? "-")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="receivable-detail-block">
+                        <div class="receivable-meta-grid">
+                            <div>
+                                <label>Total factura</label>
+                                <strong>@selectedAccount.TotalAmount.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Total abonado</label>
+                                <strong>@selectedAccount.PaidAmount.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Saldo actual</label>
+                                <strong>@selectedAccount.Balance.ToString("0.00")</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="receivable-detail-block">
+                        <div class="management-card-header" style="margin-bottom: 1rem;">
+                            <h2 style="font-size: 1rem;">Abonos</h2>
+                            <span>@abonos.Count registrados</span>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Monto</th>
+                                        <th>Metodo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (abonos.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="3" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin abonos registrados.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var abono in abonos)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@abono.DateLabel</strong>
+                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.Reference</div>
+                                                </td>
+                                                <td>@abono.Amount.ToString("0.00")</td>
+                                                <td>
+                                                    @abono.MethodName
+                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.UserLabel</div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    @if (canEditModule && selectedAccount.Balance > 0)
+                    {
+                        <div class="receivable-detail-block">
+                            <div class="management-card-header" style="margin-bottom: 1rem;">
+                                <h2 style="font-size: 1rem;">Registrar abono</h2>
+                                <span>Actualiza saldo en linea</span>
+                            </div>
+
+                            <div class="management-form-grid">
+                                <div>
+                                    <label class="form-label" for="abonoMonto">Monto</label>
+                                    <input id="abonoMonto" type="number" step="0.01" min="0.01" max="@selectedAccount.Balance" class="form-control" @bind="abonoEditor.Monto" />
+                                </div>
+                                <div>
+                                    <label class="form-label" for="abonoMetodo">Metodo de pago</label>
+                                    <select id="abonoMetodo" class="form-select" @bind="abonoEditor.MetodoPagoId">
+                                        @foreach (var method in paymentMethods)
+                                        {
+                                            <option value="@method.Id">@method.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div style="grid-column: 1 / -1;">
+                                    <label class="form-label" for="abonoReferencia">Referencia</label>
+                                    <input id="abonoReferencia" class="form-control" maxlength="100" @bind="abonoEditor.Referencia" placeholder="Transferencia, recibo o nota interna" />
+                                </div>
+                            </div>
+
+                            <div class="management-actions" style="margin-top: 1rem;">
+                                <button type="button" class="btn btn-primary" @onclick="SaveAbonoAsync">Guardar abono</button>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="receivable-detail-block">
+                        <div class="management-card-header" style="margin-bottom: 1rem;">
+                            <h2 style="font-size: 1rem;">Estado de cuenta</h2>
+                            <span>@statementMovements.Count movimientos</span>
+                        </div>
+
+                        @if (statementDocument is null)
+                        {
+                            <p style="margin: 0; color: var(--color-taupe);">No se pudo generar el estado de cuenta para esta cuenta.</p>
+                        }
+                        else
+                        {
+                            <div class="receivable-meta-grid" style="margin-bottom: 1rem;">
+                                <div>
+                                    <label>Factura original</label>
+                                    <strong>@statementDocument.OriginalInvoiceAmount.ToString("0.00")</strong>
+                                </div>
+                                <div>
+                                    <label>Notas de credito</label>
+                                    <strong>@statementDocument.TotalCredited.ToString("0.00")</strong>
+                                </div>
+                                <div>
+                                    <label>Abonos aplicados</label>
+                                    <strong>@statementDocument.TotalPaid.ToString("0.00")</strong>
+                                </div>
+                                <div>
+                                    <label>Correo destino</label>
+                                    <span>@(string.IsNullOrWhiteSpace(statementDocument.ClientEmail) ? "Sin correo" : statementDocument.ClientEmail)</span>
+                                </div>
+                            </div>
+
+                            <div class="management-actions" style="margin-bottom: 1rem;">
+                                <a class="btn btn-outline-primary" href="@($"/exports/account-statements/{selectedAccount.Id}.pdf")">Descargar PDF</a>
+                                <a class="btn btn-outline-primary" href="@($"/account-statements/{selectedAccount.Id}/print")" target="_blank">Imprimir</a>
+                            </div>
+
+                            <div class="management-form-grid" style="margin-bottom: 1rem;">
+                                <div style="grid-column: 1 / -1;">
+                                    <label class="form-label" for="statementEmail">Enviar PDF al correo</label>
+                                    <input id="statementEmail" class="form-control" maxlength="150" @bind="statementEmail" placeholder="cliente@correo.com" />
+                                </div>
+                            </div>
+
+                            <div class="management-actions" style="margin-bottom: 1rem;">
+                                <button type="button" class="btn btn-primary" @onclick="SendStatementByEmailAsync" disabled="@statementEmailSending">@(statementEmailSending ? "Enviando..." : "Enviar estado de cuenta")</button>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Tipo</th>
+                                            <th>Detalle</th>
+                                            <th>Debito</th>
+                                            <th>Credito</th>
+                                            <th>Saldo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (statementMovements.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="6" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin movimientos para este estado de cuenta.</td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var movement in statementMovements)
+                                            {
+                                                <tr>
+                                                    <td>@movement.DateLabel</td>
+                                                    <td>@movement.TypeLabel</td>
+                                                    <td>
+                                                        <strong>@movement.Description</strong>
+                                                        <div style="font-size: 0.75rem; color: var(--color-taupe);">@movement.Reference</div>
+                                                    </td>
+                                                    <td>@movement.Debit.ToString("0.00")</td>
+                                                    <td>@movement.Credit.ToString("0.00")</td>
+                                                    <td><strong>@movement.Balance.ToString("0.00")</strong></td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly List<AccountReceivableRow> accounts = [];
+    private readonly List<ClientFilterOption> clientFilters = [];
+    private readonly List<PaymentMethodOption> paymentMethods = [];
+    private readonly List<AbonoRow> abonos = [];
+    private readonly List<StatementMovementRow> statementMovements = [];
+    private ModulePermissions permissions = new();
+    private AccountReceivableRow? selectedAccount;
+    private AccountStatementDocument? statementDocument;
+    private AbonoEditor abonoEditor = new();
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool canEditModule;
+    private bool statementEmailSending;
+    private int currentUserId;
+    private int currentRoleId;
+    private string currentActorLabel = "Sistema";
+    private string statementEmail = string.Empty;
+    private string searchTerm = string.Empty;
+    private int selectedClientFilter;
+    private string selectedStateFilter = "Todos";
+    private string selectedDueFilter = "Todos";
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private List<AccountReceivableRow> FilteredAccounts => accounts
+        .Where(MatchesSearch)
+        .Where(MatchesClient)
+        .Where(MatchesState)
+        .Where(MatchesDueFilter)
+        .OrderByDescending(x => x.DisplayStatus == "Vencida")
+        .ThenBy(x => x.DueDate ?? DateOnly.MaxValue)
+        .ThenByDescending(x => x.IssueDate)
+        .ToList();
+
+    private decimal PortfolioBalance => FilteredAccounts.Sum(x => x.Balance);
+    private decimal PortfolioCollected => FilteredAccounts.Sum(x => x.PaidAmount);
+    private int OverdueAccountsCount => FilteredAccounts.Count(x => x.DisplayStatus == "Vencida");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? selectedAccountId = null)
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+        currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+        currentActorLabel = ResolveCurrentActorLabel(user);
+
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+        canEditModule = permissions.CanCreate || permissions.CanEdit;
+
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await LoadPaymentMethodsAsync(dbContext);
+        await LoadAccountsAsync(dbContext);
+
+        var desiredId = selectedAccountId ?? selectedAccount?.Id ?? FilteredAccounts.FirstOrDefault()?.Id;
+        selectedAccount = desiredId is null ? null : accounts.FirstOrDefault(x => x.Id == desiredId.Value);
+
+        if (selectedAccount is not null)
+        {
+            await LoadAbonosAsync(dbContext, selectedAccount.Id);
+            await LoadStatementAsync(selectedAccount.Id);
+            ResetAbonoEditor();
+        }
+        else
+        {
+            abonos.Clear();
+            statementMovements.Clear();
+            statementDocument = null;
+            statementEmail = string.Empty;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadAccountsAsync(OpticaDbContext dbContext)
+    {
+        var query = from cta in dbContext.tbl_cta_cobrar.AsNoTracking()
+                    join client in dbContext.clients.AsNoTracking() on cta.id_cliente equals client.cliente_id
+                    join sale in dbContext.tbl_venta.AsNoTracking() on cta.id_venta equals sale.id_venta into sales
+                    from sale in sales.DefaultIfEmpty()
+                    join patient in dbContext.tbl_pacientes.AsNoTracking() on sale.id_paciente equals patient.id_paciente into patients
+                    from patient in patients.DefaultIfEmpty()
+                    join comprobante in dbContext.tbl_comprobantes.AsNoTracking() on cta.id_comprobante equals comprobante.id_comprobante into comprobantes
+                    from comprobante in comprobantes.DefaultIfEmpty()
+                    where currentRoleId == 1 || client.id_usuario_creacion == currentUserId
+                    select new
+                    {
+                        cta.id_cta_cobrar,
+                        cta.id_cliente,
+                        cta.id_venta,
+                        cta.monto_total,
+                        cta.saldo,
+                        cta.fecha_emision,
+                        cta.fecha_vencimiento,
+                        cta.estado,
+                        client.razon_social,
+                        client.numero_identificacion,
+                        ClientFirstName = client.nombres,
+                        ClientLastName = client.apellidos,
+                        comprobante.numero_comprobante,
+                        sale.dias_credito,
+                        PatientFirstName = patient.nombres,
+                        PatientLastName = patient.apellidos
+                    };
+
+        var rows = await query.ToListAsync();
+
+        accounts.Clear();
+        accounts.AddRange(rows.Select(item => new AccountReceivableRow
+        {
+            Id = item.id_cta_cobrar,
+            ClientId = item.id_cliente,
+            SaleId = item.id_venta ?? 0,
+            ClientName = GetClientLabel(item.razon_social, item.ClientFirstName, item.ClientLastName),
+            ClientDocument = item.numero_identificacion,
+            InvoiceNumber = item.numero_comprobante,
+            PatientName = GetPatientLabel(item.PatientFirstName, item.PatientLastName),
+            State = item.estado,
+            DisplayStatus = ResolveDisplayStatus(item.estado, item.saldo, item.fecha_vencimiento),
+            IssueDate = item.fecha_emision,
+            DueDate = item.fecha_vencimiento,
+            TotalAmount = item.monto_total,
+            Balance = item.saldo,
+            PaidAmount = Math.Max(0m, item.monto_total - item.saldo),
+            CreditDays = Math.Max(0, item.dias_credito ?? 0)
+        }));
+
+        clientFilters.Clear();
+        clientFilters.AddRange(accounts
+            .GroupBy(x => new { x.ClientId, x.ClientName })
+            .OrderBy(x => x.Key.ClientName)
+            .Select(x => new ClientFilterOption(x.Key.ClientId, x.Key.ClientName)));
+    }
+
+    private async Task LoadPaymentMethodsAsync(OpticaDbContext dbContext)
+    {
+        paymentMethods.Clear();
+
+        var methods = await dbContext.tbl_metodo_pagos
+            .AsNoTracking()
+            .OrderBy(x => x.nombre)
+            .Select(x => new PaymentMethodOption(x.id_metodo_pago, x.nombre))
+            .ToListAsync();
+
+        paymentMethods.AddRange(methods);
+
+        if (paymentMethods.Count == 0)
+        {
+            paymentMethods.Add(new PaymentMethodOption(0, "Sin catalogo"));
+        }
+    }
+
+    private async Task LoadAbonosAsync(OpticaDbContext dbContext, int accountId)
+    {
+        var rows = await (
+            from abono in dbContext.tbl_abonos.AsNoTracking()
+            join method in dbContext.tbl_metodo_pagos.AsNoTracking() on abono.metodo_pago_id equals method.id_metodo_pago into methods
+            from method in methods.DefaultIfEmpty()
+            where abono.id_cta_cobrar == accountId
+            orderby abono.fecha_abono descending, abono.id_abono descending
+            select new AbonoRow
+            {
+                Amount = abono.monto_abono,
+                DateLabel = (abono.fecha_abono ?? abono.fecha_registro ?? DateTime.Now).ToString("yyyy-MM-dd HH:mm"),
+                MethodName = method != null ? method.nombre : "Sin metodo",
+                Reference = string.IsNullOrWhiteSpace(abono.referencia_pago) ? "Sin referencia" : abono.referencia_pago!,
+                UserLabel = string.IsNullOrWhiteSpace(abono.usuario_registro) ? "Sistema" : abono.usuario_registro!
+            })
+            .ToListAsync();
+
+        abonos.Clear();
+        abonos.AddRange(rows);
+    }
+
+    private async Task LoadStatementAsync(int accountId)
+    {
+        statementDocument = await AccountStatementService.BuildAsync(accountId, currentUserId, currentRoleId);
+        statementMovements.Clear();
+
+        if (statementDocument is null)
+        {
+            statementEmail = string.Empty;
+            return;
+        }
+
+        statementEmail = statementDocument.ClientEmail;
+        statementMovements.AddRange(statementDocument.Movements.Select(x => new StatementMovementRow
+        {
+            DateLabel = x.MovementDate.ToString("yyyy-MM-dd HH:mm"),
+            TypeLabel = x.TypeLabel,
+            Description = x.Description,
+            Reference = $"{x.Reference} - {x.UserLabel}",
+            Debit = x.Debit,
+            Credit = x.Credit,
+            Balance = x.Balance
+        }));
+    }
+
+    private async Task SelectAccount(int accountId)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        await LoadAsync(accountId);
+    }
+
+    private async Task SaveAbonoAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!canEditModule || selectedAccount is null)
+        {
+            return;
+        }
+
+        if (abonoEditor.Monto <= 0)
+        {
+            errorMessage = "Ingresa un monto de abono valido.";
+            return;
+        }
+
+        if (abonoEditor.Monto > selectedAccount.Balance)
+        {
+            errorMessage = "El abono no puede superar el saldo pendiente.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var account = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_cta_cobrar == selectedAccount.Id);
+        if (account is null)
+        {
+            errorMessage = "La cuenta por cobrar ya no existe.";
+            return;
+        }
+
+        int? paymentMethodId = paymentMethods.Any(x => x.Id == abonoEditor.MetodoPagoId) && abonoEditor.MetodoPagoId > 0
+            ? abonoEditor.MetodoPagoId
+            : null;
+
+        dbContext.tbl_abonos.Add(new tbl_abono
+        {
+            id_cta_cobrar = account.id_cta_cobrar,
+            fecha_abono = DateTime.Now,
+            monto_abono = abonoEditor.Monto,
+            metodo_pago_id = paymentMethodId,
+            referencia_pago = NormalizeOptional(abonoEditor.Referencia),
+            usuario_registro = currentActorLabel,
+            fecha_registro = DateTime.Now
+        });
+
+        account.saldo = Math.Max(0m, account.saldo - abonoEditor.Monto);
+        account.estado = account.saldo <= 0 ? "Pagada" : "Pendiente";
+
+        if (account.id_venta is int saleId)
+        {
+            var sale = await dbContext.tbl_venta.FirstOrDefaultAsync(x => x.id_venta == saleId);
+            if (sale is not null)
+            {
+                var total = sale.total ?? account.monto_total;
+                sale.valor_cobrado = Math.Min(total, (sale.valor_cobrado ?? 0m) + abonoEditor.Monto);
+                sale.saldo_pendiente = Math.Max(0m, total - (sale.valor_cobrado ?? 0m));
+                sale.estado = sale.saldo_pendiente > 0 ? "Credito" : "Facturada";
+            }
+        }
+
+        var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == account.id_cliente);
+        if (client is not null)
+        {
+            var clientBalance = await dbContext.tbl_cta_cobrar
+                .Where(x => x.id_cliente == client.cliente_id && x.id_cta_cobrar != account.id_cta_cobrar && x.estado == "Pendiente")
+                .Select(x => x.saldo)
+                .DefaultIfEmpty(0m)
+                .SumAsync();
+
+            client.saldo_deudor = clientBalance + account.saldo;
+            client.condicion_pago = client.saldo_deudor > 0 ? "Credito" : "Contado";
+            client.dias_plazo = client.saldo_deudor > 0 ? Math.Max(client.dias_plazo, selectedAccount.CreditDays) : 0;
+            client.fecha_actualizacion = DateTime.Now;
+            client.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : client.id_usuario_actualizacion;
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = "Abono registrado correctamente.";
+        await LoadAsync(account.id_cta_cobrar);
+    }
+
+    private async Task SendStatementByEmailAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (selectedAccount is null || statementDocument is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(statementEmail) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(statementEmail))
+        {
+            errorMessage = "Ingresa un correo valido para enviar el estado de cuenta.";
+            return;
+        }
+
+        statementEmailSending = true;
+        try
+        {
+            await AccountStatementService.SendStatementEmailAsync(statementDocument, statementEmail.Trim());
+            statusMessage = $"Estado de cuenta enviado a {statementEmail.Trim()} correctamente.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            statementEmailSending = false;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedClientFilter = 0;
+        selectedStateFilter = "Todos";
+        selectedDueFilter = "Todos";
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(x => x.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/accounts-receivable"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        if (permission is null)
+        {
+            return new ModulePermissions();
+        }
+
+        return new ModulePermissions
+        {
+            CanView = permission.puede_ver,
+            CanCreate = permission.puede_crear,
+            CanEdit = permission.puede_editar,
+            CanDelete = permission.puede_eliminar
+        };
+    }
+
+    private bool MatchesSearch(AccountReceivableRow item)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var term = searchTerm.Trim().ToLowerInvariant();
+        return item.ClientName.ToLowerInvariant().Contains(term)
+            || item.ClientDocument.ToLowerInvariant().Contains(term)
+            || item.PatientName.ToLowerInvariant().Contains(term)
+            || (item.InvoiceNumber?.ToLowerInvariant().Contains(term) ?? false);
+    }
+
+    private bool MatchesClient(AccountReceivableRow item) => selectedClientFilter <= 0 || item.ClientId == selectedClientFilter;
+
+    private bool MatchesState(AccountReceivableRow item) => selectedStateFilter == "Todos" || item.DisplayStatus == selectedStateFilter;
+
+    private bool MatchesDueFilter(AccountReceivableRow item)
+    {
+        if (selectedDueFilter == "Todos")
+        {
+            return true;
+        }
+
+        if (selectedDueFilter == "SinFecha")
+        {
+            return item.DueDate is null;
+        }
+
+        if (item.DueDate is null)
+        {
+            return false;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return selectedDueFilter switch
+        {
+            "Vencidas" => item.DisplayStatus == "Vencida",
+            "Hoy" => item.DueDate.Value == today,
+            "Proximos7" => item.DueDate.Value >= today && item.DueDate.Value <= today.AddDays(7),
+            _ => true
+        };
+    }
+
+    private void ResetAbonoEditor()
+    {
+        abonoEditor = new AbonoEditor
+        {
+            MetodoPagoId = paymentMethods.FirstOrDefault()?.Id ?? 0,
+            Referencia = string.Empty
+        };
+    }
+
+    private static string ResolveDisplayStatus(string state, decimal balance, DateOnly? dueDate)
+    {
+        if (balance <= 0 || string.Equals(state, "Pagada", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Pagada";
+        }
+
+        if (dueDate is not null && dueDate.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            return "Vencida";
+        }
+
+        return "Pendiente";
+    }
+
+    private static string GetClientLabel(string? businessName, string? firstName, string? lastName)
+    {
+        if (!string.IsNullOrWhiteSpace(businessName))
+        {
+            return businessName;
+        }
+
+        var fullName = $"{firstName} {lastName}".Trim();
+        return string.IsNullOrWhiteSpace(fullName) ? "Cliente sin nombre" : fullName;
+    }
+
+    private static string GetPatientLabel(string? firstName, string? lastName)
+    {
+        var fullName = $"{firstName} {lastName}".Trim();
+        return string.IsNullOrWhiteSpace(fullName) ? "Paciente no asociado" : fullName;
+    }
+
+    private static string GetDueCaption(AccountReceivableRow item)
+    {
+        if (item.DueDate is null)
+        {
+            return "Sin fecha";
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var days = item.DueDate.Value.DayNumber - today.DayNumber;
+
+        if (days == 0)
+        {
+            return "Vence hoy";
+        }
+
+        if (days < 0)
+        {
+            return $"{Math.Abs(days)} dias de atraso";
+        }
+
+        return $"Faltan {days} dias";
+    }
+
+    private static string RenderStatusBadge(string status) => status switch
+    {
+        "Pagada" => "<span class=\"badge\" style=\"background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;\">Pagada</span>",
+        "Vencida" => "<span class=\"badge\" style=\"background: rgba(224, 155, 60, 0.15) !important; color: #e09b3c !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;\">Vencida</span>",
+        _ => "<span class=\"badge\" style=\"background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;\">Pendiente</span>"
+    };
+
+    private static string ResolveCurrentActorLabel(ClaimsPrincipal user)
+    {
+        var fullName = $"{user.FindFirstValue(ClaimTypes.GivenName)} {user.FindFirstValue(ClaimTypes.Surname)}".Trim();
+        if (!string.IsNullOrWhiteSpace(fullName))
+        {
+            return fullName;
+        }
+
+        return user.Identity?.Name ?? "Sistema";
+    }
+
+    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class AccountReceivableRow
+    {
+        public int Id { get; set; }
+        public int ClientId { get; set; }
+        public int SaleId { get; set; }
+        public string ClientName { get; set; } = string.Empty;
+        public string ClientDocument { get; set; } = string.Empty;
+        public string? InvoiceNumber { get; set; }
+        public string PatientName { get; set; } = string.Empty;
+        public string State { get; set; } = "Pendiente";
+        public string DisplayStatus { get; set; } = "Pendiente";
+        public DateTime IssueDate { get; set; }
+        public DateOnly? DueDate { get; set; }
+        public decimal TotalAmount { get; set; }
+        public decimal Balance { get; set; }
+        public decimal PaidAmount { get; set; }
+        public int CreditDays { get; set; }
+    }
+
+    private sealed class AbonoRow
+    {
+        public string DateLabel { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string MethodName { get; set; } = string.Empty;
+        public string Reference { get; set; } = string.Empty;
+        public string UserLabel { get; set; } = string.Empty;
+    }
+
+    private sealed class AbonoEditor
+    {
+        public decimal Monto { get; set; }
+        public int MetodoPagoId { get; set; }
+        public string Referencia { get; set; } = string.Empty;
+    }
+
+    private sealed class StatementMovementRow
+    {
+        public string DateLabel { get; set; } = string.Empty;
+        public string TypeLabel { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Reference { get; set; } = string.Empty;
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Balance { get; set; }
+    }
+
+    private sealed record ClientFilterOption(int Id, string Label);
+
+    private sealed record PaymentMethodOption(int Id, string Name);
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+}

@@ -375,7 +375,11 @@ BEGIN TRY
         MERGE dbo.tbl_menu_app AS target
         USING
         (
-            VALUES ('Facturas', '/invoices', 'invoice', 21, 1)
+            VALUES
+                ('Facturas', '/invoices', 'invoice', 21, 1),
+                ('Mis facturas', '/my-invoices', 'receipt', 22, 1),
+                ('Mis notas de credito', '/my-credit-notes', 'arrow-counterclockwise', 23, 1),
+                ('Cuentas por cobrar', '/accounts-receivable', 'cash-coin', 24, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -405,7 +409,7 @@ BEGIN TRY
                     CAST(1 AS BIT) AS puede_editar,
                     CAST(1 AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app
-                WHERE ruta = '/invoices'
+                WHERE ruta IN ('/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable')
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
             WHEN MATCHED THEN
@@ -432,7 +436,7 @@ BEGIN TRY
                     CAST(1 AS BIT) AS puede_editar,
                     CAST(0 AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app
-                WHERE ruta = '/invoices'
+                WHERE ruta IN ('/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable')
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
             WHEN MATCHED THEN

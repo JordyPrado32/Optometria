@@ -15,26 +15,29 @@
     .invoice-workspace {
         padding: 0;
         overflow: hidden;
+        background:
+            radial-gradient(circle at top right, rgba(254, 188, 100, 0.12), transparent 32%),
+            linear-gradient(180deg, rgba(255, 252, 248, 0.96), rgba(255, 255, 255, 0.98));
     }
 
     .invoice-sheet-header {
         display: flex;
         justify-content: space-between;
-        gap: 1rem;
-        padding: 1.5rem;
-        background: linear-gradient(135deg, rgba(93, 161, 129, 0.12), rgba(254, 188, 100, 0.08));
-        border-bottom: 1px solid rgba(127, 105, 81, 0.12);
+        align-items: flex-start;
+        gap: 1.5rem;
+        padding: 1.75rem;
+        background: linear-gradient(135deg, rgba(93, 161, 129, 0.09), rgba(236, 204, 197, 0.18));
+        border-bottom: 1px solid rgba(127, 105, 81, 0.14);
     }
 
     .invoice-sheet-body {
-        padding: 1.5rem;
+        padding: clamp(1rem, 2vw, 1.75rem);
     }
 
     .invoice-toolbar-grid,
     .invoice-party-grid,
     .invoice-editor-grid,
-    .invoice-upsert-grid,
-    .invoice-bottom-grid {
+    .invoice-upsert-grid {
         display: grid;
         gap: 1rem;
     }
@@ -45,28 +48,30 @@
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
 
-    .invoice-party-grid,
-    .invoice-bottom-grid {
+    .invoice-party-grid {
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 
     .invoice-section {
-        border: 1px solid rgba(127, 105, 81, 0.12);
-        border-radius: 1rem;
-        padding: 1rem;
-        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(127, 105, 81, 0.14);
+        border-radius: 1.1rem;
+        padding: 1.1rem;
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: 0 10px 28px rgba(127, 105, 81, 0.06);
+        min-width: 0;
     }
 
     .invoice-block-title {
-        font-size: 0.85rem;
+        font-size: 0.76rem;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--color-taupe);
-        margin-bottom: 0.85rem;
+        margin-bottom: 0.9rem;
+        font-weight: 700;
     }
 
     .invoice-summary-table td {
-        padding: 0.45rem 0;
+        padding: 0.5rem 0;
         border: none;
     }
 
@@ -79,12 +84,26 @@
     .invoice-lines-table th,
     .invoice-lines-table td {
         vertical-align: middle;
+        padding-top: 0.8rem;
+        padding-bottom: 0.8rem;
+    }
+
+    .invoice-lines-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #fffaf4;
+        color: var(--color-ink);
+        font-size: 0.78rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.16);
     }
 
     .invoice-line-editor,
     .invoice-product-upsert {
-        margin-top: 1rem;
-        padding-top: 1rem;
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
         border-top: 1px dashed rgba(127, 105, 81, 0.18);
     }
 
@@ -94,8 +113,341 @@
 
     .invoice-kpi strong {
         display: block;
-        font-size: 1.5rem;
+        font-size: 2rem;
         color: var(--color-ink);
+    }
+
+    .invoice-top-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+        gap: 1.25rem;
+        align-items: start;
+    }
+
+    .invoice-main-stack {
+        display: grid;
+        gap: 1.25rem;
+        min-width: 0;
+    }
+
+    .invoice-sidebar {
+        display: grid;
+        gap: 1rem;
+        position: sticky;
+        top: 1rem;
+        align-self: start;
+        min-width: 0;
+    }
+
+    .invoice-document-card {
+        border: 1px solid rgba(127, 105, 81, 0.16);
+        border-radius: 1.4rem;
+        padding: 1.25rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 240, 228, 0.5));
+        box-shadow: 0 14px 34px rgba(127, 105, 81, 0.07);
+        min-width: 0;
+    }
+
+    .invoice-document-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.12);
+    }
+
+    .invoice-document-main,
+    .invoice-document-status {
+        min-width: 0;
+    }
+
+    .invoice-document-main {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+        flex: 1 1 420px;
+    }
+
+    .invoice-document-status {
+        flex: 0 1 240px;
+        text-align: right;
+    }
+
+    .invoice-brand-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 56px;
+        min-height: 56px;
+        border-radius: 1rem;
+        background: linear-gradient(135deg, rgba(93, 161, 129, 0.18), rgba(244, 240, 228, 0.95));
+        color: var(--color-ink);
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        border: 1px solid rgba(93, 161, 129, 0.16);
+    }
+
+    .invoice-doc-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(93, 161, 129, 0.12);
+        color: var(--color-sage);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .invoice-doc-number {
+        margin: 0.55rem 0 0;
+        font-size: 1.95rem;
+        line-height: 1.05;
+        color: var(--color-ink);
+        overflow-wrap: anywhere;
+    }
+
+    .invoice-doc-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem 1rem;
+        margin-top: 1rem;
+    }
+
+    .invoice-meta-card {
+        padding: 0.85rem 0.95rem;
+        border-radius: 0.95rem;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(127, 105, 81, 0.1);
+        min-width: 0;
+    }
+
+    .invoice-meta-card label {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.74rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+    }
+
+    .invoice-meta-card strong,
+    .invoice-meta-card span {
+        color: var(--color-ink);
+        display: block;
+        overflow-wrap: anywhere;
+    }
+
+    .invoice-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 1rem;
+    }
+
+    .invoice-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.45rem 0.8rem;
+        border-radius: 999px;
+        background: rgba(244, 240, 228, 0.92);
+        color: var(--color-taupe-deep);
+        border: 1px solid rgba(127, 105, 81, 0.08);
+        font-size: 0.82rem;
+    }
+
+    .invoice-form-card .management-card-header,
+    .invoice-lines-card .management-card-header {
+        margin-bottom: 1rem;
+    }
+
+    .invoice-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .invoice-readonly-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.85rem;
+    }
+
+    .invoice-readonly-item {
+        padding: 0.9rem 0.95rem;
+        border-radius: 0.95rem;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(127, 105, 81, 0.1);
+        min-width: 0;
+    }
+
+    .invoice-readonly-item label {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.74rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+    }
+
+    .invoice-readonly-item strong,
+    .invoice-readonly-item span {
+        color: var(--color-ink);
+        display: block;
+        overflow-wrap: anywhere;
+    }
+
+    .invoice-section-caption {
+        margin: -0.25rem 0 1rem;
+        color: var(--color-taupe);
+    }
+
+    .invoice-lines-card .table-responsive {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.94);
+    }
+
+    .invoice-lines-table {
+        min-width: 920px;
+    }
+
+    .invoice-lines-table td,
+    .invoice-lines-table th {
+        white-space: nowrap;
+    }
+
+    .invoice-lines-table td:nth-child(2),
+    .invoice-lines-table td:nth-child(3) {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .invoice-line-total {
+        font-weight: 700;
+        color: var(--color-ink);
+    }
+
+    .invoice-actions-primary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1.1rem;
+    }
+
+    .invoice-actions-primary .btn-primary {
+        min-width: 180px;
+    }
+
+    .invoice-sidebar-card {
+        border: 1px solid rgba(127, 105, 81, 0.14);
+        border-radius: 1.2rem;
+        padding: 1.1rem;
+        background: rgba(255, 255, 255, 0.84);
+        box-shadow: 0 10px 26px rgba(127, 105, 81, 0.06);
+        min-width: 0;
+    }
+
+    .invoice-sidebar-total {
+        padding: 1rem;
+        border-radius: 1rem;
+        background: linear-gradient(180deg, rgba(244, 240, 228, 0.96), rgba(255, 255, 255, 0.98));
+        color: var(--color-ink);
+        border-color: rgba(93, 161, 129, 0.18);
+    }
+
+    .invoice-sidebar-total .invoice-block-title,
+    .invoice-sidebar-total .invoice-summary-table td {
+        color: var(--color-taupe);
+    }
+
+    .invoice-sidebar-total .invoice-summary-table td:last-child {
+        color: var(--color-ink);
+    }
+
+    .invoice-sidebar-total strong {
+        display: block;
+        font-size: 2rem;
+        line-height: 1;
+        margin: 0.45rem 0 0.3rem;
+        color: var(--color-sage);
+    }
+
+    .invoice-sidebar-actions {
+        display: grid;
+        gap: 0.7rem;
+        margin-top: 1rem;
+    }
+
+    .invoice-sidebar-hint {
+        margin-top: 0.85rem;
+        font-size: 0.84rem;
+        color: var(--color-taupe);
+    }
+
+    .invoice-sidebar-links {
+        display: grid;
+        gap: 0.6rem;
+    }
+
+    .invoice-preview-sheet {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 240, 228, 0.56));
+        min-width: 0;
+    }
+
+    .invoice-preview-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.8rem;
+        align-items: flex-start;
+        padding-bottom: 0.85rem;
+        border-bottom: 1px dashed rgba(127, 105, 81, 0.18);
+        margin-bottom: 0.85rem;
+    }
+
+    .invoice-preview-mini-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .invoice-preview-mini-grid div {
+        font-size: 0.86rem;
+    }
+
+    .invoice-preview-notes {
+        margin-top: 0.85rem;
+        padding-top: 0.85rem;
+        border-top: 1px dashed rgba(127, 105, 81, 0.18);
+        color: var(--color-taupe);
+        white-space: pre-wrap;
+    }
+
+    .invoice-empty {
+        padding: 1rem;
+        border-radius: 0.95rem;
+        background: rgba(244, 240, 228, 0.7);
+        color: var(--color-taupe);
+        text-align: center;
+        border: 1px dashed rgba(127, 105, 81, 0.14);
+    }
+
+    @@media (max-width: 1100px) {
+        .invoice-top-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .invoice-sidebar {
+            position: static;
+        }
     }
 
     @@media (max-width: 768px) {
@@ -105,6 +457,18 @@
 
         .invoice-kpi {
             text-align: left;
+        }
+
+        .invoice-document-main,
+        .invoice-document-status,
+        .invoice-preview-header {
+            text-align: left;
+        }
+
+        .invoice-doc-meta,
+        .invoice-grid-2,
+        .invoice-preview-mini-grid {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -148,329 +512,476 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
+        @if (currentIssuer is not null && issuerRequiresInitialSequence)
+        {
+            <div class="alert alert-warning" role="alert">
+                <strong>Primera emision detectada.</strong> Este emisor aun no tiene facturas registradas. Indica desde que factura deseas empezar a emitir para ajustar la secuencia.
+                <div class="invoice-toolbar-grid" style="margin-top: 1rem;">
+                    <div>
+                        <label class="form-label">Factura inicial o secuencial</label>
+                        <input class="form-control"
+                               @bind="initialInvoiceSequenceInput"
+                               @bind:event="oninput"
+                               placeholder="@($"{BillingDraftService.GetInvoicePrefix(currentIssuer)}-000000001 o 1")"
+                               readonly="@(!canEditModule)" />
+                    </div>
+                    <div>
+                        <label class="form-label">Vista previa inicial</label>
+                        <input class="form-control" value="@InitialSequencePreview" readonly />
+                    </div>
+                </div>
+            </div>
+        }
+
         <section class="management-card invoice-workspace">
             <div class="invoice-sheet-header">
                 <div>
-                    <span class="eyebrow">Documento de venta</span>
-                    <h2 style="margin: 0.35rem 0 0.45rem;">Factura #@invoiceNumberPreview</h2>
-                    <p style="margin: 0; color: var(--color-taupe);">Fecha de trabajo: @InvoiceDateLabel</p>
+                    <span class="eyebrow">Emision comercial</span>
+                    <h2 style="margin: 0.35rem 0 0.45rem;">Factura #@DisplayInvoiceNumber</h2>
+                    <p style="margin: 0; color: var(--color-taupe);">Documento de trabajo con estructura fiscal, detalle comercial y vista previa en vivo.</p>
                 </div>
 
                 <div class="invoice-kpi">
-                    <span class="eyebrow">Total actual</span>
+                    <span class="eyebrow">Total a emitir</span>
                     <strong>@totalPreview.ToString("0.00")</strong>
-                    <span style="color: var(--color-taupe);">Saldo: @balancePreview.ToString("0.00")</span>
+                    <span style="color: var(--color-taupe);">Saldo pendiente: @balancePreview.ToString("0.00")</span>
                 </div>
             </div>
 
             <div class="invoice-sheet-body">
-                <div class="invoice-toolbar-grid">
-                    <div>
-                        <label class="form-label" for="invoicePatient">Paciente</label>
-                        <select id="invoicePatient" class="form-select" value="@selectedPatientId" @onchange="OnPatientChanged" disabled="@(!canEditModule)">
-                            <option value="0">Selecciona</option>
-                            @foreach (var patient in patients)
-                            {
-                                <option value="@patient.id_paciente">@GetPatientLabel(patient)</option>
-                            }
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="invoiceClient">Cliente</label>
-                        <select id="invoiceClient" class="form-select" value="@selectedClientId" @onchange="OnClientChanged" disabled="@(!canEditModule)">
-                            <option value="0">Selecciona</option>
-                            @foreach (var client in clients)
-                            {
-                                <option value="@client.cliente_id">@GetClientLabel(client)</option>
-                            }
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="form-label">Forma de pago</label>
-                        <select class="form-select" @bind="paymentForm" disabled="@(!canEditModule)">
-                            @foreach (var method in paymentMethods)
-                            {
-                                <option value="@method">@method</option>
-                            }
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="form-label">Dias de credito</label>
-                        <input type="number" class="form-control" @bind="creditDays" min="0" readonly="@(!canEditModule)" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Impuesto promedio %</label>
-                        <input class="form-control" value="@taxRate.ToString("0.##")" readonly />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Valor cobrado</label>
-                        <input type="number" step="0.01" class="form-control" @bind="paidAmount" min="0" readonly="@(!canEditModule)" />
-                    </div>
-                </div>
-
-                <div class="invoice-party-grid" style="margin-top: 1.25rem;">
-                    <section class="invoice-section">
-                        <div class="invoice-block-title">Facturar a</div>
-                        @if (billingClient is null && selectedPatient is null)
-                        {
-                            <p style="margin: 0;">Selecciona un cliente y, si quieres cargar pendientes, un paciente origen.</p>
-                        }
-                        else
-                        {
-                            <div class="invoice-toolbar-grid">
-                                <div>
-                                    <label class="form-label">Paciente origen</label>
-                                    <input class="form-control" value="@(selectedPatient is null ? "Varios / no definido" : GetPatientLabel(selectedPatient))" readonly />
+                <div class="invoice-top-grid">
+                    <div class="invoice-main-stack">
+                        <section class="invoice-document-card">
+                            <div class="invoice-document-head">
+                                <div class="invoice-document-main">
+                                    <div class="invoice-brand-mark">
+                                        @((currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "FC").Trim().Substring(0, Math.Min(2, (currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "FC").Trim().Length)).ToUpperInvariant())
+                                    </div>
+                                    <div>
+                                        <span class="invoice-doc-badge">Factura en emision</span>
+                                        <h3 class="invoice-doc-number">@DisplayInvoiceNumber</h3>
+                                        <div style="color: var(--color-taupe); margin-top: 0.35rem;">
+                                            @(currentIssuer?.razon_social ?? currentIssuer?.nombre_comercial ?? "Emisor sin configurar")
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label class="form-label">Identificacion</label>
-                                    <input class="form-control" value="@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? string.Empty)" readonly />
-                                </div>
-                                <div>
-                                    <label class="form-label">Razon social</label>
-                                    <input class="form-control" value="@(billingClient?.razon_social ?? (selectedPatient is null ? string.Empty : GetPatientFullName(selectedPatient)))" readonly />
-                                </div>
-                                <div>
-                                    <label class="form-label">Telefono</label>
-                                    <input class="form-control" value="@(billingClient?.telefono ?? selectedPatient?.telefono ?? string.Empty)" readonly />
-                                </div>
-                                <div>
-                                    <label class="form-label">Correo</label>
-                                    <input class="form-control" value="@(billingClient?.correo_electronico ?? selectedPatient?.email ?? string.Empty)" readonly />
-                                </div>
-                                <div>
-                                    <label class="form-label">Condicion</label>
-                                    <input class="form-control" value="@(billingClient?.condicion_pago ?? "Contado")" readonly />
+
+                                <div class="invoice-document-status">
+                                    <div class="invoice-block-title" style="margin-bottom:0.3rem;">Estado del documento</div>
+                                    <strong style="display:block; font-size:1.1rem; color:var(--color-ink);">@(draftSale is null ? "Sin borrador" : "Borrador activo")</strong>
+                                    <span style="color: var(--color-taupe);">Fecha de trabajo: @InvoiceDateLabel</span>
                                 </div>
                             </div>
-                        }
-                    </section>
 
-                    <section class="invoice-section">
-                        <div class="invoice-block-title">Resumen del documento</div>
-                        <table class="table invoice-summary-table" style="margin-bottom: 0;">
-                            <tbody>
-                                <tr><td>Numero factura</td><td>@invoiceNumberPreview</td></tr>
-                                <tr><td>Lineas cargadas</td><td>@draftLines.Count</td></tr>
-                                <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
-                                <tr><td>Impuestos</td><td>@taxPreview.ToString("0.00")</td></tr>
-                                <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
-                            </tbody>
-                        </table>
+                            <div class="invoice-doc-meta">
+                                <div class="invoice-meta-card">
+                                    <label>Emisor</label>
+                                    <strong>@(currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "Pendiente")</strong>
+                                    <span>@(currentIssuer?.ruc ?? "Sin RUC")</span>
+                                </div>
+                                <div class="invoice-meta-card">
+                                    <label>Contacto emisor</label>
+                                    <strong>@(currentIssuer?.telefono ?? "Sin telefono")</strong>
+                                    <span>@(currentIssuer?.correo ?? "Sin correo")</span>
+                                </div>
+                                <div class="invoice-meta-card">
+                                    <label>Cliente fiscal</label>
+                                    <strong>@(billingClient?.razon_social ?? (selectedPatient is null ? "Pendiente" : GetPatientFullName(selectedPatient)))</strong>
+                                    <span>@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? "Sin identificacion")</span>
+                                </div>
+                                <div class="invoice-meta-card">
+                                    <label>Pago y credito</label>
+                                    <strong>@paymentForm</strong>
+                                    <span>@($"{creditDays} dias | Cobrado {paidAmount:0.00}")</span>
+                                </div>
+                            </div>
 
-                        <div class="workspace-actions" style="margin-top: 1rem;">
-                            <a class="btn btn-outline-primary" href="/clients">Administrar clientes</a>
-                        </div>
-                    </section>
-                </div>
+                            <div class="invoice-pill-row">
+                                <span class="invoice-pill">@draftLines.Count lineas</span>
+                                <span class="invoice-pill">IVA promedio @taxRate.ToString("0.##")%</span>
+                                <span class="invoice-pill">Total @totalPreview.ToString("0.00")</span>
+                                <span class="invoice-pill">Saldo @balancePreview.ToString("0.00")</span>
+                            </div>
+                        </section>
 
-                <section class="invoice-section" style="margin-top: 1.25rem;">
-                    <div class="management-card-header">
-                        <h2>Detalle de factura</h2>
-                        <span>@draftLines.Count lineas</span>
-                    </div>
+                        <section class="invoice-section invoice-form-card">
+                            <div class="management-card-header">
+                                <h2>Estructura del documento</h2>
+                                <span>Cliente, pago y datos base</span>
+                            </div>
+                            <p class="invoice-section-caption">La información principal queda agrupada en bloques claros para emitir más rápido y con menos ruido visual.</p>
 
-                    <div class="table-responsive" style="margin-top: 1rem;">
-                        <table class="table table-hover invoice-lines-table">
-                            <thead>
-                                <tr>
-                                    <th>Codigo</th>
-                                    <th>Concepto</th>
-                                    <th>Origen</th>
-                                    <th>IVA</th>
-                                    <th>Cantidad</th>
-                                    <th>Precio</th>
-                                    <th>Descuento</th>
-                                    <th>Total</th>
-                                    <th style="text-align: right;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (draftLines.Count == 0)
-                                {
-                                    <tr>
-                                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--color-taupe);">No hay lineas en la factura.</td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    @foreach (var line in draftLines)
+                            <div class="invoice-grid-2">
+                                <section class="invoice-section">
+                                    <div class="invoice-block-title">Cliente y origen</div>
+                                    <div class="invoice-toolbar-grid">
+                                        <div>
+                                            <label class="form-label" for="invoicePatient">Paciente</label>
+                                            <select id="invoicePatient" class="form-select" value="@selectedPatientId" @onchange="OnPatientChanged" disabled="@(!canEditModule)">
+                                                <option value="0">Selecciona</option>
+                                                @foreach (var patient in patients)
+                                                {
+                                                    <option value="@patient.id_paciente">@GetPatientLabel(patient)</option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label" for="invoiceClient">Cliente</label>
+                                            <select id="invoiceClient" class="form-select" value="@selectedClientId" @onchange="OnClientChanged" disabled="@(!canEditModule)">
+                                                <option value="0">Selecciona</option>
+                                                @foreach (var client in clients)
+                                                {
+                                                    <option value="@client.cliente_id">@GetClientLabel(client)</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    @if (billingClient is null && selectedPatient is null)
                                     {
+                                        <div class="invoice-empty" style="margin-top: 1rem;">Selecciona un cliente y, si deseas, un paciente origen para comenzar la factura.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="invoice-readonly-grid" style="margin-top: 1rem;">
+                                            <div class="invoice-readonly-item">
+                                                <label>Razon social</label>
+                                                <strong>@(billingClient?.razon_social ?? (selectedPatient is null ? "-" : GetPatientFullName(selectedPatient)))</strong>
+                                            </div>
+                                            <div class="invoice-readonly-item">
+                                                <label>Identificacion</label>
+                                                <strong>@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? "-")</strong>
+                                            </div>
+                                            <div class="invoice-readonly-item">
+                                                <label>Direccion</label>
+                                                <span>@(billingClient?.direccion ?? selectedPatient?.direccion ?? "Sin direccion")</span>
+                                            </div>
+                                            <div class="invoice-readonly-item">
+                                                <label>Telefono</label>
+                                                <span>@(billingClient?.telefono ?? selectedPatient?.telefono ?? "Sin telefono")</span>
+                                            </div>
+                                            <div class="invoice-readonly-item">
+                                                <label>Correo</label>
+                                                <span>@(billingClient?.correo_electronico ?? selectedPatient?.email ?? "Sin correo")</span>
+                                            </div>
+                                            <div class="invoice-readonly-item">
+                                                <label>Condicion</label>
+                                                <span>@(billingClient?.condicion_pago ?? "Contado")</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </section>
+
+                                <section class="invoice-section">
+                                    <div class="invoice-block-title">Pago y control</div>
+                                    <div class="invoice-toolbar-grid">
+                                        <div>
+                                            <label class="form-label">Forma de pago</label>
+                                            <select class="form-select" @bind="paymentForm" disabled="@(!canEditModule)">
+                                                @foreach (var method in paymentMethods)
+                                                {
+                                                    <option value="@method">@method</option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Dias de credito</label>
+                                            <input type="number" class="form-control" @bind="creditDays" min="0" readonly="@(!canEditModule)" />
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Impuesto promedio %</label>
+                                            <input class="form-control" value="@taxRate.ToString("0.##")" readonly />
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Valor cobrado</label>
+                                            <input type="number" step="0.01" class="form-control" @bind="paidAmount" min="0" readonly="@(!canEditModule)" />
+                                        </div>
+                                    </div>
+
+                                    <div class="invoice-readonly-grid" style="margin-top: 1rem;">
+                                        <div class="invoice-readonly-item">
+                                            <label>Numero factura</label>
+                                            <strong>@DisplayInvoiceNumber</strong>
+                                        </div>
+                                        <div class="invoice-readonly-item">
+                                            <label>Lineas cargadas</label>
+                                            <strong>@draftLines.Count</strong>
+                                        </div>
+                                        <div class="invoice-readonly-item">
+                                            <label>Subtotal</label>
+                                            <strong>@subtotalPreview.ToString("0.00")</strong>
+                                        </div>
+                                        <div class="invoice-readonly-item">
+                                            <label>Impuestos</label>
+                                            <strong>@taxPreview.ToString("0.00")</strong>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        </section>
+
+                        <section class="invoice-section invoice-lines-card">
+                            <div class="management-card-header">
+                                <h2>Detalle de factura</h2>
+                                <span>@draftLines.Count lineas</span>
+                            </div>
+                            <p class="invoice-section-caption">La tabla prioriza concepto, origen y total por línea para que el documento se lea más profesional y contable.</p>
+
+                            <div class="table-responsive" style="margin-top: 1rem;">
+                                <table class="table table-hover invoice-lines-table">
+                                    <thead>
                                         <tr>
-                                            <td>@line.id_productoNavigation.codigo_producto</td>
-                                            <td>
-                                                <strong>@(line.concepto_item ?? line.id_productoNavigation.nombre_producto)</strong>
-                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@line.id_productoNavigation.nombre_producto</div>
-                                            </td>
-                                            <td>@GetOriginLabel(line)</td>
-                                            <td>@GetLineTaxLabel(line)</td>
-                                            <td>@line.cantidad</td>
-                                            <td>@((line.precio_unitario ?? 0).ToString("0.00"))</td>
-                                            <td>@((line.descuento ?? 0).ToString("0.00"))</td>
-                                            <td>@((line.total_item ?? 0).ToString("0.00"))</td>
-                                            <td style="text-align: right;">
-                                                <div style="display: inline-flex; gap: 0.5rem;">
-                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => BeginLineEdit(line)" disabled="@(!canEditModule)">
-                                                        Editar
-                                                    </button>
-                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => RemoveLineAsync(line.id_detalle_venta)" disabled="@(!canEditModule)">
-                                                        Quitar
-                                                    </button>
-                                                </div>
-                                            </td>
+                                            <th>Codigo</th>
+                                            <th>Concepto</th>
+                                            <th>Origen</th>
+                                            <th>IVA</th>
+                                            <th>Cantidad</th>
+                                            <th>Precio</th>
+                                            <th>Descuento</th>
+                                            <th>Total</th>
+                                            <th style="text-align: right;">Acciones</th>
                                         </tr>
-                                    }
-                                }
-                            </tbody>
-                        </table>
+                                    </thead>
+                                    <tbody>
+                                        @if (draftLines.Count == 0)
+                                        {
+                                            <tr>
+                                                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--color-taupe);">No hay lineas en la factura.</td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var line in draftLines)
+                                            {
+                                                <tr>
+                                                    <td>@line.id_productoNavigation.codigo_producto</td>
+                                                    <td>
+                                                        <strong>@(line.concepto_item ?? line.id_productoNavigation.nombre_producto)</strong>
+                                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@line.id_productoNavigation.nombre_producto</div>
+                                                    </td>
+                                                    <td>@GetOriginLabel(line)</td>
+                                                    <td>@GetLineTaxLabel(line)</td>
+                                                    <td>@line.cantidad</td>
+                                                    <td>@((line.precio_unitario ?? 0).ToString("0.00"))</td>
+                                                    <td>@((line.descuento ?? 0).ToString("0.00"))</td>
+                                                    <td class="invoice-line-total">@((line.total_item ?? 0).ToString("0.00"))</td>
+                                                    <td style="text-align: right;">
+                                                        <div style="display: inline-flex; gap: 0.5rem;">
+                                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => BeginLineEdit(line)" disabled="@(!canEditModule)">
+                                                                Editar
+                                                            </button>
+                                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important;" @onclick="() => RemoveLineAsync(line.id_detalle_venta)" disabled="@(!canEditModule)">
+                                                                Quitar
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="invoice-line-editor">
+                                <div class="invoice-block-title">@(lineEditor.LineId > 0 ? "Editar linea" : "Nueva linea")</div>
+
+                                <div class="invoice-editor-grid">
+                                    <div>
+                                        <label class="form-label">Producto o servicio</label>
+                                        <select class="form-select" value="@lineEditor.ProductId" @onchange="OnManualProductChanged" disabled="@(!canEditModule)">
+                                            <option value="0">Selecciona</option>
+                                            @foreach (var product in products)
+                                            {
+                                                <option value="@product.id_producto">@($"{product.codigo_producto} - {product.nombre_producto}")</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">Cantidad</label>
+                                        <input type="number" class="form-control" @bind="lineEditor.Quantity" min="1" readonly="@(!canEditModule)" />
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">Precio unitario</label>
+                                        <input type="number" step="0.01" class="form-control" @bind="lineEditor.UnitPrice" min="0" readonly="@(!canEditModule)" />
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">Descuento</label>
+                                        <input type="number" step="0.01" class="form-control" @bind="lineEditor.Discount" min="0" readonly="@(!canEditModule)" />
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">IVA del producto</label>
+                                        <input class="form-control" value="@(SelectedManualProduct is null ? "Selecciona un producto" : GetProductTaxLabel(SelectedManualProduct))" readonly />
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">Total de linea</label>
+                                        <input class="form-control" value="@LineEditorTotal.ToString("0.00")" readonly />
+                                    </div>
+
+                                    <div style="grid-column: 1 / -1;">
+                                        <label class="form-label">Concepto</label>
+                                        <input class="form-control" @bind="lineEditor.Concept" readonly="@(!canEditModule)" />
+                                    </div>
+                                </div>
+
+                                <div class="invoice-actions-primary">
+                                    <button type="button" class="btn btn-primary" @onclick="SaveLineAsync" disabled="@(!canEditModule)">@LineActionLabel</button>
+                                    <button type="button" class="btn btn-outline-primary" @onclick="ResetLineEditor" disabled="@(!canEditModule)">Limpiar</button>
+                                    <button type="button" class="btn btn-outline-primary" @onclick="ToggleProductUpsertForm" disabled="@(!canEditModule)">Upsert producto</button>
+                                </div>
+                            </div>
+
+                            @if (showProductUpsertForm)
+                            {
+                                <div class="invoice-product-upsert">
+                                    <div class="invoice-block-title">@(productUpsertEditor.IdProducto > 0 ? "Editar producto" : "Crear producto rapido")</div>
+
+                                    <div class="invoice-upsert-grid">
+                                        <div>
+                                            <label class="form-label">Codigo *</label>
+                                            <input class="form-control" @bind="productUpsertEditor.CodigoProducto" maxlength="50" />
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Nombre *</label>
+                                            <input class="form-control" @bind="productUpsertEditor.NombreProducto" maxlength="150" />
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Tipo item</label>
+                                            <select class="form-select" @bind="productUpsertEditor.TipoItem">
+                                                <option value="Producto">Producto</option>
+                                                <option value="Servicio">Servicio</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Categoria *</label>
+                                            <select class="form-select" @bind="productUpsertEditor.IdCategoria">
+                                                <option value="0">Selecciona</option>
+                                                @foreach (var category in categories.OrderBy(x => x.nombre))
+                                                {
+                                                    <option value="@category.id_categoria">@category.nombre</option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Precio venta</label>
+                                            <input type="number" step="0.01" min="0" class="form-control" @bind="productUpsertEditor.PrecioVenta" />
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">Tiene IVA</label>
+                                            <select class="form-select" @bind="ProductUpsertTieneIvaValue">
+                                                <option value="true">Si</option>
+                                                <option value="false">No</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="form-label">IVA %</label>
+                                            <select class="form-select" @bind="productUpsertEditor.PorcentajeIva" disabled="@(!productUpsertEditor.TieneIva)">
+                                                @foreach (var percentage in ivaPercentageOptions)
+                                                {
+                                                    <option value="@percentage">@($"{percentage:0}%")</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="invoice-actions-primary">
+                                        <button type="button" class="btn btn-primary" @onclick="SaveQuickProductAsync">@ProductUpsertActionLabel</button>
+                                    </div>
+                                </div>
+                            }
+                        </section>
                     </div>
 
-                    <div class="invoice-line-editor">
-                        <div class="invoice-block-title">@(lineEditor.LineId > 0 ? "Editar linea" : "Nueva linea")</div>
+                    <aside class="invoice-sidebar">
+                        <section class="invoice-sidebar-card invoice-sidebar-total">
+                            <div class="invoice-block-title">Totales de emision</div>
+                            <span>Total final</span>
+                            <strong>@totalPreview.ToString("0.00")</strong>
+                            <span>Documento listo para confirmar</span>
 
-                        <div class="invoice-editor-grid">
-                            <div>
-                                <label class="form-label">Producto o servicio</label>
-                                <select class="form-select" value="@lineEditor.ProductId" @onchange="OnManualProductChanged" disabled="@(!canEditModule)">
-                                    <option value="0">Selecciona</option>
-                                    @foreach (var product in products)
-                                    {
-                                        <option value="@product.id_producto">@($"{product.codigo_producto} - {product.nombre_producto}")</option>
-                                    }
-                                </select>
+                            <table class="table invoice-summary-table" style="margin: 0.9rem 0 0;">
+                                <tbody>
+                                    <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
+                                    <tr><td>Impuestos</td><td>@taxPreview.ToString("0.00")</td></tr>
+                                    <tr><td>Cobrado</td><td>@paidAmount.ToString("0.00")</td></tr>
+                                    <tr><td>Saldo</td><td>@balancePreview.ToString("0.00")</td></tr>
+                                </tbody>
+                            </table>
+
+                            <div class="invoice-sidebar-actions">
+                                <button type="button" class="btn btn-primary" @onclick="FinalizeInvoiceAsync" disabled="@(!CanFinalizeInvoice)">Emitir factura</button>
+                                <button type="button" class="btn btn-outline-light" disabled>Guardar borrador</button>
                             </div>
+                            @if (currentIssuer is null)
+                            {
+                                <div class="invoice-sidebar-hint">Configura un emisor activo antes de poder emitir la factura.</div>
+                            }
+                        </section>
 
-                            <div>
-                                <label class="form-label">Cantidad</label>
-                                <input type="number" class="form-control" @bind="lineEditor.Quantity" min="1" readonly="@(!canEditModule)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Precio unitario</label>
-                                <input type="number" step="0.01" class="form-control" @bind="lineEditor.UnitPrice" min="0" readonly="@(!canEditModule)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Descuento</label>
-                                <input type="number" step="0.01" class="form-control" @bind="lineEditor.Discount" min="0" readonly="@(!canEditModule)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label">IVA del producto</label>
-                                <input class="form-control" value="@(SelectedManualProduct is null ? "Selecciona un producto" : GetProductTaxLabel(SelectedManualProduct))" readonly />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Total de linea</label>
-                                <input class="form-control" value="@LineEditorTotal.ToString("0.00")" readonly />
-                            </div>
-
-                            <div style="grid-column: 1 / -1;">
-                                <label class="form-label">Concepto</label>
-                                <input class="form-control" @bind="lineEditor.Concept" readonly="@(!canEditModule)" />
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions" style="margin-top: 1rem;">
-                            <button type="button" class="btn btn-primary" @onclick="SaveLineAsync" disabled="@(!canEditModule)">@LineActionLabel</button>
-                            <button type="button" class="btn btn-outline-primary" @onclick="ResetLineEditor" disabled="@(!canEditModule)">Limpiar</button>
-                            <button type="button" class="btn btn-outline-primary" @onclick="ToggleProductUpsertForm" disabled="@(!canEditModule)">Upsert producto</button>
-                        </div>
-                    </div>
-
-                    @if (showProductUpsertForm)
-                    {
-                        <div class="invoice-product-upsert">
-                            <div class="invoice-block-title">@(productUpsertEditor.IdProducto > 0 ? "Editar producto" : "Crear producto rapido")</div>
-
-                            <div class="invoice-upsert-grid">
-                                <div>
-                                    <label class="form-label">Codigo *</label>
-                                    <input class="form-control" @bind="productUpsertEditor.CodigoProducto" maxlength="50" />
+                        <section class="invoice-sidebar-card">
+                            <div class="invoice-block-title">Vista previa</div>
+                            <div class="invoice-preview-sheet">
+                                <div class="invoice-preview-header">
+                                    <div>
+                                        <strong style="display:block; color:var(--color-ink);">@(currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "Emisor")</strong>
+                                        <span style="color:var(--color-taupe);">@(currentIssuer?.direccion ?? "Direccion pendiente")</span>
+                                    </div>
+                                    <div style="text-align:right;">
+                                        <strong style="display:block; color:var(--color-ink);">Factura</strong>
+                                        <span style="color:var(--color-taupe);">@DisplayInvoiceNumber</span>
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label class="form-label">Nombre *</label>
-                                    <input class="form-control" @bind="productUpsertEditor.NombreProducto" maxlength="150" />
+                                <div class="invoice-preview-mini-grid">
+                                    <div><strong>Cliente</strong><br />@(billingClient?.razon_social ?? (selectedPatient is null ? "Pendiente" : GetPatientFullName(selectedPatient)))</div>
+                                    <div><strong>Identificacion</strong><br />@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? "Pendiente")</div>
+                                    <div><strong>Fecha</strong><br />@InvoiceDateLabel</div>
+                                    <div><strong>Pago</strong><br />@paymentForm</div>
                                 </div>
 
-                                <div>
-                                    <label class="form-label">Tipo item</label>
-                                    <select class="form-select" @bind="productUpsertEditor.TipoItem">
-                                        <option value="Producto">Producto</option>
-                                        <option value="Servicio">Servicio</option>
-                                    </select>
-                                </div>
+                                <table class="table invoice-summary-table" style="margin-bottom: 0;">
+                                    <tbody>
+                                        <tr><td>Items</td><td>@draftLines.Count</td></tr>
+                                        <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
+                                        <tr><td>IVA</td><td>@taxPreview.ToString("0.00")</td></tr>
+                                        <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
+                                    </tbody>
+                                </table>
 
-                                <div>
-                                    <label class="form-label">Categoria *</label>
-                                    <select class="form-select" @bind="productUpsertEditor.IdCategoria">
-                                        <option value="0">Selecciona</option>
-                                        @foreach (var category in categories.OrderBy(x => x.nombre))
-                                        {
-                                            <option value="@category.id_categoria">@category.nombre</option>
-                                        }
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="form-label">Precio venta</label>
-                                    <input type="number" step="0.01" min="0" class="form-control" @bind="productUpsertEditor.PrecioVenta" />
-                                </div>
-
-                                <div>
-                                    <label class="form-label">Tiene IVA</label>
-                                    <select class="form-select" @bind="ProductUpsertTieneIvaValue">
-                                        <option value="true">Si</option>
-                                        <option value="false">No</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="form-label">IVA %</label>
-                                    <select class="form-select" @bind="productUpsertEditor.PorcentajeIva" disabled="@(!productUpsertEditor.TieneIva)">
-                                        @foreach (var percentage in ivaPercentageOptions)
-                                        {
-                                            <option value="@percentage">@($"{percentage:0}%")</option>
-                                        }
-                                    </select>
+                                <div class="invoice-preview-notes">
+                                    @(string.IsNullOrWhiteSpace(invoiceNotes) ? "Sin observaciones adicionales." : invoiceNotes)
                                 </div>
                             </div>
+                        </section>
 
-                            <div class="workspace-actions" style="margin-top: 1rem;">
-                                <button type="button" class="btn btn-primary" @onclick="SaveQuickProductAsync">@ProductUpsertActionLabel</button>
+                        <section class="invoice-sidebar-card">
+                            <div class="invoice-block-title">Observaciones</div>
+                            <textarea class="form-control" rows="7" @bind="invoiceNotes" readonly="@(!canEditModule)"></textarea>
+                        </section>
+
+                        <section class="invoice-sidebar-card">
+                            <div class="invoice-block-title">Accesos rapidos</div>
+                            <div class="invoice-sidebar-links">
+                                <a class="btn btn-outline-primary" href="/clients">Administrar clientes</a>
+                                <a class="btn btn-outline-primary" href="/my-invoices">Mis facturas</a>
+                                <a class="btn btn-outline-primary" href="/my-credit-notes">Mis notas de credito</a>
                             </div>
-                        </div>
-                    }
-                </section>
-
-                <div class="invoice-bottom-grid" style="margin-top: 1.25rem;">
-                    <section class="invoice-section">
-                        <div class="invoice-block-title">Observaciones</div>
-                        <textarea class="form-control" rows="7" @bind="invoiceNotes" readonly="@(!canEditModule)"></textarea>
-                    </section>
-
-                    <section class="invoice-section">
-                        <div class="invoice-block-title">Totales</div>
-                        <table class="table invoice-summary-table" style="margin-bottom: 1rem;">
-                            <tbody>
-                                <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
-                                <tr><td>Impuestos</td><td>@taxPreview.ToString("0.00")</td></tr>
-                                <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
-                                <tr><td>Valor cobrado</td><td>@paidAmount.ToString("0.00")</td></tr>
-                                <tr><td>Saldo pendiente</td><td>@balancePreview.ToString("0.00")</td></tr>
-                            </tbody>
-                        </table>
-
-                        <div class="workspace-actions">
-                            <button type="button" class="btn btn-primary" @onclick="FinalizeInvoiceAsync" disabled="@(!canEditModule)">Emitir factura</button>
-                        </div>
-                    </section>
+                        </section>
+                    </aside>
                 </div>
             </div>
         </section>
@@ -484,9 +995,11 @@ else
     private readonly List<tbl_categoria_producto> categories = [];
     private readonly List<string> paymentMethods = [];
     private readonly List<tbl_detalle_venta> draftLines = [];
+    private readonly string[] productTypeOptions = ["Producto", "Servicio"];
     private ModulePermissions permissions = new();
     private tbl_paciente? selectedPatient;
     private ClientEntity? billingClient;
+    private EmisorEntity? currentIssuer;
     private tbl_venta? draftSale;
     private bool isLoading = true;
     private bool canViewModule;
@@ -497,7 +1010,9 @@ else
     private int selectedClientId;
     private string? statusMessage;
     private string? errorMessage;
-    private string invoiceNumberPreview = "000000001";
+    private string invoiceNumberPreview = "Configura emisor";
+    private bool issuerRequiresInitialSequence;
+    private string initialInvoiceSequenceInput = string.Empty;
     private string paymentForm = "Efectivo";
     private int creditDays;
     private decimal taxRate;
@@ -517,6 +1032,9 @@ else
     private decimal LineEditorTotal => Math.Max(0m, (lineEditor.UnitPrice * lineEditor.Quantity) - lineEditor.Discount);
     private string LineActionLabel => lineEditor.LineId > 0 ? "Actualizar linea" : "Agregar linea";
     private string ProductUpsertActionLabel => productUpsertEditor.IdProducto > 0 ? "Actualizar producto" : "Guardar producto";
+    private string InitialSequencePreview => GetInitialSequencePreview();
+    private string DisplayInvoiceNumber => issuerRequiresInitialSequence ? InitialSequencePreview : invoiceNumberPreview;
+    private bool CanFinalizeInvoice => canEditModule && currentIssuer is not null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -562,6 +1080,10 @@ else
             .ThenBy(x => x.numero_identificacion)
             .ToListAsync());
 
+        currentIssuer = await dbContext.emisor
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
+
         categories.Clear();
         categories.AddRange(await dbContext.tbl_categoria_productos
             .AsNoTracking()
@@ -589,7 +1111,21 @@ else
             paymentMethods.AddRange(["Efectivo", "Tarjeta", "Transferencia", "Credito"]);
         }
 
-        invoiceNumberPreview = await BillingDraftService.GenerateNextInvoiceNumberAsync(dbContext);
+        if (currentIssuer is null)
+        {
+            issuerRequiresInitialSequence = false;
+            initialInvoiceSequenceInput = string.Empty;
+            invoiceNumberPreview = "Configura emisor";
+        }
+        else
+        {
+            var issuer = currentIssuer;
+            var lastSequence = await BillingDraftService.GetLastInvoiceSequenceAsync(dbContext, issuer);
+            issuerRequiresInitialSequence = !lastSequence.HasValue;
+            invoiceNumberPreview = issuerRequiresInitialSequence
+                ? GetInitialSequencePreview()
+                : BillingDraftService.BuildInvoiceNumber(issuer, (lastSequence ?? 0) + 1);
+        }
 
         selectedPatientId = patientId ?? selectedPatientId;
         await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
@@ -790,9 +1326,9 @@ else
             selectedClientId = billingClient.cliente_id;
         }
 
-        if (draftSale is null && selectedPatientId <= 0)
+        if (draftSale is null && selectedPatientId <= 0 && selectedClientId <= 0)
         {
-            errorMessage = "Selecciona un paciente antes de iniciar un nuevo borrador de factura.";
+            errorMessage = "Selecciona un cliente o un paciente antes de iniciar un nuevo borrador de factura.";
             return;
         }
 
@@ -924,6 +1460,23 @@ else
             return;
         }
 
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var issuer = await dbContext.emisor.FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
+        if (issuer is null)
+        {
+            errorMessage = "Configura un emisor activo antes de emitir la factura.";
+            return;
+        }
+
+        var lastSequence = await BillingDraftService.GetLastInvoiceSequenceAsync(dbContext, issuer);
+        var requiresInitialSequence = !lastSequence.HasValue;
+        long resolvedInitialSequence = 0;
+        if (requiresInitialSequence && !TryResolveInitialSequence(issuer, out resolvedInitialSequence, out var initialSequenceError))
+        {
+            errorMessage = initialSequenceError;
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(paymentForm))
         {
             errorMessage = "Selecciona una forma de pago.";
@@ -941,8 +1494,6 @@ else
             errorMessage = "El valor cobrado no puede ser negativo.";
             return;
         }
-
-        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var sale = await dbContext.tbl_venta
             .Include(x => x.tbl_detalle_venta)
             .FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
@@ -976,7 +1527,10 @@ else
 
         await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
 
-        var invoiceNumber = await BillingDraftService.GenerateNextInvoiceNumberAsync(dbContext);
+        var invoiceSequence = requiresInitialSequence
+            ? resolvedInitialSequence
+            : await BillingDraftService.GenerateNextInvoiceSequenceAsync(dbContext, issuer);
+        var invoiceNumber = BillingDraftService.BuildInvoiceNumber(issuer, invoiceSequence);
         sale.estado = (sale.saldo_pendiente ?? 0) > 0 ? "Credito" : "Facturada";
 
         var comprobante = new tbl_comprobante
@@ -984,8 +1538,11 @@ else
             id_venta = sale.id_venta,
             tipo_comprobante = "Factura",
             numero_comprobante = invoiceNumber,
-            secuencial = long.Parse(invoiceNumber),
-            estado_comprobante = "Emitido",
+            secuencial = invoiceSequence,
+            estado_comprobante = "PendienteSRI",
+            id_emisor = issuer.emisor_id,
+            numero_autorizacion = null,
+            fecha_autorizacion = null,
             fecha_emision = DateTime.Now
         };
         dbContext.tbl_comprobantes.Add(comprobante);
@@ -1044,8 +1601,64 @@ else
 
         await dbContext.SaveChangesAsync();
 
-        statusMessage = $"Factura {invoiceNumber} emitida correctamente.";
+        statusMessage = currentBalance > 0
+            ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. Quedo pendiente para autorizacion SRI."
+            : $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y pendiente para autorizacion SRI.";
         await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
+    }
+
+    private string GetInitialSequencePreview()
+    {
+        if (currentIssuer is null)
+        {
+            return "Configura emisor";
+        }
+
+        return TryResolveInitialSequence(currentIssuer, out var sequence, out _)
+            ? BillingDraftService.BuildInvoiceNumber(currentIssuer, sequence)
+            : $"{BillingDraftService.GetInvoicePrefix(currentIssuer)}-000000001";
+    }
+
+    private bool TryResolveInitialSequence(EmisorEntity issuer, out long sequence, out string? validationError)
+    {
+        sequence = 0;
+        validationError = null;
+
+        var rawValue = initialInvoiceSequenceInput?.Trim();
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            validationError = "Indica la factura inicial o el secuencial con el que vas a empezar a emitir.";
+            return false;
+        }
+
+        var prefix = BillingDraftService.GetInvoicePrefix(issuer);
+        if (rawValue.Contains('-'))
+        {
+            var parts = rawValue.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length != 3)
+            {
+                validationError = "La factura inicial debe tener el formato 001-001-000000123 o solo el secuencial.";
+                return false;
+            }
+
+            var requestedPrefix = $"{parts[0]}-{parts[1]}";
+            if (!string.Equals(requestedPrefix, prefix, StringComparison.Ordinal))
+            {
+                validationError = $"La factura inicial debe usar la base {prefix} del emisor activo.";
+                return false;
+            }
+
+            rawValue = parts[2];
+        }
+
+        var digits = new string(rawValue.Where(char.IsDigit).ToArray());
+        if (!long.TryParse(digits, out sequence) || sequence <= 0)
+        {
+            validationError = "Ingresa un secuencial valido mayor a cero para la primera factura.";
+            return false;
+        }
+
+        return true;
     }
 
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
@@ -1170,66 +1783,66 @@ else
         statusMessage = null;
         errorMessage = null;
 
-        if (!canEditModule)
+        if (!ValidateQuickProductEditor())
         {
-            return;
-        }
-
-        productUpsertEditor.CodigoProducto = productUpsertEditor.CodigoProducto.Trim();
-        productUpsertEditor.NombreProducto = productUpsertEditor.NombreProducto.Trim();
-
-        if (string.IsNullOrWhiteSpace(productUpsertEditor.CodigoProducto) || string.IsNullOrWhiteSpace(productUpsertEditor.NombreProducto))
-        {
-            errorMessage = "Completa el codigo y el nombre del producto.";
-            return;
-        }
-
-        if (productUpsertEditor.IdCategoria <= 0)
-        {
-            errorMessage = "Selecciona una categoria para el producto.";
-            return;
-        }
-
-        if (productUpsertEditor.PrecioVenta < 0 || productUpsertEditor.PorcentajeIva < 0)
-        {
-            errorMessage = "Precio e IVA no pueden ser negativos.";
             return;
         }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        tbl_producto? product = null;
+        var normalizedCode = productUpsertEditor.CodigoProducto.Trim().ToLowerInvariant();
+        var codeExists = await dbContext.tbl_productos
+            .AnyAsync(x => x.id_producto != productUpsertEditor.IdProducto && x.codigo_producto.ToLower() == normalizedCode);
 
-        if (productUpsertEditor.IdProducto > 0)
+        if (codeExists)
         {
-            product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == productUpsertEditor.IdProducto);
+            errorMessage = "Ya existe un producto con el mismo codigo.";
+            return;
         }
 
-        product ??= await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.codigo_producto == productUpsertEditor.CodigoProducto);
+        var isEditing = productUpsertEditor.IdProducto > 0;
+        tbl_producto? product;
 
-        if (product is null)
+        if (isEditing)
         {
+            if (!permissions.CanEdit)
+            {
+                errorMessage = "Tu rol no tiene permiso para editar productos.";
+                return;
+            }
+
+            product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == productUpsertEditor.IdProducto);
+            if (product is null)
+            {
+                errorMessage = "No se encontro el producto seleccionado.";
+                return;
+            }
+        }
+        else
+        {
+            if (!permissions.CanCreate)
+            {
+                errorMessage = "Tu rol no tiene permiso para crear productos.";
+                return;
+            }
+
             product = new tbl_producto
             {
-                codigo_producto = productUpsertEditor.CodigoProducto,
-                activo = true,
                 fecha_creacion = DateTime.Now,
                 usuario_creacion = GetCurrentActorLabel()
             };
             dbContext.tbl_productos.Add(product);
         }
 
-        product.codigo_producto = productUpsertEditor.CodigoProducto;
-        product.nombre_producto = productUpsertEditor.NombreProducto;
-        product.tipo_item = string.IsNullOrWhiteSpace(productUpsertEditor.TipoItem) ? "Producto" : productUpsertEditor.TipoItem;
-        product.id_categoria = productUpsertEditor.IdCategoria;
-        product.precio_venta = productUpsertEditor.PrecioVenta;
-        product.tiene_iva = productUpsertEditor.TieneIva;
-        product.porcentaje_iva = productUpsertEditor.TieneIva ? productUpsertEditor.PorcentajeIva : 0;
-        product.naturaleza_item ??= string.Equals(product.tipo_item, "Servicio", StringComparison.OrdinalIgnoreCase) ? "Servicio" : "Bien";
-        product.stock_actual ??= 0;
-        product.stock_minimo ??= 0;
-        product.activo = true;
+        ApplyQuickProductEditorToEntity(product);
         product.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
+
+        await dbContext.SaveChangesAsync();
+
+        WriteAudit(
+            dbContext,
+            "Productos",
+            isEditing ? "Editar producto" : "Crear producto",
+            $"ProductoId={product.id_producto}; Codigo={product.codigo_producto}; Nombre={product.nombre_producto}; EstadoProducto={product.estado_producto ?? "Disponible"}");
 
         await dbContext.SaveChangesAsync();
 
@@ -1242,6 +1855,66 @@ else
         lineEditor.ProductId = product.id_producto;
         ApplySelectedProductDefaults();
         statusMessage = $"Producto {product.codigo_producto} guardado correctamente.";
+    }
+
+    private bool ValidateQuickProductEditor()
+    {
+        if (!canEditModule)
+        {
+            return false;
+        }
+
+        productUpsertEditor.CodigoProducto = productUpsertEditor.CodigoProducto.Trim();
+        productUpsertEditor.NombreProducto = productUpsertEditor.NombreProducto.Trim();
+        productUpsertEditor.TipoItem = string.IsNullOrWhiteSpace(productUpsertEditor.TipoItem) ? "Producto" : productUpsertEditor.TipoItem.Trim();
+
+        if (string.IsNullOrWhiteSpace(productUpsertEditor.CodigoProducto) || string.IsNullOrWhiteSpace(productUpsertEditor.NombreProducto))
+        {
+            errorMessage = "Completa el codigo y el nombre del producto.";
+            return false;
+        }
+
+        if (!productTypeOptions.Contains(productUpsertEditor.TipoItem, StringComparer.OrdinalIgnoreCase))
+        {
+            errorMessage = "Selecciona un tipo de item valido.";
+            return false;
+        }
+
+        if (productUpsertEditor.IdCategoria <= 0)
+        {
+            errorMessage = "Selecciona una categoria para el producto o servicio.";
+            return false;
+        }
+
+        if (productUpsertEditor.PrecioVenta < 0)
+        {
+            errorMessage = "Los precios no pueden ser negativos.";
+            return false;
+        }
+
+        if (productUpsertEditor.PorcentajeIva < 0)
+        {
+            errorMessage = "El porcentaje de IVA no puede ser negativo.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ApplyQuickProductEditorToEntity(tbl_producto entity)
+    {
+        entity.codigo_producto = productUpsertEditor.CodigoProducto.Trim();
+        entity.nombre_producto = productUpsertEditor.NombreProducto.Trim();
+        entity.tipo_item = productUpsertEditor.TipoItem;
+        entity.id_categoria = productUpsertEditor.IdCategoria;
+        entity.precio_venta = productUpsertEditor.PrecioVenta;
+        entity.tiene_iva = productUpsertEditor.TieneIva;
+        entity.porcentaje_iva = productUpsertEditor.TieneIva ? productUpsertEditor.PorcentajeIva : 0;
+        entity.naturaleza_item = string.Equals(productUpsertEditor.TipoItem, "Servicio", StringComparison.OrdinalIgnoreCase) ? "Servicio" : "Bien";
+        entity.stock_actual ??= 0;
+        entity.stock_minimo ??= 0;
+        entity.activo = true;
+        entity.estado_producto ??= "Disponible";
     }
 
     private void ApplySelectedProductDefaults()
@@ -1300,6 +1973,18 @@ else
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
+    private void WriteAudit(OpticaDbContext dbContext, string module, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = module,
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
     private sealed class ModulePermissions
     {
         public bool CanView { get; set; }
@@ -1329,4 +2014,5 @@ else
         public bool TieneIva { get; set; }
         public decimal PorcentajeIva { get; set; }
     }
+
 }

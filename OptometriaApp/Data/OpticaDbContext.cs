@@ -30,6 +30,8 @@ public partial class OpticaDbContext : DbContext
 
     public virtual DbSet<tbl_detalle_venta> tbl_detalle_venta { get; set; }
 
+    public virtual DbSet<tbl_detalle_nota_credito> tbl_detalle_nota_credito { get; set; }
+
     public virtual DbSet<tbl_envio_laboratorio> tbl_envio_laboratorios { get; set; }
 
     public virtual DbSet<tbl_laboratorio> tbl_laboratorios { get; set; }
@@ -471,6 +473,10 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.numero_nota)
                 .HasMaxLength(50)
                 .IsUnicode(false);
+            entity.Property(e => e.tipo_nota)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Total");
             entity.Property(e => e.usuario_creacion)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -482,6 +488,36 @@ public partial class OpticaDbContext : DbContext
             entity.HasOne(d => d.id_cta_cobrarNavigation).WithMany()
                 .HasForeignKey(d => d.id_cta_cobrar)
                 .HasConstraintName("FK_tbl_nota_credito_tbl_cta_cobrar");
+        });
+
+        modelBuilder.Entity<tbl_detalle_nota_credito>(entity =>
+        {
+            entity.HasKey(e => e.id_detalle_nota_credito);
+
+            entity.ToTable("tbl_detalle_nota_credito");
+
+            entity.HasIndex(e => new { e.id_nota_credito, e.id_detalle_venta }, "IX_detalle_nota_credito_relacion");
+
+            entity.Property(e => e.descripcion_item)
+                .HasMaxLength(255)
+                .IsUnicode(false);
+            entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.monto_impuesto).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.monto_subtotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.monto_total).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.porcentaje_impuesto).HasColumnType("decimal(5, 2)");
+
+            entity.HasOne(d => d.id_detalle_ventaNavigation)
+                .WithMany()
+                .HasForeignKey(d => d.id_detalle_venta)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tbl_detalle_nota_credito_tbl_detalle_venta");
+
+            entity.HasOne(d => d.id_nota_creditoNavigation)
+                .WithMany(p => p.tbl_detalle_nota_credito)
+                .HasForeignKey(d => d.id_nota_credito)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_tbl_detalle_nota_credito_tbl_nota_credito");
         });
 
         modelBuilder.Entity<tbl_orden_rx>(entity =>

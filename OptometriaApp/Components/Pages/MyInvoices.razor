@@ -1,0 +1,451 @@
+@page "/my-invoices"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Mis facturas</PageTitle>
+
+<style>
+    .documents-grid,
+    .documents-summary-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .documents-grid {
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+    }
+
+    .documents-summary-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .documents-card {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.78);
+    }
+
+    .documents-label {
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+        margin-bottom: 0.65rem;
+    }
+
+    .documents-kpi strong {
+        display: block;
+        font-size: 1.45rem;
+        color: var(--color-ink);
+    }
+
+    @@media (max-width: 992px) {
+        .documents-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando facturas...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Mis facturas</h1>
+            <p>Tu rol no tiene permiso para entrar a este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Documentos emitidos</span>
+                <h1>Mis facturas</h1>
+                <p>Consulta tus facturas emitidas, revisa totales, saldos, lineas y acceso rapido a notas de credito.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="workspace-actions" style="margin-bottom: 1rem;">
+                <a class="btn btn-outline-primary" href="/invoices">Nueva factura</a>
+                <a class="btn btn-outline-primary" href="/my-credit-notes">Mis notas de credito</a>
+            </div>
+
+            <div class="documents-grid">
+                <section class="documents-card">
+                    <div class="management-card-header">
+                        <h2>Facturas emitidas</h2>
+                        <span>@issuedInvoices.Count registros</span>
+                    </div>
+
+                    @if (issuedInvoices.Count == 0)
+                    {
+                        <p style="margin: 1rem 0 0;">No hay facturas emitidas para mostrar.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="margin-top: 1rem;">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Factura</th>
+                                        <th>Cliente</th>
+                                        <th>Paciente</th>
+                                        <th>Fecha</th>
+                                        <th>Total</th>
+                                        <th>Cobrado</th>
+                                        <th>Saldo</th>
+                                        <th>Estado</th>
+                                        <th style="text-align:right;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in issuedInvoices)
+                                    {
+                                        <tr>
+                                            <td><strong>@item.InvoiceNumber</strong></td>
+                                            <td>@item.ClientName</td>
+                                            <td>@item.PatientName</td>
+                                            <td>@item.IssueDateLabel</td>
+                                            <td>@item.TotalAmount.ToString("0.00")</td>
+                                            <td>@item.CollectedAmount.ToString("0.00")</td>
+                                            <td>@item.Balance.ToString("0.00")</td>
+                                            <td>@item.State</td>
+                                            <td style="text-align:right;">
+                                                <div style="display:inline-flex; gap:0.5rem;">
+                                                    <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => SelectInvoiceAsync(item.ComprobanteId)">
+                                                        @(selectedInvoice?.ComprobanteId == item.ComprobanteId ? "Activa" : "Ver")
+                                                    </button>
+                                                    <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@($"/my-credit-notes?invoice={item.ComprobanteId}")">Nota</a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+
+                <section class="documents-card">
+                    @if (selectedInvoice is null)
+                    {
+                        <div class="documents-label">Detalle</div>
+                        <p style="margin: 0;">Selecciona una factura para revisar sus lineas, saldos y resumen comercial.</p>
+                    }
+                    else
+                    {
+                        <div class="management-card-header">
+                            <h2>Factura #@selectedInvoice.InvoiceNumber</h2>
+                            <span>@selectedLines.Count lineas</span>
+                        </div>
+
+                        <div class="documents-summary-grid" style="margin-top: 1rem;">
+                            <div class="documents-card documents-kpi">
+                                <div class="documents-label">Cliente</div>
+                                <strong style="font-size: 1rem;">@selectedInvoice.ClientName</strong>
+                                <span>@selectedInvoice.PatientName</span>
+                            </div>
+                            <div class="documents-card documents-kpi">
+                                <div class="documents-label">Total</div>
+                                <strong>@selectedInvoice.TotalAmount.ToString("0.00")</strong>
+                                <span>Emitida @selectedInvoice.IssueDateLabel</span>
+                            </div>
+                            <div class="documents-card documents-kpi">
+                                <div class="documents-label">Cobrado</div>
+                                <strong>@selectedInvoice.CollectedAmount.ToString("0.00")</strong>
+                                <span>Saldo @selectedInvoice.Balance.ToString("0.00")</span>
+                            </div>
+                            <div class="documents-card documents-kpi">
+                                <div class="documents-label">Notas</div>
+                                <strong>@selectedInvoice.TotalCredited.ToString("0.00")</strong>
+                                <span>@selectedInvoice.State</span>
+                            </div>
+                        </div>
+
+                        <div class="documents-label" style="margin-top: 1rem;">Lineas de la factura</div>
+                        @if (selectedLines.Count == 0)
+                        {
+                            <p style="margin: 0;">Esta factura no tiene lineas visibles.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover" style="margin-bottom: 0;">
+                                    <thead>
+                                        <tr>
+                                            <th>Codigo</th>
+                                            <th>Concepto</th>
+                                            <th>IVA</th>
+                                            <th>Cantidad</th>
+                                            <th>Precio</th>
+                                            <th>Descuento</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var line in selectedLines)
+                                        {
+                                            <tr>
+                                                <td>@line.ProductCode</td>
+                                                <td>@line.Concept</td>
+                                                <td>@line.TaxLabel</td>
+                                                <td>@line.Quantity</td>
+                                                <td>@line.UnitPrice.ToString("0.00")</td>
+                                                <td>@line.Discount.ToString("0.00")</td>
+                                                <td>@line.Total.ToString("0.00")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </section>
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    private readonly List<IssuedInvoiceRow> issuedInvoices = [];
+    private readonly List<InvoiceLineRow> selectedLines = [];
+    private ModulePermissions permissions = new();
+    private IssuedInvoiceRow? selectedInvoice;
+    private bool isLoading = true;
+    private bool canViewModule;
+    private int currentUserId;
+    private int currentRoleId;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync(int? preserveSelectedComprobanteId = null)
+    {
+        isLoading = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+        currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var rows = await (
+            from comprobante in dbContext.tbl_comprobantes.AsNoTracking()
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join client in dbContext.clients.AsNoTracking() on sale.id_cliente_facturacion equals client.cliente_id
+            join patient in dbContext.tbl_pacientes.AsNoTracking() on sale.id_paciente equals patient.id_paciente into patientJoin
+            from patient in patientJoin.DefaultIfEmpty()
+            join account in dbContext.tbl_cta_cobrar.AsNoTracking() on comprobante.id_comprobante equals account.id_comprobante into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            where comprobante.tipo_comprobante == "Factura"
+               && (comprobante.estado_comprobante ?? "Emitido") != "Anulado"
+               && (currentRoleId == 1 || client.id_usuario_creacion == currentUserId)
+            orderby comprobante.fecha_emision descending, comprobante.id_comprobante descending
+            select new
+            {
+                comprobante.id_comprobante,
+                InvoiceNumber = comprobante.numero_comprobante,
+                IssueDate = comprobante.fecha_emision,
+                SaleState = sale.estado,
+                sale.total,
+                sale.valor_cobrado,
+                sale.saldo_pendiente,
+                client.razon_social,
+                ClientFirstName = client.nombres,
+                ClientLastName = client.apellidos,
+                PatientFirstName = patient != null ? patient.nombres : string.Empty,
+                PatientLastName = patient != null ? patient.apellidos : string.Empty
+            })
+            .Take(40)
+            .ToListAsync();
+
+        var noteSums = await dbContext.tbl_nota_credito
+            .AsNoTracking()
+            .Where(x => x.id_comprobante_relacionado != null && x.estado == "Emitida")
+            .GroupBy(x => x.id_comprobante_relacionado!.Value)
+            .Select(x => new { ComprobanteId = x.Key, Total = x.Sum(y => y.monto_total) })
+            .ToDictionaryAsync(x => x.ComprobanteId, x => x.Total);
+
+        issuedInvoices.Clear();
+        issuedInvoices.AddRange(rows.Select(item => new IssuedInvoiceRow
+        {
+            ComprobanteId = item.id_comprobante,
+            InvoiceNumber = item.InvoiceNumber ?? "Sin numero",
+            ClientName = GetDisplayClientName(item.razon_social, item.ClientFirstName, item.ClientLastName),
+            PatientName = GetDisplayPersonName(item.PatientFirstName, item.PatientLastName),
+            IssueDate = item.IssueDate ?? DateTime.Now,
+            State = item.SaleState ?? "Facturada",
+            TotalAmount = item.total ?? 0m,
+            CollectedAmount = item.valor_cobrado ?? 0m,
+            Balance = item.saldo_pendiente ?? 0m,
+            TotalCredited = noteSums.TryGetValue(item.id_comprobante, out var totalCredited) ? totalCredited : 0m
+        }));
+
+        var targetId = preserveSelectedComprobanteId ?? selectedInvoice?.ComprobanteId;
+        if (targetId.HasValue && issuedInvoices.Any(x => x.ComprobanteId == targetId.Value))
+        {
+            await SelectInvoiceAsync(targetId.Value);
+        }
+        else
+        {
+            selectedInvoice = null;
+            selectedLines.Clear();
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SelectInvoiceAsync(int comprobanteId)
+    {
+        selectedInvoice = issuedInvoices.FirstOrDefault(x => x.ComprobanteId == comprobanteId);
+        selectedLines.Clear();
+
+        if (selectedInvoice is null)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var lines = await (
+            from comprobante in dbContext.tbl_comprobantes.AsNoTracking()
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join line in dbContext.tbl_detalle_venta.AsNoTracking() on sale.id_venta equals line.id_venta
+            join product in dbContext.tbl_productos.AsNoTracking() on line.id_producto equals product.id_producto
+            where comprobante.id_comprobante == comprobanteId
+            orderby line.id_detalle_venta
+            select new InvoiceLineRow
+            {
+                ProductCode = product.codigo_producto,
+                Concept = string.IsNullOrWhiteSpace(line.concepto_item) ? product.nombre_producto : line.concepto_item!,
+                TaxLabel = (product.tiene_iva ?? false) ? $"Si, {(product.porcentaje_iva ?? 0m):0.##}%" : "No",
+                Quantity = line.cantidad,
+                UnitPrice = line.precio_unitario ?? 0m,
+                Discount = line.descuento ?? 0m,
+                Total = line.total_item ?? 0m
+            })
+            .ToListAsync();
+
+        selectedLines.AddRange(lines);
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(x => x.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/my-invoices"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private static string GetDisplayClientName(string? businessName, string? firstName, string? lastName)
+    {
+        if (!string.IsNullOrWhiteSpace(businessName))
+        {
+            return businessName.Trim();
+        }
+
+        return GetDisplayPersonName(firstName, lastName);
+    }
+
+    private static string GetDisplayPersonName(string? firstName, string? lastName)
+    {
+        var fullName = $"{firstName} {lastName}".Trim();
+        return string.IsNullOrWhiteSpace(fullName) ? "Sin dato" : fullName;
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class IssuedInvoiceRow
+    {
+        public int ComprobanteId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string PatientName { get; set; } = "Sin dato";
+        public DateTime IssueDate { get; set; }
+        public string State { get; set; } = "Facturada";
+        public decimal TotalAmount { get; set; }
+        public decimal CollectedAmount { get; set; }
+        public decimal Balance { get; set; }
+        public decimal TotalCredited { get; set; }
+        public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private sealed class InvoiceLineRow
+    {
+        public string ProductCode { get; set; } = string.Empty;
+        public string Concept { get; set; } = string.Empty;
+        public string TaxLabel { get; set; } = "No";
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal Total { get; set; }
+    }
+}

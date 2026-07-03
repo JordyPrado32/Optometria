@@ -169,19 +169,22 @@
         "/kardex" => 17,
         "/clients" => 18,
         "/emisor" => 19,
-        "/users" => 20,
-        "/roles" => 21,
-        "/menus" => 22,
-        "/register" => 23,
-        "/setup-2fa" => 24,
-        "/profile" => 25,
+        "/my-invoices" => 20,
+        "/my-credit-notes" => 21,
+        "/accounts-receivable" => 22,
+        "/users" => 23,
+        "/roles" => 24,
+        "/menus" => 25,
+        "/register" => 26,
+        "/setup-2fa" => 27,
+        "/profile" => 28,
         _ => 100
     };
 
     private static string GetMenuCategory(string route) => route switch
     {
         "/dashboard" or "/patients" or "/doctor/patient-entry" or "/doctor/my-patients" or "/appointments" or "/appointment-availability" or "/doctors" or "/laboratories" => "Clinica",
-        "/clients" or "/emisor" or "/invoices" => "Comercial",
+        "/clients" or "/emisor" or "/invoices" or "/my-invoices" or "/my-credit-notes" or "/accounts-receivable" => "Comercial",
         "/products" or "/product-categories" or "/suppliers" or "/purchases" or "/purchase-orders" or "/purchase-receptions" or "/purchase-liquidations" or "/inventories" or "/kardex" => "Inventario",
         _ => "Configuracion"
     };
@@ -207,6 +210,9 @@
         "/kardex" => "bi bi-journal-text",
         "/clients" => "bi bi-person-vcard-fill",
         "/emisor" => "bi bi-building-fill-gear",
+        "/my-invoices" => "bi bi-receipt",
+        "/my-credit-notes" => "bi bi-arrow-counterclockwise",
+        "/accounts-receivable" => "bi bi-cash-coin",
         "/users" => "bi bi-people",
         "/roles" => "bi bi-shield-lock-fill",
         "/menus" => "bi bi-menu-button-wide-fill",

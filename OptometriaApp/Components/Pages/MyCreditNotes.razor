@@ -1,0 +1,1556 @@
+@page "/my-credit-notes"
+@page "/my-credit-notes/{CreditNoteId:int}"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Mis notas de credito</PageTitle>
+
+<style>
+    .credit-grid,
+    .credit-summary-grid,
+    .credit-filter-grid,
+    .credit-editor-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .credit-grid {
+        grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr);
+    }
+
+    .credit-summary-grid,
+    .credit-filter-grid,
+    .credit-editor-grid {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .credit-card {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.78);
+    }
+
+    .credit-label {
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+        margin-bottom: 0.65rem;
+    }
+
+    .credit-kpi strong {
+        display: block;
+        font-size: 1.45rem;
+        color: var(--color-ink);
+    }
+
+    .credit-note-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+    }
+
+    .credit-note-type .btn.active {
+        background: var(--color-sage);
+        border-color: var(--color-sage);
+        color: #fff;
+    }
+
+    .credit-status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        background: rgba(93, 161, 129, 0.12);
+        color: var(--color-sage);
+    }
+
+    @@media print {
+        .workspace-actions,
+        .app-nav-shell,
+        .top-row,
+        .credit-list-shell,
+        .management-hero {
+            display: none !important;
+        }
+
+        .management-shell,
+        .management-card,
+        .credit-card {
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: #fff !important;
+        }
+    }
+
+    @@media (max-width: 992px) {
+        .credit-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando notas de credito...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Mis notas de credito</h1>
+            <p>Tu rol no tiene permiso para entrar a este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Ajustes comerciales</span>
+                <h1>Mis notas de credito</h1>
+                <p>Consulta el historial, busca facturas emitidas y genera notas de credito totales o parciales con validacion de negocio.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        @if (selectedCreditNoteDetail is not null)
+        {
+            <section class="management-card" style="margin-bottom: 1rem;">
+                <div class="workspace-actions" style="margin-bottom: 1rem;">
+                    <button type="button" class="btn btn-outline-primary" onclick="window.print()">Imprimir</button>
+                    <a class="btn btn-outline-primary" href="@BuildInvoiceManagementUrl(selectedCreditNoteDetail.ComprobanteId)">Volver a la factura</a>
+                    <a class="btn btn-outline-primary" href="/my-credit-notes">Ver todas</a>
+                </div>
+
+                <div class="credit-card">
+                    <div class="management-card-header">
+                        <h2>Nota de credito #@selectedCreditNoteDetail.NoteNumber</h2>
+                        <span>@selectedCreditNoteDetail.IssueDateLabel</span>
+                    </div>
+
+                    <div class="credit-summary-grid" style="margin-top: 1rem;">
+                        <div class="credit-card credit-kpi">
+                            <div class="credit-label">Factura origen</div>
+                            <strong style="font-size: 1rem;">@selectedCreditNoteDetail.InvoiceNumber</strong>
+                            <span>@selectedCreditNoteDetail.InvoiceState</span>
+                        </div>
+                        <div class="credit-card credit-kpi">
+                            <div class="credit-label">Cliente</div>
+                            <strong style="font-size: 1rem;">@selectedCreditNoteDetail.ClientName</strong>
+                            <span>@selectedCreditNoteDetail.PatientName</span>
+                        </div>
+                        <div class="credit-card credit-kpi">
+                            <div class="credit-label">Tipo</div>
+                            <strong>@selectedCreditNoteDetail.NoteType</strong>
+                            <span>@selectedCreditNoteDetail.State</span>
+                        </div>
+                        <div class="credit-card credit-kpi">
+                            <div class="credit-label">Total</div>
+                            <strong>@selectedCreditNoteDetail.TotalAmount.ToString("0.00")</strong>
+                            <span>Subtotal @selectedCreditNoteDetail.SubtotalAmount.ToString("0.00") | Impuesto @selectedCreditNoteDetail.TaxAmount.ToString("0.00")</span>
+                        </div>
+                    </div>
+
+                    <div class="credit-label" style="margin-top: 1rem;">Motivo</div>
+                    <p style="margin: 0;">@selectedCreditNoteDetail.Reason</p>
+
+                    <div class="credit-label" style="margin-top: 1rem;">Detalle acreditado</div>
+                    @if (selectedCreditNoteDetail.Details.Count == 0)
+                    {
+                        <p style="margin: 0;">Esta nota no tiene detalle por item registrado.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover" style="margin-bottom: 0;">
+                                <thead>
+                                    <tr>
+                                        <th>Codigo</th>
+                                        <th>Concepto</th>
+                                        <th>IVA</th>
+                                        <th>Cantidad</th>
+                                        <th>Subtotal</th>
+                                        <th>Impuesto</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in selectedCreditNoteDetail.Details)
+                                    {
+                                        <tr>
+                                            <td>@item.ProductCode</td>
+                                            <td>@item.Concept</td>
+                                            <td>@item.TaxLabel</td>
+                                            <td>@item.QuantityLabel</td>
+                                            <td>@item.Subtotal.ToString("0.00")</td>
+                                            <td>@item.Tax.ToString("0.00")</td>
+                                            <td>@item.Total.ToString("0.00")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="management-card" style="margin-bottom: 1rem;">
+            <div class="management-card-header">
+                <h2>Notas de credito emitidas</h2>
+                <span>@recentCreditNotes.Count registros</span>
+            </div>
+
+            @if (recentCreditNotes.Count == 0)
+            {
+                <p style="margin: 1rem 0 0;">No hay notas de credito registradas.</p>
+            }
+            else
+            {
+                <div class="table-responsive" style="margin-top: 1rem;">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nota</th>
+                                <th>Factura</th>
+                                <th>Cliente</th>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Total</th>
+                                <th>Estado</th>
+                                <th style="text-align:right;">Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in recentCreditNotes)
+                            {
+                                <tr>
+                                    <td><strong>@item.NoteNumber</strong></td>
+                                    <td>@item.InvoiceNumber</td>
+                                    <td>@item.ClientName</td>
+                                    <td>@item.IssueDateLabel</td>
+                                    <td>@item.NoteType</td>
+                                    <td>@item.Amount.ToString("0.00")</td>
+                                    <td>@item.State</td>
+                                    <td style="text-align:right;">
+                                        <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@BuildCreditNoteDetailUrl(item.CreditNoteId, item.ComprobanteId)">Detalle</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="management-card credit-list-shell">
+            <div class="workspace-actions" style="margin-bottom: 1rem;">
+                <a class="btn btn-outline-primary" href="/invoices">Facturas</a>
+                <a class="btn btn-outline-primary" href="/my-invoices">Mis facturas</a>
+            </div>
+
+            <div class="credit-filter-grid" style="margin-bottom: 1rem;">
+                <div>
+                    <label class="form-label">Numero de factura</label>
+                    <input class="form-control" @bind="searchInvoiceNumber" />
+                </div>
+                <div>
+                    <label class="form-label">Cliente</label>
+                    <input class="form-control" @bind="searchClient" />
+                </div>
+                <div>
+                    <label class="form-label">Identificador</label>
+                    <input class="form-control" @bind="searchIdentifier" />
+                </div>
+                <div>
+                    <label class="form-label">Fecha emision</label>
+                    <input type="date" class="form-control" @bind="searchIssueDate" />
+                </div>
+            </div>
+
+            <div class="workspace-actions" style="margin-bottom: 1rem;">
+                <button type="button" class="btn btn-primary" @onclick="ApplySearchAsync">Buscar factura</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="ClearSearchAsync">Limpiar filtros</button>
+            </div>
+
+            <div class="credit-grid">
+                <section class="credit-card">
+                    <div class="management-card-header">
+                        <h2>Facturas disponibles</h2>
+                        <span>@issuedInvoices.Count facturas</span>
+                    </div>
+
+                    @if (issuedInvoices.Count == 0)
+                    {
+                        <p style="margin: 1rem 0 0;">No hay facturas emitidas disponibles para los filtros seleccionados.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive" style="margin-top: 1rem;">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Factura</th>
+                                        <th>Cliente</th>
+                                        <th>Fecha</th>
+                                        <th>Total</th>
+                                        <th>Acreditado</th>
+                                        <th>Estado</th>
+                                        <th style="text-align:right;">Accion</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in issuedInvoices)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@item.InvoiceNumber</strong>
+                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@item.IdentifierLabel</div>
+                                            </td>
+                                            <td>
+                                                @item.ClientName
+                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@item.PatientName</div>
+                                            </td>
+                                            <td>@item.IssueDateLabel</td>
+                                            <td>@item.CurrentTotal.ToString("0.00")</td>
+                                            <td>@item.TotalCredited.ToString("0.00")</td>
+                                            <td><span class="credit-status-pill">@item.InvoiceCreditState</span></td>
+                                            <td style="text-align:right;">
+                                                <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => SelectIssuedInvoiceAsync(item.ComprobanteId)">
+                                                    @(selectedIssuedInvoice?.ComprobanteId == item.ComprobanteId ? "Activa" : "Seleccionar")
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+
+                <section class="credit-card">
+                    @if (selectedIssuedInvoice is null)
+                    {
+                        <div class="credit-label">Nota de credito</div>
+                        <p style="margin: 0;">Selecciona una factura para revisar su detalle y generar una nota de credito.</p>
+                    }
+                    else
+                    {
+                        <div class="management-card-header">
+                            <h2>Factura #@selectedIssuedInvoice.InvoiceNumber</h2>
+                            <span>@selectedIssuedInvoice.InvoiceCreditState</span>
+                        </div>
+
+                        <div class="credit-summary-grid" style="margin-top: 1rem;">
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Cliente</div>
+                                <strong style="font-size: 1rem;">@selectedIssuedInvoice.ClientName</strong>
+                                <span>@selectedIssuedInvoice.PatientName</span>
+                            </div>
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Fecha emision</div>
+                                <strong style="font-size: 1rem;">@selectedIssuedInvoice.IssueDateLabel</strong>
+                                <span>@selectedIssuedInvoice.IdentifierLabel</span>
+                            </div>
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Subtotal actual</div>
+                                <strong>@selectedIssuedInvoice.CurrentSubtotal.ToString("0.00")</strong>
+                                <span>Impuesto @selectedIssuedInvoice.CurrentTax.ToString("0.00")</span>
+                            </div>
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Total actual</div>
+                                <strong>@selectedIssuedInvoice.CurrentTotal.ToString("0.00")</strong>
+                                <span>Acreditado @selectedIssuedInvoice.TotalCredited.ToString("0.00")</span>
+                            </div>
+                        </div>
+
+                        <div class="credit-label" style="margin-top: 1rem;">Tipo de nota</div>
+                        <div class="credit-note-type">
+                            <button type="button" class="btn btn-outline-primary @(creditNoteType == "Total" ? "active" : string.Empty)" @onclick='() => SetCreditNoteType("Total")' disabled="@(!canEditModule)">Total</button>
+                            <button type="button" class="btn btn-outline-primary @(creditNoteType == "Parcial" ? "active" : string.Empty)" @onclick='() => SetCreditNoteType("Parcial")' disabled="@(!canEditModule)">Parcial</button>
+                        </div>
+
+                        <div class="credit-editor-grid" style="margin-top: 1rem;">
+                            <div style="grid-column: 1 / -1;">
+                                <label class="form-label">Motivo *</label>
+                                <textarea class="form-control" rows="3" maxlength="255" @bind="creditNoteReason" readonly="@(!canEditModule)"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="credit-label" style="margin-top: 1rem;">Productos o servicios facturados</div>
+                        @if (selectedInvoiceLines.Count == 0)
+                        {
+                            <p style="margin: 0;">La factura seleccionada no tiene lineas disponibles.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Codigo</th>
+                                            <th>Concepto</th>
+                                            <th>IVA</th>
+                                            <th>Cant. facturada</th>
+                                            <th>Subtotal factura</th>
+                                            <th>Disponible</th>
+                                            @if (creditNoteType == "Parcial")
+                                            {
+                                                <th>Cant. acreditar</th>
+                                                <th>Valor base acreditar</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var line in selectedInvoiceLines)
+                                        {
+                                            <tr>
+                                                <td>@line.ProductCode</td>
+                                                <td>@line.Concept</td>
+                                                <td>@line.TaxLabel</td>
+                                                <td>@line.OriginalQuantity</td>
+                                                <td>@line.OriginalSubtotal.ToString("0.00")</td>
+                                                <td>
+                                                    <strong>@line.AvailableSubtotal.ToString("0.00")</strong>
+                                                    <div style="font-size: 0.78rem; color: var(--color-taupe);">Cantidad disponible @line.AvailableQuantity</div>
+                                                </td>
+                                                @if (creditNoteType == "Parcial")
+                                                {
+                                                    <td>
+                                                        <input type="number" min="0" max="@line.AvailableQuantity" class="form-control" @bind="line.QuantityToCredit" readonly="@(!canEditModule)" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" min="0" max="@line.AvailableSubtotal" step="0.01" class="form-control" @bind="line.SubtotalToCredit" readonly="@(!canEditModule)" />
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        <div class="credit-summary-grid" style="margin-top: 1rem;">
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Subtotal acreditado</div>
+                                <strong>@draftSummary.Subtotal.ToString("0.00")</strong>
+                            </div>
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Impuestos acreditados</div>
+                                <strong>@draftSummary.Tax.ToString("0.00")</strong>
+                            </div>
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Total nota</div>
+                                <strong>@draftSummary.Total.ToString("0.00")</strong>
+                            </div>
+                            <div class="credit-card credit-kpi">
+                                <div class="credit-label">Estado factura</div>
+                                <strong style="font-size: 1rem;">@PredictInvoiceStateAfterDraft()</strong>
+                                <span>Disponible @selectedIssuedInvoice.CurrentTotal.ToString("0.00")</span>
+                            </div>
+                        </div>
+
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            <button type="button" class="btn btn-primary" @onclick="SaveCreditNoteAsync" disabled="@(!canEditModule)">Guardar nota de credito</button>
+                        </div>
+
+                        <div class="credit-label" style="margin-top: 1rem;">Historial de la factura</div>
+                        @if (selectedCreditNotes.Count == 0)
+                        {
+                            <p style="margin: 0;">Esta factura no tiene notas de credito registradas.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover" style="margin-bottom: 0;">
+                                    <thead>
+                                        <tr>
+                                            <th>Nota</th>
+                                            <th>Fecha</th>
+                                            <th>Tipo</th>
+                                            <th>Monto</th>
+                                            <th>Estado</th>
+                                            <th>Motivo</th>
+                                            <th style="text-align:right;">Accion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var note in selectedCreditNotes)
+                                        {
+                                            <tr>
+                                                <td>@note.NoteNumber</td>
+                                                <td>@note.IssueDateLabel</td>
+                                                <td>@note.NoteType</td>
+                                                <td>@note.Amount.ToString("0.00")</td>
+                                                <td>@note.State</td>
+                                                <td>@note.Reason</td>
+                                                <td style="text-align:right;">
+                                                    <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@BuildCreditNoteDetailUrl(note.CreditNoteId, selectedIssuedInvoice.ComprobanteId)">Detalle</a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </section>
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public int? CreditNoteId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "invoice")]
+    public int? InvoiceQuery { get; set; }
+
+    private readonly List<IssuedInvoiceRow> issuedInvoices = [];
+    private readonly List<CreditNoteRow> selectedCreditNotes = [];
+    private readonly List<InvoiceCreditLineRow> selectedInvoiceLines = [];
+    private readonly List<RecentCreditNoteRow> recentCreditNotes = [];
+    private ModulePermissions permissions = new();
+    private IssuedInvoiceRow? selectedIssuedInvoice;
+    private CreditNoteDetailView? selectedCreditNoteDetail;
+    private CreditNoteDraftSummary draftSummary = new();
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool canEditModule;
+    private int currentUserId;
+    private int currentRoleId;
+    private string? statusMessage;
+    private string? errorMessage;
+    private string creditNoteType = "Total";
+    private string creditNoteReason = string.Empty;
+    private string searchInvoiceNumber = string.Empty;
+    private string searchClient = string.Empty;
+    private string searchIdentifier = string.Empty;
+    private DateTime? searchIssueDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync(InvoiceQuery);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!isLoading)
+        {
+            await LoadAsync(InvoiceQuery);
+        }
+    }
+
+    private async Task LoadAsync(int? preserveSelectedComprobanteId = null)
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+        currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+
+        permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
+        canViewModule = permissions.CanView;
+        canEditModule = permissions.CanCreate || permissions.CanEdit;
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var effectiveInvoiceId = preserveSelectedComprobanteId ?? InvoiceQuery;
+        if (CreditNoteId.HasValue)
+        {
+            effectiveInvoiceId = await ResolveInvoiceIdByCreditNoteAsync(dbContext, CreditNoteId.Value) ?? effectiveInvoiceId;
+        }
+
+        await LoadRecentCreditNotesAsync(dbContext);
+        await LoadIssuedInvoicesAsync(dbContext, effectiveInvoiceId);
+
+        if (CreditNoteId.HasValue)
+        {
+            await LoadCreditNoteDetailAsync(dbContext, CreditNoteId.Value);
+        }
+        else
+        {
+            selectedCreditNoteDetail = null;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadRecentCreditNotesAsync(OpticaDbContext dbContext)
+    {
+        var rows = await (
+            from note in dbContext.tbl_nota_credito.AsNoTracking()
+            join comprobante in dbContext.tbl_comprobantes.AsNoTracking() on note.id_comprobante_relacionado equals comprobante.id_comprobante
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join client in dbContext.clients.AsNoTracking() on sale.id_cliente_facturacion equals client.cliente_id
+            where currentRoleId == 1 || client.id_usuario_creacion == currentUserId
+            orderby note.fecha_emision descending, note.id_nota_credito descending
+            select new RecentCreditNoteRow
+            {
+                CreditNoteId = note.id_nota_credito,
+                ComprobanteId = comprobante.id_comprobante,
+                NoteNumber = note.numero_nota,
+                InvoiceNumber = comprobante.numero_comprobante ?? $"Factura #{comprobante.id_comprobante}",
+                ClientName = GetDisplayClientName(client.razon_social, client.nombres, client.apellidos),
+                IssueDate = note.fecha_emision,
+                NoteType = string.IsNullOrWhiteSpace(note.tipo_nota) ? "Total" : note.tipo_nota,
+                Amount = note.monto_total,
+                State = note.estado
+            })
+            .Take(20)
+            .ToListAsync();
+
+        recentCreditNotes.Clear();
+        recentCreditNotes.AddRange(rows);
+    }
+
+    private async Task LoadIssuedInvoicesAsync(OpticaDbContext dbContext, int? preserveSelectedComprobanteId = null)
+    {
+        var query = 
+            from comprobante in dbContext.tbl_comprobantes.AsNoTracking()
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join client in dbContext.clients.AsNoTracking() on sale.id_cliente_facturacion equals client.cliente_id
+            join patient in dbContext.tbl_pacientes.AsNoTracking() on sale.id_paciente equals patient.id_paciente into patientJoin
+            from patient in patientJoin.DefaultIfEmpty()
+            join account in dbContext.tbl_cta_cobrar.AsNoTracking() on comprobante.id_comprobante equals account.id_comprobante into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            where comprobante.tipo_comprobante == "Factura"
+               && (comprobante.estado_comprobante ?? "Emitido") != "Anulado"
+               && (currentRoleId == 1 || client.id_usuario_creacion == currentUserId)
+            select new
+            {
+                comprobante.id_comprobante,
+                InvoiceNumber = comprobante.numero_comprobante,
+                IssueDate = comprobante.fecha_emision,
+                sale.id_venta,
+                sale.subtotal,
+                sale.impuesto_total,
+                sale.total,
+                sale.valor_cobrado,
+                sale.saldo_pendiente,
+                SaleState = sale.estado,
+                accountId = account != null ? account.id_cta_cobrar : 0,
+                AccountBalance = account != null ? account.saldo : (sale.saldo_pendiente ?? 0m),
+                client.razon_social,
+                ClientFirstName = client.nombres,
+                ClientLastName = client.apellidos,
+                client.numero_identificacion,
+                PatientFirstName = patient != null ? patient.nombres : string.Empty,
+                PatientLastName = patient != null ? patient.apellidos : string.Empty
+            };
+
+        if (!string.IsNullOrWhiteSpace(searchInvoiceNumber))
+        {
+            var term = searchInvoiceNumber.Trim().ToLowerInvariant();
+            query = query.Where(x => (x.InvoiceNumber ?? string.Empty).ToLower().Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchClient))
+        {
+            var term = searchClient.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                (x.razon_social ?? string.Empty).ToLower().Contains(term) ||
+                (((x.ClientFirstName ?? string.Empty) + " " + (x.ClientLastName ?? string.Empty)).Trim().ToLower().Contains(term)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchIdentifier))
+        {
+            var term = searchIdentifier.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                (x.numero_identificacion ?? string.Empty).ToLower().Contains(term) ||
+                x.id_comprobante.ToString().Contains(term) ||
+                x.id_venta.ToString().Contains(term));
+        }
+
+        if (searchIssueDate.HasValue)
+        {
+            var date = searchIssueDate.Value.Date;
+            query = query.Where(x => x.IssueDate.HasValue && x.IssueDate.Value.Date == date);
+        }
+
+        var rows = await query
+            .OrderByDescending(x => x.IssueDate)
+            .ThenByDescending(x => x.id_comprobante)
+            .Take(60)
+            .ToListAsync();
+
+        var noteSums = await dbContext.tbl_nota_credito
+            .AsNoTracking()
+            .Where(x => x.id_comprobante_relacionado != null && x.estado == "Emitida")
+            .GroupBy(x => x.id_comprobante_relacionado!.Value)
+            .Select(x => new { ComprobanteId = x.Key, Total = x.Sum(y => y.monto_total) })
+            .ToDictionaryAsync(x => x.ComprobanteId, x => x.Total);
+
+        issuedInvoices.Clear();
+        issuedInvoices.AddRange(rows.Select(item =>
+        {
+            var totalCredited = noteSums.TryGetValue(item.id_comprobante, out var creditedValue) ? creditedValue : 0m;
+            var currentTotal = item.total ?? 0m;
+            return new IssuedInvoiceRow
+            {
+                ComprobanteId = item.id_comprobante,
+                SaleId = item.id_venta,
+                AccountId = item.accountId,
+                InvoiceNumber = item.InvoiceNumber ?? "Sin numero",
+                ClientName = GetDisplayClientName(item.razon_social, item.ClientFirstName, item.ClientLastName),
+                PatientName = GetDisplayPersonName(item.PatientFirstName, item.PatientLastName),
+                IdentifierLabel = string.IsNullOrWhiteSpace(item.numero_identificacion) ? $"Venta #{item.id_venta}" : item.numero_identificacion!,
+                IssueDate = item.IssueDate ?? DateTime.Now,
+                SaleState = item.SaleState ?? "Facturada",
+                CurrentSubtotal = item.subtotal ?? 0m,
+                CurrentTax = item.impuesto_total ?? 0m,
+                CurrentTotal = currentTotal,
+                CollectedAmount = item.valor_cobrado ?? 0m,
+                Balance = item.AccountBalance,
+                TotalCredited = totalCredited,
+                InvoiceCreditState = ResolveInvoiceCreditState(currentTotal, totalCredited)
+            };
+        }));
+
+        var targetId = preserveSelectedComprobanteId ?? selectedIssuedInvoice?.ComprobanteId;
+        if (targetId.HasValue && issuedInvoices.Any(x => x.ComprobanteId == targetId.Value))
+        {
+            await SelectIssuedInvoiceAsync(targetId.Value);
+        }
+        else
+        {
+            selectedIssuedInvoice = null;
+            selectedCreditNotes.Clear();
+            selectedInvoiceLines.Clear();
+            draftSummary = new CreditNoteDraftSummary();
+            creditNoteReason = string.Empty;
+            creditNoteType = "Total";
+        }
+    }
+
+    private async Task SelectIssuedInvoiceAsync(int comprobanteId)
+    {
+        selectedIssuedInvoice = issuedInvoices.FirstOrDefault(x => x.ComprobanteId == comprobanteId);
+        selectedCreditNoteDetail = null;
+        creditNoteType = "Total";
+        creditNoteReason = string.Empty;
+        selectedInvoiceLines.Clear();
+        selectedCreditNotes.Clear();
+
+        if (selectedIssuedInvoice is null)
+        {
+            draftSummary = new CreditNoteDraftSummary();
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadCreditNotesAsync(dbContext, comprobanteId);
+        await LoadInvoiceLinesAsync(dbContext, comprobanteId);
+        RecalculateDraftSummary();
+    }
+
+    private async Task LoadInvoiceLinesAsync(OpticaDbContext dbContext, int comprobanteId)
+    {
+        var lineCredits = await (
+            from detail in dbContext.tbl_detalle_nota_credito.AsNoTracking()
+            join note in dbContext.tbl_nota_credito.AsNoTracking() on detail.id_nota_credito equals note.id_nota_credito
+            where note.id_comprobante_relacionado == comprobanteId && note.estado == "Emitida"
+            group detail by detail.id_detalle_venta into creditGroup
+            select new
+            {
+                DetailSaleId = creditGroup.Key,
+                CreditedQuantity = creditGroup.Sum(x => x.cantidad_acreditada ?? 0),
+                CreditedSubtotal = creditGroup.Sum(x => x.monto_subtotal)
+            })
+            .ToDictionaryAsync(x => x.DetailSaleId, x => new { x.CreditedQuantity, x.CreditedSubtotal });
+
+        var lines = await (
+            from comprobante in dbContext.tbl_comprobantes.AsNoTracking()
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join line in dbContext.tbl_detalle_venta.AsNoTracking() on sale.id_venta equals line.id_venta
+            join product in dbContext.tbl_productos.AsNoTracking() on line.id_producto equals product.id_producto
+            where comprobante.id_comprobante == comprobanteId
+            orderby line.id_detalle_venta
+            select new
+            {
+                line.id_detalle_venta,
+                ProductCode = product.codigo_producto,
+                Concept = string.IsNullOrWhiteSpace(line.concepto_item) ? product.nombre_producto : line.concepto_item!,
+                TaxRate = (product.tiene_iva ?? false) ? (product.porcentaje_iva ?? 0m) : 0m,
+                Quantity = line.cantidad,
+                Subtotal = line.total_item ?? 0m
+            })
+            .ToListAsync();
+
+        selectedInvoiceLines.Clear();
+        foreach (var line in lines)
+        {
+            var creditedQuantity = lineCredits.TryGetValue(line.id_detalle_venta, out var creditInfo) ? creditInfo.CreditedQuantity : 0;
+            var creditedSubtotal = lineCredits.TryGetValue(line.id_detalle_venta, out creditInfo) ? creditInfo.CreditedSubtotal : 0m;
+            var availableQuantity = Math.Max(0, line.Quantity - creditedQuantity);
+            var availableSubtotal = Math.Max(0m, line.Subtotal - creditedSubtotal);
+
+            selectedInvoiceLines.Add(new InvoiceCreditLineRow
+            {
+                DetailSaleId = line.id_detalle_venta,
+                ProductCode = line.ProductCode ?? string.Empty,
+                Concept = line.Concept,
+                TaxRate = line.TaxRate,
+                OriginalQuantity = line.Quantity,
+                OriginalSubtotal = line.Subtotal,
+                CreditedQuantity = creditedQuantity,
+                CreditedSubtotal = creditedSubtotal,
+                AvailableQuantity = availableQuantity,
+                AvailableSubtotal = availableSubtotal
+            });
+        }
+    }
+
+    private async Task LoadCreditNotesAsync(OpticaDbContext dbContext, int comprobanteId)
+    {
+        var rows = await dbContext.tbl_nota_credito
+            .AsNoTracking()
+            .Where(x => x.id_comprobante_relacionado == comprobanteId)
+            .OrderByDescending(x => x.fecha_emision)
+            .ThenByDescending(x => x.id_nota_credito)
+            .Select(x => new CreditNoteRow
+            {
+                CreditNoteId = x.id_nota_credito,
+                NoteNumber = x.numero_nota,
+                IssueDate = x.fecha_emision,
+                NoteType = string.IsNullOrWhiteSpace(x.tipo_nota) ? "Total" : x.tipo_nota,
+                Amount = x.monto_total,
+                State = x.estado,
+                Reason = string.IsNullOrWhiteSpace(x.motivo) ? "Sin motivo" : x.motivo!,
+                UserLabel = string.IsNullOrWhiteSpace(x.usuario_creacion) ? "Sistema" : x.usuario_creacion!
+            })
+            .ToListAsync();
+
+        selectedCreditNotes.Clear();
+        selectedCreditNotes.AddRange(rows);
+    }
+
+    private async Task LoadCreditNoteDetailAsync(OpticaDbContext dbContext, int creditNoteId)
+    {
+        var header = await (
+            from note in dbContext.tbl_nota_credito.AsNoTracking()
+            join comprobante in dbContext.tbl_comprobantes.AsNoTracking() on note.id_comprobante_relacionado equals comprobante.id_comprobante
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join client in dbContext.clients.AsNoTracking() on sale.id_cliente_facturacion equals client.cliente_id
+            join patient in dbContext.tbl_pacientes.AsNoTracking() on sale.id_paciente equals patient.id_paciente into patientJoin
+            from patient in patientJoin.DefaultIfEmpty()
+            where note.id_nota_credito == creditNoteId
+               && (currentRoleId == 1 || client.id_usuario_creacion == currentUserId)
+            select new
+            {
+                note.id_nota_credito,
+                comprobante.id_comprobante,
+                InvoiceNumber = comprobante.numero_comprobante,
+                note.numero_nota,
+                note.fecha_emision,
+                note.tipo_nota,
+                note.estado,
+                note.monto_total,
+                note.motivo,
+                ClientName = string.IsNullOrWhiteSpace(client.razon_social) ? $"{client.nombres} {client.apellidos}".Trim() : client.razon_social,
+                PatientName = patient != null ? $"{patient.nombres} {patient.apellidos}".Trim() : "Sin dato",
+                CurrentInvoiceTotal = sale.total ?? 0m
+            })
+            .FirstOrDefaultAsync();
+
+        if (header is null)
+        {
+            selectedCreditNoteDetail = null;
+            return;
+        }
+
+        var detailRows = await (
+            from detail in dbContext.tbl_detalle_nota_credito.AsNoTracking()
+            join line in dbContext.tbl_detalle_venta.AsNoTracking() on detail.id_detalle_venta equals line.id_detalle_venta
+            join product in dbContext.tbl_productos.AsNoTracking() on line.id_producto equals product.id_producto
+            where detail.id_nota_credito == creditNoteId
+            orderby detail.id_detalle_nota_credito
+            select new CreditNoteDetailLineView
+            {
+                ProductCode = product.codigo_producto,
+                Concept = string.IsNullOrWhiteSpace(detail.descripcion_item)
+                    ? (string.IsNullOrWhiteSpace(line.concepto_item) ? product.nombre_producto : line.concepto_item!)
+                    : detail.descripcion_item!,
+                TaxRate = detail.porcentaje_impuesto ?? ((product.tiene_iva ?? false) ? (product.porcentaje_iva ?? 0m) : 0m),
+                Quantity = detail.cantidad_acreditada,
+                Subtotal = detail.monto_subtotal,
+                Tax = detail.monto_impuesto,
+                Total = detail.monto_total
+            })
+            .ToListAsync();
+
+        var subtotalAmount = detailRows.Sum(x => x.Subtotal);
+        var taxAmount = detailRows.Sum(x => x.Tax);
+
+        selectedCreditNoteDetail = new CreditNoteDetailView
+        {
+            CreditNoteId = header.id_nota_credito,
+            ComprobanteId = header.id_comprobante,
+            NoteNumber = header.numero_nota,
+            InvoiceNumber = header.InvoiceNumber ?? $"Factura #{header.id_comprobante}",
+            ClientName = string.IsNullOrWhiteSpace(header.ClientName) ? "Sin dato" : header.ClientName,
+            PatientName = string.IsNullOrWhiteSpace(header.PatientName) ? "Sin dato" : header.PatientName,
+            IssueDate = header.fecha_emision,
+            NoteType = string.IsNullOrWhiteSpace(header.tipo_nota) ? "Total" : header.tipo_nota!,
+            State = header.estado,
+            Reason = string.IsNullOrWhiteSpace(header.motivo) ? "Sin motivo" : header.motivo!,
+            TotalAmount = header.monto_total,
+            SubtotalAmount = subtotalAmount,
+            TaxAmount = taxAmount,
+            InvoiceState = ResolveInvoiceCreditState(header.CurrentInvoiceTotal, header.monto_total),
+            Details = detailRows
+        };
+    }
+
+    private async Task<int?> ResolveInvoiceIdByCreditNoteAsync(OpticaDbContext dbContext, int creditNoteId)
+    {
+        return await (
+            from note in dbContext.tbl_nota_credito.AsNoTracking()
+            join comprobante in dbContext.tbl_comprobantes.AsNoTracking() on note.id_comprobante_relacionado equals comprobante.id_comprobante
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            join client in dbContext.clients.AsNoTracking() on sale.id_cliente_facturacion equals client.cliente_id
+            where note.id_nota_credito == creditNoteId
+               && (currentRoleId == 1 || client.id_usuario_creacion == currentUserId)
+            select (int?)comprobante.id_comprobante)
+            .FirstOrDefaultAsync();
+    }
+
+    private void SetCreditNoteType(string type)
+    {
+        creditNoteType = type;
+        ResetLineEditors();
+        RecalculateDraftSummary();
+    }
+
+    private void ResetLineEditors()
+    {
+        foreach (var line in selectedInvoiceLines)
+        {
+            line.QuantityToCredit = 0;
+            line.SubtotalToCredit = 0m;
+        }
+    }
+
+    private void RecalculateDraftSummary()
+    {
+        draftSummary = BuildDraftSummary();
+    }
+
+    private CreditNoteDraftSummary BuildDraftSummary()
+    {
+        if (selectedIssuedInvoice is null)
+        {
+            return new CreditNoteDraftSummary();
+        }
+
+        if (creditNoteType == "Total")
+        {
+            return new CreditNoteDraftSummary
+            {
+                Subtotal = selectedIssuedInvoice.CurrentSubtotal,
+                Tax = selectedIssuedInvoice.CurrentTax,
+                Total = selectedIssuedInvoice.CurrentTotal
+            };
+        }
+
+        var summary = new CreditNoteDraftSummary();
+        foreach (var line in selectedInvoiceLines)
+        {
+            if (!TryBuildPartialAllocation(line, out var allocation, out _))
+            {
+                continue;
+            }
+
+            summary.Subtotal += allocation.Subtotal;
+            summary.Tax += allocation.Tax;
+            summary.Total += allocation.Total;
+        }
+
+        summary.Subtotal = Math.Round(summary.Subtotal, 2, MidpointRounding.AwayFromZero);
+        summary.Tax = Math.Round(summary.Tax, 2, MidpointRounding.AwayFromZero);
+        summary.Total = Math.Round(summary.Total, 2, MidpointRounding.AwayFromZero);
+        return summary;
+    }
+
+    private string PredictInvoiceStateAfterDraft()
+    {
+        if (selectedIssuedInvoice is null)
+        {
+            return "Vigente";
+        }
+
+        var remaining = Math.Max(0m, selectedIssuedInvoice.CurrentTotal - draftSummary.Total);
+        return ResolveInvoiceCreditState(remaining, selectedIssuedInvoice.TotalCredited + draftSummary.Total);
+    }
+
+    private async Task ApplySearchAsync()
+    {
+        await LoadAsync(selectedIssuedInvoice?.ComprobanteId);
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        searchInvoiceNumber = string.Empty;
+        searchClient = string.Empty;
+        searchIdentifier = string.Empty;
+        searchIssueDate = null;
+        await LoadAsync(selectedIssuedInvoice?.ComprobanteId);
+    }
+
+    private async Task SaveCreditNoteAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+        RecalculateDraftSummary();
+
+        if (!canEditModule || selectedIssuedInvoice is null)
+        {
+            return;
+        }
+
+        creditNoteReason = creditNoteReason.Trim();
+        if (string.IsNullOrWhiteSpace(creditNoteReason))
+        {
+            errorMessage = "Ingresa el motivo de la nota de credito.";
+            return;
+        }
+
+        if (draftSummary.Total <= 0m)
+        {
+            errorMessage = creditNoteType == "Total"
+                ? "La factura ya no tiene saldo disponible para acreditar."
+                : "Selecciona al menos un item, cantidad o valor para acreditar.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var invoice = await (
+            from comprobante in dbContext.tbl_comprobantes
+            join sale in dbContext.tbl_venta on comprobante.id_venta equals sale.id_venta
+            join client in dbContext.clients on sale.id_cliente_facturacion equals client.cliente_id
+            join account in dbContext.tbl_cta_cobrar on comprobante.id_comprobante equals account.id_comprobante into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            where comprobante.id_comprobante == selectedIssuedInvoice.ComprobanteId
+               && comprobante.tipo_comprobante == "Factura"
+               && (currentRoleId == 1 || client.id_usuario_creacion == currentUserId)
+            select new
+            {
+                comprobante,
+                sale,
+                client,
+                account
+            })
+            .FirstOrDefaultAsync();
+
+        if (invoice is null)
+        {
+            errorMessage = "La factura seleccionada ya no esta disponible.";
+            return;
+        }
+
+        var currentSubtotal = invoice.sale.subtotal ?? 0m;
+        var currentTax = invoice.sale.impuesto_total ?? 0m;
+        var currentTotal = invoice.sale.total ?? 0m;
+        if (draftSummary.Total > currentTotal + 0.01m)
+        {
+            errorMessage = "La nota de credito no puede superar el valor facturado disponible.";
+            return;
+        }
+
+        List<CreditAllocation> allocations;
+        if (creditNoteType == "Total")
+        {
+            allocations = BuildTotalAllocations(selectedInvoiceLines, currentSubtotal, currentTax);
+        }
+        else
+        {
+            var partialAllocations = new List<CreditAllocation>();
+            foreach (var line in selectedInvoiceLines)
+            {
+                if (!TryBuildPartialAllocation(line, out var allocation, out var allocationError))
+                {
+                    if (!string.IsNullOrWhiteSpace(allocationError))
+                    {
+                        errorMessage = allocationError;
+                        return;
+                    }
+
+                    continue;
+                }
+
+                partialAllocations.Add(allocation);
+            }
+
+            allocations = partialAllocations;
+        }
+
+        if (allocations.Count == 0)
+        {
+            errorMessage = "No se pudo construir el detalle de la nota de credito.";
+            return;
+        }
+
+        var subtotalToCredit = Math.Round(allocations.Sum(x => x.Subtotal), 2, MidpointRounding.AwayFromZero);
+        var taxToCredit = Math.Round(allocations.Sum(x => x.Tax), 2, MidpointRounding.AwayFromZero);
+        var totalToCredit = Math.Round(allocations.Sum(x => x.Total), 2, MidpointRounding.AwayFromZero);
+        if (subtotalToCredit > currentSubtotal + 0.01m || taxToCredit > currentTax + 0.01m || totalToCredit > currentTotal + 0.01m)
+        {
+            errorMessage = "La nota de credito excede los valores vigentes de la factura.";
+            return;
+        }
+
+        var noteNumber = await GenerateNextCreditNoteNumberAsync(dbContext);
+        var previousCollected = invoice.sale.valor_cobrado ?? 0m;
+        var updatedSubtotal = Math.Max(0m, currentSubtotal - subtotalToCredit);
+        var updatedTax = Math.Max(0m, currentTax - taxToCredit);
+        var updatedTotal = Math.Max(0m, currentTotal - totalToCredit);
+        var updatedCollected = Math.Min(previousCollected, updatedTotal);
+        var updatedBalance = Math.Max(0m, updatedTotal - updatedCollected);
+
+        invoice.sale.subtotal = updatedSubtotal;
+        invoice.sale.impuesto_total = updatedTax;
+        invoice.sale.total = updatedTotal;
+        invoice.sale.valor_cobrado = updatedCollected;
+        invoice.sale.saldo_pendiente = updatedBalance;
+        invoice.sale.porcentaje_impuesto = updatedSubtotal > 0m
+            ? Math.Round((updatedTax * 100m) / updatedSubtotal, 2, MidpointRounding.AwayFromZero)
+            : 0m;
+        invoice.sale.estado = updatedBalance > 0m ? "Credito" : "Facturada";
+
+        if (invoice.account is not null)
+        {
+            invoice.account.monto_total = updatedTotal;
+            invoice.account.saldo = Math.Min(updatedTotal, updatedBalance);
+            invoice.account.estado = invoice.account.saldo <= 0m ? "Pagada" : "Pendiente";
+        }
+
+        var note = new tbl_nota_credito
+        {
+            id_comprobante_relacionado = invoice.comprobante.id_comprobante,
+            id_cta_cobrar = invoice.account?.id_cta_cobrar,
+            numero_nota = noteNumber,
+            fecha_emision = DateTime.Now,
+            monto_total = totalToCredit,
+            tipo_nota = creditNoteType,
+            motivo = NormalizeOptional(creditNoteReason),
+            estado = "Emitida",
+            usuario_creacion = GetCurrentActorLabel(),
+            fecha_creacion = DateTime.Now
+        };
+
+        var currentAccountId = invoice.account?.id_cta_cobrar ?? 0;
+        var clientBalance = await dbContext.tbl_cta_cobrar
+            .Where(x => x.id_cliente == invoice.client.cliente_id && x.estado == "Pendiente" && x.id_cta_cobrar != currentAccountId)
+            .Select(x => x.saldo)
+            .DefaultIfEmpty(0m)
+            .SumAsync();
+
+        if (invoice.account is not null && invoice.account.estado == "Pendiente")
+        {
+            clientBalance += invoice.account.saldo;
+        }
+
+        invoice.client.saldo_deudor = clientBalance;
+        invoice.client.condicion_pago = clientBalance > 0m ? "Credito" : "Contado";
+        invoice.client.dias_plazo = clientBalance > 0m ? Math.Max(invoice.client.dias_plazo, invoice.sale.dias_credito ?? 0) : 0;
+        invoice.client.fecha_actualizacion = DateTime.Now;
+        invoice.client.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : invoice.client.id_usuario_actualizacion;
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+        dbContext.tbl_nota_credito.Add(note);
+        await dbContext.SaveChangesAsync();
+
+        foreach (var allocation in allocations)
+        {
+            dbContext.tbl_detalle_nota_credito.Add(new tbl_detalle_nota_credito
+            {
+                id_nota_credito = note.id_nota_credito,
+                id_detalle_venta = allocation.DetailSaleId,
+                cantidad_acreditada = allocation.QuantityToCredit,
+                monto_subtotal = allocation.Subtotal,
+                monto_impuesto = allocation.Tax,
+                monto_total = allocation.Total,
+                porcentaje_impuesto = allocation.TaxRate,
+                descripcion_item = allocation.Concept,
+                fecha_creacion = DateTime.Now
+            });
+        }
+
+        WriteAudit(
+            dbContext,
+            "NotasCredito",
+            "Emitir nota de credito",
+            $"ComprobanteId={invoice.comprobante.id_comprobante}; VentaId={invoice.sale.id_venta}; CuentaId={invoice.account?.id_cta_cobrar}; Factura={invoice.comprobante.numero_comprobante}; Nota={note.numero_nota}; Tipo={note.tipo_nota}; Monto={note.monto_total:0.00}");
+
+        await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        creditNoteReason = string.Empty;
+        ResetLineEditors();
+        statusMessage = $"Nota de credito {note.numero_nota} emitida correctamente.";
+        NavigationManager.NavigateTo(BuildCreditNoteDetailUrl(note.id_nota_credito, invoice.comprobante.id_comprobante), forceLoad: false);
+    }
+
+    private List<CreditAllocation> BuildTotalAllocations(List<InvoiceCreditLineRow> lines, decimal invoiceSubtotal, decimal invoiceTax)
+    {
+        var candidates = lines
+            .Where(x => x.OriginalSubtotal > 0m)
+            .Select(x => new
+            {
+                Line = x,
+                Weight = x.AvailableSubtotal > 0m ? x.AvailableSubtotal : x.OriginalSubtotal
+            })
+            .Where(x => x.Weight > 0m)
+            .ToList();
+
+        var allocations = new List<CreditAllocation>();
+        if (candidates.Count == 0 || invoiceSubtotal <= 0m)
+        {
+            return allocations;
+        }
+
+        var totalWeight = candidates.Sum(x => x.Weight);
+        var subtotalRemaining = invoiceSubtotal;
+        var taxRemaining = invoiceTax;
+
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            var isLast = index == candidates.Count - 1;
+            var subtotal = isLast
+                ? subtotalRemaining
+                : Math.Round(invoiceSubtotal * (candidate.Weight / totalWeight), 2, MidpointRounding.AwayFromZero);
+            var tax = isLast
+                ? taxRemaining
+                : Math.Round(subtotal * (candidate.Line.TaxRate / 100m), 2, MidpointRounding.AwayFromZero);
+
+            subtotal = Math.Max(0m, subtotal);
+            tax = Math.Max(0m, tax);
+            subtotalRemaining = Math.Max(0m, subtotalRemaining - subtotal);
+            taxRemaining = Math.Max(0m, taxRemaining - tax);
+
+            allocations.Add(new CreditAllocation
+            {
+                DetailSaleId = candidate.Line.DetailSaleId,
+                Concept = candidate.Line.Concept,
+                TaxRate = candidate.Line.TaxRate,
+                QuantityToCredit = candidate.Line.AvailableQuantity > 0 ? candidate.Line.AvailableQuantity : candidate.Line.OriginalQuantity,
+                Subtotal = subtotal,
+                Tax = tax,
+                Total = Math.Round(subtotal + tax, 2, MidpointRounding.AwayFromZero)
+            });
+        }
+
+        return allocations.Where(x => x.Total > 0m).ToList();
+    }
+
+    private bool TryBuildPartialAllocation(InvoiceCreditLineRow line, out CreditAllocation allocation, out string? error)
+    {
+        allocation = new CreditAllocation();
+        error = null;
+
+        var requestedQuantity = Math.Max(0, line.QuantityToCredit);
+        var requestedSubtotal = Math.Round(Math.Max(0m, line.SubtotalToCredit), 2, MidpointRounding.AwayFromZero);
+        if (requestedQuantity <= 0 && requestedSubtotal <= 0m)
+        {
+            return false;
+        }
+
+        if (requestedQuantity > 0 && requestedSubtotal > 0m)
+        {
+            error = $"En la linea '{line.Concept}' ingresa cantidad o valor, pero no ambos al mismo tiempo.";
+            return false;
+        }
+
+        if (requestedQuantity > line.AvailableQuantity)
+        {
+            error = $"La cantidad a acreditar en '{line.Concept}' supera la cantidad facturada disponible.";
+            return false;
+        }
+
+        if (requestedSubtotal > line.AvailableSubtotal)
+        {
+            error = $"El valor a acreditar en '{line.Concept}' supera el subtotal disponible.";
+            return false;
+        }
+
+        decimal subtotal;
+        if (requestedQuantity > 0)
+        {
+            var unitSubtotal = line.OriginalQuantity > 0
+                ? Math.Round(line.OriginalSubtotal / line.OriginalQuantity, 2, MidpointRounding.AwayFromZero)
+                : 0m;
+            subtotal = requestedQuantity == line.AvailableQuantity
+                ? line.AvailableSubtotal
+                : Math.Round(unitSubtotal * requestedQuantity, 2, MidpointRounding.AwayFromZero);
+        }
+        else
+        {
+            subtotal = requestedSubtotal;
+        }
+
+        subtotal = Math.Min(subtotal, line.AvailableSubtotal);
+        var tax = Math.Round(subtotal * (line.TaxRate / 100m), 2, MidpointRounding.AwayFromZero);
+        allocation = new CreditAllocation
+        {
+            DetailSaleId = line.DetailSaleId,
+            Concept = line.Concept,
+            TaxRate = line.TaxRate,
+            QuantityToCredit = requestedQuantity > 0 ? requestedQuantity : null,
+            Subtotal = subtotal,
+            Tax = tax,
+            Total = Math.Round(subtotal + tax, 2, MidpointRounding.AwayFromZero)
+        };
+
+        return allocation.Total > 0m;
+    }
+
+    private async Task<string> GenerateNextCreditNoteNumberAsync(OpticaDbContext dbContext)
+    {
+        var nextSequence = (await dbContext.tbl_nota_credito.MaxAsync(x => (int?)x.id_nota_credito) ?? 0) + 1;
+        return $"NC-{nextSequence:D9}";
+    }
+
+    private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId <= 0)
+        {
+            return new ModulePermissions();
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(x => x.id_rol == roleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/my-credit-notes"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission is null
+            ? new ModulePermissions()
+            : new ModulePermissions
+            {
+                CanView = permission.puede_ver,
+                CanCreate = permission.puede_crear,
+                CanEdit = permission.puede_editar,
+                CanDelete = permission.puede_eliminar
+            };
+    }
+
+    private string GetCurrentActorLabel() => $"USER_{currentUserId}";
+
+    private void WriteAudit(OpticaDbContext dbContext, string module, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = module,
+            fecha = DateTime.Now,
+            detalle = detail
+        });
+    }
+
+    private string BuildCreditNoteDetailUrl(int creditNoteId, int? comprobanteId)
+    {
+        return comprobanteId.HasValue
+            ? $"/my-credit-notes/{creditNoteId}?invoice={comprobanteId.Value}"
+            : $"/my-credit-notes/{creditNoteId}";
+    }
+
+    private string BuildInvoiceManagementUrl(int comprobanteId) => $"/my-credit-notes?invoice={comprobanteId}";
+
+    private static string ResolveInvoiceCreditState(decimal currentTotal, decimal totalCredited)
+    {
+        if (currentTotal <= 0.009m)
+        {
+            return "Totalmente acreditada";
+        }
+
+        return totalCredited > 0m ? "Parcialmente acreditada" : "Vigente";
+    }
+
+    private static string GetDisplayClientName(string? businessName, string? firstName, string? lastName)
+    {
+        if (!string.IsNullOrWhiteSpace(businessName))
+        {
+            return businessName.Trim();
+        }
+
+        return GetDisplayPersonName(firstName, lastName);
+    }
+
+    private static string GetDisplayPersonName(string? firstName, string? lastName)
+    {
+        var fullName = $"{firstName} {lastName}".Trim();
+        return string.IsNullOrWhiteSpace(fullName) ? "Sin dato" : fullName;
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private sealed class ModulePermissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class IssuedInvoiceRow
+    {
+        public int ComprobanteId { get; set; }
+        public int SaleId { get; set; }
+        public int AccountId { get; set; }
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string PatientName { get; set; } = "Sin dato";
+        public string IdentifierLabel { get; set; } = string.Empty;
+        public DateTime IssueDate { get; set; }
+        public string SaleState { get; set; } = "Facturada";
+        public decimal CurrentSubtotal { get; set; }
+        public decimal CurrentTax { get; set; }
+        public decimal CurrentTotal { get; set; }
+        public decimal CollectedAmount { get; set; }
+        public decimal Balance { get; set; }
+        public decimal TotalCredited { get; set; }
+        public string InvoiceCreditState { get; set; } = "Vigente";
+        public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private sealed class InvoiceCreditLineRow
+    {
+        public int DetailSaleId { get; set; }
+        public string ProductCode { get; set; } = string.Empty;
+        public string Concept { get; set; } = string.Empty;
+        public decimal TaxRate { get; set; }
+        public int OriginalQuantity { get; set; }
+        public decimal OriginalSubtotal { get; set; }
+        public int CreditedQuantity { get; set; }
+        public decimal CreditedSubtotal { get; set; }
+        public int AvailableQuantity { get; set; }
+        public decimal AvailableSubtotal { get; set; }
+        public int QuantityToCredit { get; set; }
+        public decimal SubtotalToCredit { get; set; }
+        public string TaxLabel => TaxRate > 0m ? $"{TaxRate:0.##}%" : "No";
+    }
+
+    private sealed class CreditNoteDraftSummary
+    {
+        public decimal Subtotal { get; set; }
+        public decimal Tax { get; set; }
+        public decimal Total { get; set; }
+    }
+
+    private sealed class CreditAllocation
+    {
+        public int DetailSaleId { get; set; }
+        public string Concept { get; set; } = string.Empty;
+        public decimal TaxRate { get; set; }
+        public int? QuantityToCredit { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal Tax { get; set; }
+        public decimal Total { get; set; }
+    }
+
+    private sealed class CreditNoteRow
+    {
+        public int CreditNoteId { get; set; }
+        public string NoteNumber { get; set; } = string.Empty;
+        public DateTime IssueDate { get; set; }
+        public string NoteType { get; set; } = "Total";
+        public decimal Amount { get; set; }
+        public string State { get; set; } = "Emitida";
+        public string Reason { get; set; } = "Sin motivo";
+        public string UserLabel { get; set; } = "Sistema";
+        public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private sealed class RecentCreditNoteRow
+    {
+        public int CreditNoteId { get; set; }
+        public int ComprobanteId { get; set; }
+        public string NoteNumber { get; set; } = string.Empty;
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public DateTime IssueDate { get; set; }
+        public string NoteType { get; set; } = "Total";
+        public decimal Amount { get; set; }
+        public string State { get; set; } = "Emitida";
+        public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private sealed class CreditNoteDetailView
+    {
+        public int CreditNoteId { get; set; }
+        public int ComprobanteId { get; set; }
+        public string NoteNumber { get; set; } = string.Empty;
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public string ClientName { get; set; } = string.Empty;
+        public string PatientName { get; set; } = "Sin dato";
+        public DateTime IssueDate { get; set; }
+        public string NoteType { get; set; } = "Total";
+        public string State { get; set; } = "Emitida";
+        public string Reason { get; set; } = "Sin motivo";
+        public decimal SubtotalAmount { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string InvoiceState { get; set; } = "Vigente";
+        public List<CreditNoteDetailLineView> Details { get; set; } = [];
+        public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private sealed class CreditNoteDetailLineView
+    {
+        public string ProductCode { get; set; } = string.Empty;
+        public string Concept { get; set; } = string.Empty;
+        public decimal TaxRate { get; set; }
+        public int? Quantity { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal Tax { get; set; }
+        public decimal Total { get; set; }
+        public string TaxLabel => TaxRate > 0m ? $"{TaxRate:0.##}%" : "No";
+        public string QuantityLabel => Quantity.HasValue && Quantity.Value > 0 ? Quantity.Value.ToString() : "-";
+    }
+}

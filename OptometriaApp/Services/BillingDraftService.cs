@@ -181,14 +181,14 @@ public sealed class BillingDraftService
             return draft;
         }
 
-        if (!patientId.HasValue || patientId.Value <= 0)
+        if ((!patientId.HasValue || patientId.Value <= 0) && (!clientId.HasValue || clientId.Value <= 0))
         {
-            throw new InvalidOperationException("Se requiere al menos un paciente para iniciar un nuevo borrador de factura.");
+            throw new InvalidOperationException("Se requiere al menos un cliente o un paciente para iniciar un nuevo borrador de factura.");
         }
 
         draft = new tbl_venta
         {
-            id_paciente = patientId.Value,
+            id_paciente = patientId.HasValue && patientId.Value > 0 ? patientId.Value : 0,
             id_usuario = actorUserId,
             id_cliente_facturacion = clientId,
             fecha_venta = DateTime.Now,
@@ -200,7 +200,9 @@ public sealed class BillingDraftService
             valor_cobrado = 0,
             saldo_pendiente = 0,
             estado = "Pendiente",
-            concepto = "Pendientes de facturacion",
+            concepto = patientId.HasValue && patientId.Value > 0
+                ? "Pendientes de facturacion"
+                : "Factura de mostrador",
             forma_pago = "Efectivo",
             dias_credito = 0
         };
@@ -250,10 +252,39 @@ public sealed class BillingDraftService
         sale.saldo_pendiente = Math.Max(0m, total - collected);
     }
 
-    public async Task<string> GenerateNextInvoiceNumberAsync(OpticaDbContext dbContext)
+    public async Task<long> GenerateNextInvoiceSequenceAsync(OpticaDbContext dbContext, EmisorEntity issuer)
     {
-        var nextSequence = (await dbContext.tbl_comprobantes.MaxAsync(x => (long?)x.secuencial) ?? 0) + 1;
-        return nextSequence.ToString("D9");
+        var nextSequence = (await GetLastInvoiceSequenceAsync(dbContext, issuer) ?? 0) + 1;
+
+        return nextSequence;
+    }
+
+    public async Task<long?> GetLastInvoiceSequenceAsync(OpticaDbContext dbContext, EmisorEntity issuer)
+    {
+        var prefix = GetInvoicePrefix(issuer);
+        return await dbContext.tbl_comprobantes
+            .Where(x =>
+                x.tipo_comprobante == "Factura" &&
+                x.id_emisor == issuer.emisor_id &&
+                x.numero_comprobante != null &&
+                x.numero_comprobante.StartsWith(prefix + "-"))
+            .MaxAsync(x => (long?)x.secuencial);
+    }
+
+    public async Task<string> GenerateNextInvoiceNumberAsync(OpticaDbContext dbContext, EmisorEntity issuer)
+    {
+        var nextSequence = await GenerateNextInvoiceSequenceAsync(dbContext, issuer);
+        return BuildInvoiceNumber(issuer, nextSequence);
+    }
+
+    public static string BuildInvoiceNumber(EmisorEntity issuer, long sequence)
+    {
+        return $"{GetInvoicePrefix(issuer)}-{sequence:D9}";
+    }
+
+    public static string GetInvoicePrefix(EmisorEntity issuer)
+    {
+        return $"{NormalizeEmissionCode(issuer.establecimiento_codigo)}-{NormalizeEmissionCode(issuer.punto_emision_codigo)}";
     }
 
     private async Task EnsureSourceLineAsync(
@@ -364,5 +395,16 @@ public sealed class BillingDraftService
             10 => "05",
             _ => "06"
         };
+    }
+
+    private static string NormalizeEmissionCode(string? value)
+    {
+        var digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length == 0)
+        {
+            return "000";
+        }
+
+        return digits.Length >= 3 ? digits[^3..] : digits.PadLeft(3, '0');
     }
 }

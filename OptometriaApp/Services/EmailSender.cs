@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
 using Microsoft.Extensions.Options;
 using OptometriaApp.Configuration;
 
@@ -96,6 +97,41 @@ Si necesitas reprogramarla o cancelarla, ingresa al sistema cuanto antes.
         };
 
         message.To.Add(destinationEmail);
+
+        using var client = new SmtpClient(settings.Host, settings.Port)
+        {
+            EnableSsl = settings.EnableSsl,
+            Credentials = new NetworkCredential(settings.UserName, settings.Password)
+        };
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await client.SendMailAsync(message);
+    }
+
+    public async Task SendAccountStatementAsync(
+        string destinationEmail,
+        string destinationName,
+        string subject,
+        string body,
+        string attachmentFileName,
+        byte[] pdfBytes,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured())
+        {
+            throw new InvalidOperationException("SMTP no configurado. Completa la seccion Smtp en appsettings.json.");
+        }
+
+        using var message = new MailMessage
+        {
+            From = new MailAddress(settings.FromAddress, settings.FromName),
+            Subject = subject,
+            Body = body,
+            IsBodyHtml = false
+        };
+
+        message.To.Add(destinationEmail);
+        message.Attachments.Add(new Attachment(new MemoryStream(pdfBytes), attachmentFileName, MediaTypeNames.Application.Pdf));
 
         using var client = new SmtpClient(settings.Host, settings.Port)
         {
