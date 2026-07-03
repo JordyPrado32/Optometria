@@ -1,14 +1,18 @@
-﻿@page "/register"
+@page "/register"
 @layout AuthLayout
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JS
 
 <PageTitle>Registro</PageTitle>
 
 <div class="auth-shell">
     <section class="auth-panel auth-panel-brand">
+        <div class="wave-divider">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path d="M 80,0 C 55,15 45,35 55,55 C 65,75 75,85 80,100 L 100,100 L 100,0 Z" fill="#F4F0E4" />
+            </svg>
+        </div>
     </section>
 
     <section class="auth-panel auth-panel-form">
@@ -16,21 +20,19 @@
             <div class="auth-heading">
                 <span class="eyebrow">Registro</span>
                 <h2>Crear cuenta</h2>
-                <p>Despues del registro entraras directo a la configuracion de 2 factores.</p>
+                <p>Completa tus datos y define una contrasena segura para entrar al sistema.</p>
             </div>
 
-            <div class="avatar-builder-container" style="background: #ffffff; padding: 25px; border-radius: 16px; margin: 15px 0 25px 0; border: 1px solid #edf2f7; text-align: center; font-family: system-ui, sans-serif; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01), 0 2px 4px -1px rgba(0,0,0,0.01);">
-
-                <div style="position: relative; display: inline-block;">
-                    <img src="/images/avatars/@ObtenerNombreImagen()"
-                         style="width: 110px; height: 110px; border-radius: 50%; border: 3px solid #68D391; padding: 4px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); object-fit: cover;" alt="Avatar Perfil" />
+            <div class="auth-avatar-card">
+                <div class="auth-avatar-preview">
+                    <img src="/images/avatars/@ObtenerNombreImagen()" alt="Avatar de perfil" />
                 </div>
 
-                <button type="button" @onclick="AbrirSeleccionador"
-                        style="display: block; margin: 14px auto 0 auto; padding: 7px 18px; font-size: 12px; font-weight: 600; color: #4a5568; background: #edf2f7; border: 1px solid #cbd5e1; border-radius: 20px; cursor: pointer; transition: 0.2s;">
-                    🔄 Cambiar Personalización
+                <button type="button" class="btn btn-outline-primary auth-avatar-trigger" @onclick="AbrirSeleccionador">
+                    Personalizar avatar
                 </button>
             </div>
+
             @if (!string.IsNullOrWhiteSpace(Error))
             {
                 <div class="alert alert-danger" role="alert">@Error</div>
@@ -42,55 +44,76 @@
             </div>
 
             <form method="post" action="/auth/register" class="auth-form">
-                <input type="hidden" name="avatar_url" id="avatar_url_hidden" value="@ObtenerNombreImagen()" />
+                <input type="hidden" name="avatar_url" value="@ObtenerNombreImagen()" />
 
                 <div class="auth-grid">
-                    <div>
+                    <div class="form-group">
                         <label class="form-label" for="nombres">Nombres</label>
-                        <input id="nombres" name="nombres" class="form-control" required />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="apellidos">Apellidos</label>
-                        <input id="apellidos" name="apellidos" class="form-control" required />
-                    </div>
-                </div>
-
-                <div class="auth-grid">
-                    <div>
-                        <label class="form-label" for="email">Correo</label>
-                        <input id="email" name="email" type="email" class="form-control" required />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="telefono">Telefono</label>
-                        <input id="telefono" name="telefono" class="form-control" />
-                    </div>
-                </div>
-
-                <div>
-                    <label class="form-label" for="usuario">Usuario</label>
-                    <input id="usuario" name="usuario" class="form-control" required />
-                </div>
-
-                <div class="auth-grid">
-                    <div>
-                        <label class="form-label" for="password">Contrasena</label>
-                        <div class="password-field">
-                            <input id="password" name="password" type="@(showPassword ? "text" : "password")" class="form-control" required />
-                            <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
-                                @(showPassword ? "Ocultar" : "Mostrar")
-                            </button>
+                        <div class="input-with-icon">
+                            <i class="bi bi-person-vcard"></i>
+                            <input id="nombres" name="nombres" class="form-control" placeholder="Tus nombres" autocomplete="given-name" required />
                         </div>
                     </div>
 
-                    <div>
+                    <div class="form-group">
+                        <label class="form-label" for="apellidos">Apellidos</label>
+                        <div class="input-with-icon">
+                            <i class="bi bi-person-vcard-fill"></i>
+                            <input id="apellidos" name="apellidos" class="form-control" placeholder="Tus apellidos" autocomplete="family-name" required />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="auth-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="email">Correo</label>
+                        <div class="input-with-icon">
+                            <i class="bi bi-envelope-at"></i>
+                            <input id="email" name="email" type="email" class="form-control" placeholder="correo@dominio.com" autocomplete="email" required />
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="telefono">Telefono</label>
+                        <div class="input-with-icon">
+                            <i class="bi bi-telephone"></i>
+                            <input id="telefono" name="telefono" class="form-control" placeholder="Telefono opcional" autocomplete="tel" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="usuario">Usuario</label>
+                    <div class="input-with-icon">
+                        <i class="bi bi-person"></i>
+                        <input id="usuario" name="usuario" class="form-control" placeholder="Crea tu usuario" autocomplete="username" required />
+                    </div>
+                </div>
+
+                <div class="auth-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="password">Contrasena</label>
+                        <div class="input-with-icon">
+                            <i class="bi bi-lock"></i>
+                            <div class="password-field">
+                                <input id="password" name="password" type="@(showPassword ? "text" : "password")" class="form-control" placeholder="Minimo 12 caracteres" autocomplete="new-password" required />
+                                <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
+                                    @(showPassword ? "Ocultar" : "Mostrar")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label" for="confirmPassword">Confirmar contrasena</label>
-                        <div class="password-field">
-                            <input id="confirmPassword" name="confirmPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" required />
-                            <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
-                                @(showConfirmPassword ? "Ocultar" : "Mostrar")
-                            </button>
+                        <div class="input-with-icon">
+                            <i class="bi bi-shield-check"></i>
+                            <div class="password-field">
+                                <input id="confirmPassword" name="confirmPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" placeholder="Repite la contrasena" autocomplete="new-password" required />
+                                <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
+                                    @(showConfirmPassword ? "Ocultar" : "Mostrar")
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -103,7 +126,7 @@
                 <button type="submit" class="btn btn-primary auth-submit">Registrar usuario</button>
             </form>
 
-            <div class="auth-footer">
+            <div class="auth-footer auth-footer-stack">
                 <span>Ya tienes cuenta?</span>
                 <a href="/">Volver al login</a>
             </div>
@@ -113,72 +136,56 @@
 
 @if (mostrarModal)
 {
-    <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); z-index: 999; display: flex; align-items: center; justify-content: center;">
-
-        <div style="background: #fff; width: 350px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; overflow: hidden;">
-
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                <span style="font-size: 13px; font-weight: 600; color: #1e293b;"> Personalizar Apariencia</span>
-                <button type="button" @onclick="CerrarSeleccionador" style="background: none; border: none; font-size: 18px; cursor: pointer; color: #94a3b8;">&times;</button>
+    <div class="profile-avatar-modal-backdrop">
+        <div class="profile-avatar-modal">
+            <div class="profile-avatar-modal-header">
+                <span>Personalizar apariencia</span>
+                <button type="button" class="profile-avatar-close" @onclick="CerrarSeleccionador">&times;</button>
             </div>
 
-            <div style="padding: 20px; display: flex; flex-direction: column; gap: 18px; max-height: 400px; overflow-y: auto;">
-
-                <div style="text-align: center;">
-                    <img src="/images/avatars/@ObtenerNombreImagen()" style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #68D391; box-shadow: 0 4px 10px rgba(0,0,0,0.1); object-fit: cover;" />
-                    <p style="margin: 5px 0 0 0; font-size: 11px; color: #64748b; font-weight: 500;">Vista previa actual</p>
+            <div class="profile-avatar-modal-body">
+                <div class="profile-avatar-preview-card">
+                    <img src="/images/avatars/@ObtenerNombreImagen()" alt="Vista previa del avatar" />
+                    <strong>Vista previa actual</strong>
+                    <span>Elige personaje y estilo antes de continuar.</span>
                 </div>
 
-                <div style="width: 100%;">
-
-                    <div style="display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; margin-bottom: 12px; gap: 4px;">
-                        <button type="button" @onclick='async () => await SeleccionarAtributo("categoria", "mujeres")'
-                                style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; background: @(categoriaActiva == "mujeres" ? "#fff" : "transparent"); color: @(categoriaActiva == "mujeres" ? "#1e293b" : "#64748b"); box-shadow: @(categoriaActiva == "mujeres" ? "0 1px 3px rgba(0,0,0,0.05)" : "none");">
-                            ♀️
+                <div class="profile-avatar-controls">
+                    <div class="profile-avatar-tabs">
+                        <button type="button" class="@(categoriaActiva == "mujeres" ? "is-active" : null)" @onclick='() => SeleccionarAtributo("categoria", "mujeres")'>
+                            Mujeres
                         </button>
-                        <button type="button" @onclick='async () => await SeleccionarAtributo("categoria", "hombres")'
-                                style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; background: @(categoriaActiva == "hombres" ? "#fff" : "transparent"); color: @(categoriaActiva == "hombres" ? "#1e293b" : "#64748b"); box-shadow: @(categoriaActiva == "hombres" ? "0 1px 3px rgba(0,0,0,0.05)" : "none");">
-                            ♂️
+                        <button type="button" class="@(categoriaActiva == "hombres" ? "is-active" : null)" @onclick='() => SeleccionarAtributo("categoria", "hombres")'>
+                            Hombres
                         </button>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                    <div class="profile-avatar-grid">
                         @foreach (var personaje in (categoriaActiva == "mujeres" ? avataresMujeres : avataresHombres))
                         {
-                            <button type="button" @onclick='async () => await SeleccionarAtributo("personaje", personaje)'
-                                    style="padding: 6px; background: @(personajeSeleccionado == personaje ? "#e6fffa" : "#fff"); border: 2px solid @(personajeSeleccionado == personaje ? "#68D391" : "#e2e8f0"); border-radius: 12px; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center;">
-                                <img src="/images/avatars/@($"{personaje}_sin_lentes.png")" style="width: 55px; height: 55px; border-radius: 50%; object-fit: cover;" />
+                            <button type="button" class="profile-avatar-option @(personajeSeleccionado == personaje ? "is-selected" : null)" @onclick='() => SeleccionarAtributo("personaje", personaje)'>
+                                <img src="/images/avatars/@($"{personaje}_sin_lentes.png")" alt="Avatar @personaje" />
                             </button>
                         }
                     </div>
-                </div>
 
-                <div style="width: 100%; text-align: left; background: #f1f5f9; padding: 12px; border-radius: 12px;">
-                    <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #64748b; display: block; margin-bottom: 6px;">🤓 Configurar Lentes:</span>
-
-                    @{
-                        string estiloRedondos = avatarLentes == "redondos"
-                        ? "flex: 1; padding: 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #68D391; color: #fff;"
-                        : "flex: 1; padding: 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #fff; color: #4a5568;";
-
-                        string estiloSinLentes = avatarLentes == "none"
-                        ? "flex: 1; padding: 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #68D391; color: #fff;"
-                        : "flex: 1; padding: 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #fff; color: #4a5568;";
-                    }
-
-                    <div style="display: flex; gap: 6px;">
-                        <button type="button" @onclick='async () => await SeleccionarAtributo("lentes", "redondos")' style="@estiloRedondos">Redondos</button>
-                        <button type="button" @onclick='async () => await SeleccionarAtributo("lentes", "none")' style="@estiloSinLentes">Sin Lentes</button>
+                    <div class="profile-avatar-controls">
+                        <strong class="manual-key-label">Configurar lentes</strong>
+                        <div class="profile-avatar-lens-toggle">
+                            <button type="button" class="@(avatarLentes == "redondos" ? "is-active" : null)" @onclick='() => SeleccionarAtributo("lentes", "redondos")'>
+                                Redondos
+                            </button>
+                            <button type="button" class="@(avatarLentes == "none" ? "is-active" : null)" @onclick='() => SeleccionarAtributo("lentes", "none")'>
+                                Sin lentes
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div style="padding: 12px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: right;">
-                <button type="button" @onclick="CerrarSeleccionador" style="padding: 6px 14px; font-size: 12px; font-weight: 600; color: #fff; background: #68D391; border: none; border-radius: 6px; cursor: pointer;">
-                    Aceptar
-                </button>
+            <div class="profile-avatar-modal-actions">
+                <button type="button" class="btn btn-primary" @onclick="CerrarSeleccionador">Aceptar</button>
             </div>
-
         </div>
     </div>
 }
@@ -191,6 +198,12 @@
     private bool showConfirmPassword;
     private bool shouldRedirectAuthenticatedUser;
     private ClaimsPrincipal? authenticatedUser;
+    private bool mostrarModal;
+    private string personajeSeleccionado = "l";
+    private string avatarLentes = "none";
+    private string categoriaActiva = "mujeres";
+    private readonly string[] avataresMujeres = ["l", "m", "n", "p", "r"];
+    private readonly string[] avataresHombres = ["s", "t", "u", "v", "w"];
 
     protected override async Task OnInitializedAsync()
     {
@@ -223,45 +236,43 @@
         showConfirmPassword = !showConfirmPassword;
     }
 
-    //Lógica para el avatar
-
-    private string personajeSeleccionado = "l";
-    private string avatarLentes = "none";
-
-    // Nueva variable para controlar qué pestaña está activa: "mujeres" o "hombres"
-    private string categoriaActiva = "mujeres";
-
-    // Separamos tus carpetas físicamente en dos listas ordenadas
-    private string[] avataresMujeres = { "l", "m", "n", "p", "r" };
-    private string[] avataresHombres = { "s", "t", "u", "v", "w" };
-
     private string ObtenerNombreImagen()
     {
-        string sufijoLentes = (avatarLentes == "redondos") ? "con_lentes" : "sin_lentes";
+        var sufijoLentes = avatarLentes == "redondos" ? "con_lentes" : "sin_lentes";
         return $"{personajeSeleccionado}_{sufijoLentes}.png";
     }
 
-    private async Task SeleccionarAtributo(string tipo, string valor)
+    private void SeleccionarAtributo(string tipo, string valor)
     {
-        if (tipo == "personaje") personajeSeleccionado = valor;
-        else if (tipo == "lentes") avatarLentes = valor;
-        else if (tipo == "categoria") categoriaActiva = valor;
-
-        await JS.InvokeVoidAsync("eval",
-            $"document.getElementById('avatar_url_hidden').value = '{ObtenerNombreImagen()}'");
+        if (tipo == "personaje")
+        {
+            personajeSeleccionado = valor;
+        }
+        else if (tipo == "lentes")
+        {
+            avatarLentes = valor;
+        }
+        else if (tipo == "categoria")
+        {
+            categoriaActiva = valor;
+        }
     }
-    //esta variable booleana dice: false= oculto, true = visisble
-    private bool mostrarModal = false;
-    //métodos para cmabair el estado del modal
 
     private void AbrirSeleccionador() => mostrarModal = true;
     private void CerrarSeleccionador() => mostrarModal = false;
 
-
     private void NavigateByStage(ClaimsPrincipal user)
     {
+        var authStage = user.FindFirst("AuthStage")?.Value;
         var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
 
-        NavigationManager.NavigateTo(forcePasswordChange ? "/change-password" : "/dashboard");
+        var target = authStage switch
+        {
+            "TwoFactorSetupRequired" => "/setup-2fa",
+            "TwoFactorPending" => "/verify-2fa",
+            _ => forcePasswordChange ? "/change-password" : "/dashboard"
+        };
+
+        NavigationManager.NavigateTo(target);
     }
 }

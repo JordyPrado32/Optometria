@@ -181,14 +181,19 @@ public sealed class BillingDraftService
             return draft;
         }
 
-        if ((!patientId.HasValue || patientId.Value <= 0) && (!clientId.HasValue || clientId.Value <= 0))
+        if (!patientId.HasValue || patientId.Value <= 0)
         {
-            throw new InvalidOperationException("Se requiere al menos un cliente o un paciente para iniciar un nuevo borrador de factura.");
+            throw new InvalidOperationException("Selecciona un paciente valido antes de iniciar un borrador de factura. La base actual requiere asociar cada venta a un paciente.");
+        }
+
+        if (!clientId.HasValue || clientId.Value <= 0)
+        {
+            throw new InvalidOperationException("Selecciona un cliente valido antes de iniciar un nuevo borrador de factura.");
         }
 
         draft = new tbl_venta
         {
-            id_paciente = patientId.HasValue && patientId.Value > 0 ? patientId.Value : 0,
+            id_paciente = patientId.Value,
             id_usuario = actorUserId,
             id_cliente_facturacion = clientId,
             fecha_venta = DateTime.Now,
@@ -200,9 +205,7 @@ public sealed class BillingDraftService
             valor_cobrado = 0,
             saldo_pendiente = 0,
             estado = "Pendiente",
-            concepto = patientId.HasValue && patientId.Value > 0
-                ? "Pendientes de facturacion"
-                : "Factura de mostrador",
+            concepto = "Pendientes de facturacion",
             forma_pago = "Efectivo",
             dias_credito = 0
         };
