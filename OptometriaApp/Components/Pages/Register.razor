@@ -6,7 +6,7 @@
 
 <PageTitle>Registro</PageTitle>
 
-<div class="auth-shell">
+<div class="auth-shell auth-shell-register">
     <section class="auth-panel auth-panel-brand">
         <div class="wave-divider">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -16,11 +16,11 @@
     </section>
 
     <section class="auth-panel auth-panel-form">
-        <div class="auth-card">
+        <div class="auth-card auth-card-register">
             <div class="auth-heading">
                 <span class="eyebrow">Registro</span>
                 <h2>Crear cuenta</h2>
-                <p>Completa tus datos y define una contrasena segura para entrar al sistema.</p>
+                <p>Completa tus datos y una contraseña segura.</p>
             </div>
 
             <div class="auth-avatar-card">
@@ -37,13 +37,7 @@
             {
                 <div class="alert alert-danger" role="alert">@Error</div>
             }
-
-            <div class="password-policy">
-                <strong>Politica de contrasena</strong>
-                <p>Minimo 12 caracteres, mayuscula, minuscula, numero, simbolo, sin espacios y sin usar partes del usuario, nombre o correo.</p>
-            </div>
-
-            <form method="post" action="/auth/register" class="auth-form">
+            <form method="post" action="/auth/register" class="auth-form auth-register-form">
                 <input type="hidden" name="avatar_url" value="@ObtenerNombreImagen()" />
 
                 <div class="auth-grid">
@@ -92,26 +86,26 @@
 
                 <div class="auth-grid">
                     <div class="form-group">
-                        <label class="form-label" for="password">Contrasena</label>
+                        <label class="form-label" for="password">Contraseña</label>
                         <div class="input-with-icon">
                             <i class="bi bi-lock"></i>
                             <div class="password-field">
                                 <input id="password" name="password" type="@(showPassword ? "text" : "password")" class="form-control" placeholder="Minimo 12 caracteres" autocomplete="new-password" required />
                                 <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
-                                    @(showPassword ? "Ocultar" : "Mostrar")
+                                    <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="confirmPassword">Confirmar contrasena</label>
+                        <label class="form-label" for="confirmPassword">Confirmar contraseña</label>
                         <div class="input-with-icon">
                             <i class="bi bi-shield-check"></i>
                             <div class="password-field">
                                 <input id="confirmPassword" name="confirmPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" placeholder="Repite la contrasena" autocomplete="new-password" required />
                                 <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
-                                    @(showConfirmPassword ? "Ocultar" : "Mostrar")
+                                    <i class="bi @(showConfirmPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                 </button>
                             </div>
                         </div>

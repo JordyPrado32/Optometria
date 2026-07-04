@@ -120,9 +120,12 @@ h1:focus {
         max-height: 100vh;
         overflow: hidden;
     }
-    .auth-panel-brand,
+    .auth-panel-brand {
+        height: 100%;
+    }
     .auth-panel-form {
         height: 100%;
+        overflow-y: auto;
     }
 }
 
@@ -149,6 +152,7 @@ h1:focus {
     padding: 3rem;
     box-sizing: border-box;
     z-index: 5;
+    min-height: 100vh;
 }
 
 /* No distinct card container - background is direct */
@@ -158,6 +162,61 @@ h1:focus {
     box-shadow: none !important;
     padding: 0 !important;
     width: min(100%, 25rem);
+    margin: 0;
+}
+
+.auth-card-register {
+    width: min(100%, 34rem);
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.45rem !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.auth-shell-register .auth-panel-form {
+    overflow: hidden;
+}
+
+.auth-card-register .auth-heading {
+    margin-bottom: 1.4rem;
+}
+
+.auth-shell-setup .auth-panel-form {
+    overflow: hidden;
+}
+
+.auth-card-setup {
+    width: min(100%, 42rem);
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.45rem !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.auth-card-setup .auth-heading {
+    margin-bottom: 1.6rem;
+}
+
+.auth-shell-change .auth-panel-form {
+    overflow: hidden;
+}
+
+.auth-card-change {
+    width: min(100%, 34rem);
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.45rem !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.auth-card-change .auth-heading {
+    margin-bottom: 1.6rem;
 }
 
 .auth-heading {
@@ -218,7 +277,7 @@ h1:focus {
 }
 
 /* Green icon inside inputs */
-.input-with-icon i {
+.input-with-icon > i {
     position: absolute;
     left: 0.5rem;
     color: var(--color-sage) !important;
@@ -255,20 +314,43 @@ h1:focus {
     width: 100%;
 }
 
+.password-field .form-control {
+    padding-right: 2.75rem !important;
+}
+
 /* Green toggle text */
 .password-toggle {
     position: absolute;
     top: 50%;
     right: 0.5rem;
     transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
     border: 0;
     background: transparent;
     color: var(--color-sage) !important;
-    font-weight: 700;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.4rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.password-toggle i {
+    position: static;
+    color: inherit !important;
+    font-size: inherit;
+    line-height: 1;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.auth-register-form {
+    overflow: visible;
+    padding-right: 0;
 }
 
 /* Café / Brown for remember me check */
@@ -326,19 +408,20 @@ h1:focus {
 }
 
 .auth-avatar-card {
-    display: grid;
-    justify-items: center;
-    gap: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
     margin: 0 0 1rem;
-    padding: 1.2rem;
+    padding: 1rem 1.25rem;
     border-radius: 1.4rem;
     background: rgba(255, 250, 244, 0.92);
     border: 1px solid rgba(127, 105, 81, 0.12);
 }
 
 .auth-avatar-preview img {
-    width: 7rem;
-    height: 7rem;
+    width: 5.5rem;
+    height: 5.5rem;
     border-radius: 50%;
     object-fit: cover;
     border: 4px solid rgba(93, 161, 129, 0.28);
@@ -380,6 +463,7 @@ h1:focus {
     }
     .auth-panel-form {
         padding: 2rem;
+        min-height: 100vh;
     }
 }
 
@@ -393,6 +477,41 @@ h1:focus {
     }
     .auth-panel-form {
         padding: 3rem 1.5rem;
+        min-height: 100vh;
+    }
+
+    .auth-card-register {
+        width: min(100%, 25rem);
+        max-height: none;
+        overflow: visible;
+        padding-right: 0 !important;
+    }
+
+    .auth-card-setup {
+        width: min(100%, 25rem);
+        max-height: none;
+        overflow: visible;
+        padding-right: 0 !important;
+    }
+
+    .auth-card-change {
+        width: min(100%, 25rem);
+        max-height: none;
+        overflow: visible;
+        padding-right: 0 !important;
+    }
+
+    .auth-register-form {
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
+    }
+}
+
+@media (max-width: 420px), (max-height: 620px) {
+    .auth-avatar-card {
+        flex-direction: column;
+        gap: 0.85rem;
     }
 }
 
@@ -1430,9 +1549,9 @@ h1:focus {
 
 .totp-setup-grid {
     display: grid;
-    grid-template-columns: 16rem 1fr;
-    gap: 1.5rem;
-    align-items: start;
+    grid-template-columns: minmax(13rem, 17rem) minmax(16rem, 1fr);
+    gap: 1.75rem;
+    align-items: stretch;
     margin-bottom: 1.5rem;
 }
 
@@ -1444,25 +1563,39 @@ h1:focus {
     padding: 1rem;
 }
 
+.totp-qr-card {
+    display: grid;
+    place-items: center;
+}
+
 .totp-qr {
     width: 100%;
+    max-width: 15rem;
     display: block;
     border-radius: 12px;
 }
 
+.totp-instructions {
+    display: grid;
+    align-content: start;
+}
+
 .totp-instructions h3 {
     margin-bottom: 0.75rem;
+    font-size: 1.6rem;
     color: var(--color-taupe-deep);
 }
 
 .totp-steps {
-    margin: 0 0 1rem 1rem;
-    padding: 0;
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
     color: rgba(95, 77, 62, 0.88);
+    line-height: 1.45;
 }
 
 .totp-steps li {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.65rem;
+    padding-left: 0.25rem;
 }
 
 .manual-key-label {
@@ -1478,10 +1611,13 @@ h1:focus {
     font-size: 1rem;
     font-weight: 700;
     word-break: break-word;
+    display: block;
+    line-height: 1.55;
 }
 
 .totp-form {
     margin-top: 0.5rem;
+    gap: 1.1rem;
 }
 
 .dashboard-hero {
@@ -1559,9 +1695,29 @@ code {
         grid-template-columns: 1fr;
     }
 
+    .auth-card-setup {
+        width: min(100%, 32rem);
+    }
+
+    .totp-qr {
+        max-width: 14rem;
+    }
+
     .dashboard-hero {
         flex-direction: column;
         align-items: flex-start;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 960px) {
+    .auth-shell-setup,
+    .auth-shell-change {
+        grid-template-columns: 0.8fr 1.2fr;
+    }
+
+    .auth-shell-setup .auth-panel-brand,
+    .auth-shell-change .auth-panel-brand {
+        display: block !important;
     }
 }
 
