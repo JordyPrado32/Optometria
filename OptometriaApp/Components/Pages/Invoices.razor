@@ -70,6 +70,44 @@
         font-weight: 700;
     }
 
+    .invoice-search-results {
+        display: grid;
+        gap: 0.5rem;
+        max-height: 15rem;
+        overflow: auto;
+    }
+
+    .invoice-search-option {
+        border: 1px solid rgba(127, 105, 81, 0.14);
+        border-radius: 0.9rem;
+        background: rgba(255, 255, 255, 0.92);
+        padding: 0.7rem 0.8rem;
+        text-align: left;
+        transition: 0.18s ease;
+    }
+
+    .invoice-search-option strong,
+    .invoice-search-option span {
+        display: block;
+    }
+
+    .invoice-search-option strong {
+        color: var(--color-ink);
+        font-size: 0.92rem;
+    }
+
+    .invoice-search-option span {
+        color: var(--color-taupe);
+        font-size: 0.78rem;
+        margin-top: 0.15rem;
+    }
+
+    .invoice-search-option.active {
+        border-color: rgba(93, 161, 129, 0.45);
+        background: rgba(93, 161, 129, 0.1);
+        box-shadow: inset 0 0 0 1px rgba(93, 161, 129, 0.18);
+    }
+
     .invoice-summary-table td {
         padding: 0.5rem 0;
         border: none;
@@ -277,6 +315,18 @@
         gap: 0.85rem;
     }
 
+    .invoice-party-stack {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .invoice-party-card-title {
+        margin-bottom: 0.65rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--color-ink);
+    }
+
     .invoice-readonly-item {
         padding: 0.9rem 0.95rem;
         border-radius: 0.95rem;
@@ -440,6 +490,48 @@
         border: 1px dashed rgba(127, 105, 81, 0.14);
     }
 
+    .invoice-editor-grid--line {
+        grid-template-columns: minmax(220px, 1.45fr) repeat(3, minmax(120px, 0.7fr));
+        align-items: end;
+    }
+
+    .invoice-editor-wide {
+        grid-column: span 2;
+    }
+
+    .invoice-editor-full {
+        grid-column: 1 / -1;
+    }
+
+    .invoice-editor-total {
+        padding: 0.85rem 1rem;
+        border-radius: 1rem;
+        background: linear-gradient(180deg, rgba(93, 161, 129, 0.08), rgba(93, 161, 129, 0.14));
+        border: 1px solid rgba(93, 161, 129, 0.18);
+    }
+
+    .invoice-editor-total label {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.74rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+    }
+
+    .invoice-editor-total strong {
+        display: block;
+        font-size: 1.3rem;
+        color: var(--color-ink);
+    }
+
+    .invoice-actions-primary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
     @@media (max-width: 1100px) {
         .invoice-top-grid {
             grid-template-columns: 1fr;
@@ -447,6 +539,15 @@
 
         .invoice-sidebar {
             position: static;
+        }
+
+        .invoice-editor-grid--line {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .invoice-editor-wide,
+        .invoice-editor-full {
+            grid-column: 1 / -1;
         }
     }
 
@@ -467,7 +568,8 @@
 
         .invoice-doc-meta,
         .invoice-grid-2,
-        .invoice-preview-mini-grid {
+        .invoice-preview-mini-grid,
+        .invoice-editor-grid--line {
             grid-template-columns: 1fr;
         }
     }
@@ -586,8 +688,8 @@ else
                                 </div>
                                 <div class="invoice-meta-card">
                                     <label>Cliente fiscal</label>
-                                    <strong>@(billingClient?.razon_social ?? (selectedPatient is null ? "Pendiente" : GetPatientFullName(selectedPatient)))</strong>
-                                    <span>@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? "Sin identificacion")</span>
+                                    <strong>@GetClientDisplayName(billingClient)</strong>
+                                    <span>@GetClientIdentification(billingClient)</span>
                                 </div>
                                 <div class="invoice-meta-card">
                                     <label>Pago y credito</label>
@@ -613,61 +715,100 @@ else
 
                             <div class="invoice-grid-2">
                                 <section class="invoice-section">
-                                    <div class="invoice-block-title">Cliente y origen</div>
+                                    <div class="invoice-block-title">Cliente y paciente</div>
                                     <div class="invoice-toolbar-grid">
                                         <div>
-                                            <label class="form-label" for="invoicePatient">Paciente</label>
-                                            <select id="invoicePatient" class="form-select" value="@selectedPatientId" @onchange="OnPatientChanged" disabled="@(!canEditModule)">
-                                                <option value="0">Selecciona</option>
-                                                @foreach (var patient in patients)
+                                            <label class="form-label" for="invoicePatientSearch">Paciente</label>
+                                            <input id="invoicePatientSearch" class="form-control" @bind="patientSearchTerm" @bind:event="oninput" placeholder="Escribe nombre o cedula" disabled="@(!canEditModule)" />
+                                            <div class="invoice-search-results" style="margin-top: 0.5rem;">
+                                                <button type="button" class="invoice-search-option @(selectedPatientId == 0 ? "active" : null)" @onclick="ClearPatientSelection" disabled="@(!canEditModule)">Sin paciente fijo</button>
+                                                @foreach (var patient in FilteredPatients)
                                                 {
-                                                    <option value="@patient.id_paciente">@GetPatientLabel(patient)</option>
+                                                    <button type="button" class="invoice-search-option @(selectedPatientId == patient.id_paciente ? "active" : null)" @onclick="() => SelectPatientAsync(patient.id_paciente)" disabled="@(!canEditModule)">
+                                                        <strong>@GetPatientFullName(patient)</strong>
+                                                        <span>@patient.cedula</span>
+                                                    </button>
                                                 }
-                                            </select>
+                                            </div>
                                         </div>
 
                                         <div>
-                                            <label class="form-label" for="invoiceClient">Cliente</label>
-                                            <select id="invoiceClient" class="form-select" value="@selectedClientId" @onchange="OnClientChanged" disabled="@(!canEditModule)">
-                                                <option value="0">Selecciona</option>
-                                                @foreach (var client in clients)
+                                            <label class="form-label" for="invoiceClientSearch">Cliente</label>
+                                            <input id="invoiceClientSearch" class="form-control" @bind="clientSearchTerm" @bind:event="oninput" placeholder="Escribe nombre o identificacion" disabled="@(!canEditModule)" />
+                                            <div class="invoice-search-results" style="margin-top: 0.5rem;">
+                                                <button type="button" class="invoice-search-option @(selectedClientId == 0 ? "active" : null)" @onclick="ClearClientSelection" disabled="@(!canEditModule)">Sin cliente fijo</button>
+                                                @foreach (var client in FilteredClients)
                                                 {
-                                                    <option value="@client.cliente_id">@GetClientLabel(client)</option>
+                                                    <button type="button" class="invoice-search-option @(selectedClientId == client.cliente_id ? "active" : null)" @onclick="() => SelectClientAsync(client.cliente_id)" disabled="@(!canEditModule)">
+                                                        <strong>@(string.IsNullOrWhiteSpace(client.razon_social) ? GetClientPersonName(client) : client.razon_social)</strong>
+                                                        <span>@client.numero_identificacion</span>
+                                                    </button>
                                                 }
-                                            </select>
+                                            </div>
                                         </div>
                                     </div>
 
                                     @if (billingClient is null && selectedPatient is null)
                                     {
-                                        <div class="invoice-empty" style="margin-top: 1rem;">Selecciona un cliente y, si deseas, un paciente origen para comenzar la factura.</div>
+                                        <div class="invoice-empty" style="margin-top: 1rem;">Selecciona cliente y paciente por separado. El paciente no reemplaza al cliente, y el cliente no reemplaza al paciente.</div>
                                     }
                                     else
                                     {
-                                        <div class="invoice-readonly-grid" style="margin-top: 1rem;">
-                                            <div class="invoice-readonly-item">
-                                                <label>Razon social</label>
-                                                <strong>@(billingClient?.razon_social ?? (selectedPatient is null ? "-" : GetPatientFullName(selectedPatient)))</strong>
+                                        <div class="invoice-party-stack" style="margin-top: 1rem;">
+                                            <div>
+                                                <div class="invoice-party-card-title">Cliente de facturacion</div>
+                                                <div class="invoice-readonly-grid">
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Nombre fiscal</label>
+                                                        <strong>@GetClientDisplayName(billingClient)</strong>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Identificacion</label>
+                                                        <strong>@GetClientIdentification(billingClient)</strong>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Direccion</label>
+                                                        <span>@(billingClient?.direccion ?? "Sin direccion")</span>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Telefono</label>
+                                                        <span>@(billingClient?.telefono ?? "Sin telefono")</span>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Correo</label>
+                                                        <span>@(billingClient?.correo_electronico ?? "Sin correo")</span>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Condicion</label>
+                                                        <span>@(billingClient?.condicion_pago ?? "Contado")</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="invoice-readonly-item">
-                                                <label>Identificacion</label>
-                                                <strong>@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? "-")</strong>
-                                            </div>
-                                            <div class="invoice-readonly-item">
-                                                <label>Direccion</label>
-                                                <span>@(billingClient?.direccion ?? selectedPatient?.direccion ?? "Sin direccion")</span>
-                                            </div>
-                                            <div class="invoice-readonly-item">
-                                                <label>Telefono</label>
-                                                <span>@(billingClient?.telefono ?? selectedPatient?.telefono ?? "Sin telefono")</span>
-                                            </div>
-                                            <div class="invoice-readonly-item">
-                                                <label>Correo</label>
-                                                <span>@(billingClient?.correo_electronico ?? selectedPatient?.email ?? "Sin correo")</span>
-                                            </div>
-                                            <div class="invoice-readonly-item">
-                                                <label>Condicion</label>
-                                                <span>@(billingClient?.condicion_pago ?? "Contado")</span>
+
+                                            <div>
+                                                <div class="invoice-party-card-title">Paciente origen</div>
+                                                <div class="invoice-readonly-grid">
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Paciente</label>
+                                                        <strong>@(selectedPatient is null ? "Sin paciente fijo" : GetPatientFullName(selectedPatient))</strong>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Cedula</label>
+                                                        <strong>@(selectedPatient?.cedula ?? "Sin cedula")</strong>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Direccion</label>
+                                                        <span>@(selectedPatient?.direccion ?? "Sin direccion")</span>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Telefono</label>
+                                                        <span>@(selectedPatient?.telefono ?? "Sin telefono")</span>
+                                                    </div>
+                                                    <div class="invoice-readonly-item">
+                                                        <label>Correo</label>
+                                                        <span>@(selectedPatient?.email ?? "Sin correo")</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     }
@@ -789,8 +930,8 @@ else
                             <div class="invoice-line-editor">
                                 <div class="invoice-block-title">@(lineEditor.LineId > 0 ? "Editar linea" : "Nueva linea")</div>
 
-                                <div class="invoice-editor-grid">
-                                    <div>
+                                <div class="invoice-editor-grid invoice-editor-grid--line">
+                                    <div class="invoice-editor-wide">
                                         <label class="form-label">Producto o servicio</label>
                                         <select class="form-select" value="@lineEditor.ProductId" @onchange="OnManualProductChanged" disabled="@(!canEditModule)">
                                             <option value="0">Selecciona</option>
@@ -816,19 +957,32 @@ else
                                         <input type="number" step="0.01" class="form-control" @bind="lineEditor.Discount" min="0" readonly="@(!canEditModule)" />
                                     </div>
 
-                                    <div>
-                                        <label class="form-label">IVA del producto</label>
-                                        <input class="form-control" value="@(SelectedManualProduct is null ? "Selecciona un producto" : GetProductTaxLabel(SelectedManualProduct))" readonly />
-                                    </div>
-
-                                    <div>
-                                        <label class="form-label">Total de linea</label>
-                                        <input class="form-control" value="@LineEditorTotal.ToString("0.00")" readonly />
-                                    </div>
-
-                                    <div style="grid-column: 1 / -1;">
+                                    <div class="invoice-editor-wide">
                                         <label class="form-label">Concepto</label>
                                         <input class="form-control" @bind="lineEditor.Concept" readonly="@(!canEditModule)" />
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">IVA del producto</label>
+                                        <select class="form-select" value="@LineEditorTieneIvaValue" @onchange="OnLineEditorTieneIvaChanged" disabled="@(!canEditModule || SelectedManualProduct is null)">
+                                            <option value="true">Si</option>
+                                            <option value="false">No</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="form-label">IVA %</label>
+                                        <select class="form-select" @bind="lineEditor.PorcentajeIva" disabled="@(!canEditModule || SelectedManualProduct is null || !lineEditor.TieneIva)">
+                                            @foreach (var percentage in ivaPercentageOptions)
+                                            {
+                                                <option value="@percentage">@($"{percentage:0}%")</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div class="invoice-editor-total">
+                                        <label>Total de linea</label>
+                                        <strong>@LineEditorTotal.ToString("0.00")</strong>
                                     </div>
                                 </div>
 
@@ -881,7 +1035,7 @@ else
 
                                         <div>
                                             <label class="form-label">Tiene IVA</label>
-                                            <select class="form-select" @bind="ProductUpsertTieneIvaValue">
+                                            <select class="form-select" value="@ProductUpsertTieneIvaValue" @onchange="OnProductUpsertTieneIvaChanged">
                                                 <option value="true">Si</option>
                                                 <option value="false">No</option>
                                             </select>
@@ -947,8 +1101,10 @@ else
                                 </div>
 
                                 <div class="invoice-preview-mini-grid">
-                                    <div><strong>Cliente</strong><br />@(billingClient?.razon_social ?? (selectedPatient is null ? "Pendiente" : GetPatientFullName(selectedPatient)))</div>
-                                    <div><strong>Identificacion</strong><br />@(billingClient?.numero_identificacion ?? selectedPatient?.cedula ?? "Pendiente")</div>
+                                    <div><strong>Cliente</strong><br />@GetClientDisplayName(billingClient)</div>
+                                    <div><strong>Identificacion</strong><br />@GetClientIdentification(billingClient)</div>
+                                    <div><strong>Paciente</strong><br />@(selectedPatient is null ? "Sin paciente fijo" : GetPatientFullName(selectedPatient))</div>
+                                    <div><strong>Cedula paciente</strong><br />@(selectedPatient?.cedula ?? "Sin cedula")</div>
                                     <div><strong>Fecha</strong><br />@InvoiceDateLabel</div>
                                     <div><strong>Pago</strong><br />@paymentForm</div>
                                 </div>
@@ -1008,6 +1164,8 @@ else
     private int currentRoleId;
     private int selectedPatientId;
     private int selectedClientId;
+    private string patientSearchTerm = string.Empty;
+    private string clientSearchTerm = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
     private string invoiceNumberPreview = "Configura emisor";
@@ -1035,6 +1193,12 @@ else
     private string InitialSequencePreview => GetInitialSequencePreview();
     private string DisplayInvoiceNumber => issuerRequiresInitialSequence ? InitialSequencePreview : invoiceNumberPreview;
     private bool CanFinalizeInvoice => canEditModule && currentIssuer is not null;
+    private IEnumerable<tbl_paciente> FilteredPatients => patients
+        .Where(MatchesPatientSearch)
+        .Take(25);
+    private IEnumerable<ClientEntity> FilteredClients => clients
+        .Where(MatchesClientSearch)
+        .Take(25);
 
     protected override async Task OnInitializedAsync()
     {
@@ -1129,6 +1293,7 @@ else
 
         selectedPatientId = patientId ?? selectedPatientId;
         await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
+        SyncSearchTerms();
 
         isLoading = false;
     }
@@ -1143,7 +1308,17 @@ else
             ? clients.FirstOrDefault(x => x.cliente_id == clientId)
             : null;
 
-        if (selectedPatient is null && billingClient is null)
+        if (billingClient is null && selectedPatient is null)
+        {
+            draftSale = null;
+            draftLines.Clear();
+            showProductUpsertForm = false;
+            ResetLineEditor();
+            RecalculatePreview();
+            return;
+        }
+
+        if (billingClient is null)
         {
             draftSale = null;
             draftLines.Clear();
@@ -1155,9 +1330,10 @@ else
 
         try
         {
+            var effectivePatientId = await ResolveAnchorPatientIdAsync(dbContext);
             draftSale = await BillingDraftService.GetOrCreateDraftSaleAsync(
                 dbContext,
-                selectedPatient?.id_paciente,
+                effectivePatientId,
                 billingClient?.cliente_id,
                 currentUserId);
 
@@ -1165,12 +1341,6 @@ else
                 .Include(x => x.tbl_detalle_venta)
                 .ThenInclude(x => x.id_productoNavigation)
                 .FirstAsync(x => x.id_venta == draftSale.id_venta);
-
-            selectedClientId = draftSale.id_cliente_facturacion ?? selectedClientId;
-            if (selectedClientId > 0)
-            {
-                billingClient = clients.FirstOrDefault(x => x.cliente_id == selectedClientId);
-            }
 
             paymentForm = draftSale.forma_pago ?? paymentMethods.First();
             creditDays = draftSale.dias_credito ?? 0;
@@ -1207,29 +1377,55 @@ else
         return Task.CompletedTask;
     }
 
-    private async Task OnPatientChanged(ChangeEventArgs args)
+    private string LineEditorTieneIvaValue
     {
-        if (!int.TryParse(args.Value?.ToString(), out var patientId))
+        get => lineEditor.TieneIva ? "true" : "false";
+        set
         {
-            patientId = 0;
+            lineEditor.TieneIva = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+            if (lineEditor.TieneIva)
+            {
+                if (!ivaPercentageOptions.Contains(lineEditor.PorcentajeIva))
+                {
+                    lineEditor.PorcentajeIva = ivaPercentageOptions[0];
+                }
+            }
+            else
+            {
+                lineEditor.PorcentajeIva = 0;
+            }
         }
-
-        selectedPatientId = patientId;
-        await LoadAsync(patientId);
     }
 
-    private async Task OnClientChanged(ChangeEventArgs args)
+    private void OnLineEditorTieneIvaChanged(ChangeEventArgs args)
+    {
+        LineEditorTieneIvaValue = args.Value?.ToString() ?? "false";
+    }
+
+    private async Task SelectPatientAsync(int patientId)
+    {
+        selectedPatientId = patientId;
+        selectedPatient = patients.FirstOrDefault(x => x.id_paciente == patientId);
+        patientSearchTerm = selectedPatient is null ? string.Empty : GetPatientLabel(selectedPatient);
+        await LoadCurrentDraftAfterSelectionAsync();
+    }
+
+    private async Task ClearPatientSelection()
+    {
+        selectedPatientId = 0;
+        selectedPatient = null;
+        patientSearchTerm = string.Empty;
+        await LoadCurrentDraftAfterSelectionAsync();
+    }
+
+    private async Task SelectClientAsync(int clientId)
     {
         statusMessage = null;
         errorMessage = null;
 
-        if (!int.TryParse(args.Value?.ToString(), out var clientId))
-        {
-            clientId = 0;
-        }
-
         selectedClientId = clientId;
         billingClient = clients.FirstOrDefault(x => x.cliente_id == clientId);
+        clientSearchTerm = billingClient is null ? string.Empty : GetClientLabel(billingClient);
         if (billingClient is not null)
         {
             creditDays = Math.Max(0, billingClient.dias_plazo);
@@ -1240,6 +1436,7 @@ else
 
         if (draftSale is null)
         {
+            await LoadCurrentDraftAfterSelectionAsync();
             return;
         }
 
@@ -1261,6 +1458,21 @@ else
         await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
     }
 
+    private async Task ClearClientSelection()
+    {
+        selectedClientId = 0;
+        billingClient = null;
+        clientSearchTerm = string.Empty;
+        await LoadCurrentDraftAfterSelectionAsync();
+    }
+
+    private async Task LoadCurrentDraftAfterSelectionAsync()
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadCurrentDraftContextAsync(dbContext, selectedPatientId, selectedClientId);
+        SyncSearchTerms();
+    }
+
     private async Task SaveLineAsync()
     {
         statusMessage = null;
@@ -1278,9 +1490,9 @@ else
         var requestedConcept = lineEditor.Concept?.Trim() ?? string.Empty;
         var requestedLineId = lineEditor.LineId;
 
-        if (billingClient is null && selectedClientId <= 0 && selectedPatientId <= 0)
+        if (billingClient is null && selectedClientId <= 0)
         {
-            errorMessage = "Selecciona un cliente o un paciente antes de agregar lineas a la factura.";
+            errorMessage = "Selecciona un cliente antes de agregar lineas a la factura.";
             return;
         }
 
@@ -1293,6 +1505,12 @@ else
         if (requestedUnitPrice < 0 || requestedDiscount < 0)
         {
             errorMessage = "Precio y descuento no pueden ser negativos.";
+            return;
+        }
+
+        if (lineEditor.PorcentajeIva < 0)
+        {
+            errorMessage = "El porcentaje de IVA no puede ser negativo.";
             return;
         }
 
@@ -1315,29 +1533,24 @@ else
             selectedPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(x => x.id_paciente == selectedPatientId);
         }
 
-        if ((billingClient is null || selectedClientId <= 0) && selectedPatient is not null)
-        {
-            selectedClientId = await BillingDraftService.EnsureBillingClientAsync(dbContext, selectedPatient, currentUserId);
-            billingClient = await dbContext.clients.AsNoTracking().FirstOrDefaultAsync(x => x.cliente_id == selectedClientId);
-        }
-
         if (selectedClientId <= 0 && billingClient?.cliente_id > 0)
         {
             selectedClientId = billingClient.cliente_id;
         }
 
-        if (draftSale is null && selectedPatientId <= 0 && selectedClientId <= 0)
+        if (draftSale is null && selectedClientId <= 0)
         {
-            errorMessage = "Selecciona un cliente o un paciente antes de iniciar un nuevo borrador de factura.";
+            errorMessage = "Selecciona un cliente antes de iniciar un nuevo borrador de factura.";
             return;
         }
 
         tbl_venta ensuredDraft;
         try
         {
+            var effectivePatientId = await ResolveAnchorPatientIdAsync(dbContext);
             ensuredDraft = await BillingDraftService.GetOrCreateDraftSaleAsync(
                 dbContext,
-                selectedPatientId > 0 ? selectedPatientId : null,
+                effectivePatientId,
                 selectedClientId > 0 ? selectedClientId : null,
                 currentUserId);
         }
@@ -1358,6 +1571,9 @@ else
             errorMessage = "No se encontro el borrador o el producto seleccionado.";
             return;
         }
+
+        product.tiene_iva = lineEditor.TieneIva;
+        product.porcentaje_iva = lineEditor.TieneIva ? lineEditor.PorcentajeIva : 0m;
 
         var unitPrice = requestedUnitPrice > 0 ? requestedUnitPrice : product.precio_venta;
         var concept = string.IsNullOrWhiteSpace(requestedConcept) ? product.nombre_producto : requestedConcept;
@@ -1519,6 +1735,9 @@ else
 
         sale.id_cliente_facturacion = client.cliente_id;
         sale.id_usuario = currentUserId;
+        sale.id_paciente = sale.id_paciente > 0
+            ? sale.id_paciente
+            : await ResolveAnchorPatientIdAsync(dbContext) ?? sale.id_paciente;
         sale.forma_pago = paymentForm;
         sale.dias_credito = creditDays;
         sale.observaciones_factura = NormalizeOptional(invoiceNotes);
@@ -1531,7 +1750,7 @@ else
             ? resolvedInitialSequence
             : await BillingDraftService.GenerateNextInvoiceSequenceAsync(dbContext, issuer);
         var invoiceNumber = BillingDraftService.BuildInvoiceNumber(issuer, invoiceSequence);
-        sale.estado = (sale.saldo_pendiente ?? 0) > 0 ? "Credito" : "Facturada";
+        sale.estado = "Pendiente";
 
         var comprobante = new tbl_comprobante
         {
@@ -1592,19 +1811,19 @@ else
         client.dias_plazo = currentBalance > 0 ? creditDays : 0;
         var otherOutstandingBalance = await dbContext.tbl_cta_cobrar
             .Where(x => x.id_cliente == client.cliente_id && x.estado == "Pendiente" && x.id_venta != sale.id_venta)
-            .Select(x => x.saldo)
-            .DefaultIfEmpty(0m)
-            .SumAsync();
+            .SumAsync(x => x.saldo);
         client.saldo_deudor = otherOutstandingBalance + currentBalance;
         client.fecha_actualizacion = DateTime.Now;
         client.id_usuario_actualizacion = currentUserId;
 
         await dbContext.SaveChangesAsync();
 
-        statusMessage = currentBalance > 0
+        var successMessage = currentBalance > 0
             ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. Quedo pendiente para autorizacion SRI."
             : $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y pendiente para autorizacion SRI.";
+
         await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
+        statusMessage = successMessage;
     }
 
     private string GetInitialSequencePreview()
@@ -1719,7 +1938,11 @@ else
             Quantity = line.cantidad,
             UnitPrice = line.precio_unitario ?? 0,
             Discount = line.descuento ?? 0,
-            Concept = line.concepto_item ?? line.id_productoNavigation.nombre_producto
+            Concept = line.concepto_item ?? line.id_productoNavigation.nombre_producto,
+            TieneIva = line.id_productoNavigation.tiene_iva ?? false,
+            PorcentajeIva = line.id_productoNavigation.tiene_iva == true && ivaPercentageOptions.Contains(line.id_productoNavigation.porcentaje_iva ?? 0m)
+                ? line.id_productoNavigation.porcentaje_iva ?? 0m
+                : (line.id_productoNavigation.tiene_iva == true ? ivaPercentageOptions[0] : 0m)
         };
     }
 
@@ -1776,6 +1999,11 @@ else
                 productUpsertEditor.PorcentajeIva = 0;
             }
         }
+    }
+
+    private void OnProductUpsertTieneIvaChanged(ChangeEventArgs args)
+    {
+        ProductUpsertTieneIvaValue = args.Value?.ToString() ?? "false";
     }
 
     private async Task SaveQuickProductAsync()
@@ -1927,6 +2155,10 @@ else
 
         lineEditor.UnitPrice = product.precio_venta;
         lineEditor.Concept = product.nombre_producto;
+        lineEditor.TieneIva = product.tiene_iva ?? false;
+        lineEditor.PorcentajeIva = lineEditor.TieneIva
+            ? (ivaPercentageOptions.Contains(product.porcentaje_iva ?? 0m) ? product.porcentaje_iva ?? 0m : ivaPercentageOptions[0])
+            : 0m;
     }
 
     private string GetOriginLabel(tbl_detalle_venta line)
@@ -1953,7 +2185,88 @@ else
 
     private string GetClientLabel(ClientEntity client)
     {
-        return $"{client.razon_social} - {client.numero_identificacion}".Trim();
+        return $"{GetClientDisplayName(client)} - {client.numero_identificacion}".Trim();
+    }
+
+    private string GetClientPersonName(ClientEntity client)
+    {
+        return $"{client.nombres} {client.apellidos}".Trim();
+    }
+
+    private string GetClientDisplayName(ClientEntity? client)
+    {
+        if (client is null)
+        {
+            return "Pendiente";
+        }
+
+        return string.IsNullOrWhiteSpace(client.razon_social)
+            ? GetClientPersonName(client)
+            : client.razon_social;
+    }
+
+    private string GetClientIdentification(ClientEntity? client)
+    {
+        return string.IsNullOrWhiteSpace(client?.numero_identificacion)
+            ? "Sin identificacion"
+            : client.numero_identificacion;
+    }
+
+    private void SyncSearchTerms()
+    {
+        patientSearchTerm = selectedPatient is null ? string.Empty : GetPatientLabel(selectedPatient);
+        clientSearchTerm = billingClient is null ? string.Empty : GetClientLabel(billingClient);
+    }
+
+    private bool MatchesPatientSearch(tbl_paciente patient)
+    {
+        var search = NormalizeSearch(patientSearchTerm);
+        if (string.IsNullOrEmpty(search))
+        {
+            return true;
+        }
+
+        return ContainsSearch(patient.cedula, search)
+            || ContainsSearch(patient.nombres, search)
+            || ContainsSearch(patient.apellidos, search)
+            || ContainsSearch(GetPatientFullName(patient), search);
+    }
+
+    private bool MatchesClientSearch(ClientEntity client)
+    {
+        var search = NormalizeSearch(clientSearchTerm);
+        if (string.IsNullOrEmpty(search))
+        {
+            return true;
+        }
+
+        return ContainsSearch(client.numero_identificacion, search)
+            || ContainsSearch(client.razon_social, search)
+            || ContainsSearch(client.nombres, search)
+            || ContainsSearch(client.apellidos, search)
+            || ContainsSearch(client.nombre_comercial, search)
+            || ContainsSearch(GetClientPersonName(client), search)
+            || ContainsSearch($"{client.apellidos} {client.nombres}".Trim(), search);
+    }
+
+    private static bool ContainsSearch(string? value, string search)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeSearch(string? value) => value?.Trim() ?? string.Empty;
+
+    private async Task<int?> ResolveAnchorPatientIdAsync(OpticaDbContext dbContext)
+    {
+        if (selectedPatientId > 0)
+        {
+            return selectedPatientId;
+        }
+
+        if (draftSale?.id_paciente > 0)
+        {
+            return draftSale.id_paciente;
+        }
+
+        return null;
     }
 
     private static string GetProductTaxLabel(tbl_producto product)
@@ -2001,6 +2314,8 @@ else
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
         public string Concept { get; set; } = string.Empty;
+        public bool TieneIva { get; set; }
+        public decimal PorcentajeIva { get; set; }
     }
 
     private sealed class ProductUpsertEditor

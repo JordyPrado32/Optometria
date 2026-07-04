@@ -1,0 +1,864 @@
+@page "/doctor/clinical-history"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Historia clinica</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando historia clinica...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Historia clinica</h1>
+            <p>No tienes acceso a esta historia clinica o el paciente no pertenece a tus consultas.</p>
+        </div>
+    </section>
+}
+else if (patient is null || editor is null || openingSnapshot is null)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Historia clinica</h1>
+            <p>Selecciona un paciente valido desde el modulo de pacientes para abrir o actualizar la historia clinica.</p>
+            <a class="btn btn-outline-primary" href="/doctor/my-patients">Volver a mis pacientes</a>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Historia optometrica</span>
+                <h1>@(historyExists ? "Actualizar historia clinica" : "Apertura de historia clinica")</h1>
+                <p>La apertura conserva los datos base del paciente y las actualizaciones posteriores se concentran en la evolucion clinica y el examen optometrico.</p>
+            </div>
+
+            <div class="workspace-actions">
+                <a class="btn btn-outline-primary" href="/doctor/my-patients">Volver</a>
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync">@(historyExists ? "Guardar actualizacion" : "Crear historia clinica")</button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card clinical-card">
+            <div class="clinical-header-grid">
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Paciente</span>
+                    <strong>@($"{openingSnapshot.Nombres} {openingSnapshot.Apellidos}")</strong>
+                    <p>@openingSnapshot.Cedula</p>
+                </div>
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Historia</span>
+                    <strong>@(string.IsNullOrWhiteSpace(editor.NumeroHistoria) ? "Pendiente" : editor.NumeroHistoria)</strong>
+                    <p>@(historyExists ? $"Apertura: {historyOpenedLabel}" : "Aun no creada")</p>
+                </div>
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Proteccion</span>
+                    <strong>@(historyExists ? "Datos base bloqueados" : "Se congelaran al crear")</strong>
+                    <p>Los datos de apertura no se sobrescriben despues de la primera creacion.</p>
+                </div>
+            </div>
+
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">Fecha</label>
+                    <input class="form-control" value="@DateTime.Now.ToString("yyyy-MM-dd")" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Hora</label>
+                    <input class="form-control" value="@DateTime.Now.ToString("HH:mm")" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Historia clinica N.</label>
+                    <input class="form-control" @bind="editor.NumeroHistoria" readonly="@historyExists" />
+                </div>
+                <div>
+                    <label class="form-label">Consultorio</label>
+                    <input class="form-control" @bind="editor.Consultorio" readonly="@historyExists" />
+                </div>
+                <div>
+                    <label class="form-label">Llave</label>
+                    <input class="form-control" @bind="editor.LlaveClinica" readonly="@historyExists" />
+                </div>
+                <div>
+                    <label class="form-label">Lugar de nacimiento</label>
+                    <input class="form-control" @bind="editor.LugarNacimiento" readonly="@historyExists" />
+                </div>
+                <div>
+                    <label class="form-label">Procedencia</label>
+                    <input class="form-control" @bind="editor.Procedencia" readonly="@historyExists" />
+                </div>
+                <div>
+                    <label class="form-label">Ultimo control</label>
+                    <input class="form-control" @bind="editor.UltimoControl" readonly="@historyExists" />
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Datos de apertura protegidos</h2>
+                <span>Snapshot inicial del paciente</span>
+            </div>
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div><label class="form-label">Apellidos</label><input class="form-control" value="@openingSnapshot.Apellidos" readonly /></div>
+                <div><label class="form-label">Nombres</label><input class="form-control" value="@openingSnapshot.Nombres" readonly /></div>
+                <div><label class="form-label">CI</label><input class="form-control" value="@openingSnapshot.Cedula" readonly /></div>
+                <div><label class="form-label">Genero</label><input class="form-control" value="@openingSnapshot.Genero" readonly /></div>
+                <div><label class="form-label">Fecha nacimiento</label><input class="form-control" value="@openingSnapshot.FechaNacimiento" readonly /></div>
+                <div><label class="form-label">Edad</label><input class="form-control" value="@openingSnapshot.Edad" readonly /></div>
+                <div><label class="form-label">Ocupacion</label><input class="form-control" value="@openingSnapshot.Ocupacion" readonly /></div>
+                <div><label class="form-label">Email</label><input class="form-control" value="@openingSnapshot.Email" readonly /></div>
+                <div class="clinical-span-2"><label class="form-label">Direccion</label><input class="form-control" value="@openingSnapshot.Direccion" readonly /></div>
+                <div><label class="form-label">Telefono</label><input class="form-control" value="@openingSnapshot.Telefono" readonly /></div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Motivo y anamnesis</h2>
+                <span>Bloque principal de consulta</span>
+            </div>
+            <div class="clinical-stack">
+                <div>
+                    <label class="form-label">Motivo de consulta</label>
+                    <textarea class="form-control" rows="3" @bind="editor.MotivoConsulta"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Anamnesis</label>
+                    <textarea class="form-control" rows="5" @bind="editor.Anamnesis"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Antecedentes</h2>
+                <span>Personales y familiares</span>
+            </div>
+            <div class="clinical-grid-2" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">Personales oculares</label>
+                    <textarea class="form-control" rows="4" @bind="editor.Antecedentes.PersonalesOculares"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Personales generales</label>
+                    <textarea class="form-control" rows="4" @bind="editor.Antecedentes.PersonalesGenerales"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Familiares oculares</label>
+                    <textarea class="form-control" rows="4" @bind="editor.Antecedentes.FamiliaresOculares"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Familiares generales</label>
+                    <textarea class="form-control" rows="4" @bind="editor.Antecedentes.FamiliaresGenerales"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Lensometria y agudeza visual</h2>
+                <span>Lectura base y vision</span>
+            </div>
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div><label class="form-label">Usa lentes</label><input type="checkbox" class="form-check-input" style="margin-left:0.2rem;" @bind="editor.UsaLentes" /></div>
+                <div><label class="form-label">ADD</label><input class="form-control" @bind="editor.Lentes.Addicion" /></div>
+                <div><label class="form-label">Prismas</label><input class="form-control" @bind="editor.Lentes.Prismas" /></div>
+                <div><label class="form-label">Dist. pupilar</label><input class="form-control" @bind="editor.Lentes.DistPupilar" /></div>
+                <div><label class="form-label">OD</label><input class="form-control" @bind="editor.Lentes.Od" /></div>
+                <div><label class="form-label">OI</label><input class="form-control" @bind="editor.Lentes.Oi" /></div>
+                <div><label class="form-label">AO</label><input class="form-control" @bind="editor.Lentes.Ao" /></div>
+                <div><label class="form-label">Tipo de lente</label><input class="form-control" @bind="editor.Lentes.TipoLente" /></div>
+                <div><label class="form-label">Material</label><input class="form-control" @bind="editor.Lentes.Material" /></div>
+                <div><label class="form-label">Filtro</label><input class="form-control" @bind="editor.Lentes.Filtro" /></div>
+                <div><label class="form-label">Tiempo de uso RX</label><input class="form-control" @bind="editor.Lentes.TiempoUsoRx" /></div>
+                <div class="clinical-span-4"><label class="form-label">Observaciones del lente</label><textarea class="form-control" rows="3" @bind="editor.Lentes.Observaciones"></textarea></div>
+            </div>
+
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div><label class="form-label">AV VL SC OD</label><input class="form-control" @bind="editor.Visual.OdVlSc" /></div>
+                <div><label class="form-label">AV VL SC OI</label><input class="form-control" @bind="editor.Visual.OiVlSc" /></div>
+                <div><label class="form-label">AV VL SC AO</label><input class="form-control" @bind="editor.Visual.AoVlSc" /></div>
+                <div><label class="form-label">PH</label><input class="form-control" @bind="editor.Visual.Ph" /></div>
+                <div><label class="form-label">AV VP SC OD</label><input class="form-control" @bind="editor.Visual.OdVpSc" /></div>
+                <div><label class="form-label">AV VP SC OI</label><input class="form-control" @bind="editor.Visual.OiVpSc" /></div>
+                <div><label class="form-label">AV VP SC AO</label><input class="form-control" @bind="editor.Visual.AoVpSc" /></div>
+                <div><label class="form-label">Dominancia</label><input class="form-control" @bind="editor.Visual.Dominancia" /></div>
+                <div><label class="form-label">Optotipo</label><input class="form-control" @bind="editor.Visual.Optotipo" /></div>
+                <div><label class="form-label">Distancia VL</label><input class="form-control" @bind="editor.Visual.DistanciaVl" /></div>
+                <div><label class="form-label">Distancia VP</label><input class="form-control" @bind="editor.Visual.DistanciaVp" /></div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Examen externo / biomicroscopia</h2>
+                <span>Grafico ocular y hallazgos</span>
+            </div>
+            <div class="clinical-grid-2" style="margin-top: 1rem;">
+                <EyeDiagramEditor Label="OD" @bind-Value="editor.Biomicroscopia.GraphicOd" />
+                <EyeDiagramEditor Label="OI" @bind-Value="editor.Biomicroscopia.GraphicOi" />
+            </div>
+            <div class="clinical-odoi-grid">
+                <div class="clinical-odoi-head">Hallazgo</div>
+                <div class="clinical-odoi-head">OD</div>
+                <div class="clinical-odoi-head">OI</div>
+                <div class="clinical-odoi-label">Orbita / cejas</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.OrbitaOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.OrbitaOi" />
+                <div class="clinical-odoi-label">Parpados / pestanas</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.ParpadosOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.ParpadosOi" />
+                <div class="clinical-odoi-label">Sistema lagrimal</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.SistemaLagrimalOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.SistemaLagrimalOi" />
+                <div class="clinical-odoi-label">Conjuntiva / esclera</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.ConjuntivaOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.ConjuntivaOi" />
+                <div class="clinical-odoi-label">Cornea / camara anterior</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.CorneaOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.CorneaOi" />
+                <div class="clinical-odoi-label">Iris / pupila</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.IrisOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.IrisOi" />
+                <div class="clinical-odoi-label">Cristalino</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.CristalinoOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.CristalinoOi" />
+                <div class="clinical-odoi-label">Test adicionales</div>
+                <input class="form-control" @bind="editor.Biomicroscopia.TestAdicionalesOd" />
+                <input class="form-control" @bind="editor.Biomicroscopia.TestAdicionalesOi" />
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Oftalmoscopia</h2>
+                <span>Fondo de ojo y hallazgos</span>
+            </div>
+            <div class="clinical-grid-2" style="margin-top: 1rem;">
+                <EyeDiagramEditor Label="OD" @bind-Value="editor.Oftalmoscopia.GraphicOd" />
+                <EyeDiagramEditor Label="OI" @bind-Value="editor.Oftalmoscopia.GraphicOi" />
+            </div>
+            <div class="clinical-odoi-grid">
+                <div class="clinical-odoi-head">Hallazgo</div>
+                <div class="clinical-odoi-head">OD</div>
+                <div class="clinical-odoi-head">OI</div>
+                <div class="clinical-odoi-label">Papila / excavacion</div>
+                <input class="form-control" @bind="editor.Oftalmoscopia.PapilaOd" />
+                <input class="form-control" @bind="editor.Oftalmoscopia.PapilaOi" />
+                <div class="clinical-odoi-label">Vasos / arteria / vena</div>
+                <input class="form-control" @bind="editor.Oftalmoscopia.VasosOd" />
+                <input class="form-control" @bind="editor.Oftalmoscopia.VasosOi" />
+                <div class="clinical-odoi-label">Macula / fijacion</div>
+                <input class="form-control" @bind="editor.Oftalmoscopia.MaculaOd" />
+                <input class="form-control" @bind="editor.Oftalmoscopia.MaculaOi" />
+                <div class="clinical-odoi-label">Tapete / regularidad y color</div>
+                <input class="form-control" @bind="editor.Oftalmoscopia.TapeteOd" />
+                <input class="form-control" @bind="editor.Oftalmoscopia.TapeteOi" />
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Examen motor y refraccion</h2>
+                <span>Bloques tecnicos de consulta</span>
+            </div>
+            <div class="clinical-grid-2" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">Examen motor</label>
+                    <textarea class="form-control" rows="8" @bind="editor.Motor.Resumen"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Ducciones / versiones / Maddox / Worth</label>
+                    <textarea class="form-control" rows="8" @bind="editor.Motor.HallazgosComplementarios"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Queratometria y miras</label>
+                    <textarea class="form-control" rows="6" @bind="editor.Keratometria.Resumen"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Astigmatismo corneal</label>
+                    <textarea class="form-control" rows="6" @bind="editor.Keratometria.AstigmatismoCorneal"></textarea>
+                </div>
+            </div>
+
+            <div class="clinical-grid-2" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">RX estatica y dinamica</label>
+                    <textarea class="form-control" rows="8" @bind="editor.Refraction.RxEstaticaDinamica"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Subjetivo, afinacion y balance binocular</label>
+                    <textarea class="form-control" rows="8" @bind="editor.Refraction.SubjetivoAfinacionBalance"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Prueba ambulatoria y RX final</label>
+                    <textarea class="form-control" rows="8" @bind="editor.Refraction.PruebaAmbulatoriaRxFinal"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Observaciones tecnicas</label>
+                    <textarea class="form-control" rows="8" @bind="editor.Refraction.Observaciones"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Diagnostico y conducta</h2>
+                <span>Cierre clinico</span>
+            </div>
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div class="clinical-span-3"><label class="form-label">Diagnostico OD</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOd" /></div>
+                <div><label class="form-label">CIE10</label><input class="form-control" @bind="editor.Diagnostico.Cie10" /></div>
+                <div class="clinical-span-2"><label class="form-label">Diagnostico OI</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOi" /></div>
+                <div class="clinical-span-2"><label class="form-label">Motor</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoMotor" /></div>
+                <div class="clinical-span-4"><label class="form-label">Patologico presuntivo</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.PatologicoPresuntivo"></textarea></div>
+                <div class="clinical-span-4"><label class="form-label">Tratamiento / disposicion / conducta</label><textarea class="form-control" rows="4" @bind="editor.Diagnostico.TratamientoConducta"></textarea></div>
+                <div class="clinical-span-4"><label class="form-label">Observaciones generales</label><textarea class="form-control" rows="4" @bind="editor.ObservacionesGenerales"></textarea></div>
+                <div class="clinical-span-2"><label class="form-label">Nombre del examinador</label><input class="form-control" @bind="editor.NombreExaminador" /></div>
+                <div class="clinical-span-2"><label class="form-label">Nivel paralelo y jornada</label><input class="form-control" @bind="editor.NivelParaleloJornada" /></div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Consentimiento informado</h2>
+                <span>Registro final</span>
+            </div>
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div class="clinical-span-2"><label class="form-label">Yo,</label><input class="form-control" @bind="editor.Consentimiento.Nombre" /></div>
+                <div><label class="form-label">CC</label><input class="form-control" @bind="editor.Consentimiento.Cedula" /></div>
+                <div><label class="form-label">Firma / referencia</label><input class="form-control" @bind="editor.Consentimiento.FirmaReferencia" /></div>
+                <div class="clinical-span-4">
+                    <label class="form-label">Texto de consentimiento</label>
+                    <textarea class="form-control" rows="4" @bind="editor.Consentimiento.Texto"></textarea>
+                </div>
+                <div>
+                    <label class="form-label">Autoriza</label>
+                    <input type="checkbox" class="form-check-input" style="margin-left:0.2rem;" @bind="editor.Consentimiento.Autorizado" />
+                </div>
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "patientId")]
+    public int? PatientId { get; set; }
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private tbl_paciente? patient;
+    private tbl_historia_clinica_optometria? history;
+    private OpeningSnapshot? openingSnapshot;
+    private HistoryEditorModel? editor;
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool historyExists;
+    private int currentUserId;
+    private int currentRoleId;
+    private string? statusMessage;
+    private string? errorMessage;
+    private string historyOpenedLabel = "Sin apertura";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+        currentRoleId = int.TryParse(authState.User.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+
+        if (!PatientId.HasValue || PatientId.Value <= 0 || currentUserId <= 0)
+        {
+            canViewModule = false;
+            isLoading = false;
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        patient = await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.id_paciente == PatientId.Value);
+
+        if (patient is null)
+        {
+            canViewModule = false;
+            isLoading = false;
+            return;
+        }
+
+        canViewModule = currentRoleId == 1 || await dbContext.tbl_consulta
+            .AsNoTracking()
+            .AnyAsync(x => x.id_paciente == patient.id_paciente && x.id_optometra == currentUserId);
+
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        history = await dbContext.tbl_historia_clinica_optometrias
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.id_paciente == patient.id_paciente && x.activo == true);
+
+        historyExists = history is not null;
+        openingSnapshot = history is null
+            ? BuildOpeningSnapshot(patient)
+            : Deserialize<OpeningSnapshot>(history.datos_apertura_json) ?? BuildOpeningSnapshot(patient);
+
+        editor = history is null ? BuildNewEditor(patient) : BuildEditor(history);
+        historyOpenedLabel = history?.fecha_apertura?.ToString("yyyy-MM-dd HH:mm") ?? "Sin apertura";
+        isLoading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (patient is null || editor is null || openingSnapshot is null)
+        {
+            errorMessage = "No existe un paciente valido para guardar la historia clinica.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta))
+        {
+            errorMessage = "Ingresa el motivo de consulta.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.NumeroHistoria))
+        {
+            errorMessage = "Define el numero de historia clinica.";
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_historia_clinica_optometrias
+            .FirstOrDefaultAsync(x => x.id_paciente == patient.id_paciente);
+
+        if (entity is null)
+        {
+            entity = new tbl_historia_clinica_optometria
+            {
+                id_paciente = patient.id_paciente,
+                id_optometra_apertura = currentUserId,
+                fecha_apertura = DateTime.Now,
+                numero_historia = NormalizeOptional(editor.NumeroHistoria),
+                consultorio = NormalizeOptional(editor.Consultorio),
+                llave_clinica = NormalizeOptional(editor.LlaveClinica),
+                lugar_nacimiento = NormalizeOptional(editor.LugarNacimiento),
+                procedencia = NormalizeOptional(editor.Procedencia),
+                ultimo_control = NormalizeOptional(editor.UltimoControl),
+                datos_apertura_json = JsonSerializer.Serialize(openingSnapshot, JsonOptions),
+                activo = true
+            };
+
+            dbContext.tbl_historia_clinica_optometrias.Add(entity);
+        }
+
+        entity.id_optometra_ultima_actualizacion = currentUserId;
+        entity.fecha_ultima_actualizacion = DateTime.Now;
+        entity.motivo_consulta = NormalizeOptional(editor.MotivoConsulta);
+        entity.anamnesis = NormalizeOptional(editor.Anamnesis);
+        entity.antecedentes_json = Serialize(editor.Antecedentes);
+        entity.usa_lentes = editor.UsaLentes;
+        entity.lentes_json = Serialize(editor.Lentes);
+        entity.agudeza_visual_json = Serialize(editor.Visual);
+        entity.biomicroscopia_json = Serialize(editor.Biomicroscopia);
+        entity.oftalmoscopia_json = Serialize(editor.Oftalmoscopia);
+        entity.examen_motor_json = Serialize(editor.Motor);
+        entity.queratometria_json = Serialize(editor.Keratometria);
+        entity.refraccion_json = Serialize(editor.Refraction);
+        entity.diagnostico_json = Serialize(editor.Diagnostico);
+        entity.observaciones_generales = NormalizeOptional(editor.ObservacionesGenerales);
+        entity.nombre_examinador = NormalizeOptional(editor.NombreExaminador);
+        entity.nivel_paralelo_jornada = NormalizeOptional(editor.NivelParaleloJornada);
+        entity.consentimiento_json = Serialize(editor.Consentimiento);
+
+        await dbContext.SaveChangesAsync();
+
+        historyExists = true;
+        statusMessage = "La historia clinica se guardo correctamente.";
+        await LoadAsync();
+    }
+
+    private static HistoryEditorModel BuildNewEditor(tbl_paciente patient)
+    {
+        return new HistoryEditorModel
+        {
+            NumeroHistoria = string.IsNullOrWhiteSpace(patient.codigo_paciente) ? $"HC-{patient.id_paciente:D5}" : patient.codigo_paciente!,
+            NombreExaminador = string.Empty,
+            Lentes = new LensSection(),
+            Visual = new VisualSection(),
+            Antecedentes = new AntecedentsSection(),
+            Biomicroscopia = new BiomicroscopiaSection(),
+            Oftalmoscopia = new OftalmoscopiaSection(),
+            Motor = new MotorExamSection(),
+            Keratometria = new KeratometrySection(),
+            Refraction = new RefractionSection(),
+            Diagnostico = new DiagnosisSection(),
+            Consentimiento = new ConsentSection
+            {
+                Nombre = $"{patient.nombres} {patient.apellidos}".Trim(),
+                Cedula = patient.cedula,
+                Texto = "Permito que se me realicen pruebas no invasivas para la evaluacion visual y el uso clinico anonimizado de los resultados."
+            }
+        };
+    }
+
+    private static HistoryEditorModel BuildEditor(tbl_historia_clinica_optometria history)
+    {
+        return new HistoryEditorModel
+        {
+            NumeroHistoria = history.numero_historia ?? string.Empty,
+            Consultorio = history.consultorio ?? string.Empty,
+            LlaveClinica = history.llave_clinica ?? string.Empty,
+            LugarNacimiento = history.lugar_nacimiento ?? string.Empty,
+            Procedencia = history.procedencia ?? string.Empty,
+            UltimoControl = history.ultimo_control ?? string.Empty,
+            MotivoConsulta = history.motivo_consulta ?? string.Empty,
+            Anamnesis = history.anamnesis ?? string.Empty,
+            UsaLentes = history.usa_lentes ?? false,
+            ObservacionesGenerales = history.observaciones_generales ?? string.Empty,
+            NombreExaminador = history.nombre_examinador ?? string.Empty,
+            NivelParaleloJornada = history.nivel_paralelo_jornada ?? string.Empty,
+            Antecedentes = Deserialize<AntecedentsSection>(history.antecedentes_json) ?? new AntecedentsSection(),
+            Lentes = Deserialize<LensSection>(history.lentes_json) ?? new LensSection(),
+            Visual = Deserialize<VisualSection>(history.agudeza_visual_json) ?? new VisualSection(),
+            Biomicroscopia = Deserialize<BiomicroscopiaSection>(history.biomicroscopia_json) ?? new BiomicroscopiaSection(),
+            Oftalmoscopia = Deserialize<OftalmoscopiaSection>(history.oftalmoscopia_json) ?? new OftalmoscopiaSection(),
+            Motor = Deserialize<MotorExamSection>(history.examen_motor_json) ?? new MotorExamSection(),
+            Keratometria = Deserialize<KeratometrySection>(history.queratometria_json) ?? new KeratometrySection(),
+            Refraction = Deserialize<RefractionSection>(history.refraccion_json) ?? new RefractionSection(),
+            Diagnostico = Deserialize<DiagnosisSection>(history.diagnostico_json) ?? new DiagnosisSection(),
+            Consentimiento = Deserialize<ConsentSection>(history.consentimiento_json) ?? new ConsentSection()
+        };
+    }
+
+    private static OpeningSnapshot BuildOpeningSnapshot(tbl_paciente patient)
+    {
+        return new OpeningSnapshot
+        {
+            Apellidos = patient.apellidos,
+            Nombres = patient.nombres,
+            Cedula = patient.cedula,
+            FechaNacimiento = patient.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty,
+            Edad = patient.edad?.ToString() ?? string.Empty,
+            Genero = patient.genero ?? string.Empty,
+            Ocupacion = patient.ocupacion ?? string.Empty,
+            Email = patient.email ?? string.Empty,
+            Direccion = patient.direccion ?? string.Empty,
+            Telefono = patient.telefono ?? string.Empty
+        };
+    }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string Serialize<T>(T model) where T : class
+        => JsonSerializer.Serialize(model, JsonOptions);
+
+    private static T? Deserialize<T>(string? value) where T : class
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(value, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private sealed class HistoryEditorModel
+    {
+        public string NumeroHistoria { get; set; } = string.Empty;
+        public string Consultorio { get; set; } = string.Empty;
+        public string LlaveClinica { get; set; } = string.Empty;
+        public string LugarNacimiento { get; set; } = string.Empty;
+        public string Procedencia { get; set; } = string.Empty;
+        public string UltimoControl { get; set; } = string.Empty;
+        public string MotivoConsulta { get; set; } = string.Empty;
+        public string Anamnesis { get; set; } = string.Empty;
+        public bool UsaLentes { get; set; }
+        public string ObservacionesGenerales { get; set; } = string.Empty;
+        public string NombreExaminador { get; set; } = string.Empty;
+        public string NivelParaleloJornada { get; set; } = string.Empty;
+        public AntecedentsSection Antecedentes { get; set; } = new();
+        public LensSection Lentes { get; set; } = new();
+        public VisualSection Visual { get; set; } = new();
+        public BiomicroscopiaSection Biomicroscopia { get; set; } = new();
+        public OftalmoscopiaSection Oftalmoscopia { get; set; } = new();
+        public MotorExamSection Motor { get; set; } = new();
+        public KeratometrySection Keratometria { get; set; } = new();
+        public RefractionSection Refraction { get; set; } = new();
+        public DiagnosisSection Diagnostico { get; set; } = new();
+        public ConsentSection Consentimiento { get; set; } = new();
+    }
+
+    private sealed class OpeningSnapshot
+    {
+        public string Apellidos { get; set; } = string.Empty;
+        public string Nombres { get; set; } = string.Empty;
+        public string Cedula { get; set; } = string.Empty;
+        public string FechaNacimiento { get; set; } = string.Empty;
+        public string Edad { get; set; } = string.Empty;
+        public string Genero { get; set; } = string.Empty;
+        public string Ocupacion { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+    }
+
+    private sealed class AntecedentsSection
+    {
+        public string PersonalesOculares { get; set; } = string.Empty;
+        public string PersonalesGenerales { get; set; } = string.Empty;
+        public string FamiliaresOculares { get; set; } = string.Empty;
+        public string FamiliaresGenerales { get; set; } = string.Empty;
+    }
+
+    private sealed class LensSection
+    {
+        public string Addicion { get; set; } = string.Empty;
+        public string Prismas { get; set; } = string.Empty;
+        public string Od { get; set; } = string.Empty;
+        public string Oi { get; set; } = string.Empty;
+        public string Ao { get; set; } = string.Empty;
+        public string TipoLente { get; set; } = string.Empty;
+        public string Material { get; set; } = string.Empty;
+        public string Filtro { get; set; } = string.Empty;
+        public string TiempoUsoRx { get; set; } = string.Empty;
+        public string DistPupilar { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+    }
+
+    private sealed class VisualSection
+    {
+        public string DistanciaVl { get; set; } = "6 metros";
+        public string DistanciaVp { get; set; } = "40 cm";
+        public string Ph { get; set; } = string.Empty;
+        public string Dominancia { get; set; } = string.Empty;
+        public string Optotipo { get; set; } = string.Empty;
+        public string OdVlSc { get; set; } = string.Empty;
+        public string OiVlSc { get; set; } = string.Empty;
+        public string AoVlSc { get; set; } = string.Empty;
+        public string OdVpSc { get; set; } = string.Empty;
+        public string OiVpSc { get; set; } = string.Empty;
+        public string AoVpSc { get; set; } = string.Empty;
+    }
+
+    private sealed class BiomicroscopiaSection
+    {
+        public string GraphicOd { get; set; } = string.Empty;
+        public string GraphicOi { get; set; } = string.Empty;
+        public string OrbitaOd { get; set; } = string.Empty;
+        public string OrbitaOi { get; set; } = string.Empty;
+        public string ParpadosOd { get; set; } = string.Empty;
+        public string ParpadosOi { get; set; } = string.Empty;
+        public string SistemaLagrimalOd { get; set; } = string.Empty;
+        public string SistemaLagrimalOi { get; set; } = string.Empty;
+        public string ConjuntivaOd { get; set; } = string.Empty;
+        public string ConjuntivaOi { get; set; } = string.Empty;
+        public string CorneaOd { get; set; } = string.Empty;
+        public string CorneaOi { get; set; } = string.Empty;
+        public string IrisOd { get; set; } = string.Empty;
+        public string IrisOi { get; set; } = string.Empty;
+        public string CristalinoOd { get; set; } = string.Empty;
+        public string CristalinoOi { get; set; } = string.Empty;
+        public string TestAdicionalesOd { get; set; } = string.Empty;
+        public string TestAdicionalesOi { get; set; } = string.Empty;
+    }
+
+    private sealed class OftalmoscopiaSection
+    {
+        public string GraphicOd { get; set; } = string.Empty;
+        public string GraphicOi { get; set; } = string.Empty;
+        public string PapilaOd { get; set; } = string.Empty;
+        public string PapilaOi { get; set; } = string.Empty;
+        public string VasosOd { get; set; } = string.Empty;
+        public string VasosOi { get; set; } = string.Empty;
+        public string MaculaOd { get; set; } = string.Empty;
+        public string MaculaOi { get; set; } = string.Empty;
+        public string TapeteOd { get; set; } = string.Empty;
+        public string TapeteOi { get; set; } = string.Empty;
+    }
+
+    private sealed class MotorExamSection
+    {
+        public string Resumen { get; set; } = string.Empty;
+        public string HallazgosComplementarios { get; set; } = string.Empty;
+    }
+
+    private sealed class KeratometrySection
+    {
+        public string Resumen { get; set; } = string.Empty;
+        public string AstigmatismoCorneal { get; set; } = string.Empty;
+    }
+
+    private sealed class RefractionSection
+    {
+        public string RxEstaticaDinamica { get; set; } = string.Empty;
+        public string SubjetivoAfinacionBalance { get; set; } = string.Empty;
+        public string PruebaAmbulatoriaRxFinal { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+    }
+
+    private sealed class DiagnosisSection
+    {
+        public string DiagnosticoOd { get; set; } = string.Empty;
+        public string DiagnosticoOi { get; set; } = string.Empty;
+        public string DiagnosticoMotor { get; set; } = string.Empty;
+        public string Cie10 { get; set; } = string.Empty;
+        public string PatologicoPresuntivo { get; set; } = string.Empty;
+        public string TratamientoConducta { get; set; } = string.Empty;
+    }
+
+    private sealed class ConsentSection
+    {
+        public string Nombre { get; set; } = string.Empty;
+        public string Cedula { get; set; } = string.Empty;
+        public string FirmaReferencia { get; set; } = string.Empty;
+        public string Texto { get; set; } = string.Empty;
+        public bool Autorizado { get; set; }
+    }
+}
+
+<style>
+    .clinical-card {
+        margin-top: 1.25rem;
+    }
+
+    .clinical-header-grid,
+    .clinical-grid-2,
+    .clinical-grid-4,
+    .clinical-stack {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .clinical-header-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .clinical-grid-2 {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+
+    .clinical-grid-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .clinical-stack {
+        grid-template-columns: 1fr;
+    }
+
+    .clinical-highlight {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.7);
+    }
+
+    .clinical-highlight strong {
+        display: block;
+        color: var(--color-ink);
+        font-size: 1.05rem;
+    }
+
+    .clinical-highlight p {
+        margin: 0.35rem 0 0;
+        color: var(--color-taupe);
+    }
+
+    .clinical-span-2 {
+        grid-column: span 2;
+    }
+
+    .clinical-span-3 {
+        grid-column: span 3;
+    }
+
+    .clinical-span-4 {
+        grid-column: span 4;
+    }
+
+    .clinical-odoi-grid {
+        display: grid;
+        grid-template-columns: minmax(180px, 0.8fr) 1fr 1fr;
+        gap: 0.75rem;
+        margin-top: 1rem;
+        align-items: center;
+    }
+
+    .clinical-odoi-head,
+    .clinical-odoi-label {
+        font-weight: 600;
+        color: var(--color-ink);
+    }
+
+    @@media (max-width: 1100px) {
+        .clinical-grid-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .clinical-span-3,
+        .clinical-span-4 {
+            grid-column: span 2;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .clinical-grid-4,
+        .clinical-odoi-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .clinical-span-2,
+        .clinical-span-3,
+        .clinical-span-4 {
+            grid-column: span 1;
+        }
+    }
+</style>

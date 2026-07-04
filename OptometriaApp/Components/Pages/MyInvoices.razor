@@ -102,10 +102,14 @@ else
                 <section class="documents-card">
                     <div class="management-card-header">
                         <h2>Facturas emitidas</h2>
-                        <span>@issuedInvoices.Count registros</span>
+                        <span>@FilteredIssuedInvoices.Count registros</span>
                     </div>
 
-                    @if (issuedInvoices.Count == 0)
+                    <div style="margin-top: 1rem;">
+                        <input class="form-control" @bind="invoiceSearchTerm" @bind:event="oninput" placeholder="Buscar por factura, cliente, paciente, cedula o identificacion" />
+                    </div>
+
+                    @if (FilteredIssuedInvoices.Count == 0)
                     {
                         <p style="margin: 1rem 0 0;">No hay facturas emitidas para mostrar.</p>
                     }
@@ -127,7 +131,7 @@ else
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var item in issuedInvoices)
+                                    @foreach (var item in FilteredIssuedInvoices)
                                     {
                                         <tr>
                                             <td><strong>@item.InvoiceNumber</strong></td>
@@ -243,8 +247,12 @@ else
     private bool canViewModule;
     private int currentUserId;
     private int currentRoleId;
+    private string invoiceSearchTerm = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private List<IssuedInvoiceRow> FilteredIssuedInvoices => issuedInvoices
+        .Where(MatchesInvoiceSearch)
+        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -294,8 +302,10 @@ else
                 sale.valor_cobrado,
                 sale.saldo_pendiente,
                 client.razon_social,
+                client.numero_identificacion,
                 ClientFirstName = client.nombres,
                 ClientLastName = client.apellidos,
+                PatientIdentification = patient != null ? patient.cedula : string.Empty,
                 PatientFirstName = patient != null ? patient.nombres : string.Empty,
                 PatientLastName = patient != null ? patient.apellidos : string.Empty
             })
@@ -315,7 +325,9 @@ else
             ComprobanteId = item.id_comprobante,
             InvoiceNumber = item.InvoiceNumber ?? "Sin numero",
             ClientName = GetDisplayClientName(item.razon_social, item.ClientFirstName, item.ClientLastName),
+            ClientIdentification = item.numero_identificacion ?? string.Empty,
             PatientName = GetDisplayPersonName(item.PatientFirstName, item.PatientLastName),
+            PatientIdentification = item.PatientIdentification ?? string.Empty,
             IssueDate = item.IssueDate ?? DateTime.Now,
             State = item.SaleState ?? "Facturada",
             TotalAmount = item.total ?? 0m,
@@ -415,6 +427,24 @@ else
         return string.IsNullOrWhiteSpace(fullName) ? "Sin dato" : fullName;
     }
 
+    private bool MatchesInvoiceSearch(IssuedInvoiceRow item)
+    {
+        var search = invoiceSearchTerm.Trim();
+        if (string.IsNullOrEmpty(search))
+        {
+            return true;
+        }
+
+        return ContainsSearch(item.InvoiceNumber, search)
+            || ContainsSearch(item.ClientName, search)
+            || ContainsSearch(item.ClientIdentification, search)
+            || ContainsSearch(item.PatientName, search)
+            || ContainsSearch(item.PatientIdentification, search);
+    }
+
+    private static bool ContainsSearch(string? value, string search)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(search, StringComparison.OrdinalIgnoreCase);
+
     private sealed class ModulePermissions
     {
         public bool CanView { get; set; }
@@ -428,7 +458,9 @@ else
         public int ComprobanteId { get; set; }
         public string InvoiceNumber { get; set; } = string.Empty;
         public string ClientName { get; set; } = string.Empty;
+        public string ClientIdentification { get; set; } = string.Empty;
         public string PatientName { get; set; } = "Sin dato";
+        public string PatientIdentification { get; set; } = string.Empty;
         public DateTime IssueDate { get; set; }
         public string State { get; set; } = "Facturada";
         public decimal TotalAmount { get; set; }

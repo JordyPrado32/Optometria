@@ -106,6 +106,7 @@ await EnsureProductSchemaAsync(app);
 await EnsureSupplierSchemaAsync(app);
 await EnsureProcurementSchemaAsync(app);
 await EnsureAppointmentSchemaAsync(app);
+await EnsureClinicalHistorySchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -3426,6 +3427,61 @@ static async Task EnsureProcurementSchemaAsync(WebApplication app)
             ALTER TABLE dbo.tbl_kardex ADD CONSTRAINT FK_kardex_lote FOREIGN KEY (id_lote) REFERENCES dbo.tbl_lote_producto(id_lote);
         IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_kardex_usuario')
             ALTER TABLE dbo.tbl_kardex ADD CONSTRAINT FK_kardex_usuario FOREIGN KEY (id_usuario_movimiento) REFERENCES dbo.tbl_usuario(id_usuario);
+        """);
+}
+
+static async Task EnsureClinicalHistorySchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.tbl_historia_clinica_optometria', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_historia_clinica_optometria
+            (
+                id_historia_clinica INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_paciente INT NOT NULL,
+                id_optometra_apertura INT NOT NULL,
+                id_optometra_ultima_actualizacion INT NULL,
+                fecha_apertura DATETIME NOT NULL CONSTRAINT DF_tbl_historia_clinica_optometria_fecha_apertura DEFAULT (GETDATE()),
+                fecha_ultima_actualizacion DATETIME NOT NULL CONSTRAINT DF_tbl_historia_clinica_optometria_fecha_actualizacion DEFAULT (GETDATE()),
+                numero_historia VARCHAR(50) NULL,
+                consultorio VARCHAR(120) NULL,
+                llave_clinica VARCHAR(120) NULL,
+                lugar_nacimiento VARCHAR(150) NULL,
+                procedencia VARCHAR(150) NULL,
+                ultimo_control VARCHAR(150) NULL,
+                datos_apertura_json VARCHAR(MAX) NULL,
+                motivo_consulta VARCHAR(MAX) NULL,
+                anamnesis VARCHAR(MAX) NULL,
+                antecedentes_json VARCHAR(MAX) NULL,
+                usa_lentes BIT NOT NULL CONSTRAINT DF_tbl_historia_clinica_optometria_usa_lentes DEFAULT (0),
+                lentes_json VARCHAR(MAX) NULL,
+                agudeza_visual_json VARCHAR(MAX) NULL,
+                biomicroscopia_json VARCHAR(MAX) NULL,
+                oftalmoscopia_json VARCHAR(MAX) NULL,
+                examen_motor_json VARCHAR(MAX) NULL,
+                queratometria_json VARCHAR(MAX) NULL,
+                refraccion_json VARCHAR(MAX) NULL,
+                diagnostico_json VARCHAR(MAX) NULL,
+                observaciones_generales VARCHAR(MAX) NULL,
+                nombre_examinador VARCHAR(200) NULL,
+                nivel_paralelo_jornada VARCHAR(200) NULL,
+                consentimiento_json VARCHAR(MAX) NULL,
+                activo BIT NOT NULL CONSTRAINT DF_tbl_historia_clinica_optometria_activo DEFAULT (1),
+                CONSTRAINT UQ_tbl_historia_clinica_optometria_paciente UNIQUE (id_paciente),
+                CONSTRAINT FK_tbl_historia_clinica_optometria_paciente FOREIGN KEY (id_paciente) REFERENCES dbo.tbl_paciente(id_paciente) ON DELETE CASCADE,
+                CONSTRAINT FK_tbl_historia_clinica_optometria_optometra_apertura FOREIGN KEY (id_optometra_apertura) REFERENCES dbo.tbl_usuario(id_usuario),
+                CONSTRAINT FK_tbl_historia_clinica_optometria_optometra_actualiza FOREIGN KEY (id_optometra_ultima_actualizacion) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_historia_clinica_optometria_optometra' AND object_id = OBJECT_ID('dbo.tbl_historia_clinica_optometria'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_tbl_historia_clinica_optometria_optometra ON dbo.tbl_historia_clinica_optometria(id_optometra_apertura);
+        END;
         """);
 }
 

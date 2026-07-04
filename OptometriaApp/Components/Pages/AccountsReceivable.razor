@@ -150,6 +150,30 @@ else
                     <span>Abonado</span>
                     <strong>@PortfolioCollected.ToString("0.00")</strong>
                 </div>
+                <div class="receivable-kpi">
+                    <span>0 a 30 dias</span>
+                    <strong>@AgingBalance0To30.ToString("0.00")</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>31 a 60 dias</span>
+                    <strong>@AgingBalance31To60.ToString("0.00")</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>61 a 90 dias</span>
+                    <strong>@AgingBalance61To90.ToString("0.00")</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>90+ dias</span>
+                    <strong>@AgingBalanceOver90.ToString("0.00")</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>Vence hoy</span>
+                    <strong>@DueTodayBalance.ToString("0.00")</strong>
+                </div>
+                <div class="receivable-kpi">
+                    <span>Proximos 7 dias</span>
+                    <strong>@DueNext7Balance.ToString("0.00")</strong>
+                </div>
             </div>
         </section>
 
@@ -257,6 +281,7 @@ else
                                             {
                                                 <strong>@item.DueDate.Value.ToString("yyyy-MM-dd")</strong>
                                                 <div style="font-size: 0.78rem; color: var(--color-taupe);">@GetDueCaption(item)</div>
+                                                <div style="font-size: 0.75rem; color: @(item.DisplayStatus == "Vencida" ? "#e09b3c" : "var(--color-taupe)");">@GetAgingBucket(item)</div>
                                             }
                                         </td>
                                         <td>@item.TotalAmount.ToString("0.00")</td>
@@ -315,6 +340,10 @@ else
                                 <label>Vencimiento</label>
                                 <span>@(selectedAccount.DueDate?.ToString("yyyy-MM-dd") ?? "-")</span>
                             </div>
+                            <div>
+                                <label>Prioridad</label>
+                                <strong>@GetCollectionPriority(selectedAccount)</strong>
+                            </div>
                         </div>
                     </div>
 
@@ -331,6 +360,31 @@ else
                             <div>
                                 <label>Saldo actual</label>
                                 <strong>@selectedAccount.Balance.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Tramo aging</label>
+                                <strong>@GetAgingBucket(selectedAccount)</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="receivable-detail-block">
+                        <div class="management-card-header" style="margin-bottom: 1rem;">
+                            <h2 style="font-size: 1rem;">Consolidado del cliente</h2>
+                            <span>@SelectedClientOpenInvoices cuentas abiertas</span>
+                        </div>
+                        <div class="receivable-meta-grid">
+                            <div>
+                                <label>Saldo total cliente</label>
+                                <strong>@SelectedClientOpenBalance.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Saldo vencido</label>
+                                <strong>@SelectedClientOverdueBalance.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Facturas abiertas</label>
+                                <strong>@SelectedClientOpenInvoices</strong>
                             </div>
                         </div>
                     </div>
@@ -442,6 +496,18 @@ else
                                     <label>Correo destino</label>
                                     <span>@(string.IsNullOrWhiteSpace(statementDocument.ClientEmail) ? "Sin correo" : statementDocument.ClientEmail)</span>
                                 </div>
+                                <div>
+                                    <label>Estado cartera</label>
+                                    <strong>@statementDocument.StatusCaption</strong>
+                                </div>
+                                <div>
+                                    <label>Dias vencido</label>
+                                    <strong>@statementDocument.DaysPastDue</strong>
+                                </div>
+                                <div>
+                                    <label>Tramo aging</label>
+                                    <strong>@statementDocument.AgingBucket</strong>
+                                </div>
                             </div>
 
                             <div class="management-actions" style="margin-bottom: 1rem;">
@@ -545,6 +611,15 @@ else
     private decimal PortfolioBalance => FilteredAccounts.Sum(x => x.Balance);
     private decimal PortfolioCollected => FilteredAccounts.Sum(x => x.PaidAmount);
     private int OverdueAccountsCount => FilteredAccounts.Count(x => x.DisplayStatus == "Vencida");
+    private decimal AgingBalance0To30 => FilteredAccounts.Where(x => GetDaysPastDue(x) is >= 0 and <= 30).Sum(x => x.Balance);
+    private decimal AgingBalance31To60 => FilteredAccounts.Where(x => GetDaysPastDue(x) is >= 31 and <= 60).Sum(x => x.Balance);
+    private decimal AgingBalance61To90 => FilteredAccounts.Where(x => GetDaysPastDue(x) is >= 61 and <= 90).Sum(x => x.Balance);
+    private decimal AgingBalanceOver90 => FilteredAccounts.Where(x => GetDaysPastDue(x) > 90).Sum(x => x.Balance);
+    private decimal DueTodayBalance => FilteredAccounts.Where(x => x.DueDate == DateOnly.FromDateTime(DateTime.Today) && x.Balance > 0).Sum(x => x.Balance);
+    private decimal DueNext7Balance => FilteredAccounts.Where(x => x.DueDate >= DateOnly.FromDateTime(DateTime.Today) && x.DueDate <= DateOnly.FromDateTime(DateTime.Today).AddDays(7) && x.Balance > 0).Sum(x => x.Balance);
+    private decimal SelectedClientOpenBalance => selectedAccount is null ? 0m : accounts.Where(x => x.ClientId == selectedAccount.ClientId && x.Balance > 0).Sum(x => x.Balance);
+    private decimal SelectedClientOverdueBalance => selectedAccount is null ? 0m : accounts.Where(x => x.ClientId == selectedAccount.ClientId && x.DisplayStatus == "Vencida" && x.Balance > 0).Sum(x => x.Balance);
+    private int SelectedClientOpenInvoices => selectedAccount is null ? 0 : accounts.Count(x => x.ClientId == selectedAccount.ClientId && x.Balance > 0);
 
     protected override async Task OnInitializedAsync()
     {
@@ -750,6 +825,12 @@ else
             return;
         }
 
+        if (IsReferenceRequired(abonoEditor.MetodoPagoId) && string.IsNullOrWhiteSpace(abonoEditor.Referencia))
+        {
+            errorMessage = "La referencia es obligatoria para este metodo de pago.";
+            return;
+        }
+
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var account = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_cta_cobrar == selectedAccount.Id);
         if (account is null)
@@ -784,7 +865,7 @@ else
                 var total = sale.total ?? account.monto_total;
                 sale.valor_cobrado = Math.Min(total, (sale.valor_cobrado ?? 0m) + abonoEditor.Monto);
                 sale.saldo_pendiente = Math.Max(0m, total - (sale.valor_cobrado ?? 0m));
-                sale.estado = sale.saldo_pendiente > 0 ? "Credito" : "Facturada";
+                sale.estado = "Pendiente";
             }
         }
 
@@ -793,9 +874,7 @@ else
         {
             var clientBalance = await dbContext.tbl_cta_cobrar
                 .Where(x => x.id_cliente == client.cliente_id && x.id_cta_cobrar != account.id_cta_cobrar && x.estado == "Pendiente")
-                .Select(x => x.saldo)
-                .DefaultIfEmpty(0m)
-                .SumAsync();
+                .SumAsync(x => x.saldo);
 
             client.saldo_deudor = clientBalance + account.saldo;
             client.condicion_pago = client.saldo_deudor > 0 ? "Credito" : "Contado";
@@ -988,6 +1067,68 @@ else
         }
 
         return $"Faltan {days} dias";
+    }
+
+    private static int GetDaysPastDue(AccountReceivableRow item)
+    {
+        if (item.DueDate is null || item.Balance <= 0)
+        {
+            return -1;
+        }
+
+        return DateOnly.FromDateTime(DateTime.Today).DayNumber - item.DueDate.Value.DayNumber;
+    }
+
+    private static string GetAgingBucket(AccountReceivableRow item)
+    {
+        var daysPastDue = GetDaysPastDue(item);
+        if (item.Balance <= 0)
+        {
+            return "Sin saldo";
+        }
+
+        if (daysPastDue < 0)
+        {
+            return "Por vencer";
+        }
+
+        if (daysPastDue <= 30)
+        {
+            return "0-30 dias";
+        }
+
+        if (daysPastDue <= 60)
+        {
+            return "31-60 dias";
+        }
+
+        if (daysPastDue <= 90)
+        {
+            return "61-90 dias";
+        }
+
+        return "90+ dias";
+    }
+
+    private static string GetCollectionPriority(AccountReceivableRow item)
+    {
+        var daysPastDue = GetDaysPastDue(item);
+        return daysPastDue switch
+        {
+            > 90 => "Critica",
+            > 30 => "Alta",
+            >= 0 => "Media",
+            _ when item.Balance > 0 => "Preventiva",
+            _ => "Cerrada"
+        };
+    }
+
+    private bool IsReferenceRequired(int paymentMethodId)
+    {
+        var methodName = paymentMethods.FirstOrDefault(x => x.Id == paymentMethodId)?.Name ?? string.Empty;
+        return methodName.Contains("transfer", StringComparison.OrdinalIgnoreCase)
+            || methodName.Contains("tarjeta", StringComparison.OrdinalIgnoreCase)
+            || methodName.Contains("deposit", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string RenderStatusBadge(string status) => status switch
