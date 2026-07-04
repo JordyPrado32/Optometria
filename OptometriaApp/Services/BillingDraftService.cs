@@ -150,14 +150,20 @@ public sealed class BillingDraftService
         {
             draft = await dbContext.tbl_venta
                 .Include(x => x.tbl_detalle_venta)
-                .FirstOrDefaultAsync(x => x.id_cliente_facturacion == clientId.Value && (x.estado == "Pendiente" || x.estado == "Borrador"));
+                .FirstOrDefaultAsync(x =>
+                    x.id_cliente_facturacion == clientId.Value
+                    && (x.estado == "Pendiente" || x.estado == "Borrador")
+                    && !x.tbl_comprobantes.Any());
         }
 
         if (draft is null && patientId.HasValue && patientId.Value > 0)
         {
             draft = await dbContext.tbl_venta
                 .Include(x => x.tbl_detalle_venta)
-                .FirstOrDefaultAsync(x => x.id_paciente == patientId.Value && (x.estado == "Pendiente" || x.estado == "Borrador"));
+                .FirstOrDefaultAsync(x =>
+                    x.id_paciente == patientId.Value
+                    && (x.estado == "Pendiente" || x.estado == "Borrador")
+                    && !x.tbl_comprobantes.Any());
         }
 
         if (draft is not null)
@@ -167,7 +173,7 @@ public sealed class BillingDraftService
                 draft.id_cliente_facturacion = clientId.Value;
             }
 
-             if (draft.id_paciente <= 0 && patientId.HasValue && patientId.Value > 0)
+            if (draft.id_paciente <= 0 && patientId.HasValue && patientId.Value > 0)
             {
                 draft.id_paciente = patientId.Value;
             }
@@ -181,14 +187,14 @@ public sealed class BillingDraftService
             return draft;
         }
 
-        if (!patientId.HasValue || patientId.Value <= 0)
-        {
-            throw new InvalidOperationException("Selecciona un paciente valido antes de iniciar un borrador de factura. La base actual requiere asociar cada venta a un paciente.");
-        }
-
         if (!clientId.HasValue || clientId.Value <= 0)
         {
             throw new InvalidOperationException("Selecciona un cliente valido antes de iniciar un nuevo borrador de factura.");
+        }
+
+        if (!patientId.HasValue || patientId.Value <= 0)
+        {
+            throw new InvalidOperationException("Selecciona un paciente origen del grupo familiar para abrir el primer borrador. La factura seguira asociada al cliente de facturacion.");
         }
 
         draft = new tbl_venta

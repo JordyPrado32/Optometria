@@ -156,6 +156,11 @@ else
                                                     @onclick="() => OpenEditPatientModal(patient.id_paciente)">
                                                 <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> @(IsEntryMode ? "Editar" : "Ver")
                                             </button>
+                                            <a class="btn btn-outline-primary"
+                                               style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;"
+                                               href="@BuildClinicalHistoryUrl(patient.id_paciente)">
+                                                Historia
+                                            </a>
                                             @if (IsEntryMode && permissions.CanDelete)
                                             {
                                                 @if (patient.activo == true)
@@ -326,6 +331,10 @@ else
                 {
                     <button type="button" class="btn btn-primary" @onclick="SaveAndClosePatientAsync">Guardar cambios</button>
                 }
+                @if (!isCreatingNewPatient && editor.IdPaciente > 0)
+                {
+                    <a class="btn btn-outline-primary" href="@BuildClinicalHistoryUrl(editor.IdPaciente)">Historia clinica</a>
+                }
                 <button type="button" class="btn btn-outline-primary" @onclick="ClosePatientModal">Cerrar</button>
             </footer>
         </div>
@@ -374,6 +383,7 @@ else
         ? "Selecciona un paciente asignado o crea uno nuevo."
         : "Selecciona un paciente para revisar su informacion.";
     private bool CanModifyEditor => IsEntryMode && (isCreatingNewPatient ? permissions.CanCreate : permissions.CanEdit);
+    private static string BuildClinicalHistoryUrl(int patientId) => $"/doctor/clinical-history?patientId={patientId}";
 
     private List<tbl_paciente> FilteredPatients => patients
         .Where(MatchesFilters)

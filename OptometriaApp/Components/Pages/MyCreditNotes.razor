@@ -1152,7 +1152,7 @@ else
         invoice.sale.porcentaje_impuesto = updatedSubtotal > 0m
             ? Math.Round((updatedTax * 100m) / updatedSubtotal, 2, MidpointRounding.AwayFromZero)
             : 0m;
-        invoice.sale.estado = updatedBalance > 0m ? "Credito" : "Facturada";
+        invoice.sale.estado = "Pendiente";
 
         if (invoice.account is not null)
         {
@@ -1178,9 +1178,7 @@ else
         var currentAccountId = invoice.account?.id_cta_cobrar ?? 0;
         var clientBalance = await dbContext.tbl_cta_cobrar
             .Where(x => x.id_cliente == invoice.client.cliente_id && x.estado == "Pendiente" && x.id_cta_cobrar != currentAccountId)
-            .Select(x => x.saldo)
-            .DefaultIfEmpty(0m)
-            .SumAsync();
+            .SumAsync(x => x.saldo);
 
         if (invoice.account is not null && invoice.account.estado == "Pendiente")
         {

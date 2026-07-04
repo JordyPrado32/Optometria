@@ -1,0 +1,173 @@
+@using System.Text.Json
+
+<div class="eye-graphic-card">
+    <div class="eye-graphic-head">
+        <strong>@Label</strong>
+        <button type="button" class="btn btn-outline-primary eye-clear-btn" @onclick="ClearAsync">Limpiar</button>
+    </div>
+
+    <svg viewBox="0 0 220 120" class="eye-graphic-svg">
+        <ellipse cx="110" cy="60" rx="78" ry="34" fill="#fff" stroke="#1f1f1f" stroke-width="2" />
+        <circle cx="110" cy="60" r="22" fill="#f7f3ee" stroke="#1f1f1f" stroke-width="1.5" />
+        <circle cx="110" cy="60" r="8" fill="#1f1f1f" />
+        @foreach (var zone in zones)
+        {
+            <g @onclick="() => ToggleZoneAsync(zone.Key)" style="cursor: pointer;">
+                <circle cx="@zone.Value.X" cy="@zone.Value.Y" r="10" fill="@GetZoneColor(zone.Key)" stroke="#1f1f1f" stroke-width="1.2" />
+                <title>@zone.Key</title>
+            </g>
+        }
+    </svg>
+
+    <div class="eye-graphic-legend">
+        <span><i style="background:#d9e8d1;"></i> Normal</span>
+        <span><i style="background:#ffe08a;"></i> Observacion</span>
+        <span><i style="background:#f4a6a6;"></i> Alerta</span>
+    </div>
+
+    <textarea class="form-control" rows="3" value="@notes" @oninput="OnNotesChanged" placeholder="Notas del grafico"></textarea>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private readonly Dictionary<string, (int X, int Y)> zones = new()
+    {
+        ["Superior"] = (110, 22),
+        ["Inferior"] = (110, 98),
+        ["Nasal"] = (48, 60),
+        ["Temporal"] = (172, 60),
+        ["Centro"] = (110, 60),
+        ["Pupila"] = (110, 44)
+    };
+
+    private Dictionary<string, string> zoneStates = [];
+    private string notes = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        var state = string.IsNullOrWhiteSpace(Value)
+            ? new EyeGraphicState()
+            : Deserialize(Value);
+
+        notes = state.Notes ?? string.Empty;
+        zoneStates = zones.Keys.ToDictionary(
+            key => key,
+            key => state.Zones.TryGetValue(key, out var zoneState) ? zoneState : "Normal");
+    }
+
+    private async Task ToggleZoneAsync(string zone)
+    {
+        zoneStates[zone] = zoneStates[zone] switch
+        {
+            "Normal" => "Observacion",
+            "Observacion" => "Alerta",
+            _ => "Normal"
+        };
+
+        await EmitAsync();
+    }
+
+    private async Task OnNotesChanged(ChangeEventArgs args)
+    {
+        notes = args.Value?.ToString() ?? string.Empty;
+        await EmitAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        notes = string.Empty;
+        zoneStates = zones.Keys.ToDictionary(key => key, _ => "Normal");
+        await EmitAsync();
+    }
+
+    private async Task EmitAsync()
+    {
+        var payload = JsonSerializer.Serialize(new EyeGraphicState
+        {
+            Notes = notes,
+            Zones = zoneStates
+        });
+
+        await ValueChanged.InvokeAsync(payload);
+    }
+
+    private string GetZoneColor(string zone) => zoneStates.TryGetValue(zone, out var state)
+        ? state switch
+        {
+            "Observacion" => "#ffe08a",
+            "Alerta" => "#f4a6a6",
+            _ => "#d9e8d1"
+        }
+        : "#d9e8d1";
+
+    private static EyeGraphicState Deserialize(string value)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<EyeGraphicState>(value) ?? new EyeGraphicState();
+        }
+        catch
+        {
+            return new EyeGraphicState();
+        }
+    }
+
+    private sealed class EyeGraphicState
+    {
+        public string? Notes { get; set; } = string.Empty;
+        public Dictionary<string, string> Zones { get; set; } = [];
+    }
+}
+
+<style>
+    .eye-graphic-card {
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1rem;
+        padding: 0.9rem;
+        background: rgba(255, 255, 255, 0.8);
+    }
+
+    .eye-graphic-head,
+    .eye-graphic-legend {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .eye-graphic-svg {
+        width: 100%;
+        height: auto;
+        margin: 0.75rem 0;
+    }
+
+    .eye-graphic-legend {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 0.75rem;
+        font-size: 0.82rem;
+        color: var(--color-taupe);
+    }
+
+    .eye-graphic-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .eye-graphic-legend i {
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 999px;
+        display: inline-block;
+        border: 1px solid rgba(31, 31, 31, 0.2);
+    }
+
+    .eye-clear-btn {
+        padding: 0.2rem 0.7rem !important;
+        font-size: 0.78rem !important;
+    }
+</style>

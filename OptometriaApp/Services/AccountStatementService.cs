@@ -198,6 +198,9 @@ h1, h2, h3 { margin: 0 0 10px; }
 .hero { display:flex; justify-content:space-between; gap:16px; margin-bottom:20px; border-bottom:1px solid #d8d1c8; padding-bottom:16px; }
 .card { border:1px solid #d8d1c8; border-radius:16px; padding:16px; margin-bottom:16px; }
 .grid { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
+.summary { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+.summary .item { border:1px solid #e6e0d8; border-radius:14px; padding:14px; background:#fcfaf8; }
+.summary .item strong { display:block; font-size:22px; margin-top:4px; }
 .meta label { display:block; font-size:12px; color:#6d6258; margin-bottom:4px; }
 .meta strong, .meta span { display:block; }
 table { width:100%; border-collapse: collapse; }
@@ -225,6 +228,14 @@ th { text-transform:uppercase; letter-spacing:0.05em; color:#6d6258; font-size:1
     <div class="eyebrow">Fecha de emision del reporte</div>
     <strong>{statement.GeneratedAt:yyyy-MM-dd HH:mm}</strong>
   </div>
+</div>
+""");
+
+        sb.Append($"""
+<div class="summary">
+  <div class="item"><span class="eyebrow">Estado</span><strong>{EscapeHtml(statement.StatusCaption)}</strong><span>{EscapeHtml(statement.AgingBucket)}</span></div>
+  <div class="item"><span class="eyebrow">Saldo actual</span><strong>{statement.Balance:0.00}</strong><span>{statement.DaysPastDueCaption}</span></div>
+  <div class="item"><span class="eyebrow">Cobertura</span><strong>{statement.CollectionProgressPercent:0}%</strong><span>{statement.TotalPaid:0.00} abonado</span></div>
 </div>
 """);
 
@@ -335,6 +346,9 @@ Adjuntamos el estado de cuenta correspondiente a la factura {statement.InvoiceNu
 Saldo actual: {statement.Balance.ToString("0.00", CultureInfo.InvariantCulture)}
 Notas de credito: {statement.TotalCredited.ToString("0.00", CultureInfo.InvariantCulture)}
 Abonos registrados: {statement.TotalPaid.ToString("0.00", CultureInfo.InvariantCulture)}
+Estado: {statement.StatusCaption}
+Tramo: {statement.AgingBucket}
+Condicion: {statement.DaysPastDueCaption}
 
 Este documento fue generado automaticamente desde el modulo de cartera.
 """;
@@ -363,11 +377,15 @@ Este documento fue generado automaticamente desde el modulo de cartera.
             $"Emision: {statement.IssueDate:yyyy-MM-dd HH:mm}",
             $"Vencimiento: {(statement.DueDate?.ToString("yyyy-MM-dd") ?? "-")}",
             $"Dias de credito: {statement.CreditDays}",
+            $"Estado cartera: {statement.StatusCaption}",
+            $"Tramo aging: {statement.AgingBucket}",
+            $"Condicion: {statement.DaysPastDueCaption}",
             "",
             $"Factura original: {statement.OriginalInvoiceAmount:0.00}",
             $"Notas de credito: {statement.TotalCredited:0.00}",
             $"Abonos: {statement.TotalPaid:0.00}",
             $"Saldo actual: {statement.Balance:0.00}",
+            $"Cobertura: {statement.CollectionProgressPercent:0}%",
             "",
             "MOVIMIENTOS"
         };
@@ -556,6 +574,37 @@ public sealed class AccountStatementDocument
     public DateTime GeneratedAt { get; set; } = DateTime.Now;
     public List<AccountStatementMovement> Movements { get; set; } = [];
     public List<AccountStatementLine> Lines { get; set; } = [];
+    public int DaysPastDue => DueDate.HasValue ? Math.Max(0, DateOnly.FromDateTime(DateTime.Today).DayNumber - DueDate.Value.DayNumber) : 0;
+    public string AgingBucket => Balance <= 0
+        ? "Sin saldo"
+        : !DueDate.HasValue || DueDate.Value > DateOnly.FromDateTime(DateTime.Today)
+            ? "Por vencer"
+            : DaysPastDue <= 30
+                ? "0-30 dias"
+                : DaysPastDue <= 60
+                    ? "31-60 dias"
+                    : DaysPastDue <= 90
+                        ? "61-90 dias"
+                        : "90+ dias";
+    public string StatusCaption => Balance <= 0
+        ? "Cuenta saldada"
+        : !DueDate.HasValue
+            ? "Pendiente sin fecha"
+            : DueDate.Value < DateOnly.FromDateTime(DateTime.Today)
+                ? "Vencida"
+                : DueDate.Value == DateOnly.FromDateTime(DateTime.Today)
+                    ? "Vence hoy"
+                    : "Al dia";
+    public string DaysPastDueCaption => Balance <= 0
+        ? "Sin saldo pendiente"
+        : !DueDate.HasValue
+            ? "No registra fecha de vencimiento"
+            : DueDate.Value < DateOnly.FromDateTime(DateTime.Today)
+                ? $"Vencido hace {DaysPastDue} dias"
+                : DueDate.Value == DateOnly.FromDateTime(DateTime.Today)
+                    ? "Vence hoy"
+                    : $"Vence en {DueDate.Value.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber} dias";
+    public decimal CollectionProgressPercent => OriginalInvoiceAmount <= 0 ? 0 : Math.Min(100m, Math.Round((TotalPaid / OriginalInvoiceAmount) * 100m, 2));
 }
 
 public sealed class AccountStatementMovement

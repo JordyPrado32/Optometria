@@ -26,6 +26,8 @@ public partial class OpticaDbContext : DbContext
 
     public virtual DbSet<tbl_consulta> tbl_consulta { get; set; }
 
+    public virtual DbSet<tbl_historia_clinica_optometria> tbl_historia_clinica_optometrias { get; set; }
+
     public virtual DbSet<tbl_cta_cobrar> tbl_cta_cobrar { get; set; }
 
     public virtual DbSet<tbl_detalle_venta> tbl_detalle_venta { get; set; }
@@ -261,6 +263,59 @@ public partial class OpticaDbContext : DbContext
                 .HasForeignKey(d => d.id_paciente)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_consulta_paciente");
+        });
+
+        modelBuilder.Entity<tbl_historia_clinica_optometria>(entity =>
+        {
+            entity.HasKey(e => e.id_historia_clinica).HasName("PK_tbl_historia_clinica_optometria");
+
+            entity.ToTable("tbl_historia_clinica_optometria");
+
+            entity.HasIndex(e => e.id_paciente, "UQ_tbl_historia_clinica_optometria_paciente").IsUnique();
+
+            entity.Property(e => e.fecha_apertura).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.fecha_ultima_actualizacion).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.numero_historia).HasMaxLength(50).IsUnicode(false);
+            entity.Property(e => e.consultorio).HasMaxLength(120).IsUnicode(false);
+            entity.Property(e => e.llave_clinica).HasMaxLength(120).IsUnicode(false);
+            entity.Property(e => e.lugar_nacimiento).HasMaxLength(150).IsUnicode(false);
+            entity.Property(e => e.procedencia).HasMaxLength(150).IsUnicode(false);
+            entity.Property(e => e.ultimo_control).HasMaxLength(150).IsUnicode(false);
+            entity.Property(e => e.datos_apertura_json).IsUnicode(false);
+            entity.Property(e => e.motivo_consulta).IsUnicode(false);
+            entity.Property(e => e.anamnesis).IsUnicode(false);
+            entity.Property(e => e.antecedentes_json).IsUnicode(false);
+            entity.Property(e => e.lentes_json).IsUnicode(false);
+            entity.Property(e => e.agudeza_visual_json).IsUnicode(false);
+            entity.Property(e => e.biomicroscopia_json).IsUnicode(false);
+            entity.Property(e => e.oftalmoscopia_json).IsUnicode(false);
+            entity.Property(e => e.examen_motor_json).IsUnicode(false);
+            entity.Property(e => e.queratometria_json).IsUnicode(false);
+            entity.Property(e => e.refraccion_json).IsUnicode(false);
+            entity.Property(e => e.diagnostico_json).IsUnicode(false);
+            entity.Property(e => e.observaciones_generales).IsUnicode(false);
+            entity.Property(e => e.nombre_examinador).HasMaxLength(200).IsUnicode(false);
+            entity.Property(e => e.nivel_paralelo_jornada).HasMaxLength(200).IsUnicode(false);
+            entity.Property(e => e.consentimiento_json).IsUnicode(false);
+            entity.Property(e => e.activo).HasDefaultValue(true);
+
+            entity.HasOne<tbl_paciente>()
+                .WithMany()
+                .HasForeignKey(e => e.id_paciente)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_tbl_historia_clinica_optometria_paciente");
+
+            entity.HasOne<tbl_usuario>()
+                .WithMany()
+                .HasForeignKey(e => e.id_optometra_apertura)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_tbl_historia_clinica_optometria_optometra_apertura");
+
+            entity.HasOne<tbl_usuario>()
+                .WithMany()
+                .HasForeignKey(e => e.id_optometra_ultima_actualizacion)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_tbl_historia_clinica_optometria_optometra_actualiza");
         });
 
         modelBuilder.Entity<tbl_cta_cobrar>(entity =>
