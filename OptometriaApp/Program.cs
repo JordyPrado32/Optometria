@@ -2483,13 +2483,57 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             (
                 id_menu INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
                 nombre VARCHAR(150) NOT NULL,
-                ruta VARCHAR(200) NOT NULL,
+                ruta VARCHAR(200) NULL,
                 icono VARCHAR(100) NULL,
                 orden INT NOT NULL CONSTRAINT DF_tbl_menu_app_orden DEFAULT (0),
+                id_menu_padre INT NULL,
                 activo BIT NOT NULL CONSTRAINT DF_tbl_menu_app_activo DEFAULT (1),
                 fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_menu_app_fecha_creacion DEFAULT (GETDATE()),
-                CONSTRAINT UQ_tbl_menu_app_ruta UNIQUE (ruta)
+                CONSTRAINT FK_tbl_menu_app_padre FOREIGN KEY (id_menu_padre) REFERENCES dbo.tbl_menu_app(id_menu)
             );
+        END;
+
+        IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_tbl_menu_app_ruta')
+        BEGIN
+            ALTER TABLE dbo.tbl_menu_app DROP CONSTRAINT UQ_tbl_menu_app_ruta;
+        END;
+
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_menu_app_ruta' AND object_id = OBJECT_ID('dbo.tbl_menu_app'))
+        BEGIN
+            DROP INDEX UQ_tbl_menu_app_ruta ON dbo.tbl_menu_app;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('dbo.tbl_menu_app')
+              AND name = 'ruta'
+              AND is_nullable = 0
+        )
+        BEGIN
+            ALTER TABLE dbo.tbl_menu_app ALTER COLUMN ruta VARCHAR(200) NULL;
+        END;
+
+        UPDATE dbo.tbl_menu_app
+        SET ruta = NULL
+        WHERE ruta = '';
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_menu_app_ruta_not_null' AND object_id = OBJECT_ID('dbo.tbl_menu_app'))
+        BEGIN
+            CREATE UNIQUE INDEX IX_tbl_menu_app_ruta_not_null
+            ON dbo.tbl_menu_app(ruta)
+            WHERE ruta IS NOT NULL AND ruta <> '';
+        END;
+
+        IF COL_LENGTH('dbo.tbl_menu_app', 'id_menu_padre') IS NULL
+        BEGIN
+            ALTER TABLE dbo.tbl_menu_app ADD id_menu_padre INT NULL;
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_menu_app_padre')
+        BEGIN
+            ALTER TABLE dbo.tbl_menu_app ADD CONSTRAINT FK_tbl_menu_app_padre FOREIGN KEY (id_menu_padre) REFERENCES dbo.tbl_menu_app(id_menu);
         END;
 
         IF OBJECT_ID('dbo.tbl_rol_menu_permiso', 'U') IS NULL
@@ -2526,7 +2570,6 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Proveedores', '/suppliers', 'suppliers', 10, 1),
                 ('Productos', '/products', 'products', 11, 1),
                 ('Categorias de productos', '/product-categories', 'tags', 12, 1),
-                ('Compras', '/purchases', 'purchases', 13, 1),
                 ('Ordenes de compra', '/purchase-orders', 'purchase-orders', 14, 1),
                 ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 15, 1),
                 ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 16, 1),
@@ -2548,12 +2591,37 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
         WHEN MATCHED THEN
             UPDATE SET
                 target.nombre = source.nombre,
-                target.icono = source.icono,
-                target.orden = source.orden,
-                target.activo = source.activo
+                target.icono = source.icono
         WHEN NOT MATCHED THEN
             INSERT (nombre, ruta, icono, orden, activo)
             VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
+
+        EXEC(N'
+            DECLARE @comprasMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre = ''Compras'' OR ruta = ''/purchases'' ORDER BY CASE WHEN nombre = ''Compras'' THEN 0 ELSE 1 END);
+            IF @comprasMenuId IS NULL
+            BEGIN
+                INSERT INTO dbo.tbl_menu_app (nombre, ruta, icono, orden, activo)
+                VALUES (''Compras'', NULL, ''purchases'', 13, 1);
+
+                SET @comprasMenuId = SCOPE_IDENTITY();
+            END
+            ELSE
+            BEGIN
+                UPDATE dbo.tbl_menu_app
+                SET nombre = ''Compras'',
+                    ruta = NULL,
+                    icono = ''purchases''
+                WHERE id_menu = @comprasMenuId;
+            END;
+
+            IF @comprasMenuId IS NOT NULL
+            BEGIN
+                UPDATE dbo.tbl_menu_app
+                SET id_menu_padre = @comprasMenuId
+                WHERE ruta IN (''/purchase-orders'', ''/purchase-receptions'', ''/purchase-liquidations'', ''/inventories'', ''/kardex'')
+                  AND id_menu_padre IS NULL;
+            END;
+        ');
 
         IF EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE id_rol = 1)
         BEGIN
@@ -2878,7 +2946,7 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
         USING (VALUES ('Citas y turnos', '/appointments', 'calendar-check', 6, 1)) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
-            UPDATE SET target.nombre = source.nombre, target.icono = source.icono, target.orden = source.orden, target.activo = source.activo
+            UPDATE SET target.nombre = source.nombre, target.icono = source.icono
         WHEN NOT MATCHED THEN
             INSERT (nombre, ruta, icono, orden, activo) VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
         """);

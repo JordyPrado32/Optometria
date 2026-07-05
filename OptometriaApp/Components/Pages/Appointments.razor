@@ -43,7 +43,7 @@ else
             <div class="workspace-actions">
                 @if (CanCreateAppointments)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNewAppointmentAsync">Nueva cita</button>
+                    <button type="button" class="btn btn-primary" @onclick="OpenNewAppointmentModal">Nueva cita</button>
                 }
 
                 <button type="button" class="btn btn-outline-primary" @onclick="ExportAppointments">Exportar CSV</button>

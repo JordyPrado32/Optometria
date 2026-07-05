@@ -11,4 +11,6 @@ public sealed class AppMenuItem
     public string? Icono { get; set; }
 
     public int Orden { get; set; }
+
+    public int? IdMenuPadre { get; set; }
 }

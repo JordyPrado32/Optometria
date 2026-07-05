@@ -1,8 +1,11 @@
 @page "/menus"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject MenuAccessService MenuAccessService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Menus</PageTitle>
 
@@ -34,7 +37,14 @@ else
                 <p>Controla el nombre, la ruta, el orden y el estado de cada modulo que luego se asigna por rol.</p>
             </div>
 
-            <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewMenu">Nuevo menu</button>
+            <div class="workspace-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="OpenSortModal">
+                    <i class="bi bi-list-ol" style="margin-right: 6px;"></i> Ordenar menus
+                </button>
+                <button type="button" class="btn btn-primary" @onclick="PrepareNewMenu">
+                    <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo menu
+                </button>
+            </div>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
@@ -47,31 +57,104 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <div class="management-grid">
-            <aside class="management-card management-list-card">
-                <div class="management-card-header">
-                    <h2>Menus</h2>
-                    <span>@menus.Count items</span>
-                </div>
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Listado de menus</h2>
+                <span>@FilteredMenus.Count resultados</span>
+            </div>
 
-                <div class="management-list">
-                    @foreach (var menu in menus.OrderBy(m => m.orden).ThenBy(m => m.nombre))
-                    {
-                        <button type="button"
-                                class="management-list-item @(selectedMenuId == menu.id_menu ? "is-active" : string.Empty)"
-                                @onclick="() => SelectMenu(menu.id_menu)">
-                            <strong>@menu.nombre</strong>
-                            <span>@menu.ruta</span>
-                        </button>
-                    }
+            <div class="filters-row-1-1" style="margin-bottom: 1rem;">
+                <div>
+                    <label class="form-label" for="menuSearch">Buscar menu</label>
+                    <input id="menuSearch" class="form-control" @bind="menuSearchTerm" @bind:event="oninput" placeholder="Nombre, ruta o icono" />
                 </div>
-            </aside>
+                <div class="management-actions" style="align-self: end;">
+                    <button type="button" class="btn btn-outline-primary" @onclick="ClearMenuSearch">Limpiar</button>
+                </div>
+            </div>
 
-            <section class="management-card">
-                <div class="management-card-header">
-                    <h2>Editor de menu</h2>
-                    <span>@(selectedMenuId > 0 ? $"Menu #{selectedMenuId}" : "Nuevo")</span>
-                </div>
+            <div class="management-table-wrap">
+                <table class="management-table soft-management-table">
+                    <thead>
+                        <tr>
+                            <th>Orden</th>
+                            <th>Menu</th>
+                            <th>Ruta</th>
+                            <th>Padre</th>
+                            <th>Icono</th>
+                            <th>Estado</th>
+                            <th class="table-actions-cell">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredMenus.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
+                                    No hay menus que coincidan con la busqueda.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var menu in PagedMenus)
+                            {
+                                <tr>
+                                    <td><span class="soft-rank">@menu.orden</span></td>
+                                    <td><strong>@menu.nombre</strong></td>
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(menu.ruta))
+                                        {
+                                            <span class="soft-status is-muted">Agrupador</span>
+                                        }
+                                        else
+                                        {
+                                            <code>@menu.ruta</code>
+                                        }
+                                    </td>
+                                    <td>@GetParentName(menu)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(menu.icono) ? "-" : menu.icono)</td>
+                                    <td>
+                                        <span class="soft-status @(menu.activo == true ? "is-active" : "is-muted")">
+                                            @(menu.activo == true ? "Activo" : "Inactivo")
+                                        </span>
+                                    </td>
+                                    <td class="table-actions-cell">
+                                        <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditMenu(menu.id_menu)">Editar</button>
+                                        <button type="button" class="btn @(menu.activo == true ? "btn-outline-primary" : "btn-primary") compact-action" @onclick="() => ToggleMenuActiveAsync(menu)">
+                                            @(menu.activo == true ? "Desactivar" : "Activar")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-pager">
+                <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousMenuPage" disabled="@(CurrentMenuPage <= 1)">Anterior</button>
+                <span>Pagina @CurrentMenuPage de @TotalMenuPages</span>
+                <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextMenuPage" disabled="@(CurrentMenuPage >= TotalMenuPages)">Siguiente</button>
+            </div>
+        </section>
+    </section>
+}
+
+@if (showFormModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseFormModal">
+        <div class="custom-modal-card form-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@(selectedMenuId > 0 ? "Editar menu" : "Nuevo menu")</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
+            </header>
+
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
 
                 <div class="management-form-grid">
                     <div>
@@ -81,7 +164,7 @@ else
 
                     <div>
                         <label class="form-label" for="menuRoute">Ruta</label>
-                        <input id="menuRoute" class="form-control" @bind="menuRoute" />
+                        <input id="menuRoute" class="form-control" @bind="menuRoute" disabled="@menuIsParent" placeholder="Ej. /patients" />
                     </div>
 
                     <div>
@@ -89,23 +172,137 @@ else
                         <input id="menuIcon" class="form-control" @bind="menuIcon" />
                     </div>
 
-                    <div>
-                        <label class="form-label" for="menuOrder">Orden</label>
-                        <input id="menuOrder" type="number" class="form-control" @bind="menuOrder" />
-                    </div>
                 </div>
 
-                <label class="auth-check">
+                <label class="auth-check" style="margin-top: 1rem;">
+                    <input type="checkbox" @bind="menuIsParent" />
+                    <span>Es menu padre / agrupador sin ruta</span>
+                </label>
+
+                <label class="auth-check" style="margin-top: 1rem;">
                     <input type="checkbox" @bind="menuActive" />
                     <span>Menu activo y visible para asignacion</span>
                 </label>
+            </div>
 
-                <div class="management-actions">
-                    <button type="button" class="btn btn-primary" @onclick="SaveMenuAsync">Guardar menu</button>
-                </div>
-            </section>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveMenuAsync">Guardar menu</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
+            </footer>
         </div>
-    </section>
+    </div>
+}
+
+@if (showSortModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseSortModal">
+        <div id="menuSortModal" class="custom-modal-card menu-sort-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header menu-sort-header">
+                <div>
+                    <h2><i class="bi bi-list-stars"></i> Ordenar menu de servicios</h2>
+                    <p>Arrastra los elementos o utiliza las flechas para ordenar los menus del panel lateral.</p>
+                </div>
+                <button type="button" class="btn-close-modal" @onclick="CloseSortModal">×</button>
+            </header>
+
+            <div class="custom-modal-body menu-sort-body">
+                <section class="menu-sort-panel" data-menu-sort-list="root">
+                    <div class="menu-sort-panel-title">
+                        <h3><i class="bi bi-grid-1x2-fill"></i> Modulos principales</h3>
+                        <span>@TopLevelMenus.Count</span>
+                    </div>
+
+                    <div class="menu-sort-list" data-menu-sort-list="root">
+                        @foreach (var menu in TopLevelMenus)
+                        {
+                            <article class="menu-sort-item @(selectedSortParentId == menu.id_menu ? "is-selected" : null)"
+                                     data-menu-id="@menu.id_menu"
+                                     draggable="true"
+                                     @onclick="() => SelectSortParent(menu.id_menu)">
+                                <span class="menu-sort-drag"><i class="bi bi-arrows-move"></i></span>
+                                <span class="menu-sort-icon"><i class="@GetBootstrapIcon(menu)"></i></span>
+                                <span class="menu-sort-copy">
+                                    <strong>@menu.nombre</strong>
+                                    <small>@(string.IsNullOrWhiteSpace(menu.ruta) ? "Agrupador sin ruta" : menu.ruta)</small>
+                                </span>
+                                <span class="menu-sort-actions">
+                                    <button type="button" title="Subir" @onclick:stopPropagation="true" @onclick="() => MoveMenuAsync(menu.id_menu, -1)">
+                                        <i class="bi bi-arrow-up"></i>
+                                    </button>
+                                    <button type="button" title="Bajar" @onclick:stopPropagation="true" @onclick="() => MoveMenuAsync(menu.id_menu, 1)">
+                                        <i class="bi bi-arrow-down"></i>
+                                    </button>
+                                </span>
+                            </article>
+                        }
+                    </div>
+                </section>
+
+                <section class="menu-sort-panel child-panel"
+                         data-menu-sort-list="children"
+                         data-parent-id="@SelectedSortParentIdValue">
+                    <div class="menu-sort-panel-title">
+                        <h3><i class="bi bi-diagram-3-fill"></i> Submenus de</h3>
+                        <select class="form-select" value="@SelectedSortParentIdValue" @onchange="OnSortParentChanged">
+                            @foreach (var parent in TopLevelMenus)
+                            {
+                                <option value="@parent.id_menu">@parent.nombre</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (SelectedSortParent is null)
+                    {
+                        <div class="menu-sort-empty" data-menu-sort-list="children" data-parent-id="@SelectedSortParentIdValue">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Selecciona un modulo principal.</span>
+                        </div>
+                    }
+                    else if (SelectedChildren.Count == 0)
+                    {
+                        <div class="menu-sort-empty" data-menu-sort-list="children" data-parent-id="@SelectedSortParentIdValue">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Arrastra menus aqui para convertirlos en submenus.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="menu-sort-list" data-menu-sort-list="children" data-parent-id="@SelectedSortParentIdValue">
+                            @foreach (var child in SelectedChildren)
+                            {
+                                <article class="menu-sort-item"
+                                         data-menu-id="@child.id_menu"
+                                         draggable="true">
+                                    <span class="menu-sort-drag"><i class="bi bi-arrows-move"></i></span>
+                                    <span class="menu-sort-icon"><i class="@GetBootstrapIcon(child)"></i></span>
+                                    <span class="menu-sort-copy">
+                                        <strong>@child.nombre</strong>
+                                        <small>@(string.IsNullOrWhiteSpace(child.ruta) ? "Agrupador sin ruta" : child.ruta)</small>
+                                    </span>
+                                    <span class="menu-sort-actions">
+                                        <button type="button" title="Subir" @onclick="() => MoveMenuAsync(child.id_menu, -1)">
+                                            <i class="bi bi-arrow-up"></i>
+                                        </button>
+                                        <button type="button" title="Bajar" @onclick="() => MoveMenuAsync(child.id_menu, 1)">
+                                            <i class="bi bi-arrow-down"></i>
+                                        </button>
+                                        <button type="button" title="Quitar de este padre" @onclick="() => MoveMenuToRootAsync(child.id_menu)">
+                                            <i class="bi bi-box-arrow-left"></i>
+                                        </button>
+                                    </span>
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+
+            <footer class="custom-modal-footer menu-sort-footer">
+                <span>Los cambios se guardan automaticamente y actualizan la barra lateral.</span>
+                <button type="button" class="btn btn-primary" @onclick="CloseSortModal">Listo</button>
+            </footer>
+        </div>
+    </div>
 }
 
 @code {
@@ -116,10 +313,44 @@ else
     private string menuName = string.Empty;
     private string menuRoute = string.Empty;
     private string? menuIcon;
-    private int menuOrder;
+    private bool menuIsParent;
     private bool menuActive = true;
+    private bool showFormModal;
+    private bool showSortModal;
+    private int menuPage = 1;
+    private int? selectedSortParentId;
+    private int? draggedMenuId;
+    private string menuSearchTerm = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private DotNetObjectReference<Menus>? sortInteropReference;
+    private const int PageSize = 5;
+    private List<tbl_menu_app> FilteredMenus => menus
+        .Where(MatchesMenuSearch)
+        .OrderBy(m => m.orden)
+        .ThenBy(m => m.nombre)
+        .ToList();
+    private IEnumerable<tbl_menu_app> PagedMenus => FilteredMenus
+        .Skip((CurrentMenuPage - 1) * PageSize)
+        .Take(PageSize);
+    private int TotalMenuPages => Math.Max(1, (int)Math.Ceiling(FilteredMenus.Count / (double)PageSize));
+    private int CurrentMenuPage => Math.Clamp(menuPage, 1, TotalMenuPages);
+    private List<tbl_menu_app> TopLevelMenus => menus
+        .Where(m => !m.id_menu_padre.HasValue)
+        .OrderBy(m => m.orden)
+        .ThenBy(m => m.nombre)
+        .ToList();
+    private tbl_menu_app? SelectedSortParent => selectedSortParentId.HasValue
+        ? menus.FirstOrDefault(m => m.id_menu == selectedSortParentId.Value)
+        : null;
+    private string SelectedSortParentIdValue => selectedSortParentId?.ToString() ?? string.Empty;
+    private List<tbl_menu_app> SelectedChildren => selectedSortParentId.HasValue
+        ? menus
+            .Where(m => m.id_menu_padre == selectedSortParentId.Value)
+            .OrderBy(m => m.orden)
+            .ThenBy(m => m.nombre)
+            .ToList()
+        : [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,6 +366,15 @@ else
         await LoadAsync();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (showSortModal)
+        {
+            sortInteropReference ??= DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("optometriaMenuSort.init", "menuSortModal", sortInteropReference);
+        }
+    }
+
     private async Task LoadAsync(int? preserveMenuId = null)
     {
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
@@ -146,6 +386,7 @@ else
 
         selectedMenuId = preserveMenuId ?? menus.FirstOrDefault()?.id_menu ?? 0;
         BuildEditor();
+        ClampMenuPage();
         isLoading = false;
     }
 
@@ -155,17 +396,25 @@ else
         menuName = string.Empty;
         menuRoute = string.Empty;
         menuIcon = string.Empty;
-        menuOrder = menus.Count + 1;
+        menuIsParent = false;
         menuActive = true;
         statusMessage = null;
         errorMessage = null;
+        showFormModal = true;
     }
 
-    private void SelectMenu(int menuId)
+    private void OpenEditMenu(int menuId)
     {
         selectedMenuId = menuId;
         BuildEditor();
         statusMessage = null;
+        errorMessage = null;
+        showFormModal = true;
+    }
+
+    private void CloseFormModal()
+    {
+        showFormModal = false;
         errorMessage = null;
     }
 
@@ -175,7 +424,8 @@ else
         menuName = selectedMenu?.nombre ?? string.Empty;
         menuRoute = selectedMenu?.ruta ?? string.Empty;
         menuIcon = selectedMenu?.icono ?? string.Empty;
-        menuOrder = selectedMenu?.orden ?? (menus.Count + 1);
+        menuIsParent = selectedMenu is not null &&
+            (string.IsNullOrWhiteSpace(selectedMenu.ruta) || menus.Any(m => m.id_menu_padre == selectedMenu.id_menu));
         menuActive = selectedMenu?.activo ?? true;
     }
 
@@ -184,9 +434,15 @@ else
         statusMessage = null;
         errorMessage = null;
 
-        if (string.IsNullOrWhiteSpace(menuName) || string.IsNullOrWhiteSpace(menuRoute))
+        if (string.IsNullOrWhiteSpace(menuName))
         {
-            errorMessage = "Completa al menos el nombre y la ruta del menu.";
+            errorMessage = "Completa el nombre del menu.";
+            return;
+        }
+
+        if (!menuIsParent && string.IsNullOrWhiteSpace(menuRoute))
+        {
+            errorMessage = "Completa la ruta del menu o marcalo como menu padre.";
             return;
         }
 
@@ -199,19 +455,351 @@ else
         }
         else
         {
-            menuEntity = new tbl_menu_app();
+            menuEntity = new tbl_menu_app
+            {
+                orden = GetNextOrder(null),
+                id_menu_padre = null
+            };
             dbContext.tbl_menu_apps.Add(menuEntity);
         }
 
         menuEntity.nombre = menuName.Trim();
-        menuEntity.ruta = menuRoute.Trim();
+        menuEntity.ruta = menuIsParent ? null : menuRoute.Trim();
         menuEntity.icono = string.IsNullOrWhiteSpace(menuIcon) ? null : menuIcon.Trim();
-        menuEntity.orden = menuOrder;
         menuEntity.activo = menuActive;
 
         await dbContext.SaveChangesAsync();
 
         statusMessage = "El menu se guardo correctamente.";
         await LoadAsync(menuEntity.id_menu);
+        await MenuAccessService.NotifyMenusChangedAsync();
+        showFormModal = false;
+    }
+
+    private void OpenSortModal()
+    {
+        showSortModal = true;
+        selectedSortParentId ??= TopLevelMenus.FirstOrDefault()?.id_menu;
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private void CloseSortModal()
+    {
+        showSortModal = false;
+        draggedMenuId = null;
+    }
+
+    private void SelectSortParent(int menuId)
+    {
+        selectedSortParentId = menuId;
+    }
+
+    private void OnSortParentChanged(ChangeEventArgs args)
+    {
+        selectedSortParentId = int.TryParse(args.Value?.ToString(), out var parentId) ? parentId : null;
+    }
+
+    private void OnMenuDragStart(int menuId)
+    {
+        draggedMenuId = menuId;
+    }
+
+    private void ClearDraggedMenu()
+    {
+        draggedMenuId = null;
+    }
+
+    private async Task DropOnSelectedParentAsync()
+    {
+        if (draggedMenuId.HasValue && selectedSortParentId.HasValue)
+        {
+            await MoveMenuToParentAsync(draggedMenuId.Value, selectedSortParentId.Value);
+        }
+    }
+
+    private async Task DropOnParentAsync(int parentId)
+    {
+        if (draggedMenuId.HasValue)
+        {
+            await MoveMenuToParentAsync(draggedMenuId.Value, parentId);
+        }
+    }
+
+    private async Task DropOnRootAsync()
+    {
+        if (draggedMenuId.HasValue)
+        {
+            await MoveMenuToRootAsync(draggedMenuId.Value);
+        }
+    }
+
+    private async Task MoveMenuToParentAsync(int menuId, int parentId)
+    {
+        if (menuId == parentId)
+        {
+            return;
+        }
+
+        var menu = menus.FirstOrDefault(m => m.id_menu == menuId);
+        if (menu is null || WouldCreateCycle(menuId, parentId))
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var menuEntity = await dbContext.tbl_menu_apps.FirstAsync(m => m.id_menu == menuId);
+        menuEntity.id_menu_padre = parentId;
+        menuEntity.orden = GetNextOrder(parentId);
+        await dbContext.SaveChangesAsync();
+
+        selectedSortParentId = parentId;
+        draggedMenuId = null;
+        await LoadAsync(menuId);
+        await MenuAccessService.NotifyMenusChangedAsync();
+    }
+
+    [JSInvokable]
+    public async Task MoveDraggedMenuToParentAsync(int menuId, int parentId)
+    {
+        await MoveMenuToParentAsync(menuId, parentId);
+        StateHasChanged();
+    }
+
+    private async Task MoveMenuToRootAsync(int menuId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var menuEntity = await dbContext.tbl_menu_apps.FirstAsync(m => m.id_menu == menuId);
+        menuEntity.id_menu_padre = null;
+        menuEntity.orden = GetNextOrder(null);
+        await dbContext.SaveChangesAsync();
+
+        draggedMenuId = null;
+        await LoadAsync(menuId);
+        await MenuAccessService.NotifyMenusChangedAsync();
+    }
+
+    [JSInvokable]
+    public async Task MoveDraggedMenuToRootAsync(int menuId)
+    {
+        await MoveMenuToRootAsync(menuId);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task ReorderDraggedMenuAsync(int menuId, int targetId, int? parentId, bool placeAfter)
+    {
+        if (menuId == targetId)
+        {
+            return;
+        }
+
+        if (parentId.HasValue && (menuId == parentId.Value || WouldCreateCycle(menuId, parentId.Value)))
+        {
+            return;
+        }
+
+        var targetMenu = menus.FirstOrDefault(m => m.id_menu == targetId);
+        if (targetMenu is null)
+        {
+            return;
+        }
+
+        parentId = targetMenu.id_menu_padre;
+        var orderedIds = menus
+            .Where(m => m.id_menu_padre == parentId && m.id_menu != menuId)
+            .OrderBy(m => m.orden)
+            .ThenBy(m => m.nombre)
+            .Select(m => m.id_menu)
+            .ToList();
+
+        var targetIndex = orderedIds.IndexOf(targetId);
+        if (targetIndex < 0)
+        {
+            return;
+        }
+
+        orderedIds.Insert(placeAfter ? targetIndex + 1 : targetIndex, menuId);
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var affectedMenus = await dbContext.tbl_menu_apps
+            .Where(m => orderedIds.Contains(m.id_menu))
+            .ToListAsync();
+
+        for (var index = 0; index < orderedIds.Count; index++)
+        {
+            var menuEntity = affectedMenus.First(m => m.id_menu == orderedIds[index]);
+            menuEntity.id_menu_padre = parentId;
+            menuEntity.orden = index + 1;
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        selectedSortParentId = parentId ?? selectedSortParentId;
+        draggedMenuId = null;
+        await LoadAsync(menuId);
+        await MenuAccessService.NotifyMenusChangedAsync();
+        StateHasChanged();
+    }
+
+    private async Task MoveMenuAsync(int menuId, int direction)
+    {
+        var menu = menus.FirstOrDefault(m => m.id_menu == menuId);
+        if (menu is null)
+        {
+            return;
+        }
+
+        var siblings = menus
+            .Where(m => m.id_menu_padre == menu.id_menu_padre)
+            .OrderBy(m => m.orden)
+            .ThenBy(m => m.nombre)
+            .ToList();
+        var currentIndex = siblings.FindIndex(m => m.id_menu == menuId);
+        var targetIndex = currentIndex + direction;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.Count)
+        {
+            return;
+        }
+
+        var target = siblings[targetIndex];
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var currentEntity = await dbContext.tbl_menu_apps.FirstAsync(m => m.id_menu == menu.id_menu);
+        var targetEntity = await dbContext.tbl_menu_apps.FirstAsync(m => m.id_menu == target.id_menu);
+
+        (currentEntity.orden, targetEntity.orden) = (targetEntity.orden, currentEntity.orden);
+        await dbContext.SaveChangesAsync();
+
+        await LoadAsync(menuId);
+        await MenuAccessService.NotifyMenusChangedAsync();
+    }
+
+    private async Task ToggleMenuActiveAsync(tbl_menu_app menu)
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var menuEntity = await dbContext.tbl_menu_apps.FirstOrDefaultAsync(m => m.id_menu == menu.id_menu);
+        if (menuEntity is null)
+        {
+            errorMessage = "No se encontro el menu seleccionado.";
+            return;
+        }
+
+        menuEntity.activo = !menuEntity.activo;
+        await dbContext.SaveChangesAsync();
+
+        statusMessage = menuEntity.activo ? "El menu se activo correctamente." : "El menu se desactivo correctamente.";
+        await LoadAsync(menuEntity.id_menu);
+        await MenuAccessService.NotifyMenusChangedAsync();
+    }
+
+    private void PreviousMenuPage()
+    {
+        if (menuPage > 1)
+        {
+            menuPage--;
+        }
+    }
+
+    private void NextMenuPage()
+    {
+        if (menuPage < TotalMenuPages)
+        {
+            menuPage++;
+        }
+    }
+
+    private void ClampMenuPage()
+    {
+        if (menuPage > TotalMenuPages)
+        {
+            menuPage = TotalMenuPages;
+        }
+        else if (menuPage < 1)
+        {
+            menuPage = 1;
+        }
+    }
+
+    private bool MatchesMenuSearch(tbl_menu_app menu)
+    {
+        if (string.IsNullOrWhiteSpace(menuSearchTerm))
+        {
+            return true;
+        }
+
+        var term = menuSearchTerm.Trim();
+        return menu.nombre.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+            (menu.ruta?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (menu.icono?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private void ClearMenuSearch()
+    {
+        menuSearchTerm = string.Empty;
+        menuPage = 1;
+    }
+
+    private int GetNextOrder(int? parentId)
+    {
+        var siblings = menus.Where(m => m.id_menu_padre == parentId).ToList();
+        return siblings.Count == 0 ? 1 : siblings.Max(m => m.orden) + 1;
+    }
+
+    private string GetParentName(tbl_menu_app menu)
+    {
+        if (!menu.id_menu_padre.HasValue)
+        {
+            return "Principal";
+        }
+
+        return menus.FirstOrDefault(m => m.id_menu == menu.id_menu_padre.Value)?.nombre ?? "Sin padre";
+    }
+
+    private string GetBootstrapIcon(tbl_menu_app menu)
+    {
+        var icon = menu.icono?.Trim();
+        if (string.IsNullOrWhiteSpace(icon))
+        {
+            return "bi bi-grid";
+        }
+
+        return icon.StartsWith("bi ", StringComparison.OrdinalIgnoreCase)
+            ? icon
+            : $"bi bi-{icon}";
+    }
+
+    private bool WouldCreateCycle(int menuId, int parentId)
+    {
+        var currentParentId = (int?)parentId;
+        while (currentParentId.HasValue)
+        {
+            if (currentParentId.Value == menuId)
+            {
+                return true;
+            }
+
+            currentParentId = menus.FirstOrDefault(m => m.id_menu == currentParentId.Value)?.id_menu_padre;
+        }
+
+        return false;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (sortInteropReference is not null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("optometriaMenuSort.dispose", "menuSortModal");
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+
+            sortInteropReference.Dispose();
+        }
     }
 }

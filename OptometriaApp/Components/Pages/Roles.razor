@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject MenuAccessService MenuAccessService
 
 <PageTitle>Roles</PageTitle>
 
@@ -47,33 +48,63 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <div class="management-grid">
-            <aside class="management-card management-list-card">
-                <div class="management-card-header">
-                    <h2>Roles</h2>
-                    <span>@roles.Count roles</span>
-                </div>
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Listado de roles</h2>
+                <span>@roles.Count roles</span>
+            </div>
 
-                <div class="management-list">
-                    @foreach (var role in roles)
-                    {
-                        <button type="button"
-                                class="management-list-item @(selectedRoleId == role.id_rol ? "is-active" : string.Empty)"
-                                @onclick="() => SelectRole(role.id_rol)">
-                            <strong>@role.nombre</strong>
-                            <span>@(string.IsNullOrWhiteSpace(role.descripcion) ? "Sin descripcion" : role.descripcion)</span>
-                        </button>
-                    }
-                </div>
-            </aside>
+            <div class="management-table-wrap">
+                <table class="management-table soft-management-table">
+                    <thead>
+                        <tr>
+                            <th>Rol</th>
+                            <th>Descripcion</th>
+                            <th>Menus asignados</th>
+                            <th class="table-actions-cell">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var role in PagedRoles)
+                        {
+                            <tr>
+                                <td><strong>@role.nombre</strong></td>
+                                <td>@(string.IsNullOrWhiteSpace(role.descripcion) ? "Sin descripcion" : role.descripcion)</td>
+                                <td>@GetVisibleMenuCount(role.id_rol)</td>
+                                <td class="table-actions-cell">
+                                    <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditRole(role.id_rol)">Editar</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
 
-            <div class="management-stack">
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Detalle del rol</h2>
-                        <span>@(selectedRoleId > 0 ? $"Rol #{selectedRoleId}" : "Nuevo")</span>
-                    </div>
+            <div class="table-pager">
+                <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousRolePage" disabled="@(rolePage <= 1)">Anterior</button>
+                <span>Pagina @rolePage de @TotalRolePages</span>
+                <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextRolePage" disabled="@(rolePage >= TotalRolePages)">Siguiente</button>
+            </div>
+        </section>
+    </section>
+}
 
+@if (showFormModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseFormModal">
+        <div class="custom-modal-card form-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@(selectedRoleId > 0 ? "Editar rol" : "Nuevo rol")</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseFormModal">×</button>
+            </header>
+
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
+                <section class="management-stack">
                     <div class="management-form-grid">
                         <div>
                             <label class="form-label" for="roleName">Nombre</label>
@@ -85,49 +116,59 @@ else
                             <input id="roleDescription" class="form-control" @bind="roleDescription" />
                         </div>
                     </div>
-                </section>
 
-                <section class="management-card">
-                    <div class="management-card-header">
-                        <h2>Permisos por menu</h2>
-                        <span>@permissionRows.Count menus</span>
-                    </div>
+                    <div>
+                        <div class="management-card-header">
+                            <h2>Permisos por menu</h2>
+                            <span>@permissionRows.Count menus</span>
+                        </div>
 
-                    <div class="management-table-wrap">
-                        <table class="management-table">
-                            <thead>
-                                <tr>
-                                    <th>Menu</th>
-                                    <th>Ruta</th>
-                                    <th>Ver</th>
-                                    <th>Crear</th>
-                                    <th>Editar</th>
-                                    <th>Eliminar</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var row in permissionRows)
-                                {
+                        <div class="management-table-wrap">
+                            <table class="management-table soft-management-table">
+                                <thead>
                                     <tr>
-                                        <td>@row.Nombre</td>
-                                        <td><code>@row.Ruta</code></td>
-                                        <td><input type="checkbox" @bind="row.PuedeVer" /></td>
-                                        <td><input type="checkbox" @bind="row.PuedeCrear" /></td>
-                                        <td><input type="checkbox" @bind="row.PuedeEditar" /></td>
-                                        <td><input type="checkbox" @bind="row.PuedeEliminar" /></td>
+                                        <th>Menu</th>
+                                        <th>Ruta</th>
+                                        <th>Ver</th>
+                                        <th>Crear</th>
+                                        <th>Editar</th>
+                                        <th>Eliminar</th>
                                     </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="management-actions">
-                        <button type="button" class="btn btn-primary" @onclick="SaveRoleAsync">Guardar rol y permisos</button>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in permissionRows)
+                                    {
+                                        <tr>
+                                            <td>@row.Nombre</td>
+                                            <td>
+                                                @if (string.IsNullOrWhiteSpace(row.Ruta))
+                                                {
+                                                    <span class="soft-status is-muted">Agrupador</span>
+                                                }
+                                                else
+                                                {
+                                                    <code>@row.Ruta</code>
+                                                }
+                                            </td>
+                                            <td><input type="checkbox" @bind="row.PuedeVer" /></td>
+                                            <td><input type="checkbox" @bind="row.PuedeCrear" /></td>
+                                            <td><input type="checkbox" @bind="row.PuedeEditar" /></td>
+                                            <td><input type="checkbox" @bind="row.PuedeEliminar" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
             </div>
+
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveRoleAsync">Guardar rol y permisos</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
+            </footer>
         </div>
-    </section>
+    </div>
 }
 
 @code {
@@ -140,8 +181,16 @@ else
     private int selectedRoleId;
     private string roleName = string.Empty;
     private string roleDescription = string.Empty;
+    private bool showFormModal;
+    private int rolePage = 1;
     private string? statusMessage;
     private string? errorMessage;
+    private const int PageSize = 5;
+    private IEnumerable<tbl_rol> PagedRoles => roles
+        .OrderBy(r => r.id_rol)
+        .Skip((rolePage - 1) * PageSize)
+        .Take(PageSize);
+    private int TotalRolePages => Math.Max(1, (int)Math.Ceiling(roles.Count / (double)PageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -178,6 +227,7 @@ else
 
         selectedRoleId = preserveRoleId ?? roles.FirstOrDefault()?.id_rol ?? 0;
         BuildEditor();
+        ClampRolePage();
         isLoading = false;
     }
 
@@ -191,18 +241,26 @@ else
             {
                 IdMenu = menu.id_menu,
                 Nombre = menu.nombre,
-                Ruta = menu.ruta
+                Ruta = menu.ruta ?? string.Empty
             })
             .ToList();
         statusMessage = null;
         errorMessage = null;
+        showFormModal = true;
     }
 
-    private void SelectRole(int roleId)
+    private void OpenEditRole(int roleId)
     {
         selectedRoleId = roleId;
         BuildEditor();
         statusMessage = null;
+        errorMessage = null;
+        showFormModal = true;
+    }
+
+    private void CloseFormModal()
+    {
+        showFormModal = false;
         errorMessage = null;
     }
 
@@ -220,7 +278,7 @@ else
                 {
                     IdMenu = menu.id_menu,
                     Nombre = menu.nombre,
-                    Ruta = menu.ruta,
+                    Ruta = menu.ruta ?? string.Empty,
                     PuedeVer = existingPermission?.puede_ver ?? false,
                     PuedeCrear = existingPermission?.puede_crear ?? false,
                     PuedeEditar = existingPermission?.puede_editar ?? false,
@@ -291,6 +349,39 @@ else
 
         statusMessage = "El rol y sus permisos se guardaron correctamente.";
         await LoadAsync(roleEntity.id_rol);
+        await MenuAccessService.NotifyMenusChangedAsync();
+        showFormModal = false;
+    }
+
+    private int GetVisibleMenuCount(int roleId) =>
+        permissions.Count(p => p.id_rol == roleId && p.puede_ver);
+
+    private void PreviousRolePage()
+    {
+        if (rolePage > 1)
+        {
+            rolePage--;
+        }
+    }
+
+    private void NextRolePage()
+    {
+        if (rolePage < TotalRolePages)
+        {
+            rolePage++;
+        }
+    }
+
+    private void ClampRolePage()
+    {
+        if (rolePage > TotalRolePages)
+        {
+            rolePage = TotalRolePages;
+        }
+        else if (rolePage < 1)
+        {
+            rolePage = 1;
+        }
     }
 
     private sealed class PermissionEditorRow

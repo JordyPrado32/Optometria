@@ -9,11 +9,13 @@ public partial class tbl_menu_app
 
     public string nombre { get; set; } = null!;
 
-    public string ruta { get; set; } = null!;
+    public string? ruta { get; set; }
 
     public string? icono { get; set; }
 
     public int orden { get; set; }
+
+    public int? id_menu_padre { get; set; }
 
     public bool activo { get; set; }
 

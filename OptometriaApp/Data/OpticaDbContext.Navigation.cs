@@ -42,7 +42,9 @@ public partial class OpticaDbContext
 
             entity.ToTable("tbl_menu_app");
 
-            entity.HasIndex(e => e.ruta, "UQ_tbl_menu_app_ruta").IsUnique();
+            entity.HasIndex(e => e.ruta, "IX_tbl_menu_app_ruta_not_null")
+                .IsUnique()
+                .HasFilter("[ruta] IS NOT NULL AND [ruta] <> ''");
 
             entity.Property(e => e.activo).HasDefaultValue(true);
             entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(getdate())");
@@ -52,6 +54,7 @@ public partial class OpticaDbContext
             entity.Property(e => e.nombre)
                 .HasMaxLength(150)
                 .IsUnicode(false);
+            entity.Property(e => e.id_menu_padre);
             entity.Property(e => e.orden).HasDefaultValue(0);
             entity.Property(e => e.ruta)
                 .HasMaxLength(200)

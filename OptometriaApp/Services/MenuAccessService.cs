@@ -7,6 +7,7 @@ namespace OptometriaApp.Services;
 public sealed class MenuAccessService
 {
     private readonly IDbContextFactory<OpticaDbContext> dbContextFactory;
+    public event Func<Task>? MenusChanged;
 
     public MenuAccessService(IDbContextFactory<OpticaDbContext> dbContextFactory)
     {
@@ -25,9 +26,10 @@ public sealed class MenuAccessService
             {
                 IdMenu = m.id_menu,
                 Nombre = m.nombre,
-                Ruta = m.ruta,
+                Ruta = m.ruta ?? string.Empty,
                 Icono = m.icono,
-                Orden = m.orden
+                Orden = m.orden,
+                IdMenuPadre = m.id_menu_padre
             })
             .ToListAsync(cancellationToken);
 
@@ -51,6 +53,50 @@ public sealed class MenuAccessService
             .Select(p => p.id_menu)
             .ToHashSet();
 
-        return activeMenus.Where(m => allowedMenuIds.Contains(m.IdMenu)).ToList();
+        var visibleMenus = activeMenus
+            .Where(m => allowedMenuIds.Contains(m.IdMenu))
+            .ToList();
+
+        var visibleMenuIds = visibleMenus.Select(m => m.IdMenu).ToHashSet();
+        var pendingParentIds = visibleMenus
+            .Where(m => m.IdMenuPadre.HasValue)
+            .Select(m => m.IdMenuPadre!.Value)
+            .ToList();
+
+        while (pendingParentIds.Count > 0)
+        {
+            var parentId = pendingParentIds[0];
+            pendingParentIds.RemoveAt(0);
+
+            if (!visibleMenuIds.Contains(parentId))
+            {
+                var parentMenu = activeMenus.FirstOrDefault(m => m.IdMenu == parentId);
+                if (parentMenu is not null)
+                {
+                    visibleMenus.Add(parentMenu);
+                    visibleMenuIds.Add(parentId);
+
+                    if (parentMenu.IdMenuPadre.HasValue)
+                    {
+                        pendingParentIds.Add(parentMenu.IdMenuPadre.Value);
+                    }
+                }
+            }
+        }
+
+        return visibleMenus;
+    }
+
+    public async Task NotifyMenusChangedAsync()
+    {
+        if (MenusChanged is null)
+        {
+            return;
+        }
+
+        foreach (var handler in MenusChanged.GetInvocationList().Cast<Func<Task>>())
+        {
+            await handler();
+        }
     }
 }

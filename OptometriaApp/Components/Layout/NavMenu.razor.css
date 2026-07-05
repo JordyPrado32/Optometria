@@ -242,13 +242,13 @@
     text-align: left;
     outline: none;
     transition: background-color 0.2s ease, color 0.2s ease;
-    color: #ffffff !important;
+    color: var(--color-taupe) !important;
     opacity: 1 !important;
 }
 
 .app-nav-group-trigger .app-nav-link-mark,
 .app-nav-group-trigger .app-nav-link-copy strong {
-    color: #ffffff !important;
+    color: var(--color-taupe) !important;
     opacity: 1 !important;
 }
 
@@ -258,7 +258,7 @@
 
 .app-nav-group.is-expanded .app-nav-group-trigger {
     background: rgba(93, 161, 129, 0.42) !important;
-    color: #ffffff !important;
+    color: var(--color-taupe) !important;
 }
 
 .app-nav-group-chevron {
@@ -268,18 +268,18 @@
     justify-content: center;
     font-size: 1.05rem;
     font-weight: 800;
-    color: #ffffff !important;
+    color: var(--color-taupe) !important;
     opacity: 1 !important;
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(127, 105, 81, 0.15);
     border-radius: 0.35rem;
     padding: 0.15rem 0.3rem;
     transition: background 0.2s ease;
 }
 
 .app-nav-group.is-expanded .app-nav-group-chevron {
-    color: #ffffff !important;
+    color: var(--color-taupe) !important;
     opacity: 1 !important;
-    background: rgba(255, 255, 255, 0.18) !important;
+    background: rgba(127, 105, 81, 0.22) !important;
 }
 
 .app-nav-group-children {
