@@ -65,7 +65,7 @@
                     </div>
 
                     <button type="submit" class="btn btn-primary auth-submit">Activar autenticacion de 2 factores</button>
-                    <a class="btn btn-outline-primary auth-back-button" href="/auth/logout">Regresar</a>
+                    <a class="btn btn-outline-primary auth-back-button" href="@BackUrl" onclick="if (window.history.length > 1) { window.history.back(); return false; }">Regresar</a>
                 </form>
             }
         </div>
@@ -76,9 +76,13 @@
     [SupplyParameterFromQuery]
     public string? Error { get; set; }
 
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
     private bool loading = true;
     private string? QrCodeDataUri;
     private string? ManualEntryKey;
+    private string BackUrl => IsLocalReturnUrl(ReturnUrl) ? ReturnUrl! : "/dashboard";
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,5 +148,12 @@
 
         ManualEntryKey = AuthenticatorService.BuildManualEntryKey(seguridad.authenticator_secret);
         loading = false;
+    }
+
+    private static bool IsLocalReturnUrl(string? returnUrl)
+    {
+        return !string.IsNullOrWhiteSpace(returnUrl) &&
+            returnUrl.StartsWith('/') &&
+            !returnUrl.StartsWith("//", StringComparison.Ordinal);
     }
 }

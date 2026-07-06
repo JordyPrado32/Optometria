@@ -237,28 +237,33 @@
     align-items: center;
     width: 100%;
     cursor: pointer;
-    background: rgba(93, 161, 129, 0.28);
+    background: transparent;
     border: none;
     text-align: left;
     outline: none;
     transition: background-color 0.2s ease, color 0.2s ease;
-    color: var(--color-taupe) !important;
-    opacity: 1 !important;
+    color: var(--color-ink) !important;
+    opacity: 0.8 !important;
 }
 
 .app-nav-group-trigger .app-nav-link-mark,
 .app-nav-group-trigger .app-nav-link-copy strong {
-    color: var(--color-taupe) !important;
-    opacity: 1 !important;
+    color: inherit !important;
+    opacity: inherit !important;
 }
 
 .app-nav-group-trigger:hover {
-    background: rgba(93, 161, 129, 0.42) !important;
+    background: rgba(255, 255, 255, 0.4) !important;
+    color: var(--color-ink) !important;
+    opacity: 1 !important;
 }
 
 .app-nav-group.is-expanded .app-nav-group-trigger {
-    background: rgba(93, 161, 129, 0.42) !important;
-    color: var(--color-taupe) !important;
+    background: #ffffff !important;
+    color: var(--color-sage) !important;
+    opacity: 1 !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 12px rgba(127, 105, 81, 0.05) !important;
 }
 
 .app-nav-group-chevron {
@@ -268,18 +273,18 @@
     justify-content: center;
     font-size: 1.05rem;
     font-weight: 800;
-    color: var(--color-taupe) !important;
+    color: inherit !important;
     opacity: 1 !important;
-    background: rgba(127, 105, 81, 0.15);
+    background: rgba(127, 105, 81, 0.08);
     border-radius: 0.35rem;
     padding: 0.15rem 0.3rem;
     transition: background 0.2s ease;
 }
 
 .app-nav-group.is-expanded .app-nav-group-chevron {
-    color: var(--color-taupe) !important;
+    color: var(--color-sage) !important;
     opacity: 1 !important;
-    background: rgba(127, 105, 81, 0.22) !important;
+    background: rgba(93, 161, 129, 0.12) !important;
 }
 
 .app-nav-group-children {

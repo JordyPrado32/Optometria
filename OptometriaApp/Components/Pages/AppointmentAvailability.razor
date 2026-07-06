@@ -43,104 +43,97 @@ else
                 <button type="button" class="btn btn-outline-primary" @onclick="ExportAvailability">Exportar CSV</button>
                 @if (CanManageAvailability)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNewAvailability">Nueva disponibilidad</button>
-                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewBlock">Nuevo bloqueo</button>
+                    <button type="button" class="btn btn-primary" @onclick="OpenNewAvailabilityModal">Nueva disponibilidad</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="OpenNewBlockModal">Nuevo bloqueo</button>
                 }
             </div>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(statusMessage))
-        {
-            <div class="alert alert-success" role="alert">@statusMessage</div>
-        }
+        <div class="availability-top-row">
+            @if (isAdmin)
+            {
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Medico en contexto</h2>
+                        <span>@(SelectedDoctor is null ? "Sin seleccion" : "Agenda activa")</span>
+                    </div>
 
-        @if (!string.IsNullOrWhiteSpace(errorMessage))
-        {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
-        }
+                    <div class="availability-context-grid">
+                        <div>
+                            <label class="form-label" for="availabilityDoctorSelector">Medico</label>
+                            <select id="availabilityDoctorSelector" class="form-select" value="@availabilityDoctorId" @onchange="OnAvailabilityDoctorChanged">
+                                @foreach (var doctor in doctors)
+                                {
+                                    <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                                }
+                            </select>
+                        </div>
 
-        @if (isAdmin)
-        {
-            <section class="management-card">
+                        <div>
+                            <label class="form-label">Especialidad</label>
+                            <input class="form-control" value="@(SelectedDoctor?.especialidad ?? "Sin especialidad registrada")" readonly />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Licencia</label>
+                            <input class="form-control" value="@(SelectedDoctor?.numero_licencia ?? "Sin licencia")" readonly />
+                        </div>
+                    </div>
+                </section>
+            }
+
+            <section class="management-card availability-filter-card">
                 <div class="management-card-header">
-                    <h2>Medico en contexto</h2>
-                    <span>@(SelectedDoctor is null ? "Sin seleccion" : "Agenda activa")</span>
+                    <h2>Filtros</h2>
+                    <span>@FilteredAvailabilityRows.Count disponibilidades | @FilteredBlocks.Count bloqueos</span>
                 </div>
 
-                <div class="management-form-grid">
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
+                    Filtra solo lo que ya esta cargado para el medico activo. El cambio de medico se hace aparte para no mezclar contexto con filtros.
+                </p>
+
+                <div class="availability-filters-grid">
                     <div>
-                        <label class="form-label" for="availabilityDoctorSelector">Medico</label>
-                        <select id="availabilityDoctorSelector" class="form-select" value="@availabilityDoctorId" @onchange="OnAvailabilityDoctorChanged">
-                            @foreach (var doctor in doctors)
+                        <label class="form-label" for="dayFilter">Dia</label>
+                        <select id="dayFilter" class="form-select" @bind="selectedDayFilter">
+                            <option value="0">Todos</option>
+                            @foreach (var option in dayOptions)
                             {
-                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
+                                <option value="@option.Value">@option.Label</option>
                             }
                         </select>
                     </div>
 
                     <div>
-                        <label class="form-label">Especialidad</label>
-                        <input class="form-control" value="@(SelectedDoctor?.especialidad ?? "Sin especialidad registrada")" readonly />
+                        <label class="form-label" for="blockTypeFilter">Tipo de bloqueo</label>
+                        <select id="blockTypeFilter" class="form-select" @bind="selectedBlockTypeFilter">
+                            <option value="">Todos</option>
+                            @foreach (var option in blockTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
                     </div>
 
-                    <div>
-                        <label class="form-label">Licencia</label>
-                        <input class="form-control" value="@(SelectedDoctor?.numero_licencia ?? "Sin licencia")" readonly />
-                    </div>
+                    <button type="button" class="btn btn-outline-primary availability-clear-button" @onclick="ClearFilters">
+                        <i class="bi bi-eraser"></i>
+                        <span>Limpiar filtros</span>
+                    </button>
                 </div>
+
+                @if (!doctors.Any())
+                {
+                    <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
+                        No hay medicos disponibles para gestionar disponibilidad.
+                    </div>
+                }
             </section>
-        }
-
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Filtros</h2>
-                <span>@FilteredAvailabilityRows.Count disponibilidades | @FilteredBlocks.Count bloqueos</span>
-            </div>
-
-            <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
-                Filtra solo lo que ya esta cargado para el medico activo. El cambio de medico se hace aparte para no mezclar contexto con filtros.
-            </p>
-
-            <div class="management-form-grid">
-                <div>
-                    <label class="form-label" for="dayFilter">Dia</label>
-                    <select id="dayFilter" class="form-select" @bind="selectedDayFilter">
-                        <option value="0">Todos</option>
-                        @foreach (var option in dayOptions)
-                        {
-                            <option value="@option.Value">@option.Label</option>
-                        }
-                    </select>
-                </div>
-
-                <div>
-                    <label class="form-label" for="blockTypeFilter">Tipo de bloqueo</label>
-                    <select id="blockTypeFilter" class="form-select" @bind="selectedBlockTypeFilter">
-                        <option value="">Todos</option>
-                        @foreach (var option in blockTypeOptions)
-                        {
-                            <option value="@option">@option</option>
-                        }
-                    </select>
-                </div>
-            </div>
-
-            <div class="management-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
-            </div>
-
-            @if (!doctors.Any())
-            {
-                <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
-                    No hay medicos disponibles para gestionar disponibilidad.
-                </div>
-            }
-        </section>
+        </div>
 
         <section class="management-card">
             <div class="management-card-header">
                 <h2>Panel operativo</h2>
-                <span>Edicion y consulta separadas</span>
+                <span>Disponibilidad y bloqueos</span>
             </div>
 
             <div class="user-summary-grid" style="margin-bottom: 1.25rem;">
@@ -163,65 +156,8 @@ else
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.35rem;">
-                <section style="display: grid; gap: 1rem; align-content: start;">
-                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(93, 161, 129, 0.16); background: rgba(93, 161, 129, 0.05);">
-                        <div class="management-card-header" style="margin-bottom: 0.9rem;">
-                            <h2>Editor de disponibilidad</h2>
-                            <span>@(availabilityEditor.IdDisponibilidad > 0 ? "Edicion activa" : "Nuevo registro")</span>
-                        </div>
-
-                        <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
-                            Define la jornada semanal, descanso y observaciones antes de guardar.
-                        </p>
-
-                        <div class="management-form-grid">
-                            <div>
-                                <label class="form-label" for="availabilityDay">Dia</label>
-                                <select id="availabilityDay" class="form-select" @bind="availabilityEditor.DayOfWeek" disabled="@(!CanManageAvailability)">
-                                    @foreach (var option in dayOptions)
-                                    {
-                                        <option value="@option.Value">@option.Label</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="availabilityStart">Hora inicio</label>
-                                <input id="availabilityStart" type="time" class="form-control" value="@availabilityEditor.StartTime" @onchange="OnAvailabilityStartChanged" readonly="@(!CanManageAvailability)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="availabilityEnd">Hora fin</label>
-                                <input id="availabilityEnd" type="time" class="form-control" value="@availabilityEditor.EndTime" @onchange="OnAvailabilityEndChanged" readonly="@(!CanManageAvailability)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="availabilityBreakStart">Descanso inicio</label>
-                                <input id="availabilityBreakStart" type="time" class="form-control" value="@availabilityEditor.BreakStart" @onchange="OnAvailabilityBreakStartChanged" readonly="@(!CanManageAvailability)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="availabilityBreakEnd">Descanso fin</label>
-                                <input id="availabilityBreakEnd" type="time" class="form-control" value="@availabilityEditor.BreakEnd" @onchange="OnAvailabilityBreakEndChanged" readonly="@(!CanManageAvailability)" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="availabilityNotes">Observaciones</label>
-                                <input id="availabilityNotes" class="form-control" @bind="availabilityEditor.Observaciones" maxlength="500" readonly="@(!CanManageAvailability)" />
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions" style="margin-top: 1rem;">
-                            @if (CanManageAvailability)
-                            {
-                                <button type="button" class="btn btn-primary" @onclick="SaveAvailabilityAsync">Guardar disponibilidad</button>
-                                <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewAvailability">Limpiar</button>
-                            }
-                        </div>
-                    </div>
-
-                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(127, 105, 81, 0.1); background: #fcfbf8;">
+            <div class="availability-records-grid">
+                <section class="availability-record-panel">
                         <div class="management-card-header" style="margin-bottom: 0.9rem;">
                             <h2>Disponibilidad registrada</h2>
                             <span>@FilteredAvailabilityRows.Count filas</span>
@@ -234,75 +170,39 @@ else
                             }
                             else
                             {
-                                @foreach (var row in FilteredAvailabilityRows)
+                                @foreach (var row in PagedAvailabilityRows)
                                 {
                                     <article class="management-list-item availability-row">
-                                        <strong>@(row.nombre_dia ?? GetDayLabel(row.dia_semana))</strong>
-                                        <span>@($"{row.hora_inicio:HH\\:mm} - {row.hora_fin:HH\\:mm}")</span>
-                                        <span>@GetBreakLabel(row)</span>
-                                        <span>@(string.IsNullOrWhiteSpace(row.observaciones) ? "Sin observaciones" : row.observaciones)</span>
+                                        <div class="availability-row-copy">
+                                            <strong>@(row.nombre_dia ?? GetDayLabel(row.dia_semana))</strong>
+                                            <span>@($"{row.hora_inicio:HH\\:mm} - {row.hora_fin:HH\\:mm}")</span>
+                                            <span>@GetBreakLabel(row)</span>
+                                            <span>@(string.IsNullOrWhiteSpace(row.observaciones) ? "Sin observaciones" : row.observaciones)</span>
+                                        </div>
                                         @if (CanManageAvailability)
                                         {
-                                            <div class="workspace-actions">
-                                                <button type="button" class="btn btn-outline-primary" @onclick="() => EditAvailability(row)">Editar</button>
-                                                <button type="button" class="btn btn-outline-primary" @onclick="() => DeleteAvailabilityAsync(row.id_disponibilidad)">Eliminar</button>
+                                            <div class="availability-row-actions">
+                                                <button type="button" class="availability-icon-button is-edit" title="Editar" aria-label="Editar disponibilidad" @onclick="() => OpenEditAvailabilityModal(row)">
+                                                    <i class="bi bi-pencil-fill"></i>
+                                                </button>
+                                                <button type="button" class="availability-icon-button is-delete" title="Eliminar" aria-label="Eliminar disponibilidad" @onclick="() => AskDeleteAvailability(row.id_disponibilidad)">
+                                                    <i class="bi bi-trash3-fill"></i>
+                                                </button>
                                             </div>
                                         }
                                     </article>
                                 }
                             }
                         </div>
-                    </div>
+
+                        <div class="table-pager availability-pager">
+                            <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousAvailabilityPage" disabled="@(CurrentAvailabilityPage <= 1)">Anterior</button>
+                            <span>Pagina @CurrentAvailabilityPage de @TotalAvailabilityPages</span>
+                            <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextAvailabilityPage" disabled="@(CurrentAvailabilityPage >= TotalAvailabilityPages)">Siguiente</button>
+                        </div>
                 </section>
 
-                <section style="display: grid; gap: 1rem; align-content: start;">
-                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(224, 155, 60, 0.16); background: rgba(254, 188, 100, 0.06);">
-                        <div class="management-card-header" style="margin-bottom: 0.9rem;">
-                            <h2>Editor de bloqueos</h2>
-                            <span>@(blockEditor.IdBloqueo > 0 ? "Edicion activa" : "Nuevo registro")</span>
-                        </div>
-
-                        <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
-                            Registra vacaciones, ausencias o mantenimientos que deban cerrar agenda temporalmente.
-                        </p>
-
-                        <div class="management-form-grid">
-                            <div>
-                                <label class="form-label" for="blockStart">Fecha inicio</label>
-                                <input id="blockStart" type="date" class="form-control" value="@blockEditor.FechaInicio" @onchange="OnBlockStartChanged" readonly="@(!CanManageAvailability)" min="@TodayDateIso" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="blockEnd">Fecha fin</label>
-                                <input id="blockEnd" type="date" class="form-control" value="@blockEditor.FechaFin" @onchange="OnBlockEndChanged" readonly="@(!CanManageAvailability)" min="@blockEditor.FechaInicio" />
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="blockType">Tipo</label>
-                                <select id="blockType" class="form-select" @bind="blockEditor.TipoBloqueo" disabled="@(!CanManageAvailability)">
-                                    @foreach (var option in blockTypeOptions)
-                                    {
-                                        <option value="@option">@option</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="form-label" for="blockReason">Razon</label>
-                                <input id="blockReason" class="form-control" @bind="blockEditor.Razon" maxlength="300" readonly="@(!CanManageAvailability)" />
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions" style="margin-top: 1rem;">
-                            @if (CanManageAvailability)
-                            {
-                                <button type="button" class="btn btn-primary" @onclick="SaveBlockAsync">Guardar bloqueo</button>
-                                <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewBlock">Limpiar</button>
-                            }
-                        </div>
-                    </div>
-
-                    <div style="padding: 1rem; border-radius: 1rem; border: 1px solid rgba(127, 105, 81, 0.1); background: #fcfbf8;">
+                <section class="availability-record-panel">
                         <div class="management-card-header" style="margin-bottom: 0.9rem;">
                             <h2>Bloqueos registrados</h2>
                             <span>@FilteredBlocks.Count filas</span>
@@ -315,28 +215,186 @@ else
                             }
                             else
                             {
-                                @foreach (var block in FilteredBlocks)
+                                @foreach (var block in PagedBlocks)
                                 {
                                     <article class="management-list-item availability-row">
-                                        <strong>@block.tipo_bloqueo</strong>
-                                        <span>@($"{block.fecha_inicio:yyyy-MM-dd} al {block.fecha_fin:yyyy-MM-dd}")</span>
-                                        <span>@(string.IsNullOrWhiteSpace(block.razon_bloqueo) ? "Sin razon" : block.razon_bloqueo)</span>
+                                        <div class="availability-row-copy">
+                                            <strong>@block.tipo_bloqueo</strong>
+                                            <span>@($"{block.fecha_inicio:yyyy-MM-dd} al {block.fecha_fin:yyyy-MM-dd}")</span>
+                                            <span>@(string.IsNullOrWhiteSpace(block.razon_bloqueo) ? "Sin razon" : block.razon_bloqueo)</span>
+                                        </div>
                                         @if (CanManageAvailability)
                                         {
-                                            <div class="workspace-actions">
-                                                <button type="button" class="btn btn-outline-primary" @onclick="() => EditBlock(block)">Editar</button>
-                                                <button type="button" class="btn btn-outline-primary" @onclick="() => DeleteBlockAsync(block.id_bloqueo)">Eliminar</button>
+                                            <div class="availability-row-actions">
+                                                <button type="button" class="availability-icon-button is-edit" title="Editar" aria-label="Editar bloqueo" @onclick="() => OpenEditBlockModal(block)">
+                                                    <i class="bi bi-pencil-fill"></i>
+                                                </button>
+                                                <button type="button" class="availability-icon-button is-delete" title="Eliminar" aria-label="Eliminar bloqueo" @onclick="() => AskDeleteBlock(block.id_bloqueo)">
+                                                    <i class="bi bi-trash3-fill"></i>
+                                                </button>
                                             </div>
                                         }
                                     </article>
                                 }
                             }
                         </div>
-                    </div>
+
+                        <div class="table-pager availability-pager">
+                            <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousBlockPage" disabled="@(CurrentBlockPage <= 1)">Anterior</button>
+                            <span>Pagina @CurrentBlockPage de @TotalBlockPages</span>
+                            <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextBlockPage" disabled="@(CurrentBlockPage >= TotalBlockPages)">Siguiente</button>
+                        </div>
                 </section>
             </div>
         </section>
     </section>
+}
+
+@if (showAvailabilityModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseAvailabilityModal">
+        <div class="custom-modal-card form-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@(availabilityEditor.IdDisponibilidad > 0 ? "Editar disponibilidad" : "Nueva disponibilidad")</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseAvailabilityModal">×</button>
+            </header>
+
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
+                    Define la jornada semanal, descanso y observaciones antes de guardar.
+                </p>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="availabilityDay">Dia</label>
+                        <select id="availabilityDay" class="form-select" @bind="availabilityEditor.DayOfWeek" disabled="@(!CanManageAvailability)">
+                            @foreach (var option in dayOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="availabilityStart">Hora inicio</label>
+                        <input id="availabilityStart" type="time" class="form-control" value="@availabilityEditor.StartTime" @onchange="OnAvailabilityStartChanged" readonly="@(!CanManageAvailability)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="availabilityEnd">Hora fin</label>
+                        <input id="availabilityEnd" type="time" class="form-control" value="@availabilityEditor.EndTime" @onchange="OnAvailabilityEndChanged" readonly="@(!CanManageAvailability)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="availabilityBreakStart">Descanso inicio</label>
+                        <input id="availabilityBreakStart" type="time" class="form-control" value="@availabilityEditor.BreakStart" @onchange="OnAvailabilityBreakStartChanged" readonly="@(!CanManageAvailability)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="availabilityBreakEnd">Descanso fin</label>
+                        <input id="availabilityBreakEnd" type="time" class="form-control" value="@availabilityEditor.BreakEnd" @onchange="OnAvailabilityBreakEndChanged" readonly="@(!CanManageAvailability)" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="availabilityNotes">Observaciones</label>
+                        <input id="availabilityNotes" class="form-control" @bind="availabilityEditor.Observaciones" maxlength="500" readonly="@(!CanManageAvailability)" />
+                    </div>
+                </div>
+            </div>
+
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveAvailabilityAsync">Guardar disponibilidad</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseAvailabilityModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showBlockModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseBlockModal">
+        <div class="custom-modal-card form-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@(blockEditor.IdBloqueo > 0 ? "Editar bloqueo" : "Nuevo bloqueo")</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseBlockModal">×</button>
+            </header>
+
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@errorMessage</div>
+                }
+
+                <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
+                    Registra vacaciones, ausencias o mantenimientos que deban cerrar agenda temporalmente.
+                </p>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label" for="blockStart">Fecha inicio</label>
+                        <input id="blockStart" type="date" class="form-control" value="@blockEditor.FechaInicio" @onchange="OnBlockStartChanged" readonly="@(!CanManageAvailability)" min="@TodayDateIso" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="blockEnd">Fecha fin</label>
+                        <input id="blockEnd" type="date" class="form-control" value="@blockEditor.FechaFin" @onchange="OnBlockEndChanged" readonly="@(!CanManageAvailability)" min="@blockEditor.FechaInicio" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="blockType">Tipo</label>
+                        <select id="blockType" class="form-select" @bind="blockEditor.TipoBloqueo" disabled="@(!CanManageAvailability)">
+                            @foreach (var option in blockTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="blockReason">Razon</label>
+                        <input id="blockReason" class="form-control" @bind="blockEditor.Razon" maxlength="300" readonly="@(!CanManageAvailability)" />
+                    </div>
+                </div>
+            </div>
+
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveBlockAsync">Guardar bloqueo</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseBlockModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showActionModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseActionModal">
+        <div class="custom-modal-card alert-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header @(actionModalKind == ActionModalKind.Error ? "error-header" : actionModalKind == ActionModalKind.Success ? "success-header" : "rose-header")">
+                <h2>@actionModalTitle</h2>
+            </header>
+
+            <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
+                <p style="margin: 0; color: var(--color-taupe-deep); font-weight: 700;">@actionModalMessage</p>
+            </div>
+
+            <footer class="custom-modal-footer" style="justify-content: center;">
+                @if (actionModalKind == ActionModalKind.Confirm)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="ConfirmPendingDeleteAsync">Si, eliminar</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="CloseActionModal">Cancelar</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary" @onclick="CloseActionModal">Aceptar</button>
+                }
+            </footer>
+        </div>
+    </div>
 }
 
 @code {
@@ -350,16 +408,26 @@ else
     private bool canViewModule;
     private bool isAdmin;
     private bool isDoctor;
+    private bool showAvailabilityModal;
+    private bool showBlockModal;
+    private bool showActionModal;
+    private ActionModalKind actionModalKind;
+    private PendingDeleteKind pendingDeleteKind;
+    private int pendingDeleteId;
     private int currentUserId;
     private int currentRoleId;
     private int currentDoctorId;
     private int availabilityDoctorId;
+    private int availabilityPage = 1;
+    private int blockPage = 1;
     private int selectedDayFilter;
     private string selectedBlockTypeFilter = string.Empty;
     private string currentRoleName = string.Empty;
-    private string? statusMessage;
     private string? errorMessage;
+    private string actionModalTitle = string.Empty;
+    private string actionModalMessage = string.Empty;
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+    private const int AvailabilityPageSize = 3;
 
     private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Mantenimiento", "Otro"];
     private static readonly DayOption[] dayOptions =
@@ -390,6 +458,16 @@ else
         .Where(x => string.IsNullOrWhiteSpace(selectedBlockTypeFilter) || string.Equals(x.tipo_bloqueo, selectedBlockTypeFilter, StringComparison.OrdinalIgnoreCase))
         .OrderByDescending(x => x.fecha_inicio)
         .ToList();
+    private int CurrentAvailabilityPage => Math.Clamp(availabilityPage, 1, TotalAvailabilityPages);
+    private int CurrentBlockPage => Math.Clamp(blockPage, 1, TotalBlockPages);
+    private IEnumerable<tbl_disponibilidad_medico> PagedAvailabilityRows => FilteredAvailabilityRows
+        .Skip((CurrentAvailabilityPage - 1) * AvailabilityPageSize)
+        .Take(AvailabilityPageSize);
+    private IEnumerable<tbl_bloqueo_horarios> PagedBlocks => FilteredBlocks
+        .Skip((CurrentBlockPage - 1) * AvailabilityPageSize)
+        .Take(AvailabilityPageSize);
+    private int TotalAvailabilityPages => Math.Max(1, (int)Math.Ceiling(FilteredAvailabilityRows.Count / (double)AvailabilityPageSize));
+    private int TotalBlockPages => Math.Max(1, (int)Math.Ceiling(FilteredBlocks.Count / (double)AvailabilityPageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -401,7 +479,6 @@ else
     private async Task LoadAsync()
     {
         isLoading = true;
-        statusMessage = null;
         errorMessage = null;
 
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -468,7 +545,6 @@ else
 
     private async Task SaveAvailabilityAsync()
     {
-        statusMessage = null;
         errorMessage = null;
 
         if (!CanManageAvailability || availabilityDoctorId <= 0)
@@ -502,7 +578,26 @@ else
             return;
         }
 
+        var normalizedObservations = NormalizeOptional(availabilityEditor.Observaciones);
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var duplicateExists = await dbContext.tbl_disponibilidad_medico
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.id_medico == availabilityDoctorId &&
+                x.id_disponibilidad != availabilityEditor.IdDisponibilidad &&
+                x.dia_semana == availabilityEditor.DayOfWeek &&
+                x.hora_inicio == startTime &&
+                x.hora_fin == endTime &&
+                x.hora_descanso_inicio == breakStart &&
+                x.hora_descanso_fin == breakEnd &&
+                x.observaciones == normalizedObservations);
+
+        if (duplicateExists)
+        {
+            errorMessage = "Ya existe una disponibilidad exactamente igual para este medico.";
+            return;
+        }
+
         tbl_disponibilidad_medico entity;
         if (availabilityEditor.IdDisponibilidad > 0)
         {
@@ -524,7 +619,7 @@ else
         entity.hora_descanso_inicio = breakStart;
         entity.hora_descanso_fin = breakEnd;
         entity.disponible = true;
-        entity.observaciones = NormalizeOptional(availabilityEditor.Observaciones);
+        entity.observaciones = normalizedObservations;
         entity.fecha_actualizacion = DateTime.Now;
         entity.usuario_actualizacion = GetCurrentActorLabel();
 
@@ -532,16 +627,18 @@ else
         WriteAudit(dbContext, availabilityEditor.IdDisponibilidad > 0 ? "Editar disponibilidad" : "Crear disponibilidad", $"MedicoId={availabilityDoctorId}; DisponibilidadId={entity.id_disponibilidad}; Dia={entity.dia_semana}; HoraInicio={entity.hora_inicio:HH\\:mm}; HoraFin={entity.hora_fin:HH\\:mm}");
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "La disponibilidad fue guardada correctamente.";
         PrepareNewAvailability();
+        showAvailabilityModal = false;
         await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
         await LoadAvailabilityAsync(refreshContext);
+        ShowActionResult("Guardado", "La disponibilidad fue guardada correctamente.", false);
     }
 
     private async Task DeleteAvailabilityAsync(int availabilityId)
     {
         if (!CanManageAvailability || availabilityId <= 0)
         {
+            ShowActionResult("Error", "No tienes permisos para eliminar esta disponibilidad.", true);
             return;
         }
 
@@ -549,6 +646,7 @@ else
         var entity = await dbContext.tbl_disponibilidad_medico.FirstOrDefaultAsync(x => x.id_disponibilidad == availabilityId && x.id_medico == availabilityDoctorId);
         if (entity is null)
         {
+            ShowActionResult("Error", "No se encontro la disponibilidad seleccionada.", true);
             return;
         }
 
@@ -556,15 +654,14 @@ else
         WriteAudit(dbContext, "Eliminar disponibilidad", $"MedicoId={availabilityDoctorId}; DisponibilidadId={availabilityId}");
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "La disponibilidad fue eliminada.";
         PrepareNewAvailability();
         await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
         await LoadAvailabilityAsync(refreshContext);
+        ShowActionResult("Eliminado", "La disponibilidad fue eliminada correctamente.", false);
     }
 
     private async Task SaveBlockAsync()
     {
-        statusMessage = null;
         errorMessage = null;
 
         if (!CanManageAvailability || availabilityDoctorId <= 0)
@@ -612,16 +709,18 @@ else
         WriteAudit(dbContext, blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}");
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "El bloqueo fue guardado correctamente.";
         PrepareNewBlock();
+        showBlockModal = false;
         await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
         await LoadAvailabilityAsync(refreshContext);
+        ShowActionResult("Guardado", "El bloqueo fue guardado correctamente.", false);
     }
 
     private async Task DeleteBlockAsync(int blockId)
     {
         if (!CanManageAvailability || blockId <= 0)
         {
+            ShowActionResult("Error", "No tienes permisos para eliminar este bloqueo.", true);
             return;
         }
 
@@ -629,6 +728,7 @@ else
         var entity = await dbContext.tbl_bloqueo_horarios.FirstOrDefaultAsync(x => x.id_bloqueo == blockId && x.id_medico == availabilityDoctorId);
         if (entity is null)
         {
+            ShowActionResult("Error", "No se encontro el bloqueo seleccionado.", true);
             return;
         }
 
@@ -636,15 +736,17 @@ else
         WriteAudit(dbContext, "Eliminar bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={blockId}");
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "El bloqueo fue eliminado.";
         PrepareNewBlock();
         await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
         await LoadAvailabilityAsync(refreshContext);
+        ShowActionResult("Eliminado", "El bloqueo fue eliminado correctamente.", false);
     }
 
     private async Task OnAvailabilityDoctorChanged(ChangeEventArgs args)
     {
         availabilityDoctorId = int.TryParse(args.Value?.ToString(), out var parsedDoctorId) ? parsedDoctorId : availabilityDoctorId;
+        availabilityPage = 1;
+        blockPage = 1;
         PrepareNewAvailability();
         PrepareNewBlock();
 
@@ -664,6 +766,137 @@ else
     {
         selectedDayFilter = 0;
         selectedBlockTypeFilter = string.Empty;
+        availabilityPage = 1;
+        blockPage = 1;
+    }
+
+    private void AskDeleteAvailability(int availabilityId)
+    {
+        pendingDeleteKind = PendingDeleteKind.Availability;
+        pendingDeleteId = availabilityId;
+        ShowActionConfirm("Esta seguro?", "Esta accion eliminara la disponibilidad seleccionada.");
+    }
+
+    private void AskDeleteBlock(int blockId)
+    {
+        pendingDeleteKind = PendingDeleteKind.Block;
+        pendingDeleteId = blockId;
+        ShowActionConfirm("Esta seguro?", "Esta accion eliminara el bloqueo seleccionado.");
+    }
+
+    private async Task ConfirmPendingDeleteAsync()
+    {
+        var deleteKind = pendingDeleteKind;
+        var deleteId = pendingDeleteId;
+        CloseActionModal();
+
+        if (deleteKind == PendingDeleteKind.Availability)
+        {
+            await DeleteAvailabilityAsync(deleteId);
+        }
+        else if (deleteKind == PendingDeleteKind.Block)
+        {
+            await DeleteBlockAsync(deleteId);
+        }
+    }
+
+    private void ShowActionConfirm(string title, string message)
+    {
+        actionModalKind = ActionModalKind.Confirm;
+        actionModalTitle = title;
+        actionModalMessage = message;
+        showActionModal = true;
+    }
+
+    private void ShowActionResult(string title, string message, bool isError)
+    {
+        actionModalKind = isError ? ActionModalKind.Error : ActionModalKind.Success;
+        actionModalTitle = title;
+        actionModalMessage = message;
+        pendingDeleteKind = PendingDeleteKind.None;
+        pendingDeleteId = 0;
+        showActionModal = true;
+    }
+
+    private void CloseActionModal()
+    {
+        showActionModal = false;
+        actionModalTitle = string.Empty;
+        actionModalMessage = string.Empty;
+        pendingDeleteKind = PendingDeleteKind.None;
+        pendingDeleteId = 0;
+    }
+
+    private void OpenNewAvailabilityModal()
+    {
+        PrepareNewAvailability();
+        errorMessage = null;
+        showAvailabilityModal = true;
+    }
+
+    private void OpenEditAvailabilityModal(tbl_disponibilidad_medico row)
+    {
+        EditAvailability(row);
+        errorMessage = null;
+        showAvailabilityModal = true;
+    }
+
+    private void CloseAvailabilityModal()
+    {
+        showAvailabilityModal = false;
+        errorMessage = null;
+    }
+
+    private void OpenNewBlockModal()
+    {
+        PrepareNewBlock();
+        errorMessage = null;
+        showBlockModal = true;
+    }
+
+    private void OpenEditBlockModal(tbl_bloqueo_horarios block)
+    {
+        EditBlock(block);
+        errorMessage = null;
+        showBlockModal = true;
+    }
+
+    private void CloseBlockModal()
+    {
+        showBlockModal = false;
+        errorMessage = null;
+    }
+
+    private void PreviousAvailabilityPage()
+    {
+        if (availabilityPage > 1)
+        {
+            availabilityPage--;
+        }
+    }
+
+    private void NextAvailabilityPage()
+    {
+        if (availabilityPage < TotalAvailabilityPages)
+        {
+            availabilityPage++;
+        }
+    }
+
+    private void PreviousBlockPage()
+    {
+        if (blockPage > 1)
+        {
+            blockPage--;
+        }
+    }
+
+    private void NextBlockPage()
+    {
+        if (blockPage < TotalBlockPages)
+        {
+            blockPage++;
+        }
     }
 
     private void PrepareNewAvailability()
@@ -832,6 +1065,20 @@ else
         public string FechaFin { get; set; } = string.Empty;
         public string TipoBloqueo { get; set; } = "Vacaciones";
         public string Razon { get; set; } = string.Empty;
+    }
+
+    private enum ActionModalKind
+    {
+        Confirm,
+        Success,
+        Error
+    }
+
+    private enum PendingDeleteKind
+    {
+        None,
+        Availability,
+        Block
     }
 
     private sealed record DayOption(int Value, string Label);
