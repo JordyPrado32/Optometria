@@ -396,7 +396,7 @@ app.MapPost("/auth/forgot-password", async (
 
     if (usuarioDb is null || string.IsNullOrWhiteSpace(usuarioDb.email))
     {
-        return Results.LocalRedirect("/recuperar-contrasena?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
+        return Results.LocalRedirect("/?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
     }
 
     var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
@@ -415,7 +415,7 @@ app.MapPost("/auth/forgot-password", async (
         temporaryPassword,
         minutesValid);
 
-    return Results.LocalRedirect("/recuperar-contrasena?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
+    return Results.LocalRedirect("/?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/setup-2fa/confirm", async (
@@ -2449,19 +2449,6 @@ using (var scope = app.Services.CreateScope())
         var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<OpticaDbContext>>();
         using var context = await contextFactory.CreateDbContextAsync();
 
-        // Clean up duplicate menus and update the original ones
-        await context.Database.ExecuteSqlRawAsync(@"
-            -- 1. Update original menus to their Spanish routes and set their correct parent
-            UPDATE dbo.tbl_menu_app SET ruta = '/registro', id_menu_padre = 1032 WHERE id_menu = 3;
-            UPDATE dbo.tbl_menu_app SET ruta = '/configurar-2fa', id_menu_padre = 1032 WHERE id_menu = 5;
-            UPDATE dbo.tbl_menu_app SET ruta = '/perfil', id_menu_padre = 1032 WHERE id_menu = 6;
-            UPDATE dbo.tbl_menu_app SET ruta = '/clientes', id_menu_padre = 1020 WHERE id_menu = 1012;
-            UPDATE dbo.tbl_menu_app SET ruta = '/citas', id_menu_padre = 1035 WHERE id_menu = 1022;
-
-            -- 2. Delete the duplicate rows that were inserted
-            DELETE FROM dbo.tbl_menu_app WHERE id_menu IN (1013, 1037, 1038, 1039, 1040);
-        ");
-        
         var routeMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "/patients", "/pacientes" },
@@ -2494,7 +2481,20 @@ using (var scope = app.Services.CreateScope())
         {
             if (!string.IsNullOrWhiteSpace(menu.ruta) && routeMappings.TryGetValue(menu.ruta.Trim(), out var newRoute))
             {
-                if (menu.ruta != newRoute)
+                var existingSpanishMenu = menus.FirstOrDefault(m =>
+                    m.id_menu != menu.id_menu &&
+                    !string.IsNullOrWhiteSpace(m.ruta) &&
+                    string.Equals(m.ruta.Trim(), newRoute, StringComparison.OrdinalIgnoreCase));
+
+                if (existingSpanishMenu is not null)
+                {
+                    if (menu.activo)
+                    {
+                        menu.activo = false;
+                        anyChanged = true;
+                    }
+                }
+                else if (menu.ruta != newRoute)
                 {
                     menu.ruta = newRoute;
                     anyChanged = true;
@@ -2716,58 +2716,67 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             );
         END;
 
-        MERGE dbo.tbl_menu_app AS target
-        USING
-        (
-            VALUES
-                ('Dashboard', '/dashboard', 'dashboard', 1, 1),
-                ('Mi perfil', '/perfil', 'user', 2, 1),
-                ('Pacientes', '/pacientes', 'patients', 3, 1),
-                ('Ingresar pacientes', '/doctor/ingresar-pacientes', 'doctor-entry', 4, 1),
-                ('Ver mis pacientes', '/doctor/mis-pacientes', 'doctor-patients', 5, 1),
-                ('Citas y turnos', '/citas', 'calendar-check', 6, 1),
-                ('Disponibilidad medica', '/disponibilidad-medica', 'calendar-availability', 7, 1),
-                ('Medicos', '/doctores', 'doctor-profile', 8, 1),
-                ('Laboratorios', '/laboratorios', 'lab', 9, 1),
-                ('Proveedores', '/proveedores', 'suppliers', 10, 1),
-                ('Productos', '/productos', 'products', 11, 1),
-                ('Categorias de productos', '/categorias-de-productos', 'tags', 12, 1),
-                ('Ordenes de compra', '/ordenes-de-compra', 'purchase-orders', 14, 1),
-                ('Recepciones de compra', '/recepciones-de-compra', 'purchase-receptions', 15, 1),
-                ('Liquidaciones de compra', '/liquidaciones-de-compra', 'purchase-liquidations', 16, 1),
-                ('Inventarios', '/inventarios', 'inventories', 17, 1),
-                ('Kardex', '/kardex', 'kardex', 18, 1),
-                ('Clientes', '/clientes', 'clients', 19, 1),
-                ('Emisor', '/emisor', 'issuer', 20, 1),
-                ('Facturas', '/facturas', 'invoice', 21, 1),
-                ('Mis facturas', '/mis-facturas', 'receipt', 22, 1),
-                ('Mis notas de credito', '/mis-notas-de-credito', 'arrow-counterclockwise', 23, 1),
-                ('Cuentas por cobrar', '/cuentas-por-cobrar', 'cash-coin', 24, 1),
-                ('Usuarios', '/usuarios', 'users', 25, 1),
-                ('Roles', '/roles', 'roles', 26, 1),
-                ('Menus', '/menus', 'menu', 27, 1),
-                ('Registrar usuario', '/registro', 'user-plus', 28, 1),
-                ('Seguridad', '/configurar-2fa', 'shield', 29, 1)
-        ) AS source(nombre, ruta, icono, orden, activo)
-        ON target.ruta = source.ruta
-        WHEN MATCHED THEN
-            UPDATE SET
-                target.nombre = source.nombre,
-                target.icono = source.icono
-        WHEN NOT MATCHED THEN
-            INSERT (nombre, ruta, icono, orden, activo)
-            VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
+        IF NOT EXISTS (SELECT 1 FROM dbo.tbl_menu_app)
+        BEGIN
+            MERGE dbo.tbl_menu_app AS target
+            USING
+            (
+                VALUES
+                    ('Dashboard', '/dashboard', 'dashboard', 1, 1),
+                    ('Mi perfil', '/perfil', 'user', 2, 1),
+                    ('Pacientes', '/pacientes', 'patients', 3, 1),
+                    ('Ingresar pacientes', '/doctor/ingresar-pacientes', 'doctor-entry', 4, 1),
+                    ('Ver mis pacientes', '/doctor/mis-pacientes', 'doctor-patients', 5, 1),
+                    ('Citas y turnos', '/citas', 'calendar-check', 6, 1),
+                    ('Disponibilidad medica', '/disponibilidad-medica', 'calendar-availability', 7, 1),
+                    ('Medicos', '/doctores', 'doctor-profile', 8, 1),
+                    ('Laboratorios', '/laboratorios', 'lab', 9, 1),
+                    ('Proveedores', '/proveedores', 'suppliers', 10, 1),
+                    ('Productos', '/productos', 'products', 11, 1),
+                    ('Categorias de productos', '/categorias-de-productos', 'tags', 12, 1),
+                    ('Ordenes de compra', '/ordenes-de-compra', 'purchase-orders', 14, 1),
+                    ('Recepciones de compra', '/recepciones-de-compra', 'purchase-receptions', 15, 1),
+                    ('Liquidaciones de compra', '/liquidaciones-de-compra', 'purchase-liquidations', 16, 1),
+                    ('Inventarios', '/inventarios', 'inventories', 17, 1),
+                    ('Kardex', '/kardex', 'kardex', 18, 1),
+                    ('Clientes', '/clientes', 'clients', 19, 1),
+                    ('Emisor', '/emisor', 'issuer', 20, 1),
+                    ('Facturas', '/facturas', 'invoice', 21, 1),
+                    ('Mis facturas', '/mis-facturas', 'receipt', 22, 1),
+                    ('Mis notas de credito', '/mis-notas-de-credito', 'arrow-counterclockwise', 23, 1),
+                    ('Cuentas por cobrar', '/cuentas-por-cobrar', 'cash-coin', 24, 1),
+                    ('Usuarios', '/usuarios', 'users', 25, 1),
+                    ('Roles', '/roles', 'roles', 26, 1),
+                    ('Menus', '/menus', 'menu', 27, 1),
+                    ('Registrar usuario', '/registro', 'user-plus', 28, 1),
+                    ('Seguridad', '/configurar-2fa', 'shield', 29, 1)
+            ) AS source(nombre, ruta, icono, orden, activo)
+            ON target.ruta = source.ruta
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.nombre = source.nombre,
+                    target.icono = source.icono
+            WHEN NOT MATCHED THEN
+                INSERT (nombre, ruta, icono, orden, activo)
+                VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
+        END;
 
         EXEC(N'
             DECLARE @comprasMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre = ''Compras'' OR ruta = ''/compras'' ORDER BY CASE WHEN nombre = ''Compras'' THEN 0 ELSE 1 END);
+            DECLARE @hasPurchaseChildren BIT = CASE WHEN EXISTS (
+                SELECT 1 FROM dbo.tbl_menu_app
+                WHERE ruta IN (''/ordenes-de-compra'', ''/recepciones-de-compra'', ''/liquidaciones-de-compra'', ''/inventarios'', ''/kardex'')
+            ) THEN 1 ELSE 0 END;
+
             IF @comprasMenuId IS NULL
+               AND @hasPurchaseChildren = 1
             BEGIN
                 INSERT INTO dbo.tbl_menu_app (nombre, ruta, icono, orden, activo)
                 VALUES (''Compras'', NULL, ''purchases'', 13, 1);
 
                 SET @comprasMenuId = SCOPE_IDENTITY();
             END
-            ELSE
+            ELSE IF @comprasMenuId IS NOT NULL
             BEGIN
                 UPDATE dbo.tbl_menu_app
                 SET nombre = ''Compras'',
@@ -3104,13 +3113,22 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_cancelaciones_paciente' AND object_id = OBJECT_ID('dbo.tbl_cancelaciones_paciente'))
             CREATE NONCLUSTERED INDEX idx_cancelaciones_paciente ON dbo.tbl_cancelaciones_paciente(id_paciente);
 
-        MERGE dbo.tbl_menu_app AS target
-        USING (VALUES ('Citas y turnos', '/appointments', 'calendar-check', 6, 1)) AS source(nombre, ruta, icono, orden, activo)
-        ON target.ruta = source.ruta
-        WHEN MATCHED THEN
-            UPDATE SET target.nombre = source.nombre, target.icono = source.icono
-        WHEN NOT MATCHED THEN
-            INSERT (nombre, ruta, icono, orden, activo) VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
+        UPDATE dbo.tbl_menu_app
+        SET ruta = '/citas',
+            nombre = 'Citas y turnos',
+            icono = 'calendar-check'
+        WHERE ruta = '/appointments'
+          AND NOT EXISTS (SELECT 1 FROM dbo.tbl_menu_app WHERE ruta = '/citas');
+
+        UPDATE dbo.tbl_menu_app
+        SET activo = 0
+        WHERE ruta = '/appointments'
+          AND EXISTS (SELECT 1 FROM dbo.tbl_menu_app WHERE ruta = '/citas');
+
+        UPDATE dbo.tbl_menu_app
+        SET nombre = 'Citas y turnos',
+            icono = 'calendar-check'
+        WHERE ruta = '/citas';
         """);
 }
 

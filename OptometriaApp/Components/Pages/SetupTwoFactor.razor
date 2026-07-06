@@ -1,4 +1,5 @@
 @page "/configurar-2fa"
+@page "/setup-2fa"
 @attribute [Authorize(Policy = "TwoFactorSetup")]
 @layout AuthLayout
 @rendermode InteractiveServer
@@ -92,7 +93,7 @@
 
         if (stage == "TwoFactorPending")
         {
-            NavigationManager.NavigateTo("/verify-2fa");
+            NavigationManager.NavigateTo("/verificar-2fa");
             return;
         }
 
@@ -130,7 +131,7 @@
         if (seguridad.two_factor_enabled && stage == "FullAccess")
         {
             var forcePasswordChange = string.Equals(user.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
-            NavigationManager.NavigateTo(forcePasswordChange ? "/change-password" : "/dashboard");
+            NavigationManager.NavigateTo(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
             return;
         }
 
