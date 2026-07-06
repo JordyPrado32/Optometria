@@ -1,4 +1,4 @@
-@page "/register"
+@page "/registro"
 @layout AuthLayout
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -262,9 +262,9 @@
 
         var target = authStage switch
         {
-            "TwoFactorSetupRequired" => "/setup-2fa",
-            "TwoFactorPending" => "/verify-2fa",
-            _ => forcePasswordChange ? "/change-password" : "/dashboard"
+            "TwoFactorSetupRequired" => "/configurar-2fa",
+            "TwoFactorPending" => "/verificar-2fa",
+            _ => forcePasswordChange ? "/cambiar-contrasena" : "/dashboard"
         };
 
         NavigationManager.NavigateTo(target);

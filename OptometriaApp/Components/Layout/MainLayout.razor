@@ -38,7 +38,7 @@
                         
                         <div class="header-profile-divider"></div>
                         
-                        <a class="header-user-profile" href="/profile">
+                        <a class="header-user-profile" href="/perfil">
                             <img src="@UserAvatarUrl" alt="Avatar del usuario" class="header-avatar" />
                             <div class="header-user-info">
                                 <span class="header-username">@UserFullName</span>
@@ -393,17 +393,32 @@
         CurrentPageTitle = relativePath.ToLowerInvariant() switch
         {
             "" or "dashboard" => "Dashboard",
-            "profile" => "Mi Perfil",
-            "patients" => "Pacientes",
-            "doctor/patient-entry" => "Ingresar Pacientes",
-            "doctor/my-patients" => "Ver Mis Pacientes",
-            "laboratories" => "Laboratorios",
-            "suppliers" => "Proveedores",
-            "users" => "Usuarios",
+            "profile" or "perfil" => "Mi Perfil",
+            "patients" or "pacientes" => "Pacientes",
+            "doctor/patient-entry" or "doctor/ingresar-pacientes" => "Ingresar Pacientes",
+            "doctor/my-patients" or "doctor/mis-pacientes" => "Ver Mis Pacientes",
+            "appointments" or "citas" => "Citas",
+            "appointment-availability" or "disponibilidad-medica" => "Disponibilidad Médica",
+            "doctors" or "doctores" => "Doctores",
+            "laboratories" or "laboratorios" => "Laboratorios",
+            "suppliers" or "proveedores" => "Proveedores",
+            "clients" or "clientes" => "Clientes",
+            "products" or "productos" => "Productos",
+            "product-categories" or "categorias-de-productos" => "Categorías de Productos",
+            "purchase-orders" or "ordenes-de-compra" => "Órdenes de Compra",
+            "purchase-receptions" or "recepciones-de-compra" => "Recepciones de Compra",
+            "purchase-liquidations" or "liquidaciones-de-compra" => "Liquidaciones de Compra",
+            "inventories" or "inventarios" => "Inventarios",
+            "kardex" => "Kardex",
+            "invoices" or "facturas" => "Facturas",
+            "my-invoices" or "mis-facturas" => "Mis Facturas",
+            "my-credit-notes" or "mis-notas-de-credito" => "Mis Notas de Crédito",
+            "accounts-receivable" or "cuentas-por-cobrar" => "Cuentas por Cobrar",
+            "users" or "usuarios" => "Usuarios",
             "roles" => "Roles",
             "menus" => "Menús",
-            "register" => "Registrar Usuario",
-            "setup-2fa" => "Seguridad (2FA)",
+            "register" or "registro" => "Registrar Usuario",
+            "setup-2fa" or "configurar-2fa" => "Seguridad (2FA)",
             _ => FormatPageTitle(relativePath)
         };
     }
@@ -476,4 +491,3 @@
         NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }
-

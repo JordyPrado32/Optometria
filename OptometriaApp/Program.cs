@@ -251,7 +251,7 @@ app.MapPost("/auth/login", async (
         BuildPrincipal(usuarioDb, AuthStages.FullAccess, forcePasswordChange, rememberMe),
         BuildAuthenticationProperties(rememberMe));
 
-    return Results.LocalRedirect(forcePasswordChange ? "/change-password" : "/dashboard");
+    return Results.LocalRedirect(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/register", async (
@@ -278,46 +278,46 @@ app.MapPost("/auth/register", async (
         string.IsNullOrWhiteSpace(usuario) ||
         string.IsNullOrWhiteSpace(password))
     {
-        return Results.LocalRedirect("/register?error=Completa+todos+los+campos+obligatorios");
+        return Results.LocalRedirect("/registro?error=Completa+todos+los+campos+obligatorios");
     }
 
     if (!IsValidEmail(email))
     {
-        return Results.LocalRedirect("/register?error=Ingresa+un+correo+electronico+valido");
+        return Results.LocalRedirect("/registro?error=Ingresa+un+correo+electronico+valido");
     }
 
     if (password != confirmPassword)
     {
-        return Results.LocalRedirect("/register?error=Las+contrasenas+no+coinciden");
+        return Results.LocalRedirect("/registro?error=Las+contrasenas+no+coinciden");
     }
 
     if (!acceptedTerms)
     {
-        return Results.LocalRedirect("/register?error=Debes+aceptar+los+terminos+y+condiciones");
+        return Results.LocalRedirect("/registro?error=Debes+aceptar+los+terminos+y+condiciones");
     }
 
     var passwordValidationError = ValidatePassword(password, usuario, nombres, apellidos, email);
     if (passwordValidationError is not null)
     {
-        return Results.LocalRedirect($"/register?error={Uri.EscapeDataString(passwordValidationError)}");
+        return Results.LocalRedirect($"/registro?error={Uri.EscapeDataString(passwordValidationError)}");
     }
 
     var existeUsuario = await dbContext.tbl_usuarios.AnyAsync(u => u.usuario.ToLower() == usuarioNormalizado);
     if (existeUsuario)
     {
-        return Results.LocalRedirect("/register?error=El+nombre+de+usuario+ya+esta+registrado");
+        return Results.LocalRedirect("/registro?error=El+nombre+de+usuario+ya+esta+registrado");
     }
 
     var existeEmail = await dbContext.tbl_usuarios.AnyAsync(u => u.email != null && u.email.ToLower() == emailNormalizado);
     if (existeEmail)
     {
-        return Results.LocalRedirect("/register?error=El+correo+electronico+ya+esta+registrado");
+        return Results.LocalRedirect("/registro?error=El+correo+electronico+ya+esta+registrado");
     }
 
     var rol = await dbContext.tbl_rols.FirstOrDefaultAsync(r => r.id_rol == 2);
     if (rol is null)
     {
-        return Results.LocalRedirect("/register?error=No+existe+el+rol+2+en+la+base+de+datos");
+        return Results.LocalRedirect("/registro?error=No+existe+el+rol+2+en+la+base+de+datos");
     }
 
     var nuevoUsuario = new tbl_usuario
@@ -375,7 +375,7 @@ app.MapPost("/auth/forgot-password", async (
 {
     if (!emailSender.IsConfigured())
     {
-        return Results.LocalRedirect("/forgot-password?error=SMTP+no+configurado.+Completa+la+seccion+Smtp+en+appsettings.json");
+        return Results.LocalRedirect("/recuperar-contrasena?error=SMTP+no+configurado.+Completa+la+seccion+Smtp+en+appsettings.json");
     }
 
     var form = await httpContext.Request.ReadFormAsync();
@@ -384,7 +384,7 @@ app.MapPost("/auth/forgot-password", async (
 
     if (string.IsNullOrWhiteSpace(credential))
     {
-        return Results.LocalRedirect("/forgot-password?error=Ingresa+tu+usuario+o+correo+electronico");
+        return Results.LocalRedirect("/recuperar-contrasena?error=Ingresa+tu+usuario+o+correo+electronico");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -396,7 +396,7 @@ app.MapPost("/auth/forgot-password", async (
 
     if (usuarioDb is null || string.IsNullOrWhiteSpace(usuarioDb.email))
     {
-        return Results.LocalRedirect("/forgot-password?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
+        return Results.LocalRedirect("/recuperar-contrasena?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
     }
 
     var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
@@ -415,7 +415,7 @@ app.MapPost("/auth/forgot-password", async (
         temporaryPassword,
         minutesValid);
 
-    return Results.LocalRedirect("/forgot-password?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
+    return Results.LocalRedirect("/recuperar-contrasena?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/setup-2fa/confirm", async (
@@ -445,12 +445,12 @@ app.MapPost("/auth/setup-2fa/confirm", async (
 
     if (string.IsNullOrWhiteSpace(seguridad.authenticator_secret))
     {
-        return Results.LocalRedirect("/setup-2fa?error=No+hay+una+clave+de+autenticador+activa+para+configurar");
+        return Results.LocalRedirect("/configurar-2fa?error=No+hay+una+clave+de+autenticador+activa+para+configurar");
     }
 
     if (!authenticatorService.ValidateCode(seguridad.authenticator_secret, code))
     {
-        return Results.LocalRedirect("/setup-2fa?error=El+codigo+de+Google+Authenticator+no+es+valido");
+        return Results.LocalRedirect("/configurar-2fa?error=El+codigo+de+Google+Authenticator+no+es+valido");
     }
 
     seguridad.two_factor_enabled = true;
@@ -463,7 +463,7 @@ app.MapPost("/auth/setup-2fa/confirm", async (
         BuildPrincipal(usuarioDb, AuthStages.FullAccess, forcePasswordChange, IsRemembered(httpContext.User)),
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
-    return Results.LocalRedirect(forcePasswordChange ? "/change-password" : "/dashboard");
+    return Results.LocalRedirect(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/verify-2fa", async (
@@ -491,7 +491,7 @@ app.MapPost("/auth/verify-2fa", async (
     var code = (await httpContext.Request.ReadFormAsync())["code"].ToString();
     if (!authenticatorService.ValidateCode(usuarioDb.tbl_usuario_seguridad.authenticator_secret, code))
     {
-        return Results.LocalRedirect("/verify-2fa?error=El+codigo+de+Google+Authenticator+no+es+valido");
+        return Results.LocalRedirect("/verificar-2fa?error=El+codigo+de+Google+Authenticator+no+es+valido");
     }
 
     usuarioDb.tbl_usuario_seguridad.updated_at = DateTime.Now;
@@ -503,7 +503,7 @@ app.MapPost("/auth/verify-2fa", async (
         BuildPrincipal(usuarioDb, AuthStages.FullAccess, forcePasswordChange, IsRemembered(httpContext.User)),
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
-    return Results.LocalRedirect(forcePasswordChange ? "/change-password" : "/dashboard");
+    return Results.LocalRedirect(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
 }).DisableAntiforgery();
 
 app.MapPost("/auth/change-password", async (
@@ -535,18 +535,18 @@ app.MapPost("/auth/change-password", async (
 
     if (string.IsNullOrWhiteSpace(password))
     {
-        return Results.LocalRedirect("/change-password?error=Ingresa+la+nueva+contrasena");
+        return Results.LocalRedirect("/cambiar-contrasena?error=Ingresa+la+nueva+contrasena");
     }
 
     if (password != confirmPassword)
     {
-        return Results.LocalRedirect("/change-password?error=Las+contrasenas+no+coinciden");
+        return Results.LocalRedirect("/cambiar-contrasena?error=Las+contrasenas+no+coinciden");
     }
 
     var passwordValidationError = ValidatePassword(password, usuarioDb.usuario, usuarioDb.nombres, usuarioDb.apellidos, usuarioDb.email ?? string.Empty);
     if (passwordValidationError is not null)
     {
-        return Results.LocalRedirect($"/change-password?error={Uri.EscapeDataString(passwordValidationError)}");
+        return Results.LocalRedirect($"/cambiar-contrasena?error={Uri.EscapeDataString(passwordValidationError)}");
     }
 
     usuarioDb.password_hash = passwordHasher.HashPassword(usuarioDb, password);
@@ -605,7 +605,7 @@ app.MapPost("/auth/profile", async (
         string.IsNullOrWhiteSpace(apellidos) ||
         string.IsNullOrWhiteSpace(usuarioDb.usuario))
     {
-        return Results.LocalRedirect("/profile?error=Completa+los+campos+obligatorios+del+perfil");
+        return Results.LocalRedirect("/perfil?error=Completa+los+campos+obligatorios+del+perfil");
     }
 
     DateOnly? fechaNacimiento = null;
@@ -613,7 +613,7 @@ app.MapPost("/auth/profile", async (
     {
         if (!DateOnly.TryParseExact(fechaNacimientoRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedFechaNacimiento))
         {
-            return Results.LocalRedirect("/profile?error=La+fecha+de+nacimiento+no+es+valida");
+            return Results.LocalRedirect("/perfil?error=La+fecha+de+nacimiento+no+es+valida");
         }
 
         fechaNacimiento = parsedFechaNacimiento;
@@ -621,7 +621,7 @@ app.MapPost("/auth/profile", async (
 
     if (!string.IsNullOrWhiteSpace(avatarUrl) && !IsValidAvatarFileName(avatarUrl))
     {
-        return Results.LocalRedirect("/profile?error=El+avatar+seleccionado+no+es+valido");
+        return Results.LocalRedirect("/perfil?error=El+avatar+seleccionado+no+es+valido");
     }
 
     usuarioDb.nombres = nombres;
@@ -640,29 +640,29 @@ app.MapPost("/auth/profile", async (
     {
         if (!hasCurrentPassword || !hasNewPassword || !hasConfirmNewPassword)
         {
-            return Results.LocalRedirect("/profile?error=Completa+los+campos+actual%2C+nueva+y+confirmacion+de+contrasena");
+            return Results.LocalRedirect("/perfil?error=Completa+los+campos+actual%2C+nueva+y+confirmacion+de+contrasena");
         }
 
         var currentPasswordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, currentPassword);
         if (currentPasswordResult == PasswordVerificationResult.Failed)
         {
-            return Results.LocalRedirect("/profile?error=La+contrasena+actual+no+coincide");
+            return Results.LocalRedirect("/perfil?error=La+contrasena+actual+no+coincide");
         }
 
         if (newPassword != confirmNewPassword)
         {
-            return Results.LocalRedirect("/profile?error=La+nueva+contrasena+y+su+confirmacion+no+coinciden");
+            return Results.LocalRedirect("/perfil?error=La+nueva+contrasena+y+su+confirmacion+no+coinciden");
         }
 
         if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal))
         {
-            return Results.LocalRedirect("/profile?error=La+nueva+contrasena+debe+ser+diferente+a+la+actual");
+            return Results.LocalRedirect("/perfil?error=La+nueva+contrasena+debe+ser+diferente+a+la+actual");
         }
 
         var passwordValidationError = ValidatePassword(newPassword, usuarioDb.usuario, nombres, apellidos, usuarioDb.email ?? string.Empty);
         if (passwordValidationError is not null)
         {
-            return Results.LocalRedirect($"/profile?error={Uri.EscapeDataString(passwordValidationError)}");
+            return Results.LocalRedirect($"/perfil?error={Uri.EscapeDataString(passwordValidationError)}");
         }
 
         usuarioDb.password_hash = passwordHasher.HashPassword(usuarioDb, newPassword);
@@ -680,7 +680,7 @@ app.MapPost("/auth/profile", async (
         BuildPrincipal(usuarioDb, AuthStages.FullAccess, false, IsRemembered(httpContext.User)),
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
-    return Results.LocalRedirect("/profile?message=Perfil+actualizado");
+    return Results.LocalRedirect("/perfil?message=Perfil+actualizado");
 }).DisableAntiforgery();
 
 app.MapGet("/auth/logout", async (HttpContext httpContext) =>
@@ -703,7 +703,7 @@ app.MapGet("/exports/users.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/users"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/usuarios"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -815,7 +815,7 @@ app.MapGet("/exports/patients.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/patients"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/pacientes"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -927,7 +927,7 @@ app.MapGet("/exports/doctor-patient-entry.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/patient-entry"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/ingresar-pacientes"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1040,7 +1040,7 @@ app.MapGet("/exports/doctor-my-patients.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/my-patients"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/mis-pacientes"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1154,7 +1154,7 @@ app.MapGet("/exports/appointments.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointments"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/citas"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1303,7 +1303,7 @@ app.MapGet("/exports/appointment-availability.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointment-availability"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/disponibilidad-medica"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1445,7 +1445,7 @@ app.MapGet("/exports/laboratories.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/laboratories"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/laboratorios"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1531,7 +1531,7 @@ app.MapGet("/exports/suppliers.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/suppliers"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/proveedores"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1624,7 +1624,7 @@ app.MapGet("/exports/clients.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/clients"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/clientes"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1792,7 +1792,7 @@ app.MapGet("/exports/products.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/products"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/productos"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -1916,7 +1916,7 @@ app.MapGet("/exports/purchase-orders.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-orders"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/ordenes-de-compra"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -2009,7 +2009,7 @@ app.MapGet("/exports/purchase-receptions.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-receptions"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/recepciones-de-compra"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -2099,7 +2099,7 @@ app.MapGet("/exports/purchase-liquidations.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/purchase-liquidations"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/liquidaciones-de-compra"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -2194,7 +2194,7 @@ app.MapGet("/exports/inventories.csv", async (
         .AsNoTracking()
         .Where(p => p.id_rol == roleId && p.puede_ver)
         .Join(
-            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/inventories"),
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/inventarios"),
             permission => permission.id_menu,
             menu => menu.id_menu,
             (_, _) => true)
@@ -2441,6 +2441,168 @@ app.MapGet("/exports/account-statements/{accountId:int}.pdf", async (
     return Results.File(pdf, "application/pdf", fileName);
 }).RequireAuthorization("OperationalAccess");
 
+// Automatic database menu route updates to Spanish at startup
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<OpticaDbContext>>();
+        using var context = await contextFactory.CreateDbContextAsync();
+
+        // Clean up duplicate menus and update the original ones
+        await context.Database.ExecuteSqlRawAsync(@"
+            -- 1. Update original menus to their Spanish routes and set their correct parent
+            UPDATE dbo.tbl_menu_app SET ruta = '/registro', id_menu_padre = 1032 WHERE id_menu = 3;
+            UPDATE dbo.tbl_menu_app SET ruta = '/configurar-2fa', id_menu_padre = 1032 WHERE id_menu = 5;
+            UPDATE dbo.tbl_menu_app SET ruta = '/perfil', id_menu_padre = 1032 WHERE id_menu = 6;
+            UPDATE dbo.tbl_menu_app SET ruta = '/clientes', id_menu_padre = 1020 WHERE id_menu = 1012;
+            UPDATE dbo.tbl_menu_app SET ruta = '/citas', id_menu_padre = 1035 WHERE id_menu = 1022;
+
+            -- 2. Delete the duplicate rows that were inserted
+            DELETE FROM dbo.tbl_menu_app WHERE id_menu IN (1013, 1037, 1038, 1039, 1040);
+        ");
+        
+        var routeMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "/patients", "/pacientes" },
+            { "/doctor/patient-entry", "/doctor/ingresar-pacientes" },
+            { "/doctor/my-patients", "/doctor/mis-pacientes" },
+            { "/appointments", "/citas" },
+            { "/appointment-availability", "/disponibilidad-medica" },
+            { "/doctors", "/doctores" },
+            { "/laboratories", "/laboratorios" },
+            { "/suppliers", "/proveedores" },
+            { "/clients", "/clientes" },
+            { "/products", "/productos" },
+            { "/product-categories", "/categorias-de-productos" },
+            { "/purchase-orders", "/ordenes-de-compra" },
+            { "/purchase-receptions", "/recepciones-de-compra" },
+            { "/purchase-liquidations", "/liquidaciones-de-compra" },
+            { "/inventories", "/inventarios" },
+            { "/invoices", "/facturas" },
+            { "/my-invoices", "/mis-facturas" },
+            { "/my-credit-notes", "/mis-notas-de-credito" },
+            { "/accounts-receivable", "/cuentas-por-cobrar" },
+            { "/users", "/usuarios" },
+            { "/profile", "/perfil" },
+            { "/setup-2fa", "/configurar-2fa" }
+        };
+
+        var menus = await context.tbl_menu_apps.ToListAsync();
+        bool anyChanged = false;
+        foreach (var menu in menus)
+        {
+            if (!string.IsNullOrWhiteSpace(menu.ruta) && routeMappings.TryGetValue(menu.ruta.Trim(), out var newRoute))
+            {
+                if (menu.ruta != newRoute)
+                {
+                    menu.ruta = newRoute;
+                    anyChanged = true;
+                }
+            }
+        }
+        if (anyChanged)
+        {
+            await context.SaveChangesAsync();
+        }
+
+        // IMPORTANT: Also execute SQL to sync the role menu permissions for any roles that lost access
+        // because of the mismatch of English routes.
+        // We'll update the records in tbl_rol_menu_permiso to make sure the Admin role (id_rol = 1) has all permissions,
+        // and role 2 has the correct Spanish permissions.
+        
+        // 1. Admin Role (id_rol = 1) gets all permissions on all menus
+        await context.Database.ExecuteSqlRawAsync(@"
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING (
+                SELECT 1 AS id_rol, id_menu, 1 AS puede_ver, 1 AS puede_crear, 1 AS puede_editar, 1 AS puede_eliminar
+                FROM dbo.tbl_menu_app
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET target.puede_ver = 1, target.puede_crear = 1, target.puede_editar = 1, target.puede_eliminar = 1
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (1, source.id_menu, 1, 1, 1, 1);
+        ");
+
+        // 2. Role 2 gets correct Spanish permissions
+        await context.Database.ExecuteSqlRawAsync(@"
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING (
+                SELECT
+                    2 AS id_rol,
+                    m.id_menu,
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                FROM dbo.tbl_menu_app m
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET 
+                    target.puede_ver = source.puede_ver,
+                    target.puede_crear = source.puede_crear,
+                    target.puede_editar = source.puede_editar,
+                    target.puede_eliminar = source.puede_eliminar
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (2, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+        ");
+
+        // 3. Doctor/Medic/Optometrist role gets correct Spanish permissions
+        await context.Database.ExecuteSqlRawAsync(@"
+            IF EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE LOWER(nombre) LIKE '%doctor%' OR LOWER(nombre) LIKE '%medic%' OR LOWER(nombre) LIKE '%optomet%')
+            BEGIN
+                -- First find the role IDs
+                DECLARE @roles TABLE (id_rol INT);
+                INSERT INTO @roles (id_rol)
+                SELECT id_rol FROM dbo.tbl_rol WHERE LOWER(nombre) LIKE '%doctor%' OR LOWER(nombre) LIKE '%medic%' OR LOWER(nombre) LIKE '%optomet%';
+
+                -- Run merge for each role
+                DECLARE @curr_rol INT;
+                DECLARE rol_cursor CURSOR FOR SELECT id_rol FROM @roles;
+                OPEN rol_cursor;
+                FETCH NEXT FROM rol_cursor INTO @curr_rol;
+                WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    MERGE dbo.tbl_rol_menu_permiso AS target
+                    USING (
+                        SELECT
+                            @curr_rol AS id_rol,
+                            m.id_menu,
+                            CAST(1 AS BIT) AS puede_ver,
+                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas') THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                        FROM dbo.tbl_menu_app m
+                        WHERE m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/citas', '/disponibilidad-medica', '/doctores')
+                    ) AS source
+                    ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+                    WHEN MATCHED THEN
+                        UPDATE SET 
+                            target.puede_ver = source.puede_ver,
+                            target.puede_crear = source.puede_crear,
+                            target.puede_editar = source.puede_editar,
+                            target.puede_eliminar = source.puede_eliminar
+                    WHEN NOT MATCHED THEN
+                        INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                        VALUES (@curr_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+
+                    FETCH NEXT FROM rol_cursor INTO @curr_rol;
+                END;
+                CLOSE rol_cursor;
+                DEALLOCATE rol_cursor;
+            END;
+        ");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error al actualizar las rutas del menú y permisos: {ex.Message}");
+    }
+}
+
 app.Run();
 
 static async Task EnsureSecuritySchemaAsync(WebApplication app)
@@ -2559,33 +2721,33 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
         (
             VALUES
                 ('Dashboard', '/dashboard', 'dashboard', 1, 1),
-                ('Mi perfil', '/profile', 'user', 2, 1),
-                ('Pacientes', '/patients', 'patients', 3, 1),
-                ('Ingresar pacientes', '/doctor/patient-entry', 'doctor-entry', 4, 1),
-                ('Ver mis pacientes', '/doctor/my-patients', 'doctor-patients', 5, 1),
-                ('Citas y turnos', '/appointments', 'calendar-check', 6, 1),
-                ('Disponibilidad medica', '/appointment-availability', 'calendar-availability', 7, 1),
-                ('Medicos', '/doctors', 'doctor-profile', 8, 1),
-                ('Laboratorios', '/laboratories', 'lab', 9, 1),
-                ('Proveedores', '/suppliers', 'suppliers', 10, 1),
-                ('Productos', '/products', 'products', 11, 1),
-                ('Categorias de productos', '/product-categories', 'tags', 12, 1),
-                ('Ordenes de compra', '/purchase-orders', 'purchase-orders', 14, 1),
-                ('Recepciones de compra', '/purchase-receptions', 'purchase-receptions', 15, 1),
-                ('Liquidaciones de compra', '/purchase-liquidations', 'purchase-liquidations', 16, 1),
-                ('Inventarios', '/inventories', 'inventories', 17, 1),
+                ('Mi perfil', '/perfil', 'user', 2, 1),
+                ('Pacientes', '/pacientes', 'patients', 3, 1),
+                ('Ingresar pacientes', '/doctor/ingresar-pacientes', 'doctor-entry', 4, 1),
+                ('Ver mis pacientes', '/doctor/mis-pacientes', 'doctor-patients', 5, 1),
+                ('Citas y turnos', '/citas', 'calendar-check', 6, 1),
+                ('Disponibilidad medica', '/disponibilidad-medica', 'calendar-availability', 7, 1),
+                ('Medicos', '/doctores', 'doctor-profile', 8, 1),
+                ('Laboratorios', '/laboratorios', 'lab', 9, 1),
+                ('Proveedores', '/proveedores', 'suppliers', 10, 1),
+                ('Productos', '/productos', 'products', 11, 1),
+                ('Categorias de productos', '/categorias-de-productos', 'tags', 12, 1),
+                ('Ordenes de compra', '/ordenes-de-compra', 'purchase-orders', 14, 1),
+                ('Recepciones de compra', '/recepciones-de-compra', 'purchase-receptions', 15, 1),
+                ('Liquidaciones de compra', '/liquidaciones-de-compra', 'purchase-liquidations', 16, 1),
+                ('Inventarios', '/inventarios', 'inventories', 17, 1),
                 ('Kardex', '/kardex', 'kardex', 18, 1),
-                ('Clientes', '/clients', 'clients', 19, 1),
+                ('Clientes', '/clientes', 'clients', 19, 1),
                 ('Emisor', '/emisor', 'issuer', 20, 1),
-                ('Facturas', '/invoices', 'invoice', 21, 1),
-                ('Mis facturas', '/my-invoices', 'receipt', 22, 1),
-                ('Mis notas de credito', '/my-credit-notes', 'arrow-counterclockwise', 23, 1),
-                ('Cuentas por cobrar', '/accounts-receivable', 'cash-coin', 24, 1),
-                ('Usuarios', '/users', 'users', 25, 1),
+                ('Facturas', '/facturas', 'invoice', 21, 1),
+                ('Mis facturas', '/mis-facturas', 'receipt', 22, 1),
+                ('Mis notas de credito', '/mis-notas-de-credito', 'arrow-counterclockwise', 23, 1),
+                ('Cuentas por cobrar', '/cuentas-por-cobrar', 'cash-coin', 24, 1),
+                ('Usuarios', '/usuarios', 'users', 25, 1),
                 ('Roles', '/roles', 'roles', 26, 1),
                 ('Menus', '/menus', 'menu', 27, 1),
-                ('Registrar usuario', '/register', 'user-plus', 28, 1),
-                ('Seguridad', '/setup-2fa', 'shield', 29, 1)
+                ('Registrar usuario', '/registro', 'user-plus', 28, 1),
+                ('Seguridad', '/configurar-2fa', 'shield', 29, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -2597,7 +2759,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
 
         EXEC(N'
-            DECLARE @comprasMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre = ''Compras'' OR ruta = ''/purchases'' ORDER BY CASE WHEN nombre = ''Compras'' THEN 0 ELSE 1 END);
+            DECLARE @comprasMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre = ''Compras'' OR ruta = ''/compras'' ORDER BY CASE WHEN nombre = ''Compras'' THEN 0 ELSE 1 END);
             IF @comprasMenuId IS NULL
             BEGIN
                 INSERT INTO dbo.tbl_menu_app (nombre, ruta, icono, orden, activo)
@@ -2618,7 +2780,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             BEGIN
                 UPDATE dbo.tbl_menu_app
                 SET id_menu_padre = @comprasMenuId
-                WHERE ruta IN (''/purchase-orders'', ''/purchase-receptions'', ''/purchase-liquidations'', ''/inventories'', ''/kardex'')
+                WHERE ruta IN (''/ordenes-de-compra'', ''/recepciones-de-compra'', ''/liquidaciones-de-compra'', ''/inventarios'', ''/kardex'')
                   AND id_menu_padre IS NULL;
             END;
         ');
@@ -2657,10 +2819,10 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/appointments', '/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta IN ('/appointments', '/invoices', '/my-invoices', '/my-credit-notes', '/accounts-receivable') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
-                    CAST(CASE WHEN m.ruta = '/appointments' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app m
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
@@ -2691,9 +2853,9 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                     r.id_rol,
                     m.id_menu,
                     CAST(1 AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta IN ('/doctor/patient-entry', '/appointments', '/appointment-availability', '/doctors') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta IN ('/doctor/patient-entry', '/appointments', '/appointment-availability', '/doctors') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
-                    CAST(CASE WHEN m.ruta IN ('/doctor/patient-entry', '/appointments') THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas') THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_rol r
                 CROSS JOIN dbo.tbl_menu_app m
                 WHERE
@@ -2702,7 +2864,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                         OR LOWER(r.nombre) LIKE '%medic%'
                         OR LOWER(r.nombre) LIKE '%optomet%'
                     )
-                    AND m.ruta IN ('/dashboard', '/profile', '/setup-2fa', '/doctor/patient-entry', '/doctor/my-patients', '/appointments', '/appointment-availability', '/doctors')
+                    AND m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/citas', '/disponibilidad-medica', '/doctores')
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
             WHEN MATCHED THEN

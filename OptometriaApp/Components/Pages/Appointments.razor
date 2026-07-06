@@ -1,4 +1,4 @@
-@page "/appointments"
+@page "/citas"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Security.Claims
@@ -2012,7 +2012,7 @@ else
             .AsNoTracking()
             .Where(p => p.id_rol == roleId)
             .Join(
-                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointments"),
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/citas"),
                 rolePermission => rolePermission.id_menu,
                 menu => menu.id_menu,
                 (rolePermission, _) => rolePermission)

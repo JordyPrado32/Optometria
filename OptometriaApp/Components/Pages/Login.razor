@@ -65,8 +65,8 @@
             </form>
 
             <div class="auth-footer">
-                <a href="/forgot-password">Olvide mi contrasena</a>
-                <a href="/register">Crear usuario</a>
+                <a href="/recuperar-contrasena">Olvide mi contrasena</a>
+                <a href="/registro">Crear usuario</a>
             </div>
         </div>
     </section>
@@ -116,9 +116,9 @@
 
         var target = authStage switch
         {
-            "TwoFactorSetupRequired" => "/setup-2fa",
-            "TwoFactorPending" => "/verify-2fa",
-            _ => forcePasswordChange ? "/change-password" : "/dashboard"
+            "TwoFactorSetupRequired" => "/configurar-2fa",
+            "TwoFactorPending" => "/verificar-2fa",
+            _ => forcePasswordChange ? "/cambiar-contrasena" : "/dashboard"
         };
 
         NavigationManager.NavigateTo(target);

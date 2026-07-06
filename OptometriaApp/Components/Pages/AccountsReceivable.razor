@@ -1,4 +1,4 @@
-@page "/accounts-receivable"
+@page "/cuentas-por-cobrar"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
@@ -940,7 +940,7 @@ else
             .AsNoTracking()
             .Where(x => x.id_rol == roleId)
             .Join(
-                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/accounts-receivable"),
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/cuentas-por-cobrar"),
                 rolePermission => rolePermission.id_menu,
                 menu => menu.id_menu,
                 (rolePermission, _) => rolePermission)

@@ -1,4 +1,4 @@
-@page "/laboratories"
+@page "/laboratorios"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Net.Mail
@@ -804,7 +804,7 @@ else
             .AsNoTracking()
             .Where(p => p.id_rol == roleId)
             .Join(
-                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/laboratories"),
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/laboratorios"),
                 rolePermission => rolePermission.id_menu,
                 menu => menu.id_menu,
                 (rolePermission, _) => rolePermission)

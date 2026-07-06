@@ -1,4 +1,4 @@
-@page "/appointment-availability"
+@page "/disponibilidad-medica"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Security.Claims
@@ -972,7 +972,7 @@ else
             .AsNoTracking()
             .Where(p => p.id_rol == roleId)
             .Join(
-                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/appointment-availability"),
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/disponibilidad-medica"),
                 rolePermission => rolePermission.id_menu,
                 menu => menu.id_menu,
                 (rolePermission, _) => rolePermission)

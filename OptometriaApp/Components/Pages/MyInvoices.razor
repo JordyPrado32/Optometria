@@ -1,4 +1,4 @@
-@page "/my-invoices"
+@page "/mis-facturas"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
@@ -394,7 +394,7 @@ else
             .AsNoTracking()
             .Where(x => x.id_rol == roleId)
             .Join(
-                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/my-invoices"),
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/mis-facturas"),
                 rolePermission => rolePermission.id_menu,
                 menu => menu.id_menu,
                 (rolePermission, _) => rolePermission)

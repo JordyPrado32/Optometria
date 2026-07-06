@@ -1,5 +1,5 @@
-@page "/my-credit-notes"
-@page "/my-credit-notes/{CreditNoteId:int}"
+@page "/mis-notas-de-credito"
+@page "/mis-notas-de-credito/{CreditNoteId:int}"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
@@ -1357,7 +1357,7 @@ else
             .AsNoTracking()
             .Where(x => x.id_rol == roleId)
             .Join(
-                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/my-credit-notes"),
+                dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/mis-notas-de-credito"),
                 rolePermission => rolePermission.id_menu,
                 menu => menu.id_menu,
                 (rolePermission, _) => rolePermission)

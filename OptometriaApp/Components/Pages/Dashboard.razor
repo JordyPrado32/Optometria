@@ -97,14 +97,14 @@ else
                     </div>
 
                     <div class="workspace-actions">
-                        @if (availableMenus.Any(m => m.Ruta == "/profile"))
+                        @if (availableMenus.Any(m => m.Ruta == "/perfil"))
                         {
-                            <a class="btn btn-outline-primary" href="/profile">Ir a perfil</a>
+                            <a class="btn btn-outline-primary" href="/perfil">Ir a perfil</a>
                         }
 
-                        @if (availableMenus.Any(m => m.Ruta == "/setup-2fa"))
+                        @if (availableMenus.Any(m => m.Ruta == "/configurar-2fa"))
                         {
-                            <a class="btn btn-primary" href="/setup-2fa">Revisar seguridad</a>
+                            <a class="btn btn-primary" href="/configurar-2fa">Revisar seguridad</a>
                         }
                     </div>
                 </section>
@@ -192,14 +192,14 @@ else
         "/kardex" => "Revisa valorizacion, costo promedio ponderado y trazabilidad completa por producto.",
         "/clients" => "Gestiona tus clientes de facturacion electronica y su trazabilidad.",
         "/emisor" => "Configura el emisor SRI asociado a tu usuario y su punto de emision.",
-        "/invoices" => "Factura servicios y productos, recoge pendientes y controla credito e impuestos.",
-        "/my-invoices" => "Consulta tus facturas emitidas, sus lineas, saldos y acceso rapido a notas de credito.",
-        "/my-credit-notes" => "Administra tus notas de credito y ajusta facturas emitidas con trazabilidad completa.",
-        "/accounts-receivable" => "Supervisa cartera, vencimientos y abonos ligados a facturas emitidas a credito.",
-        "/users" => "Administra cuentas, estados y seguridad de acceso.",
-        "/profile" => "Actualiza tu informacion personal y preferencias.",
-        "/register" => "Crea cuentas nuevas de forma controlada.",
-        "/setup-2fa" => "Gestiona autenticacion de segundo factor.",
+        "/facturas" => "Factura servicios y productos, recoge pendientes y controla credito e impuestos.",
+        "/mis-facturas" => "Consulta tus facturas emitidas, sus lineas, saldos y acceso rapido a notas de credito.",
+        "/mis-notas-de-credito" => "Administra tus notas de credito y ajusta facturas emitidas con trazabilidad completa.",
+        "/cuentas-por-cobrar" => "Supervisa cartera, vencimientos y abonos ligados a facturas emitidas a credito.",
+        "/usuarios" => "Administra cuentas, estados y seguridad de acceso.",
+        "/perfil" => "Actualiza tu informacion personal y preferencias.",
+        "/registro" => "Crea cuentas nuevas de forma controlada.",
+        "/configurar-2fa" => "Gestiona autenticacion de segundo factor.",
         "/roles" => "Configura permisos y alcance por rol.",
         "/menus" => "Organiza la navegacion del sistema.",
         _ => "Acceso habilitado por tu rol actual."
@@ -207,32 +207,32 @@ else
 
     private static string GetModuleIconLabel(string route) => route switch
     {
-        "/patients" => "PC",
-        "/doctor/patient-entry" => "IP",
-        "/doctor/my-patients" => "MP",
-        "/appointments" => "CT",
-        "/appointment-availability" => "DP",
-        "/doctors" => "MD",
-        "/laboratories" => "LB",
-        "/suppliers" => "PR",
-        "/products" => "PD",
-        "/product-categories" => "CG",
+        "/pacientes" => "PC",
+        "/doctor/ingresar-pacientes" => "IP",
+        "/doctor/mis-pacientes" => "MP",
+        "/citas" => "CT",
+        "/disponibilidad-medica" => "DP",
+        "/doctores" => "MD",
+        "/laboratorios" => "LB",
+        "/proveedores" => "PR",
+        "/productos" => "PD",
+        "/categorias-de-productos" => "CG",
         "/purchases" => "CP",
-        "/purchase-orders" => "OC",
-        "/purchase-receptions" => "RC",
-        "/purchase-liquidations" => "LC",
-        "/inventories" => "IV",
+        "/ordenes-de-compra" => "OC",
+        "/recepciones-de-compra" => "RC",
+        "/liquidaciones-de-compra" => "LC",
+        "/inventarios" => "IV",
         "/kardex" => "KX",
-        "/clients" => "CL",
+        "/clientes" => "CL",
         "/emisor" => "EM",
-        "/invoices" => "FC",
-        "/my-invoices" => "MF",
-        "/my-credit-notes" => "NC",
-        "/accounts-receivable" => "CC",
-        "/users" => "US",
-        "/profile" => "PF",
-        "/register" => "RG",
-        "/setup-2fa" => "2F",
+        "/facturas" => "FC",
+        "/mis-facturas" => "MF",
+        "/mis-notas-de-credito" => "NC",
+        "/cuentas-por-cobrar" => "CC",
+        "/usuarios" => "US",
+        "/perfil" => "PF",
+        "/registro" => "RG",
+        "/configurar-2fa" => "2F",
         "/roles" => "RL",
         "/menus" => "MN",
         _ => "MD"

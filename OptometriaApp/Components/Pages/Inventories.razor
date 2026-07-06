@@ -1,4 +1,4 @@
-@page "/inventories"
+@page "/inventarios"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -363,7 +363,7 @@ else
     private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
     {
         var permission = await db.tbl_rol_menu_permisos.AsNoTracking().Where(p => p.id_rol == currentRoleId)
-            .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/inventories"), p => p.id_menu, m => m.id_menu, (p, _) => p)
+             .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/inventarios"), p => p.id_menu, m => m.id_menu, (p, _) => p)
             .FirstOrDefaultAsync();
         return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
     }
