@@ -152,7 +152,7 @@ else
         var forcePasswordChange = string.Equals(authState.User.FindFirst("ForcePasswordChange")?.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
         if (forcePasswordChange)
         {
-            NavigationManager.NavigateTo("/change-password");
+            NavigationManager.NavigateTo("/cambiar-contrasena");
             return;
         }
 

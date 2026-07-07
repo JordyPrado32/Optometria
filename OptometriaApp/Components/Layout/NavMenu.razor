@@ -98,6 +98,8 @@
             return;
         }
 
+        RenderItems.Clear();
+
         var roleIdValue = currentUser.FindFirst("RoleId")?.Value;
         int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
 
