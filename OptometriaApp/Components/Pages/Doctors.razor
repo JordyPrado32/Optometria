@@ -38,10 +38,10 @@ else
                 <p>@HeroDescription</p>
             </div>
 
-            <div class="workspace-actions">
+            <div class="workspace-actions" style="align-items: center;">
                 @if (CanCreateDoctorProfile)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNewDoctor">
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNewDoctor">
                         <i class="bi bi-person-badge-fill" style="margin-right: 6px;"></i> Nueva ficha medica
                     </button>
                 }
@@ -71,33 +71,6 @@ else
         }
 
         <section class="management-card">
-            <div class="management-card-header">
-                <h2>Resumen</h2>
-                <span>@FilteredUsers.Count visibles</span>
-            </div>
-
-            <div class="user-summary-grid">
-                <div class="user-summary-card">
-                    <span class="eyebrow">Medicos</span>
-                    <strong>@medicalUsers.Count</strong>
-                    <p>Usuarios con rol medico o ficha ya creada.</p>
-                </div>
-
-                <div class="user-summary-card">
-                    <span class="eyebrow">Listos para agenda</span>
-                    <strong>@medicalUsers.Count(IsAvailableForAppointments)</strong>
-                    <p>Fichas activas visibles para que el paciente agende.</p>
-                </div>
-
-                <div class="user-summary-card">
-                    <span class="eyebrow">Pendientes</span>
-                    <strong>@medicalUsers.Count(u => u.tbl_medico is null)</strong>
-                    <p>Usuarios con rol medico aun sin completar ficha profesional.</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="management-card" style="margin-top: 1.5rem;">
             <div class="management-card-header">
                 <h2>Filtros y busqueda</h2>
                 <span>@FilteredUsers.Count resultados</span>
@@ -140,8 +113,10 @@ else
                 </div>
             </div>
 
-            <div class="management-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            <div class="management-actions" style="margin-top: 0.3rem;">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
+                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                </button>
             </div>
         </section>
 

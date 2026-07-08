@@ -686,16 +686,6 @@ else
                                     <strong>@(currentIssuer?.telefono ?? "Sin telefono")</strong>
                                     <span>@(currentIssuer?.correo ?? "Sin correo")</span>
                                 </div>
-                                <div class="invoice-meta-card">
-                                    <label>Cliente fiscal</label>
-                                    <strong>@GetClientDisplayName(billingClient)</strong>
-                                    <span>@GetClientIdentification(billingClient)</span>
-                                </div>
-                                <div class="invoice-meta-card">
-                                    <label>Pago y credito</label>
-                                    <strong>@paymentForm</strong>
-                                    <span>@($"{creditDays} dias | Cobrado {paidAmount:0.00}")</span>
-                                </div>
                             </div>
 
                             <div class="invoice-pill-row">

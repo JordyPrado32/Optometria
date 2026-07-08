@@ -24,12 +24,16 @@ else
                 <h1>Ordenes de compra</h1>
                 <p>Cada usuario administra sus propias ordenes, lineas de producto y seguimiento de recepcion.</p>
             </div>
-            <div class="workspace-actions">
+            <div class="workspace-actions" style="align-items: center;">
                 @if (permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNew">Nueva orden</button>
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
+                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva orden
+                    </button>
                 }
-                <button type="button" class="btn btn-outline-primary" @onclick="ExportOrders">Exportar Excel</button>
+                <button type="button" class="btn btn-excel" @onclick="ExportOrders">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
+                </button>
             </div>
         </div>
 
@@ -66,8 +70,10 @@ else
                     </div>
                 </div>
             </div>
-            <div class="management-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            <div class="management-actions" style="margin-top: 0.3rem;">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
+                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                </button>
             </div>
         </section>
 
