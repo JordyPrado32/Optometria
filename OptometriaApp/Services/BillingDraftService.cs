@@ -59,33 +59,75 @@ public sealed class BillingDraftService
             .Include(x => x.id_optometraNavigation)
             .FirstOrDefaultAsync(x => x.id_consulta == consultationId);
 
-        if (consultation is null || !HasExamContent(consultation))
+        if (consultation is null)
+        {
+            return;
+        }
+
+        var hasExam = HasExamContent(consultation);
+        var hasMedication = HasMedicationContent(consultation);
+        var draft = existingDraftSaleId.HasValue
+            ? await dbContext.tbl_venta.Include(x => x.tbl_detalle_venta).FirstOrDefaultAsync(x => x.id_venta == existingDraftSaleId.Value)
+            : null;
+
+        if (draft is null)
+        {
+            draft = await FindDraftSaleAsync(dbContext, consultation.id_paciente);
+        }
+
+        if (!hasExam && !hasMedication && draft is null)
         {
             return;
         }
 
         var clientId = await EnsureBillingClientAsync(dbContext, consultation.id_pacienteNavigation, actorUserId);
-        var draft = existingDraftSaleId.HasValue
-            ? await dbContext.tbl_venta.Include(x => x.tbl_detalle_venta).FirstOrDefaultAsync(x => x.id_venta == existingDraftSaleId.Value)
-            : null;
-
         draft ??= await GetOrCreateDraftSaleAsync(dbContext, consultation.id_paciente, clientId, actorUserId);
 
-        var examProduct = await GetOrCreateServiceProductAsync(
-            dbContext,
-            "SRV-EXAMEN-OPTICO",
-            "Examen optometrico",
-            "Servicio autogenerado desde consulta o examen.");
+        if (hasExam)
+        {
+            var examProduct = await GetOrCreateServiceProductAsync(
+                dbContext,
+                "SRV-EXAMEN-OPTICO",
+                "Examen optometrico",
+                "Servicio autogenerado desde consulta o examen.");
 
-        await EnsureSourceLineAsync(
-            dbContext,
-            draft,
-            examProduct.id_producto,
-            "Consulta",
-            consultation.id_consulta,
-            BuildConsultationConcept(consultation),
-            1,
-            0m);
+            await EnsureSourceLineAsync(
+                dbContext,
+                draft,
+                examProduct.id_producto,
+                "ConsultaExamen",
+                consultation.id_consulta,
+                BuildConsultationExamConcept(consultation),
+                1,
+                0m);
+        }
+        else
+        {
+            await RemoveSourceLineAsync(dbContext, draft, "ConsultaExamen", consultation.id_consulta);
+        }
+
+        if (hasMedication)
+        {
+            var medicationProduct = await GetOrCreateServiceProductAsync(
+                dbContext,
+                "SRV-MEDICACION-OPTICA",
+                "Medicacion optometrica",
+                "Servicio autogenerado desde formulas o tratamientos indicados en historia clinica.");
+
+            await EnsureSourceLineAsync(
+                dbContext,
+                draft,
+                medicationProduct.id_producto,
+                "ConsultaMedicacion",
+                consultation.id_consulta,
+                BuildConsultationMedicationConcept(consultation),
+                1,
+                0m);
+        }
+        else
+        {
+            await RemoveSourceLineAsync(dbContext, draft, "ConsultaMedicacion", consultation.id_consulta);
+        }
 
         draft.id_cliente_facturacion = clientId;
         draft.id_usuario = actorUserId;
@@ -93,6 +135,16 @@ public sealed class BillingDraftService
         draft.forma_pago ??= "Efectivo";
         draft.dias_credito ??= 0;
         await RecalculateSaleAsync(dbContext, draft);
+    }
+
+    private async Task<tbl_venta?> FindDraftSaleAsync(OpticaDbContext dbContext, int patientId)
+    {
+        return await dbContext.tbl_venta
+            .Include(x => x.tbl_detalle_venta)
+            .FirstOrDefaultAsync(x =>
+                x.id_paciente == patientId
+                && (x.estado == "Pendiente" || x.estado == "Borrador")
+                && !x.tbl_comprobantes.Any());
     }
 
     public async Task<int> EnsureBillingClientAsync(OpticaDbContext dbContext, tbl_paciente patient, int actorUserId)
@@ -339,6 +391,23 @@ public sealed class BillingDraftService
         dbContext.tbl_detalle_venta.Add(newLine);
     }
 
+    private async Task RemoveSourceLineAsync(OpticaDbContext dbContext, tbl_venta sale, string sourceType, int sourceId)
+    {
+        if (!dbContext.Entry(sale).Collection(x => x.tbl_detalle_venta).IsLoaded)
+        {
+            await dbContext.Entry(sale).Collection(x => x.tbl_detalle_venta).LoadAsync();
+        }
+
+        var existingLine = sale.tbl_detalle_venta.FirstOrDefault(x => x.origen_tipo == sourceType && x.origen_id == sourceId);
+        if (existingLine is null)
+        {
+            return;
+        }
+
+        sale.tbl_detalle_venta.Remove(existingLine);
+        dbContext.tbl_detalle_venta.Remove(existingLine);
+    }
+
     private async Task<tbl_producto> GetOrCreateServiceProductAsync(OpticaDbContext dbContext, string code, string name, string description)
     {
         var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.codigo_producto == code);
@@ -384,16 +453,25 @@ public sealed class BillingDraftService
                !string.IsNullOrWhiteSpace(consultation.evaluaciones);
     }
 
+    private static bool HasMedicationContent(tbl_consulta consultation)
+        => !string.IsNullOrWhiteSpace(consultation.medicamentos);
+
     private static string BuildAppointmentConcept(tbl_citas appointment)
     {
         var patientName = $"{appointment.id_pacienteNavigation.nombres} {appointment.id_pacienteNavigation.apellidos}".Trim();
         return $"Consulta optometrica {appointment.fecha_cita:yyyy-MM-dd} - {patientName}";
     }
 
-    private static string BuildConsultationConcept(tbl_consulta consultation)
+    private static string BuildConsultationExamConcept(tbl_consulta consultation)
     {
         var patientName = $"{consultation.id_pacienteNavigation.nombres} {consultation.id_pacienteNavigation.apellidos}".Trim();
         return $"Examen pendiente de facturar - {patientName} - Consulta #{consultation.id_consulta}";
+    }
+
+    private static string BuildConsultationMedicationConcept(tbl_consulta consultation)
+    {
+        var patientName = $"{consultation.id_pacienteNavigation.nombres} {consultation.id_pacienteNavigation.apellidos}".Trim();
+        return $"Medicacion pendiente de facturar - {patientName} - Consulta #{consultation.id_consulta}";
     }
 
     private static string InferIdentificationType(string identification)

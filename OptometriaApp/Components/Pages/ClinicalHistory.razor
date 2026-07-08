@@ -1,4 +1,5 @@
 @page "/doctor/historia-clinica"
+@page "/doctor/clinical-history"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Security.Claims
@@ -7,8 +8,11 @@
 @using Microsoft.EntityFrameworkCore
 @using OptometriaApp.Data
 @using OptometriaApp.Models
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
 
 <PageTitle>Historia clinica</PageTitle>
 
@@ -26,17 +30,7 @@ else if (!canViewModule)
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
             <h1>Historia clinica</h1>
-            <p>No tienes acceso a esta historia clinica o el paciente no pertenece a tus consultas.</p>
-        </div>
-    </section>
-}
-else if (patient is null || editor is null || openingSnapshot is null)
-{
-    <section class="management-shell">
-        <div class="management-card">
-            <h1>Historia clinica</h1>
-            <p>Selecciona un paciente valido desde el modulo de pacientes para abrir o actualizar la historia clinica.</p>
-            <a class="btn btn-outline-primary" href="/doctor/my-patients">Volver a mis pacientes</a>
+            <p>Tu rol no tiene permiso para usar este modulo.</p>
         </div>
     </section>
 }
@@ -46,13 +40,16 @@ else
         <div class="management-hero">
             <div>
                 <span class="eyebrow">Historia optometrica</span>
-                <h1>@(historyExists ? "Actualizar historia clinica" : "Apertura de historia clinica")</h1>
-                <p>La apertura conserva los datos base del paciente y las actualizaciones posteriores se concentran en la evolucion clinica y el examen optometrico.</p>
+                <h1>Historia clinica</h1>
+                <p>Selecciona un paciente desde este modulo y registra aqui mismo la apertura, evolucion clinica y servicios pendientes de facturacion.</p>
             </div>
 
             <div class="workspace-actions">
-                <a class="btn btn-outline-primary" href="/doctor/my-patients">Volver</a>
-                <button type="button" class="btn btn-primary" @onclick="SaveAsync">@(historyExists ? "Guardar actualizacion" : "Crear historia clinica")</button>
+                <a class="btn btn-outline-primary" href="/doctor/historia-clinica">Cambiar paciente</a>
+                @if (patient is not null && editor is not null && openingSnapshot is not null)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveAsync">@(historyExists ? "Guardar actualizacion" : "Crear historia clinica")</button>
+                }
             </div>
         </div>
 
@@ -66,6 +63,35 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
+                <h2>Paciente</h2>
+                <span>@availablePatients.Count registrados</span>
+            </div>
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div class="clinical-span-3">
+                    <label class="form-label">Selecciona el paciente</label>
+                    <select class="form-select" value="@GetSelectedPatientValue()" @onchange="OnPatientChangedAsync">
+                        <option value="">Selecciona un paciente</option>
+                        @foreach (var availablePatient in availablePatients)
+                        {
+                            <option value="@availablePatient.id_paciente">@GetPatientOptionLabel(availablePatient)</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Estado actual</label>
+                    <input class="form-control" value="@(patient is null ? "Sin seleccion" : (historyExists ? "Historia existente" : "Nueva historia"))" readonly />
+                </div>
+            </div>
+            @if (patient is null || editor is null || openingSnapshot is null)
+            {
+                <p style="margin: 1rem 0 0;">Selecciona un paciente para abrir o actualizar su historia clinica sin salir de este modulo.</p>
+            }
+        </section>
+
+        @if (patient is not null && editor is not null && openingSnapshot is not null)
+        {
         <section class="management-card clinical-card">
             <div class="clinical-header-grid">
                 <div class="clinical-highlight">
@@ -341,6 +367,8 @@ else
                 <div class="clinical-span-2"><label class="form-label">Motor</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoMotor" /></div>
                 <div class="clinical-span-4"><label class="form-label">Patologico presuntivo</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.PatologicoPresuntivo"></textarea></div>
                 <div class="clinical-span-4"><label class="form-label">Tratamiento / disposicion / conducta</label><textarea class="form-control" rows="4" @bind="editor.Diagnostico.TratamientoConducta"></textarea></div>
+                <div class="clinical-span-4"><label class="form-label">Examenes indicados para facturacion</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.ExamenesIndicados"></textarea></div>
+                <div class="clinical-span-4"><label class="form-label">Medicamentos recetados para facturacion</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.MedicamentosRecetados"></textarea></div>
                 <div class="clinical-span-4"><label class="form-label">Observaciones generales</label><textarea class="form-control" rows="4" @bind="editor.ObservacionesGenerales"></textarea></div>
                 <div class="clinical-span-2"><label class="form-label">Nombre del examinador</label><input class="form-control" @bind="editor.NombreExaminador" /></div>
                 <div class="clinical-span-2"><label class="form-label">Nivel paralelo y jornada</label><input class="form-control" @bind="editor.NivelParaleloJornada" /></div>
@@ -366,6 +394,7 @@ else
                 </div>
             </div>
         </section>
+        }
     </section>
 }
 
@@ -374,6 +403,7 @@ else
     public int? PatientId { get; set; }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly List<tbl_paciente> availablePatients = [];
     private tbl_paciente? patient;
     private tbl_historia_clinica_optometria? history;
     private OpeningSnapshot? openingSnapshot;
@@ -402,7 +432,7 @@ else
         currentUserId = int.TryParse(authState.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
         currentRoleId = int.TryParse(authState.User.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
 
-        if (!PatientId.HasValue || PatientId.Value <= 0 || currentUserId <= 0)
+        if (currentUserId <= 0)
         {
             canViewModule = false;
             isLoading = false;
@@ -410,23 +440,38 @@ else
         }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        canViewModule = await CanViewHistoryModuleAsync(dbContext);
+
+        if (!canViewModule)
+        {
+            isLoading = false;
+            return;
+        }
+
+        var loadedPatients = await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .OrderBy(x => x.apellidos)
+            .ThenBy(x => x.nombres)
+            .ToListAsync();
+
+        availablePatients.Clear();
+        availablePatients.AddRange(loadedPatients);
+
+        if (!PatientId.HasValue || PatientId.Value <= 0)
+        {
+            ResetPatientContext();
+            isLoading = false;
+            return;
+        }
+
         patient = await dbContext.tbl_pacientes
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.id_paciente == PatientId.Value);
 
         if (patient is null)
         {
-            canViewModule = false;
-            isLoading = false;
-            return;
-        }
-
-        canViewModule = currentRoleId == 1 || await dbContext.tbl_consulta
-            .AsNoTracking()
-            .AnyAsync(x => x.id_paciente == patient.id_paciente && x.id_optometra == currentUserId);
-
-        if (!canViewModule)
-        {
+            ResetPatientContext();
+            errorMessage = "No se encontro el paciente seleccionado.";
             isLoading = false;
             return;
         }
@@ -511,10 +556,25 @@ else
         entity.nivel_paralelo_jornada = NormalizeOptional(editor.NivelParaleloJornada);
         entity.consentimiento_json = Serialize(editor.Consentimiento);
 
+        var consultationId = await EnsureConsultationSnapshotAsync(dbContext);
+        await BillingDraftService.EnsureConsultationBillingEntriesAsync(dbContext, consultationId, currentUserId);
         await dbContext.SaveChangesAsync();
 
         historyExists = true;
-        statusMessage = "La historia clinica se guardo correctamente.";
+        statusMessage = HasBillingTriggers(editor)
+            ? "La historia clinica se guardo correctamente y se actualizaron los servicios pendientes de facturacion."
+            : "La historia clinica se guardo correctamente.";
+        await LoadAsync();
+    }
+
+    private async Task OnPatientChangedAsync(ChangeEventArgs args)
+    {
+        var rawValue = args.Value?.ToString();
+        PatientId = int.TryParse(rawValue, out var parsedPatientId) && parsedPatientId > 0
+            ? parsedPatientId
+            : null;
+
+        NavigationManager.NavigateTo(NavigationManager.GetUriWithQueryParameter("patientId", PatientId), forceLoad: false);
         await LoadAsync();
     }
 
@@ -590,6 +650,85 @@ else
 
     private static string? NormalizeOptional(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private async Task<bool> CanViewHistoryModuleAsync(OpticaDbContext dbContext)
+    {
+        if (currentRoleId == 1)
+        {
+            return true;
+        }
+
+        var permission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(p => p.id_rol == currentRoleId)
+            .Join(
+                dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/doctor/historia-clinica"),
+                rolePermission => rolePermission.id_menu,
+                menu => menu.id_menu,
+                (rolePermission, _) => rolePermission)
+            .FirstOrDefaultAsync();
+
+        return permission?.puede_ver == true;
+    }
+
+    private async Task<int> EnsureConsultationSnapshotAsync(OpticaDbContext dbContext)
+    {
+        var existingConsultation = await dbContext.tbl_consulta
+            .Where(x => x.id_paciente == patient!.id_paciente && x.id_optometra == currentUserId)
+            .OrderByDescending(x => x.fecha_consulta)
+            .FirstOrDefaultAsync();
+
+        if (existingConsultation is null)
+        {
+            existingConsultation = new tbl_consulta
+            {
+                id_paciente = patient!.id_paciente,
+                id_optometra = currentUserId
+            };
+
+            dbContext.tbl_consulta.Add(existingConsultation);
+        }
+
+        existingConsultation.fecha_consulta = DateTime.Now;
+        existingConsultation.motivo_consulta = NormalizeOptional(editor!.MotivoConsulta);
+        existingConsultation.historia_clinica = NormalizeOptional(editor.NumeroHistoria);
+        existingConsultation.antecedentes_personales = NormalizeOptional(editor.Antecedentes.PersonalesGenerales);
+        existingConsultation.antecedentes_familiares = NormalizeOptional(editor.Antecedentes.FamiliaresGenerales);
+        existingConsultation.antecedentes_oculares = NormalizeOptional(string.Join(" | ", new[]
+        {
+            editor.Antecedentes.PersonalesOculares,
+            editor.Antecedentes.FamiliaresOculares
+        }.Where(value => !string.IsNullOrWhiteSpace(value))));
+        existingConsultation.usa_lentes = editor.UsaLentes;
+        existingConsultation.detalle_usa_lentes = NormalizeOptional(editor.Lentes.Observaciones);
+        existingConsultation.evaluaciones = NormalizeOptional(editor.Diagnostico.TratamientoConducta);
+        existingConsultation.examenes_varios = NormalizeOptional(editor.Diagnostico.ExamenesIndicados);
+        existingConsultation.medicamentos = NormalizeOptional(editor.Diagnostico.MedicamentosRecetados);
+        existingConsultation.notas = NormalizeOptional(editor.ObservacionesGenerales);
+
+        await dbContext.SaveChangesAsync();
+        return existingConsultation.id_consulta;
+    }
+
+    private void ResetPatientContext()
+    {
+        patient = null;
+        history = null;
+        openingSnapshot = null;
+        editor = null;
+        historyExists = false;
+        historyOpenedLabel = "Sin apertura";
+    }
+
+    private string GetSelectedPatientValue()
+        => PatientId?.ToString() ?? string.Empty;
+
+    private static string GetPatientOptionLabel(tbl_paciente patient)
+        => $"{patient.apellidos} {patient.nombres} - {patient.cedula}";
+
+    private static bool HasBillingTriggers(HistoryEditorModel editor)
+        => !string.IsNullOrWhiteSpace(editor.Diagnostico.ExamenesIndicados) ||
+           !string.IsNullOrWhiteSpace(editor.Diagnostico.MedicamentosRecetados);
 
     private static string Serialize<T>(T model) where T : class
         => JsonSerializer.Serialize(model, JsonOptions);
@@ -753,6 +892,8 @@ else
         public string Cie10 { get; set; } = string.Empty;
         public string PatologicoPresuntivo { get; set; } = string.Empty;
         public string TratamientoConducta { get; set; } = string.Empty;
+        public string ExamenesIndicados { get; set; } = string.Empty;
+        public string MedicamentosRecetados { get; set; } = string.Empty;
     }
 
     private sealed class ConsentSection

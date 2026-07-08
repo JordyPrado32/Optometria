@@ -147,7 +147,7 @@ else
                                                     <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => SelectInvoiceAsync(item.ComprobanteId)">
                                                         @(selectedInvoice?.ComprobanteId == item.ComprobanteId ? "Activa" : "Ver")
                                                     </button>
-                                                    <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@($"/my-credit-notes?invoice={item.ComprobanteId}")">Nota</a>
+                                                    <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@($"/my-credit-notes?invoice={item.ComprobanteId}")">Nueva nota</a>
                                                 </div>
                                             </td>
                                         </tr>
@@ -190,8 +190,12 @@ else
                             <div class="documents-card documents-kpi">
                                 <div class="documents-label">Notas</div>
                                 <strong>@selectedInvoice.TotalCredited.ToString("0.00")</strong>
-                                <span>@selectedInvoice.State</span>
+                                <span>@GetInvoiceCreditState(selectedInvoice)</span>
                             </div>
+                        </div>
+
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
                         </div>
 
                         <div class="documents-label" style="margin-top: 1rem;">Lineas de la factura</div>
@@ -425,6 +429,16 @@ else
     {
         var fullName = $"{firstName} {lastName}".Trim();
         return string.IsNullOrWhiteSpace(fullName) ? "Sin dato" : fullName;
+    }
+
+    private static string GetInvoiceCreditState(IssuedInvoiceRow invoice)
+    {
+        if (invoice.TotalAmount <= 0.009m)
+        {
+            return "Totalmente acreditada";
+        }
+
+        return invoice.TotalCredited > 0m ? "Parcialmente acreditada" : invoice.State;
     }
 
     private bool MatchesInvoiceSearch(IssuedInvoiceRow item)

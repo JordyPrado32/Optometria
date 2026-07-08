@@ -39,6 +39,75 @@
         background: rgba(255, 255, 255, 0.78);
     }
 
+    .credit-document-card {
+        border: 1px solid rgba(127, 105, 81, 0.16);
+        border-radius: 1.3rem;
+        padding: 1.2rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(244, 240, 228, 0.56));
+        box-shadow: 0 12px 28px rgba(127, 105, 81, 0.07);
+    }
+
+    .credit-document-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        padding-bottom: 1rem;
+        border-bottom: 1px dashed rgba(127, 105, 81, 0.18);
+        margin-bottom: 1rem;
+    }
+
+    .credit-document-title {
+        margin: 0.35rem 0 0;
+        color: var(--color-ink);
+        font-size: 1.8rem;
+        line-height: 1.05;
+    }
+
+    .credit-document-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.32rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(93, 161, 129, 0.12);
+        color: var(--color-sage);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .credit-document-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.85rem;
+    }
+
+    .credit-document-meta > div {
+        border: 1px solid rgba(127, 105, 81, 0.1);
+        border-radius: 0.95rem;
+        padding: 0.85rem 0.95rem;
+        background: rgba(255, 255, 255, 0.76);
+    }
+
+    .credit-document-meta label {
+        display: block;
+        margin-bottom: 0.22rem;
+        font-size: 0.73rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-taupe);
+    }
+
+    .credit-document-meta strong,
+    .credit-document-meta span {
+        display: block;
+        color: var(--color-ink);
+        overflow-wrap: anywhere;
+    }
+
     .credit-label {
         font-size: 0.82rem;
         letter-spacing: 0.08em;
@@ -346,7 +415,7 @@ else
                                             <td><span class="credit-status-pill">@item.InvoiceCreditState</span></td>
                                             <td style="text-align:right;">
                                                 <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => SelectIssuedInvoiceAsync(item.ComprobanteId)">
-                                                    @(selectedIssuedInvoice?.ComprobanteId == item.ComprobanteId ? "Activa" : "Seleccionar")
+                                                    @(selectedIssuedInvoice?.ComprobanteId == item.ComprobanteId ? "Activa" : "Preparar nota")
                                                 </button>
                                             </td>
                                         </tr>
@@ -365,44 +434,66 @@ else
                     }
                     else
                     {
-                        <div class="management-card-header">
-                            <h2>Factura #@selectedIssuedInvoice.InvoiceNumber</h2>
-                            <span>@selectedIssuedInvoice.InvoiceCreditState</span>
-                        </div>
+                        <div class="credit-document-card">
+                            <div class="credit-document-head">
+                                <div>
+                                    <span class="credit-document-badge">Documento de anulación</span>
+                                    <h2 class="credit-document-title">Factura #@selectedIssuedInvoice.InvoiceNumber</h2>
+                                    <div style="margin-top: 0.35rem; color: var(--color-taupe);">
+                                        Revisa exactamente qué vas a acreditar antes de emitir la nota.
+                                    </div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div class="credit-label" style="margin-bottom:0.25rem;">Estado actual</div>
+                                    <strong style="display:block; font-size:1.05rem; color:var(--color-ink);">@selectedIssuedInvoice.InvoiceCreditState</strong>
+                                    <span style="color: var(--color-taupe);">Emitida @selectedIssuedInvoice.IssueDateLabel</span>
+                                </div>
+                            </div>
 
-                        <div class="credit-summary-grid" style="margin-top: 1rem;">
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Cliente</div>
-                                <strong style="font-size: 1rem;">@selectedIssuedInvoice.ClientName</strong>
-                                <span>@selectedIssuedInvoice.PatientName</span>
-                            </div>
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Fecha emision</div>
-                                <strong style="font-size: 1rem;">@selectedIssuedInvoice.IssueDateLabel</strong>
-                                <span>@selectedIssuedInvoice.IdentifierLabel</span>
-                            </div>
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Subtotal actual</div>
-                                <strong>@selectedIssuedInvoice.CurrentSubtotal.ToString("0.00")</strong>
-                                <span>Impuesto @selectedIssuedInvoice.CurrentTax.ToString("0.00")</span>
-                            </div>
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Total actual</div>
-                                <strong>@selectedIssuedInvoice.CurrentTotal.ToString("0.00")</strong>
-                                <span>Acreditado @selectedIssuedInvoice.TotalCredited.ToString("0.00")</span>
+                            <div class="credit-document-meta">
+                                <div>
+                                    <label>Cliente</label>
+                                    <strong>@selectedIssuedInvoice.ClientName</strong>
+                                    <span>@selectedIssuedInvoice.IdentifierLabel</span>
+                                </div>
+                                <div>
+                                    <label>Paciente</label>
+                                    <strong>@selectedIssuedInvoice.PatientName</strong>
+                                    <span>Factura origen</span>
+                                </div>
+                                <div>
+                                    <label>Subtotal vigente</label>
+                                    <strong>@selectedIssuedInvoice.CurrentSubtotal.ToString("0.00")</strong>
+                                    <span>Impuesto @selectedIssuedInvoice.CurrentTax.ToString("0.00")</span>
+                                </div>
+                                <div>
+                                    <label>Total vigente</label>
+                                    <strong>@selectedIssuedInvoice.CurrentTotal.ToString("0.00")</strong>
+                                    <span>Acreditado historico @selectedIssuedInvoice.TotalCredited.ToString("0.00")</span>
+                                </div>
                             </div>
                         </div>
 
                         <div class="credit-label" style="margin-top: 1rem;">Tipo de nota</div>
                         <div class="credit-note-type">
-                            <button type="button" class="btn btn-outline-primary @(creditNoteType == "Total" ? "active" : string.Empty)" @onclick='() => SetCreditNoteType("Total")' disabled="@(!canEditModule)">Total</button>
-                            <button type="button" class="btn btn-outline-primary @(creditNoteType == "Parcial" ? "active" : string.Empty)" @onclick='() => SetCreditNoteType("Parcial")' disabled="@(!canEditModule)">Parcial</button>
+                            <button type="button" class="btn btn-outline-primary @(creditNoteType == "Total" ? "active" : string.Empty)" @onclick='() => SetCreditNoteType("Total")' disabled="@(!CanEditSelectedInvoice)">Total</button>
+                            <button type="button" class="btn btn-outline-primary @(creditNoteType == "Parcial" ? "active" : string.Empty)" @onclick='() => SetCreditNoteType("Parcial")' disabled="@(!CanEditSelectedInvoice)">Parcial</button>
                         </div>
+                        <p style="margin: 0.6rem 0 0; color: var(--color-taupe);">
+                            `Total` anula todo lo que queda vigente. `Parcial` permite varias notas sucesivas por cantidad o por valor base disponible.
+                        </p>
+
+                        @if (!CanEditSelectedInvoice)
+                        {
+                            <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
+                                Esta factura ya fue acreditada por completo. No admite nuevas notas de crédito.
+                            </div>
+                        }
 
                         <div class="credit-editor-grid" style="margin-top: 1rem;">
                             <div style="grid-column: 1 / -1;">
                                 <label class="form-label">Motivo *</label>
-                                <textarea class="form-control" rows="3" maxlength="255" @bind="creditNoteReason" readonly="@(!canEditModule)"></textarea>
+                                <textarea class="form-control" rows="3" maxlength="255" @bind="creditNoteReason" readonly="@(!CanEditSelectedInvoice)"></textarea>
                             </div>
                         </div>
 
@@ -422,6 +513,7 @@ else
                                             <th>IVA</th>
                                             <th>Cant. facturada</th>
                                             <th>Subtotal factura</th>
+                                            <th>Ya acreditado</th>
                                             <th>Disponible</th>
                                             @if (creditNoteType == "Parcial")
                                             {
@@ -440,16 +532,20 @@ else
                                                 <td>@line.OriginalQuantity</td>
                                                 <td>@line.OriginalSubtotal.ToString("0.00")</td>
                                                 <td>
+                                                    <strong>@line.CreditedSubtotal.ToString("0.00")</strong>
+                                                    <div style="font-size: 0.78rem; color: var(--color-taupe);">Cantidad acreditada @line.CreditedQuantity</div>
+                                                </td>
+                                                <td>
                                                     <strong>@line.AvailableSubtotal.ToString("0.00")</strong>
                                                     <div style="font-size: 0.78rem; color: var(--color-taupe);">Cantidad disponible @line.AvailableQuantity</div>
                                                 </td>
                                                 @if (creditNoteType == "Parcial")
                                                 {
                                                     <td>
-                                                        <input type="number" min="0" max="@line.AvailableQuantity" class="form-control" @bind="line.QuantityToCredit" readonly="@(!canEditModule)" />
+                                                        <input type="number" min="0" max="@line.AvailableQuantity" class="form-control" @bind="line.QuantityToCredit" readonly="@(!CanEditSelectedInvoice)" />
                                                     </td>
                                                     <td>
-                                                        <input type="number" min="0" max="@line.AvailableSubtotal" step="0.01" class="form-control" @bind="line.SubtotalToCredit" readonly="@(!canEditModule)" />
+                                                        <input type="number" min="0" max="@line.AvailableSubtotal" step="0.01" class="form-control" @bind="line.SubtotalToCredit" readonly="@(!CanEditSelectedInvoice)" />
                                                     </td>
                                                 }
                                             </tr>
@@ -480,7 +576,8 @@ else
                         </div>
 
                         <div class="workspace-actions" style="margin-top: 1rem;">
-                            <button type="button" class="btn btn-primary" @onclick="SaveCreditNoteAsync" disabled="@(!canEditModule)">Guardar nota de credito</button>
+                            <button type="button" class="btn btn-primary" @onclick="SaveCreditNoteAsync" disabled="@(!CanEditSelectedInvoice)">Emitir nota de credito</button>
+                            <a class="btn btn-outline-primary" href="@($"/my-invoices")">Volver a mis facturas</a>
                         </div>
 
                         <div class="credit-label" style="margin-top: 1rem;">Historial de la factura</div>
@@ -557,6 +654,8 @@ else
     private string searchClient = string.Empty;
     private string searchIdentifier = string.Empty;
     private DateTime? searchIssueDate;
+    private bool SelectedInvoiceIsFullyCredited => selectedIssuedInvoice?.CurrentTotal <= 0.009m;
+    private bool CanEditSelectedInvoice => canEditModule && selectedIssuedInvoice is not null && !SelectedInvoiceIsFullyCredited;
 
     protected override async Task OnInitializedAsync()
     {
@@ -742,7 +841,7 @@ else
                 TotalCredited = totalCredited,
                 InvoiceCreditState = ResolveInvoiceCreditState(currentTotal, totalCredited)
             };
-        }));
+        }).Where(x => x.CurrentTotal > 0.009m));
 
         var targetId = preserveSelectedComprobanteId ?? selectedIssuedInvoice?.ComprobanteId;
         if (targetId.HasValue && issuedInvoices.Any(x => x.ComprobanteId == targetId.Value))
@@ -916,6 +1015,11 @@ else
             })
             .ToListAsync();
 
+        var totalCredited = await dbContext.tbl_nota_credito
+            .AsNoTracking()
+            .Where(x => x.id_comprobante_relacionado == header.id_comprobante && x.estado == "Emitida")
+            .SumAsync(x => (decimal?)x.monto_total) ?? 0m;
+
         var subtotalAmount = detailRows.Sum(x => x.Subtotal);
         var taxAmount = detailRows.Sum(x => x.Tax);
 
@@ -934,7 +1038,7 @@ else
             TotalAmount = header.monto_total,
             SubtotalAmount = subtotalAmount,
             TaxAmount = taxAmount,
-            InvoiceState = ResolveInvoiceCreditState(header.CurrentInvoiceTotal, header.monto_total),
+            InvoiceState = ResolveInvoiceCreditState(header.CurrentInvoiceTotal, totalCredited),
             Details = detailRows
         };
     }
@@ -1040,10 +1144,12 @@ else
         errorMessage = null;
         RecalculateDraftSummary();
 
-        if (!canEditModule || selectedIssuedInvoice is null)
+        if (!CanEditSelectedInvoice)
         {
             return;
         }
+
+        var selectedComprobanteId = selectedIssuedInvoice!.ComprobanteId;
 
         creditNoteReason = creditNoteReason.Trim();
         if (string.IsNullOrWhiteSpace(creditNoteReason))
@@ -1067,7 +1173,7 @@ else
             join client in dbContext.clients on sale.id_cliente_facturacion equals client.cliente_id
             join account in dbContext.tbl_cta_cobrar on comprobante.id_comprobante equals account.id_comprobante into accountJoin
             from account in accountJoin.DefaultIfEmpty()
-            where comprobante.id_comprobante == selectedIssuedInvoice.ComprobanteId
+            where comprobante.id_comprobante == selectedComprobanteId
                && comprobante.tipo_comprobante == "Factura"
                && (currentRoleId == 1 || client.id_usuario_creacion == currentUserId)
             select new
@@ -1143,6 +1249,7 @@ else
         var updatedTotal = Math.Max(0m, currentTotal - totalToCredit);
         var updatedCollected = Math.Min(previousCollected, updatedTotal);
         var updatedBalance = Math.Max(0m, updatedTotal - updatedCollected);
+        var fullyCredited = updatedTotal <= 0.009m;
 
         invoice.sale.subtotal = updatedSubtotal;
         invoice.sale.impuesto_total = updatedTax;
@@ -1152,7 +1259,8 @@ else
         invoice.sale.porcentaje_impuesto = updatedSubtotal > 0m
             ? Math.Round((updatedTax * 100m) / updatedSubtotal, 2, MidpointRounding.AwayFromZero)
             : 0m;
-        invoice.sale.estado = "Pendiente";
+        invoice.sale.estado = fullyCredited ? "Anulada" : "Pendiente";
+        invoice.comprobante.estado_comprobante = fullyCredited ? "Anulado" : (string.IsNullOrWhiteSpace(invoice.comprobante.estado_comprobante) ? "Emitido" : invoice.comprobante.estado_comprobante);
 
         if (invoice.account is not null)
         {
@@ -1222,7 +1330,9 @@ else
 
         creditNoteReason = string.Empty;
         ResetLineEditors();
-        statusMessage = $"Nota de credito {note.numero_nota} emitida correctamente.";
+        statusMessage = fullyCredited
+            ? $"Nota de credito {note.numero_nota} emitida correctamente. La factura quedo acreditada en su totalidad y ya no admite nuevas notas."
+            : $"Nota de credito {note.numero_nota} emitida correctamente.";
         NavigationManager.NavigateTo(BuildCreditNoteDetailUrl(note.id_nota_credito, invoice.comprobante.id_comprobante), forceLoad: false);
     }
 

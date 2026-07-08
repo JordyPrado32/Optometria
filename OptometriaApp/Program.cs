@@ -2454,6 +2454,7 @@ using (var scope = app.Services.CreateScope())
             { "/patients", "/pacientes" },
             { "/doctor/patient-entry", "/doctor/ingresar-pacientes" },
             { "/doctor/my-patients", "/doctor/mis-pacientes" },
+            { "/doctor/clinical-history", "/doctor/historia-clinica" },
             { "/appointments", "/citas" },
             { "/appointment-availability", "/disponibilidad-medica" },
             { "/doctors", "/doctores" },
@@ -2513,42 +2514,48 @@ using (var scope = app.Services.CreateScope())
         
         // 1. Admin Role (id_rol = 1) gets all permissions on all menus
         await context.Database.ExecuteSqlRawAsync(@"
-            MERGE dbo.tbl_rol_menu_permiso AS target
-            USING (
-                SELECT 1 AS id_rol, id_menu, 1 AS puede_ver, 1 AS puede_crear, 1 AS puede_editar, 1 AS puede_eliminar
-                FROM dbo.tbl_menu_app
-            ) AS source
-            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
-            WHEN MATCHED THEN
-                UPDATE SET target.puede_ver = 1, target.puede_crear = 1, target.puede_editar = 1, target.puede_eliminar = 1
-            WHEN NOT MATCHED THEN
-                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
-                VALUES (1, source.id_menu, 1, 1, 1, 1);
+            IF EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE id_rol = 1)
+            BEGIN
+                MERGE dbo.tbl_rol_menu_permiso AS target
+                USING (
+                    SELECT 1 AS id_rol, id_menu, 1 AS puede_ver, 1 AS puede_crear, 1 AS puede_editar, 1 AS puede_eliminar
+                    FROM dbo.tbl_menu_app
+                ) AS source
+                ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+                WHEN MATCHED THEN
+                    UPDATE SET target.puede_ver = 1, target.puede_crear = 1, target.puede_editar = 1, target.puede_eliminar = 1
+                WHEN NOT MATCHED THEN
+                    INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                    VALUES (1, source.id_menu, 1, 1, 1, 1);
+            END;
         ");
 
         // 2. Role 2 gets correct Spanish permissions
         await context.Database.ExecuteSqlRawAsync(@"
-            MERGE dbo.tbl_rol_menu_permiso AS target
-            USING (
-                SELECT
-                    2 AS id_rol,
-                    m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
-                    CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
-                FROM dbo.tbl_menu_app m
-            ) AS source
-            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
-            WHEN MATCHED THEN
-                UPDATE SET 
-                    target.puede_ver = source.puede_ver,
-                    target.puede_crear = source.puede_crear,
-                    target.puede_editar = source.puede_editar,
-                    target.puede_eliminar = source.puede_eliminar
-            WHEN NOT MATCHED THEN
-                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
-                VALUES (2, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+            IF EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE id_rol = 2)
+            BEGIN
+                MERGE dbo.tbl_rol_menu_permiso AS target
+                USING (
+                    SELECT
+                        2 AS id_rol,
+                        m.id_menu,
+                        CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                        CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                        CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                        CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                    FROM dbo.tbl_menu_app m
+                ) AS source
+                ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+                WHEN MATCHED THEN
+                    UPDATE SET 
+                        target.puede_ver = source.puede_ver,
+                        target.puede_crear = source.puede_crear,
+                        target.puede_editar = source.puede_editar,
+                        target.puede_eliminar = source.puede_eliminar
+                WHEN NOT MATCHED THEN
+                    INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                    VALUES (2, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+            END;
         ");
 
         // 3. Doctor/Medic/Optometrist role gets correct Spanish permissions
@@ -2573,11 +2580,11 @@ using (var scope = app.Services.CreateScope())
                             @curr_rol AS id_rol,
                             m.id_menu,
                             CAST(1 AS BIT) AS puede_ver,
-                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/doctor/historia-clinica', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                            CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/doctor/historia-clinica', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                             CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas') THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                         FROM dbo.tbl_menu_app m
-                        WHERE m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/citas', '/disponibilidad-medica', '/doctores')
+                        WHERE m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/doctor/historia-clinica', '/citas', '/disponibilidad-medica', '/doctores')
                     ) AS source
                     ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
                     WHEN MATCHED THEN
@@ -2727,6 +2734,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                     ('Pacientes', '/pacientes', 'patients', 3, 1),
                     ('Ingresar pacientes', '/doctor/ingresar-pacientes', 'doctor-entry', 4, 1),
                     ('Ver mis pacientes', '/doctor/mis-pacientes', 'doctor-patients', 5, 1),
+                    ('Historia clinica', '/doctor/historia-clinica', 'journal-medical', 5, 1),
                     ('Citas y turnos', '/citas', 'calendar-check', 6, 1),
                     ('Disponibilidad medica', '/disponibilidad-medica', 'calendar-availability', 7, 1),
                     ('Medicos', '/doctores', 'doctor-profile', 8, 1),
@@ -2862,8 +2870,8 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                     r.id_rol,
                     m.id_menu,
                     CAST(1 AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/doctor/historia-clinica', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/doctor/historia-clinica', '/citas', '/disponibilidad-medica', '/doctores') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                     CAST(CASE WHEN m.ruta IN ('/doctor/ingresar-pacientes', '/citas') THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_rol r
                 CROSS JOIN dbo.tbl_menu_app m
@@ -2873,7 +2881,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                         OR LOWER(r.nombre) LIKE '%medic%'
                         OR LOWER(r.nombre) LIKE '%optomet%'
                     )
-                    AND m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/citas', '/disponibilidad-medica', '/doctores')
+                    AND m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/doctor/historia-clinica', '/citas', '/disponibilidad-medica', '/doctores')
             ) AS source
             ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
             WHEN MATCHED THEN
