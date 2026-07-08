@@ -39,12 +39,18 @@ else
                 <p>@HeroDescription</p>
             </div>
 
-            <div class="workspace-actions">
-                <button type="button" class="btn btn-outline-primary" @onclick="ExportAvailability">Exportar CSV</button>
+            <div class="workspace-actions" style="align-items: center;">
+                <button type="button" class="btn btn-excel" @onclick="ExportAvailability">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
+                </button>
                 @if (CanManageAvailability)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="OpenNewAvailabilityModal">Nueva disponibilidad</button>
-                    <button type="button" class="btn btn-outline-primary" @onclick="OpenNewBlockModal">Nuevo bloqueo</button>
+                    <button type="button" class="btn btn-coffee" @onclick="OpenNewAvailabilityModal">
+                        <i class="bi bi-calendar-plus-fill" style="margin-right: 6px;"></i> Nueva disponibilidad
+                    </button>
+                    <button type="button" class="btn btn-coffee" @onclick="OpenNewBlockModal" style="background-color: var(--color-sand) !important; color: var(--color-taupe-deep) !important; border-color: rgba(127,105,81,0.3) !important;">
+                        <i class="bi bi-calendar-x-fill" style="margin-right: 6px;"></i> Nuevo bloqueo
+                    </button>
                 }
             </div>
         </div>
@@ -115,8 +121,8 @@ else
                         </select>
                     </div>
 
-                    <button type="button" class="btn btn-outline-primary availability-clear-button" @onclick="ClearFilters">
-                        <i class="bi bi-eraser"></i>
+                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important; min-height: auto !important; height: 32px !important; display: inline-flex; align-items: center; gap: 0.45rem; margin-bottom: 4px;">
+                        <i class="bi bi-trash"></i>
                         <span>Limpiar filtros</span>
                     </button>
                 </div>

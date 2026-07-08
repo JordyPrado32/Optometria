@@ -37,15 +37,17 @@ else
                 <p>Administra relacion comercial, contacto, credito, datos fiscales y seguimiento operativo del proveedor en un solo lugar.</p>
             </div>
 
-            <div class="workspace-actions">
+            <div class="workspace-actions" style="align-items: center;">
                 @if (permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNewSupplier">
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNewSupplier">
                         <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo proveedor
                     </button>
                 }
 
-                <button type="button" class="btn btn-outline-primary" @onclick="ExportSuppliers">Exportar CSV</button>
+                <button type="button" class="btn btn-excel" @onclick="ExportSuppliers">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
+                </button>
             </div>
         </div>
 
@@ -84,8 +86,10 @@ else
                 </div>
             </div>
 
-            <div class="management-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            <div class="management-actions" style="margin-top: 0.3rem;">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
+                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                </button>
             </div>
         </section>
 

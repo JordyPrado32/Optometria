@@ -25,8 +25,10 @@ else
                 <h1>Kardex por promedio ponderado</h1>
                 <p>Consulta entradas, salidas, ajustes, saldo valorizado y costo promedio con trazabilidad util para operacion y auditoria.</p>
             </div>
-            <div class="workspace-actions">
-                <button type="button" class="btn btn-outline-primary" @onclick="ExportKardex">Exportar Excel</button>
+            <div class="workspace-actions" style="align-items: center;">
+                <button type="button" class="btn btn-excel" @onclick="ExportKardex">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
+                </button>
                 @if (permissions.CanEdit)
                 {
                     <button type="button" class="btn btn-outline-primary" @onclick="RebuildVisibleAsync">Recalcular visible</button>
@@ -83,13 +85,15 @@ else
                 </div>
             </div>
 
-            <div class="management-actions" style="margin-top:1rem; justify-content:space-between; align-items:center;">
+            <div class="management-actions" style="margin-top: 0.3rem; justify-content:space-between; align-items:center;">
                 <div style="display:flex; gap:0.75rem; flex-wrap:wrap; color:var(--color-taupe); font-size:0.88rem;">
                     <span>Productos: <strong>@FilteredProductSummaries.Count</strong></span>
                     <span>Saldo: <strong>@CurrentBalanceDisplay</strong></span>
                     <span>Promedio: <strong>@CurrentAverageDisplay</strong></span>
                 </div>
-                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
+                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                </button>
             </div>
         </section>
 

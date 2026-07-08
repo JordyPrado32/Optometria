@@ -31,13 +31,17 @@ else
                 <p>@PageDescription</p>
             </div>
 
-            <div class="workspace-actions">
+            <div class="workspace-actions" style="align-items: center;">
                 @if (IsEntryMode && permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-outline-primary" @onclick="OpenNewPatientModal">Nuevo paciente</button>
+                    <button type="button" class="btn btn-coffee" @onclick="OpenNewPatientModal">
+                        <i class="bi bi-person-plus-fill" style="margin-right: 6px;"></i> Nuevo paciente
+                    </button>
                 }
 
-                <button type="button" class="btn btn-primary" @onclick="ExportPatients">Exportar CSV</button>
+                <button type="button" class="btn btn-excel" @onclick="ExportPatients">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
+                </button>
             </div>
         </div>
 

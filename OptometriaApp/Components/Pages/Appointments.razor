@@ -40,14 +40,17 @@ else
                 <p>@HeroDescription</p>
             </div>
 
-            <div class="workspace-actions">
+            <div class="workspace-actions" style="align-items: center;">
                 @if (CanCreateAppointments)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="OpenNewAppointmentModal">Nueva cita</button>
+                    <button type="button" class="btn btn-coffee" @onclick="OpenNewAppointmentModal">
+                        <i class="bi bi-calendar-plus-fill" style="margin-right: 6px;"></i> Nueva cita
+                    </button>
                 }
 
-                <button type="button" class="btn btn-outline-primary" @onclick="ExportAppointments">Exportar CSV</button>
-
+                <button type="button" class="btn btn-excel" @onclick="ExportAppointments">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
+                </button>
             </div>
         </div>
 
@@ -178,8 +181,10 @@ else
                 </div>
             </div>
 
-            <div class="management-actions">
-                <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters">Limpiar filtros</button>
+            <div class="management-actions" style="margin-top: 0.3rem;">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
+                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                </button>
             </div>
 
             @if (!doctors.Any())

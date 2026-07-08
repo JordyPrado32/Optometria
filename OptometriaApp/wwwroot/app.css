@@ -34,6 +34,32 @@ a, .btn-link {
     border-color: #4c8b6d;
 }
 
+.btn-coffee {
+    color: #fff !important;
+    background-color: var(--color-taupe) !important;
+    border-color: var(--color-taupe) !important;
+}
+
+.btn-coffee:hover,
+.btn-coffee:focus {
+    color: #fff !important;
+    background-color: var(--color-taupe-deep) !important;
+    border-color: var(--color-taupe-deep) !important;
+}
+
+.btn-excel {
+    color: #fff !important;
+    background-color: #1D6F42 !important;
+    border-color: #1D6F42 !important;
+}
+
+.btn-excel:hover,
+.btn-excel:focus {
+    color: #fff !important;
+    background-color: #155230 !important;
+    border-color: #155230 !important;
+}
+
 .btn-outline-primary {
     color: var(--color-taupe-deep);
     border-color: rgba(127, 105, 81, 0.35);
@@ -1064,7 +1090,7 @@ h1:focus {
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    align-items: flex-end;
+    align-items: center;
 }
 
 .management-grid {

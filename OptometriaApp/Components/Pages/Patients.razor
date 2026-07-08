@@ -35,18 +35,20 @@ else
             <div>
                 <span class="eyebrow">Administrador</span>
                 <h1>Pacientes</h1>
-                <p>Administra historias base de pacientes con una vista clara, filtros rápidos y acciones integradas.</p>
+                <p>Administra historiasde pacientes con filtros rápidos y acciones.</p>
             </div>
 
-            <div class="workspace-actions">
+            <div class="workspace-actions" style="align-items: center;">
                 @if (permissions.CanCreate)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNewPatient">
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNewPatient">
                         <i class="bi bi-person-plus-fill" style="margin-right: 6px;"></i> Nuevo paciente
                     </button>
                 }
 
-                <button type="button" class="btn btn-outline-primary" @onclick="ExportPatients">Exportar CSV</button>
+                <button type="button" class="btn btn-excel" @onclick="ExportPatients">
+                    <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
+                </button>
             </div>
         </div>
 
