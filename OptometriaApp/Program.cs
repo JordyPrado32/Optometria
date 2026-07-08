@@ -2783,6 +2783,46 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             WHERE ruta = '/doctor/historia-clinica';
         END;
 
+        IF EXISTS (SELECT 1 FROM dbo.tbl_menu_app WHERE ruta = '/doctor/historia-clinica')
+           AND EXISTS (SELECT 1 FROM dbo.tbl_rol_menu_permiso)
+        BEGIN
+            DECLARE @historiaClinicaMenuId INT = (
+                SELECT TOP 1 id_menu
+                FROM dbo.tbl_menu_app
+                WHERE ruta = '/doctor/historia-clinica'
+            );
+
+            ;WITH roles_relacionados AS
+            (
+                SELECT DISTINCT p.id_rol
+                FROM dbo.tbl_rol_menu_permiso p
+                INNER JOIN dbo.tbl_menu_app m ON m.id_menu = p.id_menu
+                WHERE p.puede_ver = 1
+                  AND m.ruta IN ('/doctor/ingresar-pacientes', '/doctor/mis-pacientes', '/citas')
+            )
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING
+            (
+                SELECT
+                    rr.id_rol,
+                    @historiaClinicaMenuId AS id_menu,
+                    CAST(1 AS BIT) AS puede_ver,
+                    CAST(1 AS BIT) AS puede_crear,
+                    CAST(1 AS BIT) AS puede_editar,
+                    CAST(0 AS BIT) AS puede_eliminar
+                FROM roles_relacionados rr
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.puede_ver = 1,
+                    target.puede_crear = CASE WHEN target.puede_crear = 1 THEN 1 ELSE source.puede_crear END,
+                    target.puede_editar = CASE WHEN target.puede_editar = 1 THEN 1 ELSE source.puede_editar END
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+        END;
+
         EXEC(N'
             DECLARE @comprasMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre = ''Compras'' OR ruta = ''/compras'' ORDER BY CASE WHEN nombre = ''Compras'' THEN 0 ELSE 1 END);
             DECLARE @hasPurchaseChildren BIT = CASE WHEN EXISTS (

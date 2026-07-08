@@ -7,7 +7,9 @@
 @using System.Security.Claims
 @using OptometriaApp.Data
 @using OptometriaApp.Models
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
 
@@ -144,6 +146,28 @@
         font-weight: 700;
         background: rgba(93, 161, 129, 0.12);
         color: var(--color-sage);
+    }
+
+    .credit-totals-card {
+        border: 1px solid rgba(93, 161, 129, 0.24);
+        background: linear-gradient(180deg, rgba(93, 161, 129, 0.14), rgba(255, 255, 255, 0.98));
+    }
+
+    .credit-summary-table td {
+        color: var(--color-ink);
+        border-color: rgba(127, 105, 81, 0.12);
+    }
+
+    .credit-summary-table td:last-child {
+        text-align: right;
+        font-weight: 700;
+    }
+
+    .credit-grand-total {
+        display: block;
+        font-size: 2rem;
+        line-height: 1;
+        color: var(--color-ink);
     }
 
     @@media print {
@@ -452,6 +476,11 @@ else
 
                             <div class="credit-document-meta">
                                 <div>
+                                    <label>Nota de credito</label>
+                                    <strong>@CreditNoteNumberPreview</strong>
+                                    <span>Serie y secuencia del emisor activo</span>
+                                </div>
+                                <div>
                                     <label>Cliente</label>
                                     <strong>@selectedIssuedInvoice.ClientName</strong>
                                     <span>@selectedIssuedInvoice.IdentifierLabel</span>
@@ -555,25 +584,23 @@ else
                             </div>
                         }
 
-                        <div class="credit-summary-grid" style="margin-top: 1rem;">
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Subtotal acreditado</div>
-                                <strong>@draftSummary.Subtotal.ToString("0.00")</strong>
-                            </div>
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Impuestos acreditados</div>
-                                <strong>@draftSummary.Tax.ToString("0.00")</strong>
-                            </div>
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Total nota</div>
-                                <strong>@draftSummary.Total.ToString("0.00")</strong>
-                            </div>
-                            <div class="credit-card credit-kpi">
-                                <div class="credit-label">Estado factura</div>
-                                <strong style="font-size: 1rem;">@PredictInvoiceStateAfterDraft()</strong>
-                                <span>Disponible @selectedIssuedInvoice.CurrentTotal.ToString("0.00")</span>
-                            </div>
-                        </div>
+                        <section class="credit-card credit-totals-card" style="margin-top: 1rem;">
+                            <div class="credit-label">Totales de emision</div>
+                            <span style="display:block; color: var(--color-taupe);">Total final de la nota</span>
+                            <strong class="credit-grand-total">@draftSummary.Total.ToString("0.00")</strong>
+                            <span style="display:block; color: var(--color-taupe); margin-top: 0.35rem;">Documento listo para confirmar</span>
+
+                            <table class="table credit-summary-table" style="margin: 0.9rem 0 0;">
+                                <tbody>
+                                    <tr><td>Serie nota</td><td>@CreditNoteSeriesPreview</td></tr>
+                                    <tr><td>Secuencial</td><td>@CreditNoteSequencePreview</td></tr>
+                                    <tr><td>Subtotal</td><td>@draftSummary.Subtotal.ToString("0.00")</td></tr>
+                                    <tr><td>Impuestos</td><td>@draftSummary.Tax.ToString("0.00")</td></tr>
+                                    <tr><td>Total</td><td>@draftSummary.Total.ToString("0.00")</td></tr>
+                                    <tr><td>Estado factura</td><td>@PredictInvoiceStateAfterDraft()</td></tr>
+                                </tbody>
+                            </table>
+                        </section>
 
                         <div class="workspace-actions" style="margin-top: 1rem;">
                             <button type="button" class="btn btn-primary" @onclick="SaveCreditNoteAsync" disabled="@(!CanEditSelectedInvoice)">Emitir nota de credito</button>
@@ -640,6 +667,7 @@ else
     private ModulePermissions permissions = new();
     private IssuedInvoiceRow? selectedIssuedInvoice;
     private CreditNoteDetailView? selectedCreditNoteDetail;
+    private EmisorEntity? currentIssuer;
     private CreditNoteDraftSummary draftSummary = new();
     private bool isLoading = true;
     private bool canViewModule;
@@ -656,6 +684,10 @@ else
     private DateTime? searchIssueDate;
     private bool SelectedInvoiceIsFullyCredited => selectedIssuedInvoice?.CurrentTotal <= 0.009m;
     private bool CanEditSelectedInvoice => canEditModule && selectedIssuedInvoice is not null && !SelectedInvoiceIsFullyCredited;
+    private long nextCreditNoteSequencePreview = 1;
+    private string CreditNoteNumberPreview => currentIssuer is null ? "Configura emisor" : BuildCreditNoteNumber(currentIssuer, nextCreditNoteSequencePreview);
+    private string CreditNoteSeriesPreview => currentIssuer is null ? "Sin emisor" : BillingDraftService.GetInvoicePrefix(currentIssuer);
+    private string CreditNoteSequencePreview => currentIssuer is null ? "000000001" : nextCreditNoteSequencePreview.ToString("D9");
 
     protected override async Task OnInitializedAsync()
     {
@@ -685,6 +717,12 @@ else
         permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
         canViewModule = permissions.CanView;
         canEditModule = permissions.CanCreate || permissions.CanEdit;
+        currentIssuer = await dbContext.emisor
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
+        nextCreditNoteSequencePreview = currentIssuer is null
+            ? 1
+            : await GenerateNextCreditNoteSequenceAsync(dbContext, currentIssuer);
         if (!canViewModule)
         {
             isLoading = false;
@@ -1191,6 +1229,13 @@ else
             return;
         }
 
+        var issuer = await dbContext.emisor.FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
+        if (issuer is null)
+        {
+            errorMessage = "Configura un emisor activo antes de emitir la nota de credito.";
+            return;
+        }
+
         var currentSubtotal = invoice.sale.subtotal ?? 0m;
         var currentTax = invoice.sale.impuesto_total ?? 0m;
         var currentTotal = invoice.sale.total ?? 0m;
@@ -1242,7 +1287,8 @@ else
             return;
         }
 
-        var noteNumber = await GenerateNextCreditNoteNumberAsync(dbContext);
+        var noteSequence = await GenerateNextCreditNoteSequenceAsync(dbContext, issuer);
+        var noteNumber = BuildCreditNoteNumber(issuer, noteSequence);
         var previousCollected = invoice.sale.valor_cobrado ?? 0m;
         var updatedSubtotal = Math.Max(0m, currentSubtotal - subtotalToCredit);
         var updatedTax = Math.Max(0m, currentTax - taxToCredit);
@@ -1450,10 +1496,39 @@ else
         return allocation.Total > 0m;
     }
 
-    private async Task<string> GenerateNextCreditNoteNumberAsync(OpticaDbContext dbContext)
+    private async Task<long> GenerateNextCreditNoteSequenceAsync(OpticaDbContext dbContext, EmisorEntity issuer)
     {
-        var nextSequence = (await dbContext.tbl_nota_credito.MaxAsync(x => (int?)x.id_nota_credito) ?? 0) + 1;
-        return $"NC-{nextSequence:D9}";
+        var prefix = $"{BillingDraftService.GetInvoicePrefix(issuer)}-";
+        var noteNumbers = await dbContext.tbl_nota_credito
+            .AsNoTracking()
+            .Where(x => x.numero_nota.StartsWith(prefix))
+            .Select(x => x.numero_nota)
+            .ToListAsync();
+
+        var lastSequence = noteNumbers
+            .Select(ParseCreditNoteSequence)
+            .Where(x => x.HasValue)
+            .Select(x => x!.Value)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return lastSequence + 1;
+    }
+
+    private string BuildCreditNoteNumber(EmisorEntity issuer, long sequence)
+        => $"{BillingDraftService.GetInvoicePrefix(issuer)}-{sequence:D9}";
+
+    private static long? ParseCreditNoteSequence(string? noteNumber)
+    {
+        if (string.IsNullOrWhiteSpace(noteNumber))
+        {
+            return null;
+        }
+
+        var lastDashIndex = noteNumber.LastIndexOf('-');
+        var rawSequence = lastDashIndex >= 0 ? noteNumber[(lastDashIndex + 1)..] : noteNumber;
+        var digits = new string(rawSequence.Where(char.IsDigit).ToArray());
+        return long.TryParse(digits, out var sequence) && sequence > 0 ? sequence : null;
     }
 
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
