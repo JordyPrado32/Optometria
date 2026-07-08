@@ -2769,6 +2769,20 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
         END;
 
+        IF NOT EXISTS (SELECT 1 FROM dbo.tbl_menu_app WHERE ruta = '/doctor/historia-clinica')
+        BEGIN
+            INSERT INTO dbo.tbl_menu_app (nombre, ruta, icono, orden, activo)
+            VALUES ('Historia clinica', '/doctor/historia-clinica', 'journal-medical', 5, 1);
+        END
+        ELSE
+        BEGIN
+            UPDATE dbo.tbl_menu_app
+            SET nombre = 'Historia clinica',
+                icono = CASE WHEN icono IS NULL OR LTRIM(RTRIM(icono)) = '' THEN 'journal-medical' ELSE icono END,
+                activo = 1
+            WHERE ruta = '/doctor/historia-clinica';
+        END;
+
         EXEC(N'
             DECLARE @comprasMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre = ''Compras'' OR ruta = ''/compras'' ORDER BY CASE WHEN nombre = ''Compras'' THEN 0 ELSE 1 END);
             DECLARE @hasPurchaseChildren BIT = CASE WHEN EXISTS (
