@@ -72,33 +72,6 @@ else
 
         <section class="management-card">
             <div class="management-card-header">
-                <h2>Resumen</h2>
-                <span>@FilteredUsers.Count visibles</span>
-            </div>
-
-            <div class="user-summary-grid">
-                <div class="user-summary-card">
-                    <span class="eyebrow">Medicos</span>
-                    <strong>@medicalUsers.Count</strong>
-                    <p>Usuarios con rol medico o ficha ya creada.</p>
-                </div>
-
-                <div class="user-summary-card">
-                    <span class="eyebrow">Listos para agenda</span>
-                    <strong>@medicalUsers.Count(IsAvailableForAppointments)</strong>
-                    <p>Fichas activas visibles para que el paciente agende.</p>
-                </div>
-
-                <div class="user-summary-card">
-                    <span class="eyebrow">Pendientes</span>
-                    <strong>@medicalUsers.Count(u => u.tbl_medico is null)</strong>
-                    <p>Usuarios con rol medico aun sin completar ficha profesional.</p>
-                </div>
-            </div>
-        </section>
-
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
                 <h2>Filtros y busqueda</h2>
                 <span>@FilteredUsers.Count resultados</span>
             </div>
