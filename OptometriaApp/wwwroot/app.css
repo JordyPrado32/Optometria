@@ -2223,7 +2223,7 @@ select.form-select,
 textarea.form-control,
 .form-floating > .form-control {
     border-radius: 0.75rem !important;
-    border: 1.5px solid rgba(127, 105, 81, 0.15) !important;
+    border: 1.5px solid rgba(93, 161, 129, 0.48) !important;
     background-color: #ffffff !important;
     color: #3c342e !important;
     padding: 0.65rem 1rem !important;
@@ -2237,6 +2237,22 @@ textarea.form-control:focus,
 .form-control:focus {
     border-color: #5DA181 !important; /* Sage Green focus */
     box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15) !important;
+    outline: none !important;
+}
+
+.clinical-history-shell input.form-control,
+.clinical-history-shell select.form-select,
+.clinical-history-shell textarea.form-control,
+.clinical-history-shell .form-floating > .form-control {
+    border-color: rgba(254, 188, 100, 0.58) !important;
+}
+
+.clinical-history-shell input.form-control:focus,
+.clinical-history-shell select.form-select:focus,
+.clinical-history-shell textarea.form-control:focus,
+.clinical-history-shell .form-control:focus {
+    border-color: #FEBC64 !important;
+    box-shadow: 0 0 0 3px rgba(254, 188, 100, 0.22) !important;
     outline: none !important;
 }
 
@@ -2720,6 +2736,23 @@ textarea.form-control:focus,
     .receivable-compact-filters .filter-selects-col-2 > * {
         flex-basis: 100%;
     }
+}
+
+/* Historia clinica usa naranja para distinguir sus campos del resto del sistema. */
+body .clinical-history-shell .form-control,
+body .clinical-history-shell .form-select,
+body .clinical-card .form-control,
+body .clinical-card .form-select {
+    border-color: rgba(254, 188, 100, 0.7) !important;
+}
+
+body .clinical-history-shell .form-control:focus,
+body .clinical-history-shell .form-select:focus,
+body .clinical-card .form-control:focus,
+body .clinical-card .form-select:focus {
+    border-color: #FEBC64 !important;
+    box-shadow: 0 0 0 3px rgba(254, 188, 100, 0.26) !important;
+    outline: none !important;
 }
 
 .table-pager {

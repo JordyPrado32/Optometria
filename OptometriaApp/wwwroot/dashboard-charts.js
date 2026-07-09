@@ -1,4 +1,4 @@
-window.initializeDashboardCharts = (patientsData, appointmentsData, financesData, totalText) => {
+window.initializeDashboardCharts = (labels, activityData, financesData, totalText) => {
     // Destroy existing charts if they exist to prevent memory leaks or canvas reuse errors
     if (window.dashboardChart1) {
         window.dashboardChart1.destroy();
@@ -12,47 +12,18 @@ window.initializeDashboardCharts = (patientsData, appointmentsData, financesData
     if (el1) {
         const ctx1 = el1.getContext('2d');
         
-        // Create sage and taupe gradients
-        const gradSage = ctx1.createLinearGradient(0, 0, 0, 160);
-        gradSage.addColorStop(0, 'rgba(93, 161, 129, 0.4)');
-        gradSage.addColorStop(1, 'rgba(93, 161, 129, 0)');
-        
-        const gradTaupe = ctx1.createLinearGradient(0, 0, 0, 160);
-        gradTaupe.addColorStop(0, 'rgba(127, 105, 81, 0.4)');
-        gradTaupe.addColorStop(1, 'rgba(127, 105, 81, 0)');
-
         window.dashboardChart1 = new Chart(ctx1, {
-            type: 'line',
+            type: 'bar',
             data: {
-                labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-                datasets: [
-                    {
-                        label: 'Citas',
-                        data: appointmentsData,
-                        borderColor: '#5DA181',
-                        backgroundColor: gradSage,
-                        fill: true,
-                        tension: 0.4,
-                        borderWidth: 3,
-                        pointBackgroundColor: '#5DA181',
-                        pointBorderColor: '#fff',
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    },
-                    {
-                        label: 'Clientes',
-                        data: patientsData,
-                        borderColor: '#7F6951',
-                        backgroundColor: gradTaupe,
-                        fill: true,
-                        tension: 0.4,
-                        borderWidth: 2,
-                        pointBackgroundColor: '#7F6951',
-                        pointBorderColor: '#fff',
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }
-                ]
+                labels,
+                datasets: [{
+                    data: activityData,
+                    backgroundColor: ['#7F6951', '#FEBC64', '#5DA181'],
+                    borderColor: ['#7F6951', '#E9A84E', '#4B8D70'],
+                    borderWidth: 1,
+                    borderRadius: 7,
+                    maxBarThickness: 62
+                }]
             },
             options: {
                 responsive: true,
@@ -77,10 +48,13 @@ window.initializeDashboardCharts = (patientsData, appointmentsData, financesData
                 },
                 scales: {
                     y: {
+                        beginAtZero: true,
+                        suggestedMax: Math.max(...activityData, 1) + 1,
                         grid: {
                             color: 'rgba(127, 105, 81, 0.08)'
                         },
                         ticks: {
+                            precision: 0,
                             color: 'rgba(60, 52, 46, 0.6)',
                             font: { size: 10 }
                         },
