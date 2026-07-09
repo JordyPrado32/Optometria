@@ -6,12 +6,14 @@
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
 @using OptometriaApp.Data
 @using OptometriaApp.Models
 @using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
 <PageTitle>Historia clinica</PageTitle>
@@ -65,6 +67,35 @@ else
 
         <section class="management-card clinical-card">
             <div class="management-card-header">
+                <h2>Guia rapida</h2>
+                <span>@GetProgressLabel()</span>
+            </div>
+            <div class="clinical-guide-grid" style="margin-top: 1rem;">
+                <div class="clinical-guide-card">
+                    <span class="eyebrow">1. Inicio</span>
+                    <strong>Selecciona paciente</strong>
+                    <p>Empieza arriba. Al elegir el paciente, el sistema completa los datos base protegidos.</p>
+                </div>
+                <div class="clinical-guide-card">
+                    <span class="eyebrow">2. Consulta</span>
+                    <strong>Llena motivo y examen</strong>
+                    <p>Primero diligencia motivo, anamnesis y diagnostico. Luego completa los hallazgos tecnicos.</p>
+                </div>
+                <div class="clinical-guide-card">
+                    <span class="eyebrow">3. Cierre</span>
+                    <strong>Firma y guarda</strong>
+                    <p>Al final registra consentimiento, dibuja la firma si aplica y guarda la historia.</p>
+                </div>
+                <div class="clinical-guide-card clinical-guide-card--accent">
+                    <span class="eyebrow">Progreso</span>
+                    <strong>@GetCompletionPercent()% completado</strong>
+                    <p>@GetCompletionHint()</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card clinical-card">
+            <div class="management-card-header">
                 <h2>Paciente</h2>
                 <span>@availablePatients.Count registrados</span>
             </div>
@@ -91,6 +122,28 @@ else
         </section>
 
         @if (patient is not null && editor is not null && openingSnapshot is not null)
+        {
+        <section class="management-card clinical-card clinical-wizard-shell">
+            <div class="management-card-header">
+                <h2>Diligenciamiento guiado</h2>
+                <span>Paso @activeWizardStep de @WizardStepCount</span>
+            </div>
+            <div class="clinical-stepper" style="margin-top: 1rem;">
+                @for (var step = 1; step <= WizardStepCount; step++)
+                {
+                    <button type="button" class="@GetWizardStepButtonClass(step)" @onclick="@(() => GoToWizardStep(step))">
+                        <span class="clinical-stepper-index">@step</span>
+                        <span class="clinical-stepper-copy">
+                            <strong>@GetWizardStepTitle(step)</strong>
+                            <small>@GetWizardStepDescription(step)</small>
+                        </span>
+                    </button>
+                }
+            </div>
+            <p class="clinical-helper-text">@GetWizardCurrentHint()</p>
+        </section>
+
+        @if (activeWizardStep == 1)
         {
         <section class="management-card clinical-card">
             <div class="clinical-header-grid">
@@ -165,12 +218,16 @@ else
                 <div><label class="form-label">Telefono</label><input class="form-control" value="@openingSnapshot.Telefono" readonly /></div>
             </div>
         </section>
+        }
 
+        @if (activeWizardStep == 2)
+        {
         <section class="management-card clinical-card">
             <div class="management-card-header">
                 <h2>Motivo y anamnesis</h2>
                 <span>Bloque principal de consulta</span>
             </div>
+            <p class="clinical-helper-text">Si no sabes por donde empezar, llena primero motivo de consulta y luego resume lo que el paciente cuenta en anamnesis.</p>
             <div class="clinical-stack">
                 <div>
                     <label class="form-label">Motivo de consulta</label>
@@ -188,6 +245,7 @@ else
                 <h2>Antecedentes</h2>
                 <span>Personales y familiares</span>
             </div>
+            <p class="clinical-helper-text">Usa antecedentes oculares para vision, lentes, cirugias o traumas. Usa generales para enfermedades, medicamentos o condiciones sistemicas.</p>
             <div class="clinical-grid-2" style="margin-top: 1rem;">
                 <div>
                     <label class="form-label">Personales oculares</label>
@@ -213,6 +271,7 @@ else
                 <h2>Lensometria y agudeza visual</h2>
                 <span>Lectura base y vision</span>
             </div>
+            <p class="clinical-helper-text">Este bloque sirve para registrar con que llega el paciente y como esta viendo antes de la refraccion final.</p>
             <div class="clinical-grid-4" style="margin-top: 1rem;">
                 <div><label class="form-label">Usa lentes</label><input type="checkbox" class="form-check-input" style="margin-left:0.2rem;" @bind="editor.UsaLentes" /></div>
                 <div><label class="form-label">ADD</label><input class="form-control" @bind="editor.Lentes.Addicion" /></div>
@@ -242,7 +301,10 @@ else
                 <div><label class="form-label">Distancia VP</label><input class="form-control" @bind="editor.Visual.DistanciaVp" /></div>
             </div>
         </section>
+        }
 
+        @if (activeWizardStep == 3)
+        {
         <section class="management-card clinical-card">
             <div class="management-card-header">
                 <h2>Examen externo / biomicroscopia</h2>
@@ -354,12 +416,16 @@ else
                 </div>
             </div>
         </section>
+        }
 
+        @if (activeWizardStep == 4)
+        {
         <section class="management-card clinical-card">
             <div class="management-card-header">
                 <h2>Diagnostico y conducta</h2>
                 <span>Cierre clinico</span>
             </div>
+            <p class="clinical-helper-text">Aqui defines la conclusion de la consulta y cualquier examen o medicacion que deba pasar despues a facturacion.</p>
             <div class="clinical-grid-4" style="margin-top: 1rem;">
                 <div class="clinical-span-3"><label class="form-label">Diagnostico OD</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOd" /></div>
                 <div><label class="form-label">CIE10</label><input class="form-control" @bind="editor.Diagnostico.Cie10" /></div>
@@ -374,12 +440,16 @@ else
                 <div class="clinical-span-2"><label class="form-label">Nivel paralelo y jornada</label><input class="form-control" @bind="editor.NivelParaleloJornada" /></div>
             </div>
         </section>
+        }
 
+        @if (activeWizardStep == 5)
+        {
         <section class="management-card clinical-card">
             <div class="management-card-header">
                 <h2>Consentimiento informado</h2>
                 <span>Registro final</span>
             </div>
+            <p class="clinical-helper-text">Puedes escribir una referencia corta o dibujar la firma directamente en el recuadro. Si deseas repetirla, usa limpiar.</p>
             <div class="clinical-grid-4" style="margin-top: 1rem;">
                 <div class="clinical-span-2"><label class="form-label">Yo,</label><input class="form-control" @bind="editor.Consentimiento.Nombre" /></div>
                 <div><label class="form-label">CC</label><input class="form-control" @bind="editor.Consentimiento.Cedula" /></div>
@@ -392,6 +462,37 @@ else
                     <label class="form-label">Autoriza</label>
                     <input type="checkbox" class="form-check-input" style="margin-left:0.2rem;" @bind="editor.Consentimiento.Autorizado" />
                 </div>
+                <div class="clinical-span-4">
+                    <label class="form-label">Firma dibujada</label>
+                    <div class="clinical-signature-shell">
+                        <canvas id="@SignatureCanvasId" class="clinical-signature-pad"></canvas>
+                        <div class="workspace-actions clinical-signature-actions">
+                            <button type="button" class="btn btn-outline-primary" @onclick="ClearSignatureAsync">Limpiar firma</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        }
+
+        <section class="management-card clinical-card clinical-wizard-footer">
+            <div class="clinical-wizard-footer-copy">
+                <strong>@GetWizardStepTitle(activeWizardStep)</strong>
+                <p>@GetWizardCurrentHint()</p>
+            </div>
+            <div class="workspace-actions">
+                @if (activeWizardStep > 1)
+                {
+                    <button type="button" class="btn btn-outline-primary" @onclick="GoToPreviousWizardStep">Paso anterior</button>
+                }
+                @if (activeWizardStep < WizardStepCount)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="GoToNextWizardStep">Siguiente paso</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveAsync">@(historyExists ? "Guardar actualizacion" : "Crear historia clinica")</button>
+                }
             </div>
         </section>
         }
@@ -413,13 +514,28 @@ else
     private bool historyExists;
     private int currentUserId;
     private int currentRoleId;
+    private const int WizardStepCount = 5;
+    private int activeWizardStep = 1;
+    private bool shouldInitializeSignaturePad;
     private string? statusMessage;
     private string? errorMessage;
     private string historyOpenedLabel = "Sin apertura";
+    private string SignatureCanvasId => "clinical-signature-pad";
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!shouldInitializeSignaturePad || editor is null)
+        {
+            return;
+        }
+
+        shouldInitializeSignaturePad = false;
+        await JSRuntime.InvokeVoidAsync("optometriaClinicalSignature.init", SignatureCanvasId, editor.Consentimiento.FirmaDibujada);
     }
 
     private async Task LoadAsync()
@@ -487,6 +603,8 @@ else
 
         editor = history is null ? BuildNewEditor(patient) : BuildEditor(history);
         historyOpenedLabel = history?.fecha_apertura?.ToString("yyyy-MM-dd HH:mm") ?? "Sin apertura";
+        activeWizardStep = 1;
+        shouldInitializeSignaturePad = false;
         isLoading = false;
     }
 
@@ -512,6 +630,8 @@ else
             errorMessage = "Define el numero de historia clinica.";
             return;
         }
+
+        editor.Consentimiento.FirmaDibujada = await GetSignatureAsync();
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var entity = await dbContext.tbl_historia_clinica_optometrias
@@ -565,6 +685,17 @@ else
             ? "La historia clinica se guardo correctamente y se actualizaron los servicios pendientes de facturacion."
             : "La historia clinica se guardo correctamente.";
         await LoadAsync();
+    }
+
+    private async Task ClearSignatureAsync()
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.Consentimiento.FirmaDibujada = string.Empty;
+        await JSRuntime.InvokeVoidAsync("optometriaClinicalSignature.clear", SignatureCanvasId);
     }
 
     private async Task OnPatientChangedAsync(ChangeEventArgs args)
@@ -716,8 +847,10 @@ else
         history = null;
         openingSnapshot = null;
         editor = null;
+        activeWizardStep = 1;
         historyExists = false;
         historyOpenedLabel = "Sin apertura";
+        shouldInitializeSignaturePad = false;
     }
 
     private string GetSelectedPatientValue()
@@ -729,6 +862,151 @@ else
     private static bool HasBillingTriggers(HistoryEditorModel editor)
         => !string.IsNullOrWhiteSpace(editor.Diagnostico.ExamenesIndicados) ||
            !string.IsNullOrWhiteSpace(editor.Diagnostico.MedicamentosRecetados);
+
+    private async Task<string> GetSignatureAsync()
+    {
+        try
+        {
+            return await JSRuntime.InvokeAsync<string>("optometriaClinicalSignature.getDataUrl", SignatureCanvasId);
+        }
+        catch
+        {
+            return editor?.Consentimiento.FirmaDibujada ?? string.Empty;
+        }
+    }
+
+    private int GetCompletionPercent()
+    {
+        if (editor is null)
+        {
+            return 0;
+        }
+
+        var checks = new[]
+        {
+            !string.IsNullOrWhiteSpace(editor.MotivoConsulta),
+            !string.IsNullOrWhiteSpace(editor.Anamnesis),
+            HasAnyAntecedent(editor),
+            HasAnyVisualData(editor),
+            HasAnyDiagnosis(editor),
+            editor.Consentimiento.Autorizado,
+            !string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaReferencia) || !string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaDibujada)
+        };
+
+        var completed = checks.Count(x => x);
+        return (int)Math.Round((completed * 100m) / checks.Length, MidpointRounding.AwayFromZero);
+    }
+
+    private string GetProgressLabel()
+        => patient is null ? "Sin paciente" : $"Paciente activo: {openingSnapshot?.Nombres} {openingSnapshot?.Apellidos}".Trim();
+
+    private void GoToWizardStep(int step)
+    {
+        activeWizardStep = Math.Min(Math.Max(step, 1), WizardStepCount);
+
+        if (activeWizardStep == WizardStepCount && editor is not null)
+        {
+            shouldInitializeSignaturePad = true;
+        }
+    }
+
+    private void GoToNextWizardStep()
+        => GoToWizardStep(activeWizardStep + 1);
+
+    private void GoToPreviousWizardStep()
+        => GoToWizardStep(activeWizardStep - 1);
+
+    private string GetWizardStepTitle(int step)
+        => step switch
+        {
+            1 => "Apertura",
+            2 => "Consulta inicial",
+            3 => "Hallazgos",
+            4 => "Diagnostico",
+            5 => "Consentimiento",
+            _ => "Paso"
+        };
+
+    private string GetWizardStepDescription(int step)
+        => step switch
+        {
+            1 => "Verifica datos del paciente e historia.",
+            2 => "Motivo, anamnesis, antecedentes y agudeza visual.",
+            3 => "Biomicroscopia, oftalmoscopia y refraccion.",
+            4 => "Conclusion clinica, examenes y medicamentos.",
+            5 => "Firma, autorizacion y guardado final.",
+            _ => string.Empty
+        };
+
+    private string GetWizardStepButtonClass(int step)
+    {
+        var cssClass = "clinical-stepper-item";
+
+        if (step == activeWizardStep)
+        {
+            return $"{cssClass} clinical-stepper-item--active";
+        }
+
+        if (step < activeWizardStep)
+        {
+            return $"{cssClass} clinical-stepper-item--done";
+        }
+
+        return cssClass;
+    }
+
+    private string GetWizardCurrentHint()
+        => activeWizardStep switch
+        {
+            1 => "Revisa que la informacion base del paciente este correcta antes de seguir.",
+            2 => "Empieza por lo que el paciente cuenta y luego completa antecedentes y vision inicial.",
+            3 => "Registra hallazgos tecnicos y dibujos clinicos sin salir de esta pantalla.",
+            4 => "Aqui defines la conducta y cualquier servicio que deba pasar a facturacion.",
+            5 => "Finaliza con autorizacion y firma. Cuando termines, guarda la historia clinica.",
+            _ => "Completa la historia clinica paso a paso."
+        };
+
+    private string GetCompletionHint()
+    {
+        if (editor is null)
+        {
+            return "Selecciona un paciente para empezar el diligenciamiento guiado.";
+        }
+
+        if (GetCompletionPercent() >= 85)
+        {
+            return "Solo falta revisar consentimiento, firma y guardar.";
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta))
+        {
+            return "Empieza escribiendo el motivo de consulta.";
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.Anamnesis))
+        {
+            return "Continua con anamnesis para dejar clara la historia del paciente.";
+        }
+
+        return "Sigue los bloques en orden hasta completar diagnostico, conducta y consentimiento.";
+    }
+
+    private static bool HasAnyAntecedent(HistoryEditorModel editor)
+        => !string.IsNullOrWhiteSpace(editor.Antecedentes.PersonalesOculares) ||
+           !string.IsNullOrWhiteSpace(editor.Antecedentes.PersonalesGenerales) ||
+           !string.IsNullOrWhiteSpace(editor.Antecedentes.FamiliaresOculares) ||
+           !string.IsNullOrWhiteSpace(editor.Antecedentes.FamiliaresGenerales);
+
+    private static bool HasAnyVisualData(HistoryEditorModel editor)
+        => !string.IsNullOrWhiteSpace(editor.Visual.OdVlSc) ||
+           !string.IsNullOrWhiteSpace(editor.Visual.OiVlSc) ||
+           !string.IsNullOrWhiteSpace(editor.Refraction.RxEstaticaDinamica) ||
+           !string.IsNullOrWhiteSpace(editor.Motor.Resumen);
+
+    private static bool HasAnyDiagnosis(HistoryEditorModel editor)
+        => !string.IsNullOrWhiteSpace(editor.Diagnostico.DiagnosticoOd) ||
+           !string.IsNullOrWhiteSpace(editor.Diagnostico.DiagnosticoOi) ||
+           !string.IsNullOrWhiteSpace(editor.Diagnostico.TratamientoConducta);
 
     private static string Serialize<T>(T model) where T : class
         => JsonSerializer.Serialize(model, JsonOptions);
@@ -901,6 +1179,7 @@ else
         public string Nombre { get; set; } = string.Empty;
         public string Cedula { get; set; } = string.Empty;
         public string FirmaReferencia { get; set; } = string.Empty;
+        public string FirmaDibujada { get; set; } = string.Empty;
         public string Texto { get; set; } = string.Empty;
         public bool Autorizado { get; set; }
     }
@@ -909,6 +1188,8 @@ else
 <style>
     .clinical-card {
         margin-top: 1.25rem;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        box-shadow: 0 18px 40px rgba(90, 67, 44, 0.08);
     }
 
     .clinical-header-grid,
@@ -953,6 +1234,125 @@ else
         color: var(--color-taupe);
     }
 
+    .clinical-guide-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+
+    .clinical-wizard-shell,
+    .clinical-wizard-footer {
+        background:
+            linear-gradient(180deg, rgba(255, 254, 250, 0.98), rgba(255, 250, 244, 0.96));
+    }
+
+    .clinical-stepper {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.85rem;
+    }
+
+    .clinical-stepper-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        width: 100%;
+        text-align: left;
+        border: 1px solid rgba(127, 105, 81, 0.14);
+        border-radius: 1rem;
+        padding: 0.95rem 1rem;
+        background: rgba(255, 255, 255, 0.92);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .clinical-stepper-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(176, 124, 71, 0.34);
+        box-shadow: 0 12px 24px rgba(90, 67, 44, 0.08);
+    }
+
+    .clinical-stepper-item--active {
+        border-color: rgba(176, 124, 71, 0.55);
+        background: linear-gradient(135deg, rgba(255, 243, 224, 0.98), rgba(255, 255, 255, 0.96));
+        box-shadow: 0 14px 30px rgba(176, 124, 71, 0.14);
+    }
+
+    .clinical-stepper-item--done {
+        border-color: rgba(96, 141, 110, 0.3);
+        background: linear-gradient(180deg, rgba(245, 252, 247, 0.95), rgba(255, 255, 255, 0.94));
+    }
+
+    .clinical-stepper-index {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        font-weight: 700;
+        color: var(--color-ink);
+        background: rgba(176, 124, 71, 0.16);
+    }
+
+    .clinical-stepper-item--done .clinical-stepper-index {
+        background: rgba(96, 141, 110, 0.16);
+    }
+
+    .clinical-stepper-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .clinical-stepper-copy strong {
+        color: var(--color-ink);
+        font-size: 0.98rem;
+    }
+
+    .clinical-stepper-copy small {
+        color: var(--color-taupe);
+        line-height: 1.35;
+    }
+
+    .clinical-guide-card {
+        border-radius: 1rem;
+        padding: 1rem;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        background:
+            linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 255, 255, 0.94));
+        min-height: 148px;
+    }
+
+    .clinical-guide-card strong {
+        display: block;
+        margin-top: 0.2rem;
+        color: var(--color-ink);
+        font-size: 1rem;
+    }
+
+    .clinical-guide-card p {
+        margin: 0.45rem 0 0;
+        color: var(--color-taupe);
+        line-height: 1.45;
+    }
+
+    .clinical-guide-card--accent {
+        border-color: rgba(176, 124, 71, 0.28);
+        background:
+            linear-gradient(135deg, rgba(255, 244, 228, 0.96), rgba(255, 252, 246, 0.98));
+    }
+
+    .clinical-helper-text {
+        margin: 0.9rem 0 0;
+        padding: 0.85rem 1rem;
+        border-left: 4px solid rgba(176, 124, 71, 0.75);
+        border-radius: 0.85rem;
+        background: rgba(255, 248, 239, 0.85);
+        color: var(--color-taupe);
+        line-height: 1.45;
+    }
+
     .clinical-span-2 {
         grid-column: span 2;
     }
@@ -979,6 +1379,72 @@ else
         color: var(--color-ink);
     }
 
+    .clinical-signature-shell {
+        border: 1px dashed rgba(127, 105, 81, 0.35);
+        border-radius: 1rem;
+        padding: 0.9rem;
+        background:
+            linear-gradient(180deg, rgba(255, 253, 250, 0.98), rgba(251, 246, 239, 0.96));
+    }
+
+    .clinical-signature-pad {
+        width: 100%;
+        min-height: 210px;
+        display: block;
+        border-radius: 0.85rem;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 248, 242, 0.98));
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        touch-action: none;
+    }
+
+    .clinical-signature-actions {
+        margin-top: 0.75rem;
+        justify-content: flex-end;
+    }
+
+    .clinical-wizard-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .clinical-wizard-footer-copy strong {
+        display: block;
+        color: var(--color-ink);
+        font-size: 1rem;
+    }
+
+    .clinical-wizard-footer-copy p {
+        margin: 0.35rem 0 0;
+        color: var(--color-taupe);
+    }
+
+    .clinical-card .form-label {
+        font-weight: 600;
+        color: var(--color-ink);
+        margin-bottom: 0.45rem;
+    }
+
+    .clinical-card .form-control,
+    .clinical-card .form-select {
+        border-radius: 0.85rem;
+        border-color: rgba(127, 105, 81, 0.18);
+        min-height: 46px;
+        background: rgba(255, 255, 255, 0.96);
+    }
+
+    .clinical-card textarea.form-control {
+        min-height: 112px;
+    }
+
+    .clinical-card .form-control:focus,
+    .clinical-card .form-select:focus {
+        border-color: rgba(176, 124, 71, 0.55);
+        box-shadow: 0 0 0 0.2rem rgba(176, 124, 71, 0.12);
+    }
+
     @@media (max-width: 1100px) {
         .clinical-grid-4 {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -994,6 +1460,11 @@ else
         .clinical-grid-4,
         .clinical-odoi-grid {
             grid-template-columns: 1fr;
+        }
+
+        .clinical-wizard-footer {
+            flex-direction: column;
+            align-items: stretch;
         }
 
         .clinical-span-2,

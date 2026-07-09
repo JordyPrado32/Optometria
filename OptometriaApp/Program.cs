@@ -3415,8 +3415,7 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         USING
         (
             VALUES
-                ('Producto', 'Articulos fisicos'),
-                ('Servicio', 'Servicios de la clinica')
+                ('Producto', 'Articulos fisicos y referencias inventariables')
         ) AS source(nombre_tipo, descripcion)
         ON target.nombre_tipo = source.nombre_tipo
         WHEN MATCHED THEN
@@ -3427,9 +3426,11 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
 
         UPDATE dbo.tbl_producto
         SET tipo_item = 'Producto'
-        WHERE tipo_item IS NULL OR LTRIM(RTRIM(tipo_item)) = '';
+        WHERE tipo_item IS NULL
+           OR LTRIM(RTRIM(tipo_item)) = ''
+           OR LTRIM(RTRIM(tipo_item)) = 'Servicio';
 
-        IF NOT EXISTS
+        IF EXISTS
         (
             SELECT 1
             FROM sys.check_constraints
@@ -3437,9 +3438,11 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
                 AND parent_object_id = OBJECT_ID('dbo.tbl_producto')
         )
         BEGIN
-            ALTER TABLE dbo.tbl_producto
-            ADD CONSTRAINT CK_tipo_item CHECK (tipo_item IN ('Producto', 'Servicio'));
+            ALTER TABLE dbo.tbl_producto DROP CONSTRAINT CK_tipo_item;
         END;
+
+        ALTER TABLE dbo.tbl_producto
+        ADD CONSTRAINT CK_tipo_item CHECK (tipo_item = 'Producto');
 
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_producto_tipo_item' AND object_id = OBJECT_ID('dbo.tbl_producto'))
         BEGIN

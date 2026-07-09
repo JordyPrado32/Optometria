@@ -575,9 +575,9 @@ else
     private readonly List<tbl_categoria_producto> categories = [];
     private readonly List<tbl_proveedor> suppliers = [];
     private readonly string[] productStateOptions = ["Disponible", "Descontinuado", "Agotado", "Especial Orden"];
-    private readonly string[] productTypeOptions = ["Producto", "Servicio"];
+    private readonly string[] productTypeOptions = ["Producto"];
     private readonly string[] movementFrequencyOptions = ["Alta", "Media", "Baja"];
-    private readonly string[] natureOptions = ["Bien", "Servicio", "Mixto"];
+    private readonly string[] natureOptions = ["Bien"];
     private readonly decimal[] ivaPercentageOptions = [5m, 8m, 13m, 15m];
     private List<tbl_log_auditoria> auditEntries = [];
     private ProductEditorModel? editor;
@@ -637,6 +637,9 @@ else
             .AsNoTracking()
             .Include(p => p.id_categoriaNavigation)
             .Include(p => p.id_proveedorNavigation)
+            .Where(p =>
+                (p.tipo_item ?? "Producto") == "Producto" &&
+                (p.naturaleza_item == null || p.naturaleza_item == "" || p.naturaleza_item == "Bien"))
             .ToListAsync();
 
         var loadedCategories = await dbContext.tbl_categoria_productos
@@ -973,7 +976,7 @@ else
         entity.id_categoria = editor.IdCategoria;
         entity.codigo_producto = editor.CodigoProducto.Trim();
         entity.nombre_producto = editor.NombreProducto.Trim();
-        entity.tipo_item = editor.TipoItem;
+        entity.tipo_item = "Producto";
         entity.descripcion = NormalizeOptional(editor.Descripcion);
         entity.precio_costo = editor.PrecioCosto;
         entity.precio_venta = editor.PrecioVenta;
@@ -999,7 +1002,7 @@ else
         entity.dias_vencimiento = editor.DiasVencimiento;
         entity.cuenta_contable = NormalizeOptional(editor.CuentaContable);
         entity.centro_costo = NormalizeOptional(editor.CentroCosto);
-        entity.naturaleza_item = NormalizeOptional(editor.NaturalezaItem);
+        entity.naturaleza_item = "Bien";
         entity.porcentaje_margen = editor.PorcentajeMargen;
         entity.descuento_mayorista = editor.DescuentoMayorista;
         entity.descuento_cliente_fijo = editor.DescuentoClienteFijo;
@@ -1153,7 +1156,7 @@ else
         editor.CodigoProducto = editor.CodigoProducto.Trim();
         editor.NombreProducto = editor.NombreProducto.Trim();
         editor.CodigoBarras = editor.CodigoBarras.Trim();
-        editor.TipoItem = string.IsNullOrWhiteSpace(editor.TipoItem) ? "Producto" : editor.TipoItem.Trim();
+        editor.TipoItem = "Producto";
 
         if (string.IsNullOrWhiteSpace(editor.CodigoProducto) || string.IsNullOrWhiteSpace(editor.NombreProducto))
         {
@@ -1169,7 +1172,7 @@ else
 
         if (!editor.IdCategoria.HasValue || editor.IdCategoria.Value <= 0)
         {
-            errorMessage = "Selecciona una categoria para el producto o servicio.";
+            errorMessage = "Selecciona una categoria para el producto.";
             return false;
         }
 

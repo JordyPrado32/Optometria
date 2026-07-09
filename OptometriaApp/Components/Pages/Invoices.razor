@@ -8,6 +8,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject KardexService KardexService
 
 <PageTitle>Facturas</PageTitle>
 
@@ -922,12 +923,12 @@ else
 
                                 <div class="invoice-editor-grid invoice-editor-grid--line">
                                     <div class="invoice-editor-wide">
-                                        <label class="form-label">Producto o servicio</label>
+                                        <label class="form-label">Producto</label>
                                         <select class="form-select" value="@lineEditor.ProductId" @onchange="OnManualProductChanged" disabled="@(!canEditModule)">
                                             <option value="0">Selecciona</option>
-                                            @foreach (var product in products)
+                                            @foreach (var product in AvailableInvoiceProducts)
                                             {
-                                                <option value="@product.id_producto">@($"{product.codigo_producto} - {product.nombre_producto}")</option>
+                                                <option value="@product.id_producto">@GetInvoiceProductOptionLabel(product)</option>
                                             }
                                         </select>
                                     </div>
@@ -1001,10 +1002,7 @@ else
 
                                         <div>
                                             <label class="form-label">Tipo item</label>
-                                            <select class="form-select" @bind="productUpsertEditor.TipoItem">
-                                                <option value="Producto">Producto</option>
-                                                <option value="Servicio">Servicio</option>
-                                            </select>
+                                            <input class="form-control" value="Producto" readonly />
                                         </div>
 
                                         <div>
@@ -1141,7 +1139,7 @@ else
     private readonly List<tbl_categoria_producto> categories = [];
     private readonly List<string> paymentMethods = [];
     private readonly List<tbl_detalle_venta> draftLines = [];
-    private readonly string[] productTypeOptions = ["Producto", "Servicio"];
+    private readonly string[] productTypeOptions = ["Producto"];
     private ModulePermissions permissions = new();
     private tbl_paciente? selectedPatient;
     private ClientEntity? billingClient;
@@ -1176,6 +1174,10 @@ else
     private bool showProductUpsertForm;
 
     private tbl_producto? SelectedManualProduct => products.FirstOrDefault(x => x.id_producto == lineEditor.ProductId);
+    private IEnumerable<tbl_producto> AvailableInvoiceProducts => products
+        .Where(CanInvoiceProduct)
+        .OrderBy(x => x.nombre_producto)
+        .ThenBy(x => x.codigo_producto);
     private string InvoiceDateLabel => (draftSale?.fecha_venta ?? DateTime.Now).ToString("yyyy-MM-dd HH:mm");
     private decimal LineEditorTotal => Math.Max(0m, (lineEditor.UnitPrice * lineEditor.Quantity) - lineEditor.Discount);
     private string LineActionLabel => lineEditor.LineId > 0 ? "Actualizar linea" : "Agregar linea";
@@ -1562,6 +1564,25 @@ else
             return;
         }
 
+        if (!CanInvoiceProduct(product))
+        {
+            errorMessage = "Ese producto no esta disponible para facturacion.";
+            return;
+        }
+
+        if (IsStockManagedProduct(product))
+        {
+            var reservedInDraft = sale.tbl_detalle_venta
+                .Where(x => x.id_producto == product.id_producto && x.id_detalle_venta != requestedLineId)
+                .Sum(x => x.cantidad);
+            var availableStock = product.stock_actual ?? 0;
+            if (availableStock <= 0 || requestedQuantity + reservedInDraft > availableStock)
+            {
+                errorMessage = $"No hay stock suficiente para '{product.nombre_producto}'. Disponible: {Math.Max(0, availableStock - reservedInDraft)}.";
+                return;
+            }
+        }
+
         product.tiene_iva = lineEditor.TieneIva;
         product.porcentaje_iva = lineEditor.TieneIva ? lineEditor.PorcentajeIva : 0m;
 
@@ -1716,6 +1737,36 @@ else
             return;
         }
 
+        var linesByProduct = sale.tbl_detalle_venta
+            .GroupBy(x => x.id_producto)
+            .Select(x => new { ProductId = x.Key, Quantity = x.Sum(line => line.cantidad) })
+            .ToList();
+        var involvedProductIds = linesByProduct.Select(x => x.ProductId).Distinct().ToList();
+        var invoiceProducts = await dbContext.tbl_productos
+            .Where(x => involvedProductIds.Contains(x.id_producto))
+            .ToDictionaryAsync(x => x.id_producto);
+
+        foreach (var groupedLine in linesByProduct)
+        {
+            if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct))
+            {
+                errorMessage = "Una de las lineas referencia un producto inexistente.";
+                return;
+            }
+
+            if (!CanInvoiceProduct(invoiceProduct))
+            {
+                errorMessage = $"El producto '{invoiceProduct.nombre_producto}' ya no esta disponible para facturacion.";
+                return;
+            }
+
+            if (IsStockManagedProduct(invoiceProduct) && groupedLine.Quantity > (invoiceProduct.stock_actual ?? 0))
+            {
+                errorMessage = $"No hay stock suficiente para '{invoiceProduct.nombre_producto}'. Disponible: {invoiceProduct.stock_actual ?? 0}.";
+                return;
+            }
+        }
+
         var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == billingClient.cliente_id);
         if (client is null)
         {
@@ -1756,6 +1807,45 @@ else
         };
         dbContext.tbl_comprobantes.Add(comprobante);
         await dbContext.SaveChangesAsync();
+
+        var inventoryProductIds = new List<int>();
+        foreach (var groupedLine in linesByProduct)
+        {
+            if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct) || !IsStockManagedProduct(invoiceProduct))
+            {
+                continue;
+            }
+
+            var previousStock = invoiceProduct.stock_actual ?? 0;
+            var newStock = previousStock - groupedLine.Quantity;
+            if (newStock < 0)
+            {
+                errorMessage = $"No hay stock suficiente para '{invoiceProduct.nombre_producto}'.";
+                return;
+            }
+
+            invoiceProduct.stock_actual = newStock;
+            invoiceProduct.estado_producto = newStock == 0
+                ? "Agotado"
+                : (string.Equals(invoiceProduct.estado_producto, "Agotado", StringComparison.OrdinalIgnoreCase) ? "Disponible" : invoiceProduct.estado_producto);
+            inventoryProductIds.Add(invoiceProduct.id_producto);
+
+            dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+            {
+                id_producto = invoiceProduct.id_producto,
+                id_usuario = currentUserId,
+                fecha_movimiento = DateTime.Now,
+                tipo_movimiento = "Salida",
+                cantidad = groupedLine.Quantity,
+                stock_anterior = previousStock,
+                stock_resultante = newStock,
+                comprobante_numero = comprobante.numero_comprobante,
+                id_referencia_documento = comprobante.id_comprobante,
+                tipo_documento_referencia = "Factura",
+                observaciones = $"Salida automatica por factura {comprobante.numero_comprobante}",
+                metodo_valuacion = "Promedio"
+            });
+        }
 
         var currentBalance = sale.saldo_pendiente ?? 0m;
         var accountReceivable = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_venta == sale.id_venta);
@@ -1807,6 +1897,10 @@ else
         client.id_usuario_actualizacion = currentUserId;
 
         await dbContext.SaveChangesAsync();
+        if (inventoryProductIds.Count > 0)
+        {
+            await KardexService.RebuildForProductsAsync(inventoryProductIds, currentUserId, $"Salida por factura {invoiceNumber}");
+        }
 
         var successMessage = currentBalance > 0
             ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. Quedo pendiente para autorizacion SRI."
@@ -2084,7 +2178,7 @@ else
 
         productUpsertEditor.CodigoProducto = productUpsertEditor.CodigoProducto.Trim();
         productUpsertEditor.NombreProducto = productUpsertEditor.NombreProducto.Trim();
-        productUpsertEditor.TipoItem = string.IsNullOrWhiteSpace(productUpsertEditor.TipoItem) ? "Producto" : productUpsertEditor.TipoItem.Trim();
+        productUpsertEditor.TipoItem = "Producto";
 
         if (string.IsNullOrWhiteSpace(productUpsertEditor.CodigoProducto) || string.IsNullOrWhiteSpace(productUpsertEditor.NombreProducto))
         {
@@ -2100,7 +2194,7 @@ else
 
         if (productUpsertEditor.IdCategoria <= 0)
         {
-            errorMessage = "Selecciona una categoria para el producto o servicio.";
+            errorMessage = "Selecciona una categoria para el producto.";
             return false;
         }
 
@@ -2123,12 +2217,12 @@ else
     {
         entity.codigo_producto = productUpsertEditor.CodigoProducto.Trim();
         entity.nombre_producto = productUpsertEditor.NombreProducto.Trim();
-        entity.tipo_item = productUpsertEditor.TipoItem;
+        entity.tipo_item = "Producto";
         entity.id_categoria = productUpsertEditor.IdCategoria;
         entity.precio_venta = productUpsertEditor.PrecioVenta;
         entity.tiene_iva = productUpsertEditor.TieneIva;
         entity.porcentaje_iva = productUpsertEditor.TieneIva ? productUpsertEditor.PorcentajeIva : 0;
-        entity.naturaleza_item = string.Equals(productUpsertEditor.TipoItem, "Servicio", StringComparison.OrdinalIgnoreCase) ? "Servicio" : "Bien";
+        entity.naturaleza_item = "Bien";
         entity.stock_actual ??= 0;
         entity.stock_minimo ??= 0;
         entity.activo = true;
@@ -2149,6 +2243,37 @@ else
         lineEditor.PorcentajeIva = lineEditor.TieneIva
             ? (ivaPercentageOptions.Contains(product.porcentaje_iva ?? 0m) ? product.porcentaje_iva ?? 0m : ivaPercentageOptions[0])
             : 0m;
+    }
+
+    private bool CanInvoiceProduct(tbl_producto product)
+    {
+        if (product.activo != true)
+        {
+            return false;
+        }
+
+        if (!IsStockManagedProduct(product))
+        {
+            return true;
+        }
+
+        return !string.Equals(product.estado_producto, "Agotado", StringComparison.OrdinalIgnoreCase)
+            && (product.stock_actual ?? 0) > 0;
+    }
+
+    private static bool IsStockManagedProduct(tbl_producto product)
+    {
+        return !string.Equals(product.naturaleza_item, "Servicio", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetInvoiceProductOptionLabel(tbl_producto product)
+    {
+        if (!IsStockManagedProduct(product))
+        {
+            return $"{product.codigo_producto} - {product.nombre_producto}";
+        }
+
+        return $"{product.codigo_producto} - {product.nombre_producto} (stock {(product.stock_actual ?? 0)})";
     }
 
     private string GetOriginLabel(tbl_detalle_venta line)
