@@ -105,7 +105,7 @@ else
                         @onclick='() => SelectSheet("resumen")'>
                     Resumen
                 </button>
-                @foreach (var summary in FilteredProductSummaries)
+                @foreach (var summary in PagedProductSummaries)
                 {
                     <button type="button"
                             class="btn @(activeSheet == GetProductSheetKey(summary.ProductId) ? "btn-primary" : "btn-outline-primary")"
@@ -138,7 +138,7 @@ else
                             }
                             else
                             {
-                                @foreach (var summary in FilteredProductSummaries)
+                                @foreach (var summary in PagedProductSummaries)
                                 {
                                     <tr style="cursor:pointer;" @onclick="() => SelectSheet(GetProductSheetKey(summary.ProductId))">
                                         <td><strong>@summary.ProductName</strong></td>
@@ -153,6 +153,7 @@ else
                         </tbody>
                     </table>
                 </div>
+                <TablePager TotalItems="@FilteredProductSummaries.Count" CurrentPage="@summaryPage" CurrentPageChanged="SetSummaryPage" />
             }
             else
             {
@@ -195,7 +196,7 @@ else
                             }
                             else
                             {
-                                @foreach (var item in ActiveSheetEntries)
+                                @foreach (var item in PagedSheetEntries)
                                 {
                                     <tr>
                                         <td>@item.fecha_movimiento?.ToString("yyyy-MM-dd HH:mm")</td>
@@ -217,6 +218,7 @@ else
                         </tbody>
                     </table>
                 </div>
+                <TablePager TotalItems="@ActiveSheetEntries.Count" CurrentPage="@sheetPage" CurrentPageChanged="SetSheetPage" />
             }
             
             <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--color-taupe);">
@@ -259,6 +261,14 @@ else
 
     private List<tbl_kardex> FilteredEntries => entries.Where(MatchesFilters).OrderByDescending(x => x.fecha_movimiento).ThenByDescending(x => x.id_kardex).ToList();
     private List<ProductKardexSummary> FilteredProductSummaries => BuildProductSummaries();
+    private const int TablePageSize = 5;
+    private int summaryPage = 1, sheetPage = 1;
+    private int EffectiveSummaryPage => Math.Min(summaryPage, Math.Max(1, (int)Math.Ceiling(FilteredProductSummaries.Count / (double)TablePageSize)));
+    private int EffectiveSheetPage => Math.Min(sheetPage, Math.Max(1, (int)Math.Ceiling(ActiveSheetEntries.Count / (double)TablePageSize)));
+    private IEnumerable<ProductKardexSummary> PagedProductSummaries => FilteredProductSummaries.Skip((EffectiveSummaryPage - 1) * TablePageSize).Take(TablePageSize);
+    private IEnumerable<tbl_kardex> PagedSheetEntries => ActiveSheetEntries.Skip((EffectiveSheetPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetSummaryPage(int page) => summaryPage = page;
+    private void SetSheetPage(int page) => sheetPage = page;
     private bool ActiveSheetIsSummary => NormalizeActiveSheet() == "resumen";
     private ProductKardexSummary? ActiveProductSummary => ActiveSheetIsSummary ? null : FilteredProductSummaries.FirstOrDefault(x => GetProductSheetKey(x.ProductId) == NormalizeActiveSheet());
     private List<tbl_kardex> ActiveSheetEntries => ActiveSheetIsSummary

@@ -151,7 +151,7 @@ else
                         }
                         else
                         {
-                            @foreach (var user in FilteredUsers)
+                            @foreach (var user in PagedUsers)
                             {
                                 <tr>
                                     <td>
@@ -227,6 +227,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredUsers.Count" CurrentPage="@doctorPage" CurrentPageChanged="SetDoctorPage" />
         </section>
     </section>
 }
@@ -474,6 +475,11 @@ else
         .OrderBy(u => u.apellidos)
         .ThenBy(u => u.nombres)
         .ToList();
+    private const int TablePageSize = 5;
+    private int doctorPage = 1;
+    private int EffectiveDoctorPage => Math.Min(doctorPage, Math.Max(1, (int)Math.Ceiling(FilteredUsers.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_usuario> PagedUsers => FilteredUsers.Skip((EffectiveDoctorPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetDoctorPage(int page) => doctorPage = page;
 
     protected override async Task OnInitializedAsync()
     {

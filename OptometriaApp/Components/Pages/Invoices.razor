@@ -886,7 +886,7 @@ else
                                         }
                                         else
                                         {
-                                            @foreach (var line in draftLines)
+                                            @foreach (var line in PagedDraftLines)
                                             {
                                                 <tr>
                                                     <td>@line.id_productoNavigation.codigo_producto</td>
@@ -916,6 +916,7 @@ else
                                     </tbody>
                                 </table>
                             </div>
+                            <TablePager TotalItems="@draftLines.Count" CurrentPage="@draftLinePage" CurrentPageChanged="SetDraftLinePage" />
 
                             <div class="invoice-line-editor">
                                 <div class="invoice-block-title">@(lineEditor.LineId > 0 ? "Editar linea" : "Nueva linea")</div>
@@ -1135,6 +1136,10 @@ else
 }
 
 @code {
+    private const int TablePageSize = 5;
+    private int draftLinePage = 1;
+    private IEnumerable<tbl_detalle_venta> PagedDraftLines => draftLines.Skip((draftLinePage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetDraftLinePage(int page) => draftLinePage = page;
     private readonly List<tbl_paciente> patients = [];
     private readonly List<ClientEntity> clients = [];
     private readonly List<tbl_producto> products = [];

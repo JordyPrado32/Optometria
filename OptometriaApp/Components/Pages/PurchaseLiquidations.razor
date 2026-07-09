@@ -33,7 +33,7 @@ else
             </div>
         </div>
 
-        <section class="management-card">
+        <section class="management-card compact-filter-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredItems.Count resultados</span></div>
             <div class="filters-row-2">
                 <div>
@@ -82,7 +82,7 @@ else
                         }
                         else
                         {
-                            @foreach (var item in FilteredItems)
+                            @foreach (var item in PagedItems)
                             {
                                 <tr>
                                     <td>@item.numero_liquidacion</td>
@@ -105,6 +105,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredItems.Count" CurrentPage="@liquidationPage" CurrentPageChanged="SetLiquidationPage" />
         </section>
     </section>
 }
@@ -170,6 +171,11 @@ else
     private string alertMessage = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
 
     private List<tbl_liquidacion_compra> FilteredItems => items.Where(MatchesFilters).ToList();
+    private const int TablePageSize = 5;
+    private int liquidationPage = 1;
+    private int EffectiveLiquidationPage => Math.Min(liquidationPage, Math.Max(1, (int)Math.Ceiling(FilteredItems.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_liquidacion_compra> PagedItems => FilteredItems.Skip((EffectiveLiquidationPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetLiquidationPage(int page) => liquidationPage = page;
     private IEnumerable<tbl_orden_compra> FilteredAvailableOrders => availableOrders.Where(MatchesOrderSearch).OrderByDescending(x => x.fecha_orden);
 
     protected override async Task OnInitializedAsync()

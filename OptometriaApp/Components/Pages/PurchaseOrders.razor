@@ -37,7 +37,7 @@ else
             </div>
         </div>
 
-        <section class="management-card">
+        <section class="management-card compact-filter-card">
             <div class="management-card-header">
                 <h2>Filtros</h2>
                 <span>@FilteredOrders.Count resultados</span>
@@ -102,7 +102,7 @@ else
                         }
                         else
                         {
-                            @foreach (var order in FilteredOrders)
+                            @foreach (var order in PagedOrders)
                             {
                                 <tr>
                                     <td><strong>@order.numero_orden</strong></td>
@@ -127,6 +127,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredOrders.Count" CurrentPage="@orderPage" CurrentPageChanged="SetOrderPage" />
         </section>
     </section>
 }
@@ -303,6 +304,11 @@ else
     private string searchTerm = string.Empty, stateFilter = string.Empty, supplierFilter = string.Empty, alertMessage = string.Empty;
 
     private List<tbl_orden_compra> FilteredOrders => orders.Where(MatchesFilters).ToList();
+    private const int TablePageSize = 5;
+    private int orderPage = 1;
+    private int EffectiveOrderPage => Math.Min(orderPage, Math.Max(1, (int)Math.Ceiling(FilteredOrders.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_orden_compra> PagedOrders => FilteredOrders.Skip((EffectiveOrderPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetOrderPage(int page) => orderPage = page;
 
     protected override async Task OnInitializedAsync()
     {

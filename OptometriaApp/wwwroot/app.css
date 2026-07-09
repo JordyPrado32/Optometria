@@ -2641,3 +2641,129 @@ textarea.form-control:focus,
         grid-template-columns: 1fr !important;
     }
 }
+.compact-filter-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.75rem;
+    align-items: end;
+}
+
+.compact-filter-card > .management-card-header {
+    grid-column: 1 / -1;
+}
+
+.compact-filter-card > .management-actions {
+    margin: 0 0 0.05rem !important;
+    white-space: nowrap;
+}
+
+.compact-filter-card .filters-row-2,
+.compact-filter-card .patient-form-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+    align-items: end;
+    min-width: 0;
+}
+
+.compact-filter-card .filters-row-2 > *,
+.compact-filter-card .patient-form-grid > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.compact-filter-card .filter-selects-col-2 {
+    display: contents;
+}
+
+.receivable-compact-filters .form-label {
+    font-size: 0.76rem;
+    margin-bottom: 0.2rem;
+}
+
+.receivable-compact-filters .form-control,
+.receivable-compact-filters .form-select {
+    min-height: 2.25rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    font-size: 0.82rem;
+}
+
+.receivable-compact-filters .filters-row-2 {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+    align-items: end;
+}
+
+.receivable-compact-filters .filters-row-2 > *,
+.receivable-compact-filters .filter-selects-col-2 > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.receivable-compact-filters .filter-selects-col-2 {
+    display: contents;
+}
+
+.receivable-compact-filters .receivable-clear-action {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+@media (max-width: 760px) {
+    .receivable-compact-filters .filters-row-2 {
+        flex-wrap: wrap;
+    }
+
+    .receivable-compact-filters .filters-row-2 > *,
+    .receivable-compact-filters .filter-selects-col-2 > * {
+        flex-basis: 100%;
+    }
+}
+
+.table-pager {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.85rem;
+    color: var(--color-taupe);
+    font-size: 0.82rem;
+}
+
+.table-pager > div {
+    display: flex;
+    gap: 0.3rem;
+}
+
+.table-pager .btn {
+    min-width: 2.15rem;
+    min-height: 2.15rem;
+    padding: 0.3rem 0.55rem !important;
+}
+
+@media (max-width: 760px) {
+    .compact-filter-card {
+        display: block;
+    }
+
+    .compact-filter-card .filters-row-2,
+    .compact-filter-card .patient-form-grid {
+        flex-wrap: wrap;
+    }
+
+    .compact-filter-card .filters-row-2 > *,
+    .compact-filter-card .patient-form-grid > * {
+        flex-basis: 100%;
+    }
+
+    .compact-filter-card > .management-actions {
+        margin-top: 0.65rem !important;
+    }
+
+    .table-pager {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

@@ -1,0 +1,37 @@
+@if (TotalPages > 1)
+{
+    <nav class="table-pager" aria-label="Paginacion de la tabla">
+        <span>Pagina @SafeCurrentPage de @TotalPages</span>
+        <div>
+            <button type="button" class="btn btn-outline-primary btn-sm" title="Pagina anterior"
+                    disabled="@(SafeCurrentPage == 1)" @onclick="() => ChangePageAsync(SafeCurrentPage - 1)">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            @for (var page = 1; page <= TotalPages; page++)
+            {
+                var targetPage = page;
+                <button type="button" class="btn btn-sm @(targetPage == SafeCurrentPage ? "btn-coffee" : "btn-outline-primary")"
+                        @onclick="() => ChangePageAsync(targetPage)">
+                    @targetPage
+                </button>
+            }
+            <button type="button" class="btn btn-outline-primary btn-sm" title="Pagina siguiente"
+                    disabled="@(SafeCurrentPage == TotalPages)" @onclick="() => ChangePageAsync(SafeCurrentPage + 1)">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    </nav>
+}
+
+@code {
+    [Parameter] public int CurrentPage { get; set; } = 1;
+    [Parameter] public int TotalItems { get; set; }
+    [Parameter] public int PageSize { get; set; } = 5;
+    [Parameter] public EventCallback<int> CurrentPageChanged { get; set; }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalItems / (double)Math.Max(1, PageSize)));
+    private int SafeCurrentPage => Math.Clamp(CurrentPage, 1, TotalPages);
+
+    private Task ChangePageAsync(int page) =>
+        CurrentPageChanged.InvokeAsync(Math.Clamp(page, 1, TotalPages));
+}

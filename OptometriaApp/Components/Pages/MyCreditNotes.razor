@@ -344,7 +344,7 @@ else
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var item in recentCreditNotes)
+                            @foreach (var item in PagedRecentCreditNotes)
                             {
                                 <tr>
                                     <td><strong>@item.NoteNumber</strong></td>
@@ -362,6 +362,7 @@ else
                         </tbody>
                     </table>
                 </div>
+                <TablePager TotalItems="@recentCreditNotes.Count" CurrentPage="@recentPage" CurrentPageChanged="SetRecentPage" />
             }
         </section>
 
@@ -422,7 +423,7 @@ else
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var item in issuedInvoices)
+                                    @foreach (var item in PagedIssuedInvoices)
                                     {
                                         <tr>
                                             <td>
@@ -447,6 +448,7 @@ else
                                 </tbody>
                             </table>
                         </div>
+                        <TablePager TotalItems="@issuedInvoices.Count" CurrentPage="@issuedPage" CurrentPageChanged="SetIssuedPage" />
                     }
                 </section>
 
@@ -552,7 +554,7 @@ else
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var line in selectedInvoiceLines)
+                                        @foreach (var line in PagedInvoiceLines)
                                         {
                                             <tr>
                                                 <td>@line.ProductCode</td>
@@ -582,6 +584,7 @@ else
                                     </tbody>
                                 </table>
                             </div>
+                            <TablePager TotalItems="@selectedInvoiceLines.Count" CurrentPage="@linePage" CurrentPageChanged="SetLinePage" />
                         }
 
                         <section class="credit-card credit-totals-card" style="margin-top: 1rem;">
@@ -628,7 +631,7 @@ else
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach (var note in selectedCreditNotes)
+                                        @foreach (var note in PagedSelectedCreditNotes)
                                         {
                                             <tr>
                                                 <td>@note.NoteNumber</td>
@@ -645,6 +648,7 @@ else
                                     </tbody>
                                 </table>
                             </div>
+                            <TablePager TotalItems="@selectedCreditNotes.Count" CurrentPage="@historyPage" CurrentPageChanged="SetHistoryPage" />
                         }
                     }
                 </section>
@@ -664,6 +668,16 @@ else
     private readonly List<CreditNoteRow> selectedCreditNotes = [];
     private readonly List<InvoiceCreditLineRow> selectedInvoiceLines = [];
     private readonly List<RecentCreditNoteRow> recentCreditNotes = [];
+    private const int TablePageSize = 5;
+    private int recentPage = 1, issuedPage = 1, linePage = 1, historyPage = 1;
+    private IEnumerable<RecentCreditNoteRow> PagedRecentCreditNotes => recentCreditNotes.Skip((recentPage - 1) * TablePageSize).Take(TablePageSize);
+    private IEnumerable<IssuedInvoiceRow> PagedIssuedInvoices => issuedInvoices.Skip((issuedPage - 1) * TablePageSize).Take(TablePageSize);
+    private IEnumerable<InvoiceCreditLineRow> PagedInvoiceLines => selectedInvoiceLines.Skip((linePage - 1) * TablePageSize).Take(TablePageSize);
+    private IEnumerable<CreditNoteRow> PagedSelectedCreditNotes => selectedCreditNotes.Skip((historyPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetRecentPage(int page) => recentPage = page;
+    private void SetIssuedPage(int page) => issuedPage = page;
+    private void SetLinePage(int page) => linePage = page;
+    private void SetHistoryPage(int page) => historyPage = page;
     private ModulePermissions permissions = new();
     private IssuedInvoiceRow? selectedIssuedInvoice;
     private CreditNoteDetailView? selectedCreditNoteDetail;

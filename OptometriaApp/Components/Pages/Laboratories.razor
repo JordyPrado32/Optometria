@@ -51,7 +51,7 @@ else
             </div>
         </div>
 
-        <section class="management-card">
+        <section class="management-card compact-filter-card">
             <div class="management-card-header">
                 <h2>Filtros y búsqueda</h2>
                 <span>@FilteredLaboratories.Count resultados</span>
@@ -111,7 +111,7 @@ else
                         }
                         else
                         {
-                            @foreach (var laboratory in FilteredLaboratories)
+                            @foreach (var laboratory in PagedLaboratories)
                             {
                                 <tr>
                                     <td>
@@ -164,6 +164,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredLaboratories.Count" CurrentPage="@laboratoryPage" CurrentPageChanged="SetLaboratoryPage" />
         </section>
     </section>
 }
@@ -417,6 +418,11 @@ else
         .Where(MatchesFilters)
         .OrderBy(l => l.nombre)
         .ToList();
+    private const int TablePageSize = 5;
+    private int laboratoryPage = 1;
+    private int EffectiveLaboratoryPage => Math.Min(laboratoryPage, Math.Max(1, (int)Math.Ceiling(FilteredLaboratories.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_laboratorio> PagedLaboratories => FilteredLaboratories.Skip((EffectiveLaboratoryPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetLaboratoryPage(int page) => laboratoryPage = page;
 
     private string EditorTitle => isCreatingNewLaboratory ? "Nuevo laboratorio" : "Detalle del laboratorio";
     private string EditorSubtitle => isCreatingNewLaboratory ? "Alta administrativa" : (selectedLaboratoryId > 0 ? $"Laboratorio #{selectedLaboratoryId}" : "Vista");

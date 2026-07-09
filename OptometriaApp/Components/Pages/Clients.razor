@@ -50,7 +50,7 @@ else
             </div>
         </div>
 
-        <section class="management-card">
+        <section class="management-card compact-filter-card">
             <div class="management-card-header">
                 <h2>Filtros y busqueda</h2>
                 <span>@FilteredClients.Count resultados</span>
@@ -122,7 +122,7 @@ else
                         }
                         else
                         {
-                            @foreach (var item in FilteredClients)
+                            @foreach (var item in PagedClients)
                             {
                                 <tr>
                                     <td>
@@ -168,6 +168,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredClients.Count" CurrentPage="@clientPage" CurrentPageChanged="SetClientPage" />
         </section>
     </section>
 }
@@ -454,6 +455,11 @@ else
         .OrderBy(c => c.razon_social)
         .ThenBy(c => c.numero_identificacion)
         .ToList();
+    private const int TablePageSize = 5;
+    private int clientPage = 1;
+    private int EffectiveClientPage => Math.Min(clientPage, Math.Max(1, (int)Math.Ceiling(FilteredClients.Count / (double)TablePageSize)));
+    private IEnumerable<ClientEntity> PagedClients => FilteredClients.Skip((EffectiveClientPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetClientPage(int page) => clientPage = page;
 
     private string EditorTitle => isCreatingNewClient ? "Nuevo cliente" : "Detalle del cliente";
     private bool CanModifyEditor => isCreatingNewClient ? permissions.CanCreate : permissions.CanEdit;
