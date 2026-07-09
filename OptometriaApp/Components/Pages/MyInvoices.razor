@@ -131,7 +131,7 @@ else
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var item in FilteredIssuedInvoices)
+                                    @foreach (var item in PagedIssuedInvoices)
                                     {
                                         <tr>
                                             <td><strong>@item.InvoiceNumber</strong></td>
@@ -155,6 +155,7 @@ else
                                 </tbody>
                             </table>
                         </div>
+                        <TablePager TotalItems="@FilteredIssuedInvoices.Count" CurrentPage="@invoicePage" CurrentPageChanged="SetInvoicePage" />
                     }
                 </section>
 
@@ -257,6 +258,11 @@ else
     private List<IssuedInvoiceRow> FilteredIssuedInvoices => issuedInvoices
         .Where(MatchesInvoiceSearch)
         .ToList();
+    private const int TablePageSize = 5;
+    private int invoicePage = 1;
+    private int EffectiveInvoicePage => Math.Min(invoicePage, Math.Max(1, (int)Math.Ceiling(FilteredIssuedInvoices.Count / (double)TablePageSize)));
+    private IEnumerable<IssuedInvoiceRow> PagedIssuedInvoices => FilteredIssuedInvoices.Skip((EffectiveInvoicePage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetInvoicePage(int page) => invoicePage = page;
 
     protected override async Task OnInitializedAsync()
     {

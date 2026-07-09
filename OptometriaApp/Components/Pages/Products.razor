@@ -155,7 +155,7 @@ else
                         }
                         else
                         {
-                            @foreach (var product in FilteredProducts)
+                            @foreach (var product in PagedProducts)
                             {
                                 <tr>
                                     <td>
@@ -197,6 +197,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredProducts.Count" CurrentPage="@productPage" CurrentPageChanged="SetProductPage" />
         </section>
     </section>
 }
@@ -607,6 +608,11 @@ else
         .OrderBy(p => p.nombre_producto)
         .ThenBy(p => p.codigo_producto)
         .ToList();
+    private const int TablePageSize = 5;
+    private int productPage = 1;
+    private int EffectiveProductPage => Math.Min(productPage, Math.Max(1, (int)Math.Ceiling(FilteredProducts.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_producto> PagedProducts => FilteredProducts.Skip((EffectiveProductPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetProductPage(int page) => productPage = page;
 
     private string EditorTitle => isCreatingNewProduct ? "Nuevo producto" : "Detalle del producto";
     private bool CanModifyEditor => isCreatingNewProduct ? permissions.CanCreate : permissions.CanEdit;

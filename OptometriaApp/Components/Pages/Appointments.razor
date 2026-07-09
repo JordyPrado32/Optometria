@@ -230,7 +230,7 @@ else
                         }
                         else
                         {
-                            @foreach (var appointment in FilteredAppointments)
+                            @foreach (var appointment in PagedAppointments)
                             {
                                 var stateName = appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado";
                                 var stateColor = stateName switch
@@ -281,6 +281,14 @@ else
                                                     <i class="bi bi-check2-circle" style="margin-right: 4px;"></i> Confirmar
                                                 </button>
                                             }
+                                            else if (stateName == "Confirmada" && (permissions.CanDelete || isAdmin || isDoctor || isClient))
+                                            {
+                                                <button type="button" class="btn btn-outline-primary"
+                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(220,53,69,0.35) !important; color: #dc3545 !important;"
+                                                        @onclick="() => OpenCancellationChoiceAsync(appointment.id_cita)">
+                                                    <i class="bi bi-x-circle" style="margin-right: 4px;"></i> Cancelar
+                                                </button>
+                                            }
                                             <button type="button" class="btn btn-outline-primary"
                                                     style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
                                                     @onclick="() => OpenAuditModal(appointment.id_cita)">
@@ -294,6 +302,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredAppointments.Count" CurrentPage="@appointmentPage" CurrentPageChanged="SetAppointmentPage" />
         </section>
     </section>
 }
@@ -487,6 +496,43 @@ else
     </div>
 }
 
+<!-- Cancellation choice modal -->
+@if (showCancellationChoiceModal && appointmentEditor is not null)
+{
+    <div class="custom-modal-overlay" @onclick="CloseCancellationChoiceModal">
+        <div class="custom-modal-card alert-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>Cancelar cita confirmada</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseCancellationChoiceModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <p>¿Deseas reprogramar la cita o cancelarla definitivamente?</p>
+                <div>
+                    <label class="form-label" for="cancellationChoiceReason">Razón de cancelación definitiva</label>
+                    <textarea id="cancellationChoiceReason" class="form-control" rows="3"
+                              @bind="appointmentEditor.RazonCancelacion"
+                              placeholder="Escribe la razón si deseas cancelarla definitivamente"></textarea>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert" style="margin-top: 1rem;">@errorMessage</div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="ChooseReprogramAppointment">
+                    <i class="bi bi-calendar-event" style="margin-right: 5px;"></i> Reprogramar
+                </button>
+                <button type="button" class="btn btn-outline-primary"
+                        style="color: #dc3545 !important; border-color: rgba(220,53,69,0.35) !important;"
+                        @onclick="CancelDefinitelyAsync">
+                    <i class="bi bi-x-circle" style="margin-right: 5px;"></i> Cancelar definitivamente
+                </button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseCancellationChoiceModal">Volver</button>
+            </footer>
+        </div>
+    </div>
+}
+
 <!-- Audit Modal -->
 @if (showAuditModal)
 {
@@ -551,6 +597,7 @@ else
     private bool isCreatingAppointment;
     private bool showFormModal;
     private bool showAuditModal;
+    private bool showCancellationChoiceModal;
     private int selectedAppointmentId;
     private int currentUserId;
     private int currentRoleId;
@@ -621,6 +668,11 @@ else
         .OrderBy(a => a.fecha_cita)
         .ThenBy(a => a.hora_inicio)
         .ToList();
+    private const int TablePageSize = 5;
+    private int appointmentPage = 1;
+    private int EffectiveAppointmentPage => Math.Min(appointmentPage, Math.Max(1, (int)Math.Ceiling(FilteredAppointments.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_citas> PagedAppointments => FilteredAppointments.Skip((EffectiveAppointmentPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetAppointmentPage(int page) => appointmentPage = page;
 
     protected override async Task OnInitializedAsync()
     {
@@ -869,6 +921,36 @@ else
     {
         await LoadAppointmentAuditAsync(appointmentId);
         showAuditModal = true;
+    }
+
+    private async Task OpenCancellationChoiceAsync(int appointmentId)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        await SelectAppointmentAsync(appointmentId, false);
+        showCancellationChoiceModal = true;
+    }
+
+    private void CloseCancellationChoiceModal()
+    {
+        showCancellationChoiceModal = false;
+        errorMessage = null;
+    }
+
+    private void ChooseReprogramAppointment()
+    {
+        showCancellationChoiceModal = false;
+        errorMessage = null;
+        showFormModal = true;
+    }
+
+    private async Task CancelDefinitelyAsync()
+    {
+        await ChangeAppointmentStateAsync("Cancelada");
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            showCancellationChoiceModal = false;
+        }
     }
 
     private void CloseFormModal()
@@ -1760,12 +1842,6 @@ else
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(appointmentEditor.Motivo))
-        {
-            errorMessage = "Escribe el motivo de la cita.";
-            return false;
-        }
-
         return true;
     }
 
@@ -2277,7 +2353,7 @@ else
 
     private static bool IsPendingState(string? stateName)
     {
-        return stateName is "Programada" or "Confirmada" or "Reprogramada";
+        return stateName is "Programada" or "Reprogramada";
     }
 
     private static string? NormalizeOptional(string? value)

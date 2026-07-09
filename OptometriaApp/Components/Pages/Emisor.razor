@@ -77,7 +77,7 @@ else
                         }
                         else
                         {
-                            @foreach (var item in emisores)
+                            @foreach (var item in PagedIssuers)
                             {
                                 <tr>
                                     <td><strong style="color: var(--color-sage);">@item.ruc</strong></td>
@@ -119,6 +119,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@emisores.Count" CurrentPage="@issuerPage" CurrentPageChanged="SetIssuerPage" />
         </section>
     </section>
 }
@@ -312,6 +313,10 @@ else
 
 @code {
     private readonly List<EmisorEntity> emisores = [];
+    private const int TablePageSize = 5;
+    private int issuerPage = 1;
+    private IEnumerable<EmisorEntity> PagedIssuers => emisores.Skip((issuerPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetIssuerPage(int page) => issuerPage = page;
     private readonly List<(string Code, string Label)> identificationOptions =
     [
         ("04", "04 - RUC"),

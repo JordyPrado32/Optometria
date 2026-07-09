@@ -51,7 +51,7 @@ else
             </div>
         </div>
 
-        <section class="management-card">
+        <section class="management-card compact-filter-card">
             <div class="management-card-header">
                 <h2>Filtros y busqueda</h2>
                 <span>@FilteredSuppliers.Count resultados</span>
@@ -124,7 +124,7 @@ else
                         }
                         else
                         {
-                            @foreach (var supplier in FilteredSuppliers)
+                            @foreach (var supplier in PagedSuppliers)
                             {
                                 <tr>
                                     <td>
@@ -170,6 +170,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredSuppliers.Count" CurrentPage="@supplierPage" CurrentPageChanged="SetSupplierPage" />
         </section>
     </section>
 }
@@ -446,6 +447,11 @@ else
         .OrderBy(s => s.nombre)
         .ThenBy(s => s.razon_social)
         .ToList();
+    private const int TablePageSize = 5;
+    private int supplierPage = 1;
+    private int EffectiveSupplierPage => Math.Min(supplierPage, Math.Max(1, (int)Math.Ceiling(FilteredSuppliers.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_proveedor> PagedSuppliers => FilteredSuppliers.Skip((EffectiveSupplierPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetSupplierPage(int page) => supplierPage = page;
 
     private string EditorTitle => isCreatingNewSupplier ? "Nuevo proveedor" : "Detalle del proveedor";
     private bool CanModifyEditor => isCreatingNewSupplier ? permissions.CanCreate : permissions.CanEdit;

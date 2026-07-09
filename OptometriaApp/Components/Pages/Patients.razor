@@ -134,7 +134,7 @@ else
                         }
                         else
                         {
-                            @foreach (var patient in FilteredPatients)
+                            @foreach (var patient in PagedPatients)
                             {
                                 <tr>
                                     <td>
@@ -187,6 +187,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredPatients.Count" CurrentPage="@patientPage" CurrentPageChanged="SetPatientPage" />
         </section>
     </section>
 }
@@ -513,6 +514,11 @@ else
         .OrderBy(p => p.apellidos)
         .ThenBy(p => p.nombres)
         .ToList();
+    private const int TablePageSize = 5;
+    private int patientPage = 1;
+    private int EffectivePatientPage => Math.Min(patientPage, Math.Max(1, (int)Math.Ceiling(FilteredPatients.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_paciente> PagedPatients => FilteredPatients.Skip((EffectivePatientPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetPatientPage(int page) => patientPage = page;
 
     private string EditorTitle => isCreatingNewPatient ? "Nuevo paciente" : "Detalle del paciente";
     private bool CanModifyEditor => isCreatingNewPatient ? permissions.CanCreate : permissions.CanEdit;

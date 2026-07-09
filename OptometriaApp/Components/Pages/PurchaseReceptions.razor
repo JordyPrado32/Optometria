@@ -34,7 +34,7 @@ else
             </div>
         </div>
 
-        <section class="management-card">
+        <section class="management-card compact-filter-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredReceptions.Count resultados</span></div>
             <div class="filters-row-2">
                 <div>
@@ -83,7 +83,7 @@ else
                         }
                         else
                         {
-                            @foreach (var item in FilteredReceptions)
+                            @foreach (var item in PagedReceptions)
                             {
                                 <tr>
                                     <td>@item.numero_recepcion</td>
@@ -106,6 +106,7 @@ else
                     </tbody>
                 </table>
             </div>
+            <TablePager TotalItems="@FilteredReceptions.Count" CurrentPage="@receptionPage" CurrentPageChanged="SetReceptionPage" />
         </section>
     </section>
 }
@@ -158,6 +159,11 @@ else
     private string alertMessage = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
 
     private List<tbl_recepcion_compra> FilteredReceptions => recepciones.Where(MatchesFilters).ToList();
+    private const int TablePageSize = 5;
+    private int receptionPage = 1;
+    private int EffectiveReceptionPage => Math.Min(receptionPage, Math.Max(1, (int)Math.Ceiling(FilteredReceptions.Count / (double)TablePageSize)));
+    private IEnumerable<tbl_recepcion_compra> PagedReceptions => FilteredReceptions.Skip((EffectiveReceptionPage - 1) * TablePageSize).Take(TablePageSize);
+    private void SetReceptionPage(int page) => receptionPage = page;
     private IEnumerable<tbl_orden_compra> FilteredAvailableOrders => availableOrders.Where(MatchesOrderSearch).OrderByDescending(x => x.fecha_orden);
 
     protected override async Task OnInitializedAsync()
