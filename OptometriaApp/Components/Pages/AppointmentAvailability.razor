@@ -712,14 +712,18 @@ else
         entity.activo = true;
 
         await dbContext.SaveChangesAsync();
-        WriteAudit(dbContext, blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}");
+        var automaticReschedules = await RescheduleAppointmentsForBlockAsync(dbContext, availabilityDoctorId, entity.fecha_inicio, entity.fecha_fin, entity.id_bloqueo);
+        WriteAudit(dbContext, blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}; Reprogramadas={automaticReschedules}");
         await dbContext.SaveChangesAsync();
 
         PrepareNewBlock();
         showBlockModal = false;
         await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
         await LoadAvailabilityAsync(refreshContext);
-        ShowActionResult("Guardado", "El bloqueo fue guardado correctamente.", false);
+        var actionMessage = automaticReschedules > 0
+            ? $"El bloqueo fue guardado correctamente y se reprogramaron {automaticReschedules} cita(s)."
+            : "El bloqueo fue guardado correctamente.";
+        ShowActionResult("Guardado", actionMessage, false);
     }
 
     private async Task DeleteBlockAsync(int blockId)
@@ -1021,6 +1025,146 @@ else
         }
 
         return $"Descanso {row.hora_descanso_inicio:HH\\:mm}-{row.hora_descanso_fin:HH\\:mm}";
+    }
+
+    private async Task<int> RescheduleAppointmentsForBlockAsync(
+        OpticaDbContext dbContext,
+        int doctorId,
+        DateOnly blockStart,
+        DateOnly blockEnd,
+        int blockId)
+    {
+        var overlappingAppointments = await dbContext.tbl_citas
+            .Include(x => x.id_estadoNavigation)
+            .Where(x =>
+                x.id_medico == doctorId &&
+                x.fecha_cita >= blockStart &&
+                x.fecha_cita <= blockEnd &&
+                x.id_estadoNavigation != null &&
+                (x.id_estadoNavigation.nombre_estado == "Programada" ||
+                 x.id_estadoNavigation.nombre_estado == "Confirmada" ||
+                 x.id_estadoNavigation.nombre_estado == "Reprogramada"))
+            .OrderBy(x => x.fecha_cita)
+            .ThenBy(x => x.hora_inicio)
+            .ToListAsync();
+
+        if (overlappingAppointments.Count == 0)
+        {
+            return 0;
+        }
+
+        var reprogrammedStateId = await dbContext.tbl_estado_cita
+            .Where(x => x.nombre_estado == "Reprogramada")
+            .Select(x => x.id_estado)
+            .FirstAsync();
+
+        var reprogrammedCount = 0;
+        foreach (var appointment in overlappingAppointments)
+        {
+            var durationMinutes = Math.Max(10, (int)(appointment.hora_fin - appointment.hora_inicio).TotalMinutes);
+            var nextSlot = await FindNextAvailableSlotAsync(dbContext, doctorId, blockEnd.AddDays(1), durationMinutes, appointment.id_cita);
+            if (nextSlot is null)
+            {
+                continue;
+            }
+
+            appointment.fecha_cita = nextSlot.Value.Date;
+            appointment.hora_inicio = nextSlot.Value.Start;
+            appointment.hora_fin = nextSlot.Value.End;
+            appointment.id_disponibilidad = nextSlot.Value.AvailabilityId;
+            appointment.id_estado = reprogrammedStateId;
+            appointment.fecha_actualizacion = DateTime.Now;
+
+            WriteAudit(
+                dbContext,
+                "Reprogramar cita por bloqueo horario",
+                $"CitaId={appointment.id_cita}; MedicoId={doctorId}; BloqueoId={blockId}; NuevaFecha={appointment.fecha_cita:yyyy-MM-dd}; NuevaHora={appointment.hora_inicio:HH\\:mm}");
+
+            reprogrammedCount++;
+        }
+
+        return reprogrammedCount;
+    }
+
+    private async Task<(DateOnly Date, TimeOnly Start, TimeOnly End, int? AvailabilityId)?> FindNextAvailableSlotAsync(
+        OpticaDbContext dbContext,
+        int doctorId,
+        DateOnly searchStartDate,
+        int durationMinutes,
+        int currentAppointmentId)
+    {
+        for (var offset = 0; offset < 90; offset++)
+        {
+            var candidateDate = searchStartDate.AddDays(offset);
+            var dayOfWeek = ToDatabaseDayOfWeek(candidateDate.DayOfWeek);
+            var schedules = await dbContext.tbl_disponibilidad_medico
+                .AsNoTracking()
+                .Where(x => x.id_medico == doctorId && x.dia_semana == dayOfWeek && x.disponible == true)
+                .OrderBy(x => x.hora_inicio)
+                .ToListAsync();
+
+            if (schedules.Count == 0)
+            {
+                continue;
+            }
+
+            var isBlocked = await dbContext.tbl_bloqueo_horarios
+                .AsNoTracking()
+                .AnyAsync(x => x.id_medico == doctorId && x.activo == true && x.fecha_inicio <= candidateDate && x.fecha_fin >= candidateDate);
+
+            if (isBlocked)
+            {
+                continue;
+            }
+
+            var busySlots = await dbContext.tbl_citas
+                .AsNoTracking()
+                .Include(x => x.id_estadoNavigation)
+                .Where(x => x.id_medico == doctorId && x.fecha_cita == candidateDate && x.id_cita != currentAppointmentId)
+                .Where(x => x.id_estadoNavigation != null &&
+                    (x.id_estadoNavigation.nombre_estado == "Programada" ||
+                     x.id_estadoNavigation.nombre_estado == "Confirmada" ||
+                     x.id_estadoNavigation.nombre_estado == "Reprogramada"))
+                .Select(x => new { x.hora_inicio, x.hora_fin })
+                .ToListAsync();
+
+            foreach (var schedule in schedules)
+            {
+                var cursor = schedule.hora_inicio;
+                while (cursor.AddMinutes(durationMinutes) <= schedule.hora_fin)
+                {
+                    var slotEnd = cursor.AddMinutes(durationMinutes);
+                    var overlapsBreak = schedule.hora_descanso_inicio.HasValue &&
+                        schedule.hora_descanso_fin.HasValue &&
+                        cursor < schedule.hora_descanso_fin.Value &&
+                        slotEnd > schedule.hora_descanso_inicio.Value;
+                    var overlapsAppointment = busySlots.Any(x => cursor < x.hora_fin && slotEnd > x.hora_inicio);
+
+                    if (!overlapsBreak && !overlapsAppointment)
+                    {
+                        return (candidateDate, cursor, slotEnd, schedule.id_disponibilidad);
+                    }
+
+                    cursor = cursor.AddMinutes(durationMinutes);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static int ToDatabaseDayOfWeek(DayOfWeek dayOfWeek)
+    {
+        return dayOfWeek switch
+        {
+            DayOfWeek.Monday => 1,
+            DayOfWeek.Tuesday => 2,
+            DayOfWeek.Wednesday => 3,
+            DayOfWeek.Thursday => 4,
+            DayOfWeek.Friday => 5,
+            DayOfWeek.Saturday => 6,
+            _ => 7
+        };
     }
 
     private static string? NormalizeOptional(string? value)

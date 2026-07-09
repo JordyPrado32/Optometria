@@ -214,11 +214,30 @@ else
         canView = permissions.CanView;
         if (!canView) { isLoading = false; return; }
         products.Clear();
-        products.AddRange(await db.tbl_productos.AsNoTracking().OrderBy(x => x.nombre_producto).ToListAsync());
+        products.AddRange(await db.tbl_productos
+            .AsNoTracking()
+            .Where(x =>
+                x.activo == true &&
+                (x.tipo_item ?? "Producto") == "Producto" &&
+                (x.naturaleza_item == null || x.naturaleza_item == "" || x.naturaleza_item == "Bien"))
+            .OrderBy(x => x.nombre_producto)
+            .ToListAsync());
+
+        var productIds = products.Select(x => x.id_producto).ToList();
         movements.Clear();
-        movements.AddRange(await db.tbl_movimiento_inventarios.AsNoTracking().Include(x => x.id_productoNavigation).Where(x => x.id_usuario == currentUserId).OrderByDescending(x => x.fecha_movimiento).ToListAsync());
+        movements.AddRange(await db.tbl_movimiento_inventarios
+            .AsNoTracking()
+            .Include(x => x.id_productoNavigation)
+            .Where(x => x.id_usuario == currentUserId && productIds.Contains(x.id_producto))
+            .OrderByDescending(x => x.fecha_movimiento)
+            .ToListAsync());
         lots.Clear();
-        lots.AddRange(await db.tbl_lote_producto.AsNoTracking().Include(x => x.id_productoNavigation).Where(x => x.id_usuario_ingreso == currentUserId).OrderByDescending(x => x.fecha_ingreso).ToListAsync());
+        lots.AddRange(await db.tbl_lote_producto
+            .AsNoTracking()
+            .Include(x => x.id_productoNavigation)
+            .Where(x => x.id_usuario_ingreso == currentUserId && productIds.Contains(x.id_producto))
+            .OrderByDescending(x => x.fecha_ingreso)
+            .ToListAsync());
         isLoading = false;
     }
 
@@ -229,25 +248,57 @@ else
     {
         if (editor is null || editor.IdProducto <= 0 || editor.Cantidad <= 0) { ShowAlert("Completa los datos del movimiento.", true); return; }
         await using var db = await DbContextFactory.CreateDbContextAsync();
-        var product = await db.tbl_productos.FirstAsync(x => x.id_producto == editor.IdProducto);
+        var product = await db.tbl_productos.FirstOrDefaultAsync(x =>
+            x.id_producto == editor.IdProducto &&
+            x.activo == true &&
+            (x.tipo_item ?? "Producto") == "Producto" &&
+            (x.naturaleza_item == null || x.naturaleza_item == "" || x.naturaleza_item == "Bien"));
+
+        if (product is null)
+        {
+            ShowAlert("Selecciona un producto inventariable valido.", true);
+            return;
+        }
+
         tbl_movimiento_inventario entity;
+        tbl_producto? originalProduct = null;
+        var affectedProductIds = new HashSet<int> { product.id_producto };
         var previousStock = product.stock_actual ?? 0;
+        var resultingStock = previousStock;
 
         if (isCreating)
         {
             entity = new tbl_movimiento_inventario { id_usuario = currentUserId, fecha_movimiento = DateTime.Now };
             db.tbl_movimiento_inventarios.Add(entity);
+            resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
         }
         else
         {
             entity = await db.tbl_movimiento_inventarios.FirstAsync(x => x.id_movimiento_inventario == editor.Id && x.id_usuario == currentUserId);
-            previousStock = entity.stock_anterior ?? (product.stock_actual ?? 0);
-        }
+            originalProduct = await db.tbl_productos.FirstAsync(x => x.id_producto == entity.id_producto);
+            affectedProductIds.Add(originalProduct.id_producto);
 
-        var resultingStock = previousStock;
-        if (editor.TipoMovimiento == "Entrada") resultingStock += editor.Cantidad;
-        else if (editor.TipoMovimiento == "Salida") resultingStock -= editor.Cantidad;
-        else resultingStock = editor.Cantidad;
+            var originalDelta = ResolveMovementDelta(entity.tipo_movimiento, entity.cantidad, entity.stock_anterior, entity.stock_resultante);
+
+            if (originalProduct.id_producto == product.id_producto)
+            {
+                previousStock = (product.stock_actual ?? 0) - originalDelta;
+                resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
+            }
+            else
+            {
+                var restoredOriginalStock = (originalProduct.stock_actual ?? 0) - originalDelta;
+                if (restoredOriginalStock < 0)
+                {
+                    ShowAlert("El movimiento original dejo el inventario en un estado invalido. Revisa el kardex del producto.", true);
+                    return;
+                }
+
+                originalProduct.stock_actual = restoredOriginalStock;
+                previousStock = product.stock_actual ?? 0;
+                resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
+            }
+        }
 
         if (resultingStock < 0) { ShowAlert("El stock no puede quedar negativo.", true); return; }
 
@@ -285,7 +336,7 @@ else
 
         WriteAudit(db, isCreating ? "Crear movimiento inventario" : "Editar movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
         await db.SaveChangesAsync();
-        await KardexService.RebuildForProductAsync(editor.IdProducto, currentUserId, isCreating ? "Movimiento manual" : "Edicion movimiento manual");
+        await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, isCreating ? "Movimiento manual" : "Edicion movimiento manual");
         CloseForm();
         ShowAlert("Movimiento guardado.", false);
         await LoadAsync();
@@ -387,6 +438,40 @@ else
     private void ShowAlert(string message, bool isError) { alertMessage = message; alertIsError = isError; showAlert = true; }
     private void CloseForm() { showForm = false; editor = null; }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static int ResolveResultingStock(string? movementType, int previousStock, int quantity)
+    {
+        if (string.Equals(movementType, "Entrada", StringComparison.OrdinalIgnoreCase))
+        {
+            return previousStock + quantity;
+        }
+
+        if (string.Equals(movementType, "Salida", StringComparison.OrdinalIgnoreCase))
+        {
+            return previousStock - quantity;
+        }
+
+        return quantity;
+    }
+
+    private static int ResolveMovementDelta(string? movementType, int quantity, int? stockBefore, int? stockAfter)
+    {
+        if (string.Equals(movementType, "Entrada", StringComparison.OrdinalIgnoreCase))
+        {
+            return quantity;
+        }
+
+        if (string.Equals(movementType, "Salida", StringComparison.OrdinalIgnoreCase))
+        {
+            return quantity * -1;
+        }
+
+        if (stockBefore.HasValue && stockAfter.HasValue)
+        {
+            return stockAfter.Value - stockBefore.Value;
+        }
+
+        return quantity;
+    }
     private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }
     private sealed class MovementEditor { public int Id { get; set; } public int IdProducto { get; set; } public string TipoMovimiento { get; set; } = "Entrada"; public int Cantidad { get; set; } = 1; public string ComprobanteNumero { get; set; } = string.Empty; public string MetodoValuacion { get; set; } = "Promedio"; public string Observaciones { get; set; } = string.Empty; }
 }

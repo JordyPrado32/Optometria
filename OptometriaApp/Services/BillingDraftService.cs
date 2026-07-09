@@ -420,7 +420,7 @@ public sealed class BillingDraftService
 
             product.nombre_producto = name;
             product.descripcion = description;
-            product.tipo_item = "Servicio";
+            product.tipo_item = "Producto";
             product.naturaleza_item = "Servicio";
             return product;
         }
@@ -430,7 +430,7 @@ public sealed class BillingDraftService
             codigo_producto = code,
             nombre_producto = name,
             descripcion = description,
-            tipo_item = "Servicio",
+            tipo_item = "Producto",
             naturaleza_item = "Servicio",
             precio_venta = 0,
             tiene_iva = false,
