@@ -34,7 +34,7 @@
                             <div class="app-nav-group-children">
                                 @foreach (var child in item.Children)
                                 {
-                                    <NavLink class="app-nav-link app-nav-child-link" href="@child.Ruta" Match="NavLinkMatch.Prefix">
+                                    <NavLink class="app-nav-link app-nav-child-link" href="@child.Ruta" Match="NavLinkMatch.Prefix" @onclick="HandleNavigationClick">
                                         <span class="app-nav-link-mark">
                                             <i class="@GetMenuIconClass(child)"></i>
                                         </span>
@@ -48,7 +48,7 @@
                     }
                     else
                     {
-                        <NavLink class="app-nav-link" href="@item.MenuItem!.Ruta" Match="@(item.MenuItem.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                        <NavLink class="app-nav-link" href="@item.MenuItem!.Ruta" Match="@(item.MenuItem.Ruta == "/dashboard" ? NavLinkMatch.All : NavLinkMatch.Prefix)" @onclick="HandleNavigationClick">
                             <span class="app-nav-link-mark">
                                 <i class="@GetMenuIconClass(item.MenuItem)"></i>
                             </span>
@@ -84,6 +84,7 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         currentUser = authState.User;
         MenuAccessService.MenusChanged += ReloadMenusAsync;
+        NavigationManager.LocationChanged += HandleLocationChanged;
 
         UserName = currentUser.Identity?.Name ?? "Cuenta";
         RoleName = currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sesion";
@@ -152,7 +153,11 @@
         RenderItems.Clear();
         RenderItems.AddRange(sorted);
 
-        // Auto-expand purchases group if we are currently on one of the child pages
+        ExpandGroupForCurrentRoute();
+    }
+
+    private void ExpandGroupForCurrentRoute()
+    {
         var currentUri = NavigationManager.Uri;
         var relativePath = "/" + NavigationManager.ToBaseRelativePath(currentUri).ToLowerInvariant();
         var currentGroup = RenderItems.FirstOrDefault(item => item.Children.Any(child => relativePath.Contains(child.Ruta.ToLowerInvariant())));
@@ -176,6 +181,7 @@
     public void Dispose()
     {
         MenuAccessService.MenusChanged -= ReloadMenusAsync;
+        NavigationManager.LocationChanged -= HandleLocationChanged;
     }
 
     private void ToggleMenu()
@@ -189,6 +195,18 @@
         {
             expandedMenuIds.Remove(menuId);
         }
+    }
+
+    private void HandleNavigationClick()
+    {
+        menuOpen = false;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        menuOpen = false;
+        ExpandGroupForCurrentRoute();
+        InvokeAsync(StateHasChanged);
     }
 
     private static int GetRouteOrder(string route) => route switch

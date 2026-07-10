@@ -50,12 +50,14 @@ window.optometriaClinicalSignature = (() => {
         if (pads.has(canvasId)) {
             if (initialDataUrl) {
                 drawImageOnCanvas(canvas, initialDataUrl);
+                pads.get(canvasId).hasInk = true;
             }
             return true;
         }
 
         const context = resizeCanvas(canvas);
         let drawing = false;
+        const pad = { hasInk: Boolean(initialDataUrl) };
 
         const start = (event) => {
             drawing = true;
@@ -73,6 +75,7 @@ window.optometriaClinicalSignature = (() => {
             const point = getPoint(event, canvas);
             context.lineTo(point.x, point.y);
             context.stroke();
+            pad.hasInk = true;
             event.preventDefault();
         };
 
@@ -100,7 +103,7 @@ window.optometriaClinicalSignature = (() => {
             drawImageOnCanvas(canvas, dataUrl);
         });
 
-        pads.set(canvasId, true);
+        pads.set(canvasId, pad);
         if (initialDataUrl) {
             drawImageOnCanvas(canvas, initialDataUrl);
         }
@@ -115,6 +118,10 @@ window.optometriaClinicalSignature = (() => {
         }
 
         resizeCanvas(canvas);
+        const pad = pads.get(canvasId);
+        if (pad) {
+            pad.hasInk = false;
+        }
     }
 
     function getDataUrl(canvasId) {
@@ -123,10 +130,8 @@ window.optometriaClinicalSignature = (() => {
             return "";
         }
 
-        const blank = document.createElement("canvas");
-        blank.width = canvas.width;
-        blank.height = canvas.height;
-        if (canvas.toDataURL("image/png") === blank.toDataURL("image/png")) {
+        const pad = pads.get(canvasId);
+        if (!pad || !pad.hasInk) {
             return "";
         }
 

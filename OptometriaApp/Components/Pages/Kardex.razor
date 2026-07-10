@@ -5,6 +5,7 @@
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
 @inject NavigationManager NavigationManager
+@using OptometriaApp.Services
 
 <PageTitle>Kardex</PageTitle>
 
@@ -308,14 +309,14 @@ else
 
         products.Clear();
         products.AddRange(await db.tbl_productos.AsNoTracking()
-            .Where(x => productIds.Contains(x.id_producto))
+            .Where(x => productIds.Contains(x.id_producto) && (x.naturaleza_item == null || x.naturaleza_item == "" || x.naturaleza_item == "Bien"))
             .OrderBy(x => x.nombre_producto)
             .ToListAsync());
 
         entries.Clear();
         entries.AddRange(await db.tbl_kardex.AsNoTracking()
             .Include(x => x.id_productoNavigation)
-            .Where(x => productIds.Contains(x.id_producto))
+            .Where(x => productIds.Contains(x.id_producto) && (x.id_productoNavigation.naturaleza_item == null || x.id_productoNavigation.naturaleza_item == "" || x.id_productoNavigation.naturaleza_item == "Bien"))
             .OrderByDescending(x => x.fecha_movimiento)
             .ThenByDescending(x => x.id_kardex)
             .ToListAsync());

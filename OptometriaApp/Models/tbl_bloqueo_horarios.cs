@@ -12,6 +12,12 @@ public partial class tbl_bloqueo_horarios
 
     public DateOnly fecha_fin { get; set; }
 
+    public string? alcance_bloqueo { get; set; }
+
+    public TimeOnly? hora_inicio { get; set; }
+
+    public TimeOnly? hora_fin { get; set; }
+
     public string? tipo_bloqueo { get; set; }
 
     public string? razon_bloqueo { get; set; }

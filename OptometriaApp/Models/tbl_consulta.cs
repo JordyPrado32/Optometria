@@ -49,6 +49,8 @@ public partial class tbl_consulta
 
     public virtual ICollection<tbl_orden_rx> tbl_orden_rxes { get; set; } = new List<tbl_orden_rx>();
 
+    public virtual ICollection<tbl_receta_medica> tbl_receta_medica { get; set; } = new List<tbl_receta_medica>();
+
     public virtual ICollection<tbl_rx_contactologia> tbl_rx_contactologia { get; set; } = new List<tbl_rx_contactologia>();
 
     public virtual ICollection<tbl_rx_lente> tbl_rx_lentes { get; set; } = new List<tbl_rx_lente>();

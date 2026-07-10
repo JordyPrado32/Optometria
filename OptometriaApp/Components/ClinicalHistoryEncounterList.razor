@@ -1,0 +1,43 @@
+@if (Encounters.Count == 0 && string.IsNullOrWhiteSpace(LegacyLabel))
+{
+    <p class="clinical-empty-state">Todavia no hay evoluciones registradas para este paciente.</p>
+}
+else
+{
+    <div class="clinical-encounter-list">
+        @if (!string.IsNullOrWhiteSpace(LegacyLabel))
+        {
+            <div class="clinical-encounter-card clinical-encounter-card--legacy">
+                <div>
+                    <strong>@LegacyLabel</strong>
+                    <p>Este registro viene del modelo anterior y quedara versionado al guardar la siguiente evolucion.</p>
+                </div>
+                <span class="clinical-badge clinical-badge--neutral">Pendiente de migracion</span>
+            </div>
+        }
+
+        @foreach (var encounter in Encounters)
+        {
+            var isActive = encounter.EncounterId == SelectedEncounterId;
+            <button type="button" class="@(isActive ? "clinical-encounter-card clinical-encounter-card--active" : "clinical-encounter-card")" @onclick="() => OnSelect.InvokeAsync(encounter.EncounterId)">
+                <div class="clinical-encounter-card-head">
+                    <strong>@encounter.EventDate.ToString("yyyy-MM-dd HH:mm")</strong>
+                    <span class="@ClinicalHistoryService.GetEncounterStatusClass(encounter.Status)">@encounter.Status</span>
+                </div>
+                <p>@encounter.Motive</p>
+                <small>@encounter.Diagnosis</small>
+                <div class="clinical-encounter-card-foot">
+                    <span>Progreso @encounter.Progress%</span>
+                    <span>Consulta #@encounter.ConsultationId</span>
+                </div>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public required IReadOnlyList<ClinicalEncounterSummary> Encounters { get; set; }
+    [Parameter] public int? SelectedEncounterId { get; set; }
+    [Parameter] public string? LegacyLabel { get; set; }
+    [Parameter] public EventCallback<int> OnSelect { get; set; }
+}

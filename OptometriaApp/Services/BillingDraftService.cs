@@ -57,6 +57,8 @@ public sealed class BillingDraftService
         var consultation = await dbContext.tbl_consulta
             .Include(x => x.id_pacienteNavigation)
             .Include(x => x.id_optometraNavigation)
+            .Include(x => x.tbl_receta_medica)
+            .ThenInclude(x => x.tbl_receta_medica_detalle)
             .FirstOrDefaultAsync(x => x.id_consulta == consultationId);
 
         if (consultation is null)
@@ -83,7 +85,18 @@ public sealed class BillingDraftService
         var clientId = await EnsureBillingClientAsync(dbContext, consultation.id_pacienteNavigation, actorUserId);
         draft ??= await GetOrCreateDraftSaleAsync(dbContext, consultation.id_paciente, clientId, actorUserId);
 
-        if (hasExam)
+        var latestPrescription = consultation.tbl_receta_medica
+            .OrderByDescending(x => x.fecha_emision)
+            .ThenByDescending(x => x.id_receta)
+            .FirstOrDefault();
+
+        var synchronizedPrescriptionLines = await SyncPrescriptionBillingLinesAsync(
+            dbContext,
+            draft,
+            consultation,
+            latestPrescription);
+
+        if (synchronizedPrescriptionLines == 0 && hasExam)
         {
             var examProduct = await GetOrCreateServiceProductAsync(
                 dbContext,
@@ -106,7 +119,7 @@ public sealed class BillingDraftService
             await RemoveSourceLineAsync(dbContext, draft, "ConsultaExamen", consultation.id_consulta);
         }
 
-        if (hasMedication)
+        if (synchronizedPrescriptionLines == 0 && hasMedication)
         {
             var medicationProduct = await GetOrCreateServiceProductAsync(
                 dbContext,
@@ -406,6 +419,76 @@ public sealed class BillingDraftService
 
         sale.tbl_detalle_venta.Remove(existingLine);
         dbContext.tbl_detalle_venta.Remove(existingLine);
+    }
+
+    private async Task<int> SyncPrescriptionBillingLinesAsync(
+        OpticaDbContext dbContext,
+        tbl_venta draft,
+        tbl_consulta consultation,
+        tbl_receta_medica? prescription)
+    {
+        if (prescription is null)
+        {
+            return 0;
+        }
+
+        if (!dbContext.Entry(prescription).Collection(x => x.tbl_receta_medica_detalle).IsLoaded)
+        {
+            await dbContext.Entry(prescription).Collection(x => x.tbl_receta_medica_detalle).LoadAsync();
+        }
+
+        var detailIds = prescription.tbl_receta_medica_detalle.Select(x => x.id_receta_detalle).ToHashSet();
+        if (!dbContext.Entry(draft).Collection(x => x.tbl_detalle_venta).IsLoaded)
+        {
+            await dbContext.Entry(draft).Collection(x => x.tbl_detalle_venta).LoadAsync();
+        }
+
+        var staleLines = draft.tbl_detalle_venta
+            .Where(x => x.origen_tipo == "RecetaDetalle" && (!x.origen_id.HasValue || !detailIds.Contains(x.origen_id.Value)))
+            .ToList();
+
+        if (staleLines.Count > 0)
+        {
+            foreach (var staleLine in staleLines)
+            {
+                draft.tbl_detalle_venta.Remove(staleLine);
+                dbContext.tbl_detalle_venta.Remove(staleLine);
+            }
+        }
+
+        var synchronized = 0;
+        foreach (var detail in prescription.tbl_receta_medica_detalle)
+        {
+            var product = detail.id_producto.HasValue
+                ? await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == detail.id_producto.Value && x.activo == true)
+                : null;
+
+            detail.stock_disponible = product?.stock_actual;
+            detail.disponible_facturacion = detail.enviar_a_facturacion == true &&
+                product is not null &&
+                (!ProductInventoryRules.IsStockManaged(product) || (product.stock_actual ?? 0) >= detail.cantidad);
+
+            if (detail.enviar_a_facturacion != true || product is null || detail.disponible_facturacion != true)
+            {
+                await RemoveSourceLineAsync(dbContext, draft, "RecetaDetalle", detail.id_receta_detalle);
+                continue;
+            }
+
+            var concept = $"{detail.nombre_item} - Receta consulta #{consultation.id_consulta}";
+            await EnsureSourceLineAsync(
+                dbContext,
+                draft,
+                product.id_producto,
+                "RecetaDetalle",
+                detail.id_receta_detalle,
+                concept,
+                Math.Max(1, detail.cantidad),
+                product.precio_venta);
+
+            synchronized++;
+        }
+
+        return synchronized;
     }
 
     private async Task<tbl_producto> GetOrCreateServiceProductAsync(OpticaDbContext dbContext, string code, string name, string description)

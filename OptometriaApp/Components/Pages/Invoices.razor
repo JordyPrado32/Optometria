@@ -5,6 +5,7 @@
 @using System.Security.Claims
 @using OptometriaApp.Data
 @using OptometriaApp.Models
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
@@ -1075,6 +1076,32 @@ else
                             }
                         </section>
 
+                        @if (latestPrescription is not null && latestPrescriptionItems.Count > 0)
+                        {
+                            <section class="invoice-sidebar-card">
+                                <div class="invoice-block-title">Receta medica vigente</div>
+                                <div style="font-size:0.83rem; color:var(--color-taupe); margin-bottom:0.75rem;">
+                                    Receta @latestPrescription.numero_receta | @latestPrescription.fecha_emision?.ToString("yyyy-MM-dd HH:mm")
+                                </div>
+                                <div style="display:grid; gap:0.65rem;">
+                                    @foreach (var item in latestPrescriptionItems)
+                                    {
+                                        <div style="padding:0.8rem; border:1px solid rgba(127,105,81,0.12); border-radius:0.9rem; background:rgba(255,255,255,0.7);">
+                                            <strong style="display:block; color:var(--color-ink);">@item.nombre_item</strong>
+                                            <span style="display:block; color:var(--color-taupe); font-size:0.8rem;">@item.tipo_item_prescrito | x@item.cantidad @(item.unidad ?? "unidad")</span>
+                                            <span style="display:block; color:var(--color-taupe); font-size:0.8rem;">@(string.IsNullOrWhiteSpace(item.indicaciones) ? "Sin indicaciones adicionales" : item.indicaciones)</span>
+                                            <span style="display:block; font-size:0.78rem; margin-top:0.35rem; color:@GetPrescriptionAvailabilityColor(item);">
+                                                @GetPrescriptionAvailabilityLabel(item)
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="invoice-sidebar-links" style="margin-top:0.85rem;">
+                                    <a class="btn btn-outline-primary" href="@($"/prescriptions/{latestPrescription.id_consulta}/print")" target="_blank">Ver receta</a>
+                                </div>
+                            </section>
+                        }
+
                         <section class="invoice-sidebar-card">
                             <div class="invoice-block-title">Vista previa</div>
                             <div class="invoice-preview-sheet">
@@ -1144,6 +1171,7 @@ else
     private readonly List<tbl_categoria_producto> categories = [];
     private readonly List<string> paymentMethods = [];
     private readonly List<tbl_detalle_venta> draftLines = [];
+    private readonly List<tbl_receta_medica_detalle> latestPrescriptionItems = [];
     private readonly string[] productTypeOptions = ["Producto"];
     private ModulePermissions permissions = new();
     private tbl_paciente? selectedPatient;
@@ -1177,6 +1205,7 @@ else
     private ManualLineEditor lineEditor = new();
     private ProductUpsertEditor productUpsertEditor = new();
     private bool showProductUpsertForm;
+    private tbl_receta_medica? latestPrescription;
 
     private tbl_producto? SelectedManualProduct => products.FirstOrDefault(x => x.id_producto == lineEditor.ProductId);
     private IEnumerable<tbl_producto> AvailableInvoiceProducts => products
@@ -1309,6 +1338,8 @@ else
         {
             draftSale = null;
             draftLines.Clear();
+            latestPrescription = null;
+            latestPrescriptionItems.Clear();
             showProductUpsertForm = false;
             ResetLineEditor();
             RecalculatePreview();
@@ -1319,11 +1350,15 @@ else
         {
             draftSale = null;
             draftLines.Clear();
+            latestPrescription = null;
+            latestPrescriptionItems.Clear();
             showProductUpsertForm = false;
             ResetLineEditor();
             RecalculatePreview();
             return;
         }
+
+        await LoadPrescriptionContextAsync(dbContext, patientId);
 
         try
         {
@@ -1360,6 +1395,36 @@ else
             ResetLineEditor();
             RecalculatePreview();
         }
+    }
+
+    private async Task LoadPrescriptionContextAsync(OpticaDbContext dbContext, int patientId)
+    {
+        latestPrescription = null;
+        latestPrescriptionItems.Clear();
+
+        if (patientId <= 0)
+        {
+            return;
+        }
+
+        latestPrescription = await dbContext.tbl_receta_medica
+            .AsNoTracking()
+            .Where(x => x.id_paciente == patientId)
+            .OrderByDescending(x => x.fecha_emision)
+            .ThenByDescending(x => x.id_receta)
+            .FirstOrDefaultAsync();
+
+        if (latestPrescription is null)
+        {
+            return;
+        }
+
+        latestPrescriptionItems.AddRange(await dbContext.tbl_receta_medica_detalle
+            .AsNoTracking()
+            .Include(x => x.id_productoNavigation)
+            .Where(x => x.id_receta == latestPrescription.id_receta)
+            .OrderBy(x => x.id_receta_detalle)
+            .ToListAsync());
     }
 
     private Task OnManualProductChanged(ChangeEventArgs args)
@@ -2274,7 +2339,7 @@ else
 
     private static bool IsStockManagedProduct(tbl_producto product)
     {
-        return !string.Equals(product.naturaleza_item, "Servicio", StringComparison.OrdinalIgnoreCase);
+        return ProductInventoryRules.IsStockManaged(product);
     }
 
     private static string GetInvoiceProductOptionLabel(tbl_producto product)
@@ -2285,6 +2350,35 @@ else
         }
 
         return $"{product.codigo_producto} - {product.nombre_producto} (stock {(product.stock_actual ?? 0)})";
+    }
+
+    private static string GetPrescriptionAvailabilityLabel(tbl_receta_medica_detalle item)
+    {
+        if (item.enviar_a_facturacion != true)
+        {
+            return "Solo informado en receta, no enviado a facturacion";
+        }
+
+        if (item.disponible_facturacion == true)
+        {
+            return ProductInventoryRules.IsStockManaged(item.id_productoNavigation ?? new tbl_producto { naturaleza_item = "Servicio" })
+                ? $"Listo para facturar | stock {item.stock_disponible ?? 0}"
+                : "Listo para facturar";
+        }
+
+        return item.id_producto.HasValue
+            ? $"Prescrito pero no facturable ahora | stock {item.stock_disponible ?? 0}"
+            : "Prescrito sin producto catalogado";
+    }
+
+    private static string GetPrescriptionAvailabilityColor(tbl_receta_medica_detalle item)
+    {
+        if (item.enviar_a_facturacion != true)
+        {
+            return "var(--color-taupe)";
+        }
+
+        return item.disponible_facturacion == true ? "var(--color-sage)" : "#c46b4f";
     }
 
     private string GetOriginLabel(tbl_detalle_venta line)
