@@ -147,11 +147,13 @@ public sealed class ClinicalHistoryService
         consultation.detalle_usa_lentes = NormalizeOptional(request.Editor.Lentes.Observaciones);
         consultation.examenes_preliminares = NormalizeOptional(BuildPreliminaryExamSummary(request.Editor));
         consultation.evaluaciones = NormalizeOptional(request.Editor.Diagnostico.TratamientoConducta);
-        consultation.examenes_varios = NormalizeOptional(request.Editor.Diagnostico.ExamenesIndicados);
-        consultation.medicamentos = NormalizeOptional(request.Editor.Diagnostico.MedicamentosRecetados);
+        consultation.examenes_varios = NormalizeOptional(BuildPrescriptionSummary(request.Editor.Diagnostico, "Examen"));
+        consultation.medicamentos = NormalizeOptional(BuildPrescriptionSummary(request.Editor.Diagnostico, "Medicamento"));
         consultation.notas = NormalizeOptional(request.Editor.ObservacionesGenerales);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        await SyncPrescriptionAsync(dbContext, consultation, request, cancellationToken);
 
         var encounter = request.SelectedEncounterId.HasValue
             ? await dbContext.tbl_historia_clinica_optometria_eventos
@@ -280,6 +282,15 @@ public sealed class ClinicalHistoryService
             errors.Add("Completa diagnostico y conducta.");
         }
 
+        foreach (var item in editor.Diagnostico.PrescripcionItems)
+        {
+            if (item.Cantidad <= 0 || string.IsNullOrWhiteSpace(item.NombreItem))
+            {
+                errors.Add("Cada item de la receta debe tener nombre y cantidad valida.");
+                break;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(editor.NombreExaminador))
         {
             errors.Add("Ingresa el nombre del examinador.");
@@ -319,7 +330,8 @@ public sealed class ClinicalHistoryService
     }
 
     public static bool HasBillingTriggers(ClinicalHistoryEditorModel editor)
-        => !string.IsNullOrWhiteSpace(editor.Diagnostico.ExamenesIndicados) ||
+        => editor.Diagnostico.PrescripcionItems.Any(x => x.EnviarAFacturacion && (x.ProductoId > 0 || !string.IsNullOrWhiteSpace(x.NombreItem))) ||
+           !string.IsNullOrWhiteSpace(editor.Diagnostico.ExamenesIndicados) ||
            !string.IsNullOrWhiteSpace(editor.Diagnostico.MedicamentosRecetados);
 
     public static bool HasAnyAnamnesis(ClinicalHistoryEditorModel editor)
@@ -606,6 +618,33 @@ public sealed class ClinicalHistoryService
             editor.Diagnostico.DiagnosticoMotor
         }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
+    private static string BuildPrescriptionSummary(DiagnosisSection diagnosis, string itemType)
+    {
+        var structured = diagnosis.PrescripcionItems
+            .Where(x => string.Equals(x.TipoItem, itemType, StringComparison.OrdinalIgnoreCase))
+            .Select(BuildPrescriptionDisplay)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        if (structured.Count > 0)
+        {
+            return string.Join(" | ", structured);
+        }
+
+        return string.Equals(itemType, "Examen", StringComparison.OrdinalIgnoreCase)
+            ? diagnosis.ExamenesIndicados
+            : diagnosis.MedicamentosRecetados;
+    }
+
+    private static string BuildPrescriptionDisplay(PrescriptionLineItem item)
+    {
+        var name = string.IsNullOrWhiteSpace(item.NombreItem) ? "Item sin nombre" : item.NombreItem.Trim();
+        var quantity = item.Cantidad <= 0 ? 1 : item.Cantidad;
+        var unit = string.IsNullOrWhiteSpace(item.Unidad) ? string.Empty : $" {item.Unidad.Trim()}";
+        var indications = string.IsNullOrWhiteSpace(item.Indicaciones) ? string.Empty : $" - {item.Indicaciones.Trim()}";
+        return $"{name} x{quantity}{unit}{indications}".Trim();
+    }
+
     private static bool HasAnyAntecedent(ClinicalHistoryEditorModel editor)
         => !string.IsNullOrWhiteSpace(editor.Antecedentes.PersonalesOculares) ||
            !string.IsNullOrWhiteSpace(editor.Antecedentes.PersonalesGenerales) ||
@@ -648,6 +687,126 @@ public sealed class ClinicalHistoryService
 
     private static string Serialize<T>(T model) where T : class
         => JsonSerializer.Serialize(model, JsonOptions);
+
+    private static async Task SyncPrescriptionAsync(
+        OpticaDbContext dbContext,
+        tbl_consulta consultation,
+        ClinicalHistorySaveRequest request,
+        CancellationToken cancellationToken)
+    {
+        var items = request.Editor.Diagnostico.PrescripcionItems
+            .Where(x => x.Cantidad > 0 && !string.IsNullOrWhiteSpace(x.NombreItem))
+            .ToList();
+
+        if (items.Count == 0 &&
+            string.IsNullOrWhiteSpace(request.Editor.Diagnostico.MedicamentosRecetados) &&
+            string.IsNullOrWhiteSpace(request.Editor.Diagnostico.ExamenesIndicados))
+        {
+            return;
+        }
+
+        var doctorProfileId = await dbContext.tbl_medico
+            .Where(x => x.id_usuario == request.ActorUserId)
+            .Select(x => (int?)x.id_medico)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!doctorProfileId.HasValue)
+        {
+            return;
+        }
+
+        var recipe = await dbContext.tbl_receta_medica
+            .Include(x => x.tbl_receta_medica_detalle)
+            .FirstOrDefaultAsync(x => x.id_consulta == consultation.id_consulta, cancellationToken);
+
+        if (recipe is null)
+        {
+            recipe = new tbl_receta_medica
+            {
+                id_consulta = consultation.id_consulta,
+                id_paciente = consultation.id_paciente,
+                id_medico = doctorProfileId.Value,
+                numero_receta = $"RXM-{consultation.id_consulta:D8}",
+                fecha_emision = DateTime.Now,
+                usuario_creacion = request.ActorUserId.ToString()
+            };
+
+            dbContext.tbl_receta_medica.Add(recipe);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        recipe.id_paciente = consultation.id_paciente;
+        recipe.id_medico = doctorProfileId.Value;
+        recipe.estado = request.Mode == ClinicalHistorySaveMode.Finalize ? "Activa" : "Borrador";
+        recipe.diagnostico_resumen = NormalizeOptional(BuildDiagnosisSummary(request.Editor));
+        recipe.observaciones = NormalizeOptional(request.Editor.Diagnostico.TratamientoConducta);
+        recipe.fecha_actualizacion = DateTime.Now;
+
+        if (!dbContext.Entry(recipe).Collection(x => x.tbl_receta_medica_detalle).IsLoaded)
+        {
+            await dbContext.Entry(recipe).Collection(x => x.tbl_receta_medica_detalle).LoadAsync(cancellationToken);
+        }
+
+        if (recipe.tbl_receta_medica_detalle.Count > 0)
+        {
+            dbContext.tbl_receta_medica_detalle.RemoveRange(recipe.tbl_receta_medica_detalle);
+            recipe.tbl_receta_medica_detalle.Clear();
+        }
+
+        if (items.Count == 0)
+        {
+            items = BuildFallbackPrescriptionItems(request.Editor.Diagnostico);
+        }
+
+        foreach (var item in items)
+        {
+            recipe.tbl_receta_medica_detalle.Add(new tbl_receta_medica_detalle
+            {
+                tipo_item_prescrito = string.IsNullOrWhiteSpace(item.TipoItem) ? "Medicamento" : item.TipoItem.Trim(),
+                id_producto = item.ProductoId > 0 ? item.ProductoId : null,
+                nombre_item = item.NombreItem.Trim(),
+                indicaciones = NormalizeOptional(item.Indicaciones),
+                cantidad = item.Cantidad <= 0 ? 1 : item.Cantidad,
+                unidad = NormalizeOptional(item.Unidad),
+                enviar_a_facturacion = item.EnviarAFacturacion,
+                disponible_facturacion = false,
+                stock_disponible = null,
+                observaciones = NormalizeOptional(item.Observaciones),
+                fecha_creacion = DateTime.Now
+            });
+        }
+    }
+
+    private static List<PrescriptionLineItem> BuildFallbackPrescriptionItems(DiagnosisSection diagnosis)
+    {
+        var items = new List<PrescriptionLineItem>();
+
+        if (!string.IsNullOrWhiteSpace(diagnosis.MedicamentosRecetados))
+        {
+            items.Add(new PrescriptionLineItem
+            {
+                TipoItem = "Medicamento",
+                NombreItem = diagnosis.MedicamentosRecetados.Trim(),
+                Cantidad = 1,
+                Unidad = "indicacion",
+                EnviarAFacturacion = false
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(diagnosis.ExamenesIndicados))
+        {
+            items.Add(new PrescriptionLineItem
+            {
+                TipoItem = "Examen",
+                NombreItem = diagnosis.ExamenesIndicados.Trim(),
+                Cantidad = 1,
+                Unidad = "orden",
+                EnviarAFacturacion = false
+            });
+        }
+
+        return items;
+    }
 
     private static void ApplyStructuredAnamnesisDefaults(ClinicalHistoryEditorModel editor)
     {
@@ -900,6 +1059,19 @@ public sealed class DiagnosisSection
     public string TratamientoConducta { get; set; } = string.Empty;
     public string ExamenesIndicados { get; set; } = string.Empty;
     public string MedicamentosRecetados { get; set; } = string.Empty;
+    public List<PrescriptionLineItem> PrescripcionItems { get; set; } = [];
+}
+
+public sealed class PrescriptionLineItem
+{
+    public string TipoItem { get; set; } = "Medicamento";
+    public int ProductoId { get; set; }
+    public string NombreItem { get; set; } = string.Empty;
+    public int Cantidad { get; set; } = 1;
+    public string Unidad { get; set; } = "unidad";
+    public string Indicaciones { get; set; } = string.Empty;
+    public bool EnviarAFacturacion { get; set; }
+    public string Observaciones { get; set; } = string.Empty;
 }
 
 public sealed class ConsentSection

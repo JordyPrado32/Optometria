@@ -227,6 +227,7 @@ else
                                         <div class="availability-row-copy">
                                             <strong>@block.tipo_bloqueo</strong>
                                             <span>@($"{block.fecha_inicio:yyyy-MM-dd} al {block.fecha_fin:yyyy-MM-dd}")</span>
+                                            <span>@GetBlockTimeLabel(block)</span>
                                             <span>@(string.IsNullOrWhiteSpace(block.razon_bloqueo) ? "Sin razon" : block.razon_bloqueo)</span>
                                         </div>
                                         @if (CanManageAvailability)
@@ -337,7 +338,7 @@ else
                 }
 
                 <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
-                    Registra vacaciones, ausencias o mantenimientos que deban cerrar agenda temporalmente.
+                    Registra ausencias completas, permisos parciales o el horario de almuerzo cuando deban cerrar agenda real.
                 </p>
 
                 <div class="management-form-grid">
@@ -352,6 +353,16 @@ else
                     </div>
 
                     <div>
+                        <label class="form-label" for="blockScope">Alcance</label>
+                        <select id="blockScope" class="form-select" @bind="blockEditor.AlcanceBloqueo" disabled="@(!CanManageAvailability)">
+                            @foreach (var option in blockScopeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
                         <label class="form-label" for="blockType">Tipo</label>
                         <select id="blockType" class="form-select" @bind="blockEditor.TipoBloqueo" disabled="@(!CanManageAvailability)">
                             @foreach (var option in blockTypeOptions)
@@ -359,6 +370,16 @@ else
                                 <option value="@option">@option</option>
                             }
                         </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="blockStartTime">Hora inicio</label>
+                        <input id="blockStartTime" type="time" class="form-control" value="@blockEditor.HoraInicio" @onchange="OnBlockTimeStartChanged" disabled="@IsBlockTimeDisabled" />
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="blockEndTime">Hora fin</label>
+                        <input id="blockEndTime" type="time" class="form-control" value="@blockEditor.HoraFin" @onchange="OnBlockTimeEndChanged" disabled="@IsBlockTimeDisabled" />
                     </div>
 
                     <div>
@@ -410,6 +431,7 @@ else
     private ModulePermissions permissions = new();
     private AvailabilityEditor availabilityEditor = new();
     private BlockEditor blockEditor = new();
+    private tbl_medico? currentDoctorProfile;
     private bool isLoading = true;
     private bool canViewModule;
     private bool isAdmin;
@@ -435,7 +457,8 @@ else
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
     private const int AvailabilityPageSize = 3;
 
-    private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Mantenimiento", "Otro"];
+    private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Permiso parcial", "Almuerzo", "Mantenimiento", "Otro"];
+    private static readonly string[] blockScopeOptions = ["Completo", "Parcial", "Almuerzo"];
     private static readonly DayOption[] dayOptions =
     [
         new((byte)1, "Lunes"),
@@ -447,8 +470,9 @@ else
         new((byte)7, "Domingo")
     ];
 
-    private bool CanManageAvailability => permissions.CanEdit && (isAdmin || isDoctor);
+    private bool CanManageAvailability => permissions.CanEdit && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_disponibilidad != false));
     private tbl_medico? SelectedDoctor => doctors.FirstOrDefault(d => d.id_medico == availabilityDoctorId);
+    private bool IsBlockTimeDisabled => !CanManageAvailability || string.Equals(blockEditor.AlcanceBloqueo, "Completo", StringComparison.OrdinalIgnoreCase);
     private string HeroTitle => isAdmin ? "Disponibilidad y bloqueos de todos los medicos" : "Mi disponibilidad y ausencias";
     private string HeroDescription => isAdmin
         ? "Administra horarios semanales, descansos y bloqueos de todo el equipo medico en una sola vista operativa."
@@ -517,7 +541,8 @@ else
 
         if (isDoctor)
         {
-            currentDoctorId = doctors.FirstOrDefault(d => d.id_usuario == currentUserId)?.id_medico ?? 0;
+            currentDoctorProfile = doctors.FirstOrDefault(d => d.id_usuario == currentUserId);
+            currentDoctorId = currentDoctorProfile?.id_medico ?? 0;
         }
 
         availabilityDoctorId = currentDoctorId > 0 ? currentDoctorId : availabilityDoctorId > 0 ? availabilityDoctorId : doctors.FirstOrDefault()?.id_medico ?? 0;
@@ -687,6 +712,20 @@ else
             return;
         }
 
+        TimeOnly? blockTimeStart = null;
+        TimeOnly? blockTimeEnd = null;
+        if (!string.Equals(blockEditor.AlcanceBloqueo, "Completo", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TimeOnly.TryParse(blockEditor.HoraInicio, out var parsedBlockStart) || !TimeOnly.TryParse(blockEditor.HoraFin, out var parsedBlockEnd) || parsedBlockStart >= parsedBlockEnd)
+            {
+                errorMessage = "Para un permiso parcial o un almuerzo debes indicar una hora valida de inicio y fin.";
+                return;
+            }
+
+            blockTimeStart = parsedBlockStart;
+            blockTimeEnd = parsedBlockEnd;
+        }
+
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         tbl_bloqueo_horarios entity;
         if (blockEditor.IdBloqueo > 0)
@@ -707,23 +746,35 @@ else
         entity.id_medico = availabilityDoctorId;
         entity.fecha_inicio = startDate;
         entity.fecha_fin = endDate;
+        entity.alcance_bloqueo = blockEditor.AlcanceBloqueo;
+        entity.hora_inicio = blockTimeStart;
+        entity.hora_fin = blockTimeEnd;
         entity.tipo_bloqueo = blockEditor.TipoBloqueo;
         entity.razon_bloqueo = NormalizeOptional(blockEditor.Razon);
         entity.activo = true;
 
         await dbContext.SaveChangesAsync();
-        var automaticReschedules = await RescheduleAppointmentsForBlockAsync(dbContext, availabilityDoctorId, entity.fecha_inicio, entity.fecha_fin, entity.id_bloqueo);
-        WriteAudit(dbContext, blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario", $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}; Reprogramadas={automaticReschedules}");
+        var automaticRescheduleResult = await RescheduleAppointmentsForBlockAsync(dbContext, availabilityDoctorId, entity, entity.id_bloqueo);
+        WriteAudit(
+            dbContext,
+            blockEditor.IdBloqueo > 0 ? "Editar bloqueo horario" : "Crear bloqueo horario",
+            $"MedicoId={availabilityDoctorId}; BloqueoId={entity.id_bloqueo}; Inicio={entity.fecha_inicio:yyyy-MM-dd}; Fin={entity.fecha_fin:yyyy-MM-dd}; Reprogramadas={automaticRescheduleResult.ReprogrammedCount}; Pendientes={automaticRescheduleResult.UnresolvedAppointmentIds.Count}");
         await dbContext.SaveChangesAsync();
 
         PrepareNewBlock();
         showBlockModal = false;
         await using var refreshContext = await DbContextFactory.CreateDbContextAsync();
         await LoadAvailabilityAsync(refreshContext);
-        var actionMessage = automaticReschedules > 0
-            ? $"El bloqueo fue guardado correctamente y se reprogramaron {automaticReschedules} cita(s)."
+        var actionMessage = automaticRescheduleResult.ReprogrammedCount > 0
+            ? $"El bloqueo fue guardado correctamente y se reprogramaron {automaticRescheduleResult.ReprogrammedCount} cita(s)."
             : "El bloqueo fue guardado correctamente.";
-        ShowActionResult("Guardado", actionMessage, false);
+
+        if (automaticRescheduleResult.UnresolvedAppointmentIds.Count > 0)
+        {
+            actionMessage += $" Quedaron {automaticRescheduleResult.UnresolvedAppointmentIds.Count} cita(s) sin cupo automatico: {string.Join(", ", automaticRescheduleResult.UnresolvedAppointmentIds)}.";
+        }
+
+        ShowActionResult("Guardado", actionMessage, automaticRescheduleResult.UnresolvedAppointmentIds.Count > 0);
     }
 
     private async Task DeleteBlockAsync(int blockId)
@@ -771,6 +822,8 @@ else
     private void OnAvailabilityBreakEndChanged(ChangeEventArgs args) => availabilityEditor.BreakEnd = args.Value?.ToString() ?? string.Empty;
     private void OnBlockStartChanged(ChangeEventArgs args) => blockEditor.FechaInicio = args.Value?.ToString() ?? string.Empty;
     private void OnBlockEndChanged(ChangeEventArgs args) => blockEditor.FechaFin = args.Value?.ToString() ?? string.Empty;
+    private void OnBlockTimeStartChanged(ChangeEventArgs args) => blockEditor.HoraInicio = args.Value?.ToString() ?? string.Empty;
+    private void OnBlockTimeEndChanged(ChangeEventArgs args) => blockEditor.HoraFin = args.Value?.ToString() ?? string.Empty;
 
     private void ClearFilters()
     {
@@ -938,6 +991,9 @@ else
         {
             FechaInicio = today,
             FechaFin = today,
+            AlcanceBloqueo = "Completo",
+            HoraInicio = "12:00",
+            HoraFin = "13:00",
             TipoBloqueo = "Vacaciones"
         };
     }
@@ -949,6 +1005,9 @@ else
             IdBloqueo = block.id_bloqueo,
             FechaInicio = block.fecha_inicio.ToString("yyyy-MM-dd"),
             FechaFin = block.fecha_fin.ToString("yyyy-MM-dd"),
+            AlcanceBloqueo = string.IsNullOrWhiteSpace(block.alcance_bloqueo) ? "Completo" : block.alcance_bloqueo,
+            HoraInicio = block.hora_inicio?.ToString("HH:mm") ?? string.Empty,
+            HoraFin = block.hora_fin?.ToString("HH:mm") ?? string.Empty,
             TipoBloqueo = block.tipo_bloqueo ?? "Otro",
             Razon = block.razon_bloqueo ?? string.Empty
         };
@@ -1021,25 +1080,37 @@ else
     {
         if (!row.hora_descanso_inicio.HasValue || !row.hora_descanso_fin.HasValue)
         {
-            return "Sin descanso";
+            return "Sin almuerzo";
         }
 
-        return $"Descanso {row.hora_descanso_inicio:HH\\:mm}-{row.hora_descanso_fin:HH\\:mm}";
+        return $"Almuerzo {row.hora_descanso_inicio:HH\\:mm}-{row.hora_descanso_fin:HH\\:mm}";
     }
 
-    private async Task<int> RescheduleAppointmentsForBlockAsync(
+    private static string GetBlockTimeLabel(tbl_bloqueo_horarios block)
+    {
+        if (string.Equals(block.alcance_bloqueo, "Completo", StringComparison.OrdinalIgnoreCase) ||
+            !block.hora_inicio.HasValue ||
+            !block.hora_fin.HasValue)
+        {
+            return "Bloqueo de jornada completa";
+        }
+
+        return $"{block.alcance_bloqueo ?? "Parcial"} {block.hora_inicio:HH\\:mm}-{block.hora_fin:HH\\:mm}";
+    }
+
+    private async Task<BlockRescheduleResult> RescheduleAppointmentsForBlockAsync(
         OpticaDbContext dbContext,
         int doctorId,
-        DateOnly blockStart,
-        DateOnly blockEnd,
+        tbl_bloqueo_horarios block,
         int blockId)
     {
+        var result = new BlockRescheduleResult();
         var overlappingAppointments = await dbContext.tbl_citas
             .Include(x => x.id_estadoNavigation)
             .Where(x =>
                 x.id_medico == doctorId &&
-                x.fecha_cita >= blockStart &&
-                x.fecha_cita <= blockEnd &&
+                x.fecha_cita >= block.fecha_inicio &&
+                x.fecha_cita <= block.fecha_fin &&
                 x.id_estadoNavigation != null &&
                 (x.id_estadoNavigation.nombre_estado == "Programada" ||
                  x.id_estadoNavigation.nombre_estado == "Confirmada" ||
@@ -1050,7 +1121,7 @@ else
 
         if (overlappingAppointments.Count == 0)
         {
-            return 0;
+            return result;
         }
 
         var reprogrammedStateId = await dbContext.tbl_estado_cita
@@ -1058,13 +1129,22 @@ else
             .Select(x => x.id_estado)
             .FirstAsync();
 
-        var reprogrammedCount = 0;
         foreach (var appointment in overlappingAppointments)
         {
+            if (!DoesBlockAffectAppointment(block, appointment.fecha_cita, appointment.hora_inicio, appointment.hora_fin))
+            {
+                continue;
+            }
+
             var durationMinutes = Math.Max(10, (int)(appointment.hora_fin - appointment.hora_inicio).TotalMinutes);
-            var nextSlot = await FindNextAvailableSlotAsync(dbContext, doctorId, blockEnd.AddDays(1), durationMinutes, appointment.id_cita);
+            var nextSlot = await FindNextAvailableSlotAsync(dbContext, doctorId, block.fecha_fin.AddDays(1), durationMinutes, appointment.id_cita);
             if (nextSlot is null)
             {
+                result.UnresolvedAppointmentIds.Add(appointment.id_cita);
+                WriteAudit(
+                    dbContext,
+                    "Reprogramacion automatica pendiente",
+                    $"CitaId={appointment.id_cita}; MedicoId={doctorId}; BloqueoId={blockId}; Motivo=SinCupoAutomatico");
                 continue;
             }
 
@@ -1080,10 +1160,10 @@ else
                 "Reprogramar cita por bloqueo horario",
                 $"CitaId={appointment.id_cita}; MedicoId={doctorId}; BloqueoId={blockId}; NuevaFecha={appointment.fecha_cita:yyyy-MM-dd}; NuevaHora={appointment.hora_inicio:HH\\:mm}");
 
-            reprogrammedCount++;
+            result.ReprogrammedCount++;
         }
 
-        return reprogrammedCount;
+        return result;
     }
 
     private async Task<(DateOnly Date, TimeOnly Start, TimeOnly End, int? AvailabilityId)?> FindNextAvailableSlotAsync(
@@ -1108,14 +1188,10 @@ else
                 continue;
             }
 
-            var isBlocked = await dbContext.tbl_bloqueo_horarios
+            var dayBlocks = await dbContext.tbl_bloqueo_horarios
                 .AsNoTracking()
-                .AnyAsync(x => x.id_medico == doctorId && x.activo == true && x.fecha_inicio <= candidateDate && x.fecha_fin >= candidateDate);
-
-            if (isBlocked)
-            {
-                continue;
-            }
+                .Where(x => x.id_medico == doctorId && x.activo == true && x.fecha_inicio <= candidateDate && x.fecha_fin >= candidateDate)
+                .ToListAsync();
 
             var busySlots = await dbContext.tbl_citas
                 .AsNoTracking()
@@ -1138,9 +1214,10 @@ else
                         schedule.hora_descanso_fin.HasValue &&
                         cursor < schedule.hora_descanso_fin.Value &&
                         slotEnd > schedule.hora_descanso_inicio.Value;
+                    var overlapsBlock = SlotOverlapsAnyBlock(dayBlocks, candidateDate, cursor, slotEnd);
                     var overlapsAppointment = busySlots.Any(x => cursor < x.hora_fin && slotEnd > x.hora_inicio);
 
-                    if (!overlapsBreak && !overlapsAppointment)
+                    if (!overlapsBreak && !overlapsBlock && !overlapsAppointment)
                     {
                         return (candidateDate, cursor, slotEnd, schedule.id_disponibilidad);
                     }
@@ -1166,6 +1243,26 @@ else
             _ => 7
         };
     }
+
+    private static bool DoesBlockAffectAppointment(tbl_bloqueo_horarios block, DateOnly date, TimeOnly start, TimeOnly end)
+    {
+        if (date < block.fecha_inicio || date > block.fecha_fin)
+        {
+            return false;
+        }
+
+        if (string.Equals(block.alcance_bloqueo, "Completo", StringComparison.OrdinalIgnoreCase) ||
+            !block.hora_inicio.HasValue ||
+            !block.hora_fin.HasValue)
+        {
+            return true;
+        }
+
+        return start < block.hora_fin.Value && end > block.hora_inicio.Value;
+    }
+
+    private static bool SlotOverlapsAnyBlock(IEnumerable<tbl_bloqueo_horarios> blocks, DateOnly date, TimeOnly start, TimeOnly end)
+        => blocks.Any(block => DoesBlockAffectAppointment(block, date, start, end));
 
     private static string? NormalizeOptional(string? value)
     {
@@ -1213,8 +1310,17 @@ else
         public int IdBloqueo { get; set; }
         public string FechaInicio { get; set; } = string.Empty;
         public string FechaFin { get; set; } = string.Empty;
+        public string AlcanceBloqueo { get; set; } = "Completo";
+        public string HoraInicio { get; set; } = "12:00";
+        public string HoraFin { get; set; } = "13:00";
         public string TipoBloqueo { get; set; } = "Vacaciones";
         public string Razon { get; set; } = string.Empty;
+    }
+
+    private sealed class BlockRescheduleResult
+    {
+        public int ReprogrammedCount { get; set; }
+        public List<int> UnresolvedAppointmentIds { get; } = [];
     }
 
     private enum ActionModalKind

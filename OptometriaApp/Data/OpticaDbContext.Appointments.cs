@@ -39,6 +39,10 @@ public partial class OpticaDbContext
             entity.Property(e => e.descuento_porcentaje).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.aceptar_citas_telefonicas).HasDefaultValue(true);
             entity.Property(e => e.aceptar_citas_presenciales).HasDefaultValue(true);
+            entity.Property(e => e.puede_gestionar_agenda).HasDefaultValue(true);
+            entity.Property(e => e.puede_gestionar_disponibilidad).HasDefaultValue(true);
+            entity.Property(e => e.puede_gestionar_historia_clinica).HasDefaultValue(true);
+            entity.Property(e => e.puede_gestionar_facturacion).HasDefaultValue(false);
             entity.Property(e => e.duracion_consulta_minutos).HasDefaultValue(30);
             entity.Property(e => e.observaciones).IsUnicode(false);
             entity.Property(e => e.activo).HasDefaultValue(true);
@@ -145,6 +149,7 @@ public partial class OpticaDbContext
             entity.HasIndex(e => new { e.fecha_inicio, e.fecha_fin }, "IX_tbl_bloqueo_horarios_fechas");
             entity.Property(e => e.fecha_inicio).HasColumnType("date");
             entity.Property(e => e.fecha_fin).HasColumnType("date");
+            entity.Property(e => e.alcance_bloqueo).HasMaxLength(20).IsUnicode(false).HasDefaultValue("Completo");
             entity.Property(e => e.tipo_bloqueo).HasMaxLength(50).IsUnicode(false);
             entity.Property(e => e.razon_bloqueo).HasMaxLength(300).IsUnicode(false);
             entity.Property(e => e.activo).HasDefaultValue(true);

@@ -52,6 +52,10 @@ public partial class OpticaDbContext : DbContext
 
     public virtual DbSet<tbl_paciente> tbl_pacientes { get; set; }
 
+    public virtual DbSet<tbl_receta_medica> tbl_receta_medica { get; set; }
+
+    public virtual DbSet<tbl_receta_medica_detalle> tbl_receta_medica_detalle { get; set; }
+
     public virtual DbSet<tbl_plantilla_mensaje> tbl_plantilla_mensajes { get; set; }
 
     public virtual DbSet<tbl_producto> tbl_productos { get; set; }
@@ -664,6 +668,87 @@ public partial class OpticaDbContext : DbContext
             entity.HasOne(d => d.id_rx_lenteNavigation).WithMany(p => p.tbl_orden_rxes)
                 .HasForeignKey(d => d.id_rx_lente)
                 .HasConstraintName("fk_orden_rx_lente");
+        });
+
+        modelBuilder.Entity<tbl_receta_medica>(entity =>
+        {
+            entity.HasKey(e => e.id_receta).HasName("PK_tbl_receta_medica");
+
+            entity.ToTable("tbl_receta_medica");
+
+            entity.HasIndex(e => e.id_consulta, "UQ_tbl_receta_medica_consulta").IsUnique();
+            entity.HasIndex(e => e.numero_receta, "UQ_tbl_receta_medica_numero").IsUnique();
+            entity.HasIndex(e => new { e.id_paciente, e.fecha_emision }, "IX_tbl_receta_medica_paciente_fecha");
+
+            entity.Property(e => e.numero_receta)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.estado)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValue("Activa");
+            entity.Property(e => e.diagnostico_resumen).IsUnicode(false);
+            entity.Property(e => e.observaciones).IsUnicode(false);
+            entity.Property(e => e.fecha_emision).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.fecha_actualizacion).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.usuario_creacion)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.id_consultaNavigation).WithMany(p => p.tbl_receta_medica)
+                .HasForeignKey(d => d.id_consulta)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_tbl_receta_medica_tbl_consulta");
+
+            entity.HasOne(d => d.id_pacienteNavigation).WithMany()
+                .HasForeignKey(d => d.id_paciente)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_tbl_receta_medica_tbl_paciente");
+
+            entity.HasOne(d => d.id_medicoNavigation).WithMany()
+                .HasForeignKey(d => d.id_medico)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_tbl_receta_medica_tbl_medico");
+        });
+
+        modelBuilder.Entity<tbl_receta_medica_detalle>(entity =>
+        {
+            entity.HasKey(e => e.id_receta_detalle).HasName("PK_tbl_receta_medica_detalle");
+
+            entity.ToTable("tbl_receta_medica_detalle");
+
+            entity.HasIndex(e => e.id_receta, "IX_tbl_receta_medica_detalle_receta");
+            entity.HasIndex(e => e.id_producto, "IX_tbl_receta_medica_detalle_producto");
+
+            entity.Property(e => e.tipo_item_prescrito)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.nombre_item)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.indicaciones)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.cantidad).HasDefaultValue(1);
+            entity.Property(e => e.unidad)
+                .HasMaxLength(40)
+                .IsUnicode(false);
+            entity.Property(e => e.enviar_a_facturacion).HasDefaultValue(false);
+            entity.Property(e => e.disponible_facturacion).HasDefaultValue(false);
+            entity.Property(e => e.observaciones)
+                .HasMaxLength(300)
+                .IsUnicode(false);
+            entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(getdate())");
+
+            entity.HasOne(d => d.id_recetaNavigation).WithMany(p => p.tbl_receta_medica_detalle)
+                .HasForeignKey(d => d.id_receta)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_tbl_receta_medica_detalle_tbl_receta_medica");
+
+            entity.HasOne(d => d.id_productoNavigation).WithMany(p => p.tbl_receta_medica_detalle)
+                .HasForeignKey(d => d.id_producto)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_tbl_receta_medica_detalle_tbl_producto");
         });
 
         modelBuilder.Entity<tbl_paciente>(entity =>

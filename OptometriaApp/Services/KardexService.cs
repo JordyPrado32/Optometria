@@ -79,7 +79,7 @@ public sealed class KardexService
         CancellationToken cancellationToken)
     {
         var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == productId, cancellationToken);
-        if (product is null)
+        if (product is null || !ProductInventoryRules.IsGoodProduct(product))
         {
             return new KardexRebuildResult();
         }

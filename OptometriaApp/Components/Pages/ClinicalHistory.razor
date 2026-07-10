@@ -8,6 +8,7 @@
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
+@using OptometriaApp.Services
 
 <PageTitle>Historia clinica</PageTitle>
 
@@ -539,6 +540,68 @@ else
                         <div class="clinical-span-4"><label class="form-label">Tratamiento / disposicion / conducta</label><textarea class="form-control" rows="4" @bind="editor.Diagnostico.TratamientoConducta"></textarea></div>
                         <div class="clinical-span-4"><label class="form-label">Examenes indicados para facturacion</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.ExamenesIndicados"></textarea></div>
                         <div class="clinical-span-4"><label class="form-label">Medicamentos recetados para facturacion</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.MedicamentosRecetados"></textarea></div>
+                        <div class="clinical-span-4" style="padding: 1rem; border: 1px solid rgba(127,105,81,0.12); border-radius: 1rem; background: rgba(255,255,255,0.68);">
+                            <div class="management-card-header" style="margin-bottom: 0.75rem;">
+                                <h2>Receta medica estructurada</h2>
+                                <span>Se guarda como receta y cruza stock para facturacion</span>
+                            </div>
+                            <p class="clinical-helper-text">Agrega aqui lo realmente prescrito. Si eliges un producto existente y activas facturacion, el sistema solo lo llevara a factura cuando sea facturable y, si es un bien, tenga stock suficiente.</p>
+                            <div class="clinical-stack">
+                                @foreach (var item in editor.Diagnostico.PrescripcionItems.Select((value, index) => new { value, index }))
+                                {
+                                    <div class="clinical-grid-4" style="padding: 0.85rem; border: 1px dashed rgba(127,105,81,0.18); border-radius: 0.9rem;">
+                                        <div>
+                                            <label class="form-label">Tipo</label>
+                                            <select class="form-select" @bind="item.value.TipoItem">
+                                                @foreach (var option in PrescriptionTypeOptions)
+                                                {
+                                                    <option value="@option">@option</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="clinical-span-2">
+                                            <label class="form-label">Producto relacionado</label>
+                                            <select class="form-select" value="@item.value.ProductoId" @onchange="args => OnPrescriptionProductChanged(item.index, args)">
+                                                <option value="0">Escribir manualmente</option>
+                                                @foreach (var product in AvailablePrescriptionProducts)
+                                                {
+                                                    <option value="@product.id_producto">@GetPrescriptionProductLabel(product)</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Facturar</label>
+                                            <div class="form-check form-switch" style="margin-top: 0.45rem;">
+                                                <input class="form-check-input" type="checkbox" @bind="item.value.EnviarAFacturacion" />
+                                            </div>
+                                        </div>
+                                        <div class="clinical-span-2">
+                                            <label class="form-label">Nombre prescrito</label>
+                                            <input class="form-control" @bind="item.value.NombreItem" maxlength="200" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Cantidad</label>
+                                            <input type="number" min="1" class="form-control" @bind="item.value.Cantidad" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Unidad</label>
+                                            <input class="form-control" @bind="item.value.Unidad" maxlength="40" />
+                                        </div>
+                                        <div class="clinical-span-3">
+                                            <label class="form-label">Indicaciones</label>
+                                            <input class="form-control" @bind="item.value.Indicaciones" maxlength="500" placeholder="Dosis, frecuencia, observaciones de uso o preparacion" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Quitar</label>
+                                            <button type="button" class="btn btn-outline-primary" style="width:100%;" @onclick="() => RemovePrescriptionItem(item.index)">Eliminar</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="workspace-actions" style="margin-top: 0.85rem;">
+                                <button type="button" class="btn btn-outline-primary" @onclick="AddPrescriptionItem">Agregar item a receta</button>
+                            </div>
+                        </div>
                         <div class="clinical-span-4"><label class="form-label">Observaciones generales</label><textarea class="form-control" rows="4" @bind="editor.ObservacionesGenerales"></textarea></div>
                         <div class="clinical-span-2"><label class="form-label">Nombre del examinador</label><input class="form-control" @bind="editor.NombreExaminador" /></div>
                         <div class="clinical-span-2"><label class="form-label">Nivel paralelo y jornada</label><input class="form-control" @bind="editor.NivelParaleloJornada" /></div>
@@ -612,6 +675,7 @@ else
     public int? EncounterId { get; set; }
 
     private readonly List<tbl_paciente> availablePatients = [];
+    private readonly List<tbl_producto> prescriptionProducts = [];
     private readonly List<string> validationMessages = [];
     private static readonly string[] MainComplaintOptions = ["Vision borrosa", "Ardor ocular", "Ojo rojo", "Dolor ocular", "Cefalea", "Diplopia", "Fotofobia", "Control visual", "Adaptacion de lentes", "Otro (especificar)"];
     private static readonly string[] OnsetOptions = ["Sudito", "Gradual", "Intermitente", "Recurrente", "Post-trauma"];
@@ -620,6 +684,7 @@ else
     private static readonly string[] IntensityOptions = ["Leve", "Moderada", "Severa", "10/10"];
     private static readonly string[] SymptomOptions = ["Vision borrosa", "Prurito", "Lagrimeo", "Cefalea", "Fotofobia", "Diplopia", "Cuerpo extrano", "Secrecion", "Moscas volantes", "Destellos"];
     private static readonly string[] RedFlagOptions = ["Dolor intenso", "Perdida subita de vision", "Trauma", "Destellos nuevos", "Moscas volantes nuevas", "Diplopia aguda", "Ojo rojo severo", "Cefalea intensa"];
+    private static readonly string[] PrescriptionTypeOptions = ["Medicamento", "Examen", "Insumo"];
     private static readonly IReadOnlyList<ClinicalHistoryStepNavigation.ClinicalStepDefinition> WizardSteps = new[]
     {
         new ClinicalHistoryStepNavigation.ClinicalStepDefinition(1, "Apertura", "Historia maestra y control del paciente."),
@@ -647,6 +712,7 @@ else
     private string? errorMessage;
     private string patientSearchTerm = string.Empty;
     private string SignatureCanvasId => "clinical-signature-pad";
+    private IEnumerable<tbl_producto> AvailablePrescriptionProducts => prescriptionProducts.OrderBy(x => x.nombre_producto).ThenBy(x => x.codigo_producto);
     private IEnumerable<tbl_paciente> FilteredPatients => string.IsNullOrWhiteSpace(patientSearchTerm)
         ? availablePatients.Take(200)
         : availablePatients.Where(x =>
@@ -705,6 +771,13 @@ else
             .AsNoTracking()
             .OrderBy(x => x.apellidos)
             .ThenBy(x => x.nombres)
+            .ToListAsync());
+
+        prescriptionProducts.Clear();
+        prescriptionProducts.AddRange(await dbContext.tbl_productos
+            .AsNoTracking()
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.nombre_producto)
             .ToListAsync());
 
         if (!PatientId.HasValue || PatientId.Value <= 0)
@@ -956,6 +1029,15 @@ else
             return true;
         }
 
+        var doctorProfile = await dbContext.tbl_medico
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.id_usuario == currentUserId);
+
+        if (doctorProfile is not null && doctorProfile.puede_gestionar_historia_clinica == false)
+        {
+            return false;
+        }
+
         var permission = await dbContext.tbl_rol_menu_permisos
             .AsNoTracking()
             .Where(p => p.id_rol == currentRoleId)
@@ -1035,6 +1117,62 @@ else
         }
 
         return "Sigue el flujo guiado hasta completar hallazgos, diagnostico y consentimiento.";
+    }
+
+    private void AddPrescriptionItem()
+    {
+        editor?.Diagnostico.PrescripcionItems.Add(new PrescriptionLineItem
+        {
+            TipoItem = "Medicamento",
+            Cantidad = 1,
+            Unidad = "unidad"
+        });
+    }
+
+    private void RemovePrescriptionItem(int index)
+    {
+        if (editor is null || index < 0 || index >= editor.Diagnostico.PrescripcionItems.Count)
+        {
+            return;
+        }
+
+        editor.Diagnostico.PrescripcionItems.RemoveAt(index);
+    }
+
+    private void OnPrescriptionProductChanged(int index, ChangeEventArgs args)
+    {
+        if (editor is null || index < 0 || index >= editor.Diagnostico.PrescripcionItems.Count)
+        {
+            return;
+        }
+
+        var item = editor.Diagnostico.PrescripcionItems[index];
+        item.ProductoId = int.TryParse(args.Value?.ToString(), out var productId) ? productId : 0;
+
+        if (item.ProductoId <= 0)
+        {
+            return;
+        }
+
+        var product = prescriptionProducts.FirstOrDefault(x => x.id_producto == item.ProductoId);
+        if (product is null)
+        {
+            return;
+        }
+
+        item.NombreItem = product.nombre_producto;
+        if (ProductInventoryRules.IsStockManaged(product))
+        {
+            item.TipoItem = "Medicamento";
+        }
+    }
+
+    private static string GetPrescriptionProductLabel(tbl_producto product)
+    {
+        var stockLabel = ProductInventoryRules.IsStockManaged(product)
+            ? $" | stock {(product.stock_actual ?? 0)}"
+            : " | servicio";
+        return $"{product.codigo_producto} - {product.nombre_producto}{stockLabel}";
     }
 
     private static int InferStepFromValidation(IEnumerable<string> errors)

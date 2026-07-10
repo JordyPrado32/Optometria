@@ -35,6 +35,14 @@ public partial class tbl_medico
 
     public bool? aceptar_citas_presenciales { get; set; }
 
+    public bool? puede_gestionar_agenda { get; set; }
+
+    public bool? puede_gestionar_disponibilidad { get; set; }
+
+    public bool? puede_gestionar_historia_clinica { get; set; }
+
+    public bool? puede_gestionar_facturacion { get; set; }
+
     public int? duracion_consulta_minutos { get; set; }
 
     public string? observaciones { get; set; }

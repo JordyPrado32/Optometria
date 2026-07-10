@@ -349,6 +349,38 @@ else
                             </div>
 
                             <div>
+                                <label class="form-label d-block">Puede gestionar agenda</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorCanManageAgenda" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarAgenda" disabled="@(!CanModifyEditor)" />
+                                    <label class="form-check-label" for="doctorCanManageAgenda">@((editor.PuedeGestionarAgenda ? "SÃ­" : "No"))</label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label d-block">Puede gestionar disponibilidad</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorCanManageAvailability" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarDisponibilidad" disabled="@(!CanModifyEditor)" />
+                                    <label class="form-check-label" for="doctorCanManageAvailability">@((editor.PuedeGestionarDisponibilidad ? "SÃ­" : "No"))</label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label d-block">Puede gestionar historia clinica</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorCanManageHistory" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarHistoriaClinica" disabled="@(!CanModifyEditor)" />
+                                    <label class="form-check-label" for="doctorCanManageHistory">@((editor.PuedeGestionarHistoriaClinica ? "SÃ­" : "No"))</label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label d-block">Puede apoyar facturacion</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorCanManageBilling" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarFacturacion" disabled="@(!CanModifyEditor)" />
+                                    <label class="form-check-label" for="doctorCanManageBilling">@((editor.PuedeGestionarFacturacion ? "SÃ­" : "No"))</label>
+                                </div>
+                            </div>
+
+                            <div>
                                 <label class="form-label d-block">Estado de ficha</label>
                                 <div class="form-check form-switch">
                                     <input id="doctorProfileStatus" class="form-check-input" type="checkbox" @bind="editor.Activo" disabled="@(!CanModifyEditor || selfManagedMode)" />
@@ -703,6 +735,10 @@ else
         doctorEntity.descuento_porcentaje = ParseOptionalDecimal(currentEditor.DescuentoPorcentaje);
         doctorEntity.aceptar_citas_telefonicas = currentEditor.AceptarCitasTelefonicas;
         doctorEntity.aceptar_citas_presenciales = currentEditor.AceptarCitasPresenciales;
+        doctorEntity.puede_gestionar_agenda = currentEditor.PuedeGestionarAgenda;
+        doctorEntity.puede_gestionar_disponibilidad = currentEditor.PuedeGestionarDisponibilidad;
+        doctorEntity.puede_gestionar_historia_clinica = currentEditor.PuedeGestionarHistoriaClinica;
+        doctorEntity.puede_gestionar_facturacion = currentEditor.PuedeGestionarFacturacion;
         doctorEntity.duracion_consulta_minutos = ParseOptionalInt(currentEditor.DuracionConsultaMinutos);
         doctorEntity.observaciones = NormalizeOptional(currentEditor.Observaciones);
         doctorEntity.activo = selfManagedMode ? true : currentEditor.Activo;
@@ -1064,6 +1100,9 @@ else
             LinkedRoleName = user.id_rolNavigation?.nombre ?? "Sin rol",
             AceptarCitasTelefonicas = true,
             AceptarCitasPresenciales = true,
+            PuedeGestionarAgenda = true,
+            PuedeGestionarDisponibilidad = true,
+            PuedeGestionarHistoriaClinica = true,
             DuracionConsultaMinutos = "30",
             Activo = true
         };
@@ -1096,6 +1135,10 @@ else
             DescuentoPorcentaje = user.tbl_medico.descuento_porcentaje?.ToString("0.##") ?? string.Empty,
             AceptarCitasTelefonicas = user.tbl_medico.aceptar_citas_telefonicas != false,
             AceptarCitasPresenciales = user.tbl_medico.aceptar_citas_presenciales != false,
+            PuedeGestionarAgenda = user.tbl_medico.puede_gestionar_agenda != false,
+            PuedeGestionarDisponibilidad = user.tbl_medico.puede_gestionar_disponibilidad != false,
+            PuedeGestionarHistoriaClinica = user.tbl_medico.puede_gestionar_historia_clinica != false,
+            PuedeGestionarFacturacion = user.tbl_medico.puede_gestionar_facturacion == true,
             DuracionConsultaMinutos = user.tbl_medico.duracion_consulta_minutos?.ToString() ?? "30",
             Observaciones = user.tbl_medico.observaciones ?? string.Empty,
             Activo = user.tbl_medico.activo != false
@@ -1169,6 +1212,10 @@ else
         public string DescuentoPorcentaje { get; set; } = string.Empty;
         public bool AceptarCitasTelefonicas { get; set; } = true;
         public bool AceptarCitasPresenciales { get; set; } = true;
+        public bool PuedeGestionarAgenda { get; set; } = true;
+        public bool PuedeGestionarDisponibilidad { get; set; } = true;
+        public bool PuedeGestionarHistoriaClinica { get; set; } = true;
+        public bool PuedeGestionarFacturacion { get; set; }
         public string DuracionConsultaMinutos { get; set; } = "30";
         public string Observaciones { get; set; } = string.Empty;
         public bool Activo { get; set; } = true;

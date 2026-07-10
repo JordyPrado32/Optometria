@@ -1,4 +1,5 @@
 using System.Net.Mail;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -2442,6 +2443,91 @@ app.MapGet("/exports/account-statements/{accountId:int}.pdf", async (
     return Results.File(pdf, "application/pdf", fileName);
 }).RequireAuthorization("OperationalAccess");
 
+app.MapGet("/prescriptions/{consultationId:int}/print", async (
+    int consultationId,
+    IDbContextFactory<OpticaDbContext> dbContextFactory,
+    CancellationToken cancellationToken) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+    var prescription = await dbContext.tbl_receta_medica
+        .AsNoTracking()
+        .Include(x => x.id_pacienteNavigation)
+        .Include(x => x.id_medicoNavigation).ThenInclude(x => x.id_usuarioNavigation)
+        .FirstOrDefaultAsync(x => x.id_consulta == consultationId, cancellationToken);
+
+    if (prescription is null)
+    {
+        return Results.NotFound();
+    }
+
+    var items = await dbContext.tbl_receta_medica_detalle
+        .AsNoTracking()
+        .Where(x => x.id_receta == prescription.id_receta)
+        .OrderBy(x => x.id_receta_detalle)
+        .ToListAsync(cancellationToken);
+
+    static string Html(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
+
+    var doctorName = $"{prescription.id_medicoNavigation.id_usuarioNavigation.nombres} {prescription.id_medicoNavigation.id_usuarioNavigation.apellidos}".Trim();
+    var patientName = $"{prescription.id_pacienteNavigation.nombres} {prescription.id_pacienteNavigation.apellidos}".Trim();
+    var rows = string.Join(string.Empty, items.Select(item =>
+        $"""
+        <tr>
+            <td>{Html(item.tipo_item_prescrito)}</td>
+            <td>{Html(item.nombre_item)}</td>
+            <td>{item.cantidad}</td>
+            <td>{Html(item.unidad)}</td>
+            <td>{Html(item.indicaciones)}</td>
+        </tr>
+        """));
+
+    var html = $$"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <title>Receta {{Html(prescription.numero_receta)}}</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #2f2a24; }
+            .printbar { margin-bottom: 18px; }
+            .card { border: 1px solid #d8d0c4; border-radius: 14px; padding: 20px; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+            .label { font-size: 12px; text-transform: uppercase; color: #7f6951; margin-bottom: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th, td { border: 1px solid #d8d0c4; padding: 10px; text-align: left; vertical-align: top; }
+            th { background: #f6f1e7; }
+            .notes { margin-top: 18px; white-space: pre-wrap; }
+            @media print { .printbar { display:none; } body { margin: 10mm; } }
+        </style>
+    </head>
+    <body>
+        <div class="printbar"><button onclick="window.print()">Imprimir</button></div>
+        <div class="card">
+            <h1 style="margin-top:0;">Receta medica</h1>
+            <div class="grid">
+                <div><div class="label">Numero</div><strong>{{Html(prescription.numero_receta)}}</strong></div>
+                <div><div class="label">Fecha</div><strong>{{prescription.fecha_emision?.ToString("yyyy-MM-dd HH:mm")}}</strong></div>
+                <div><div class="label">Paciente</div><strong>{{Html(patientName)}}</strong><div>{{Html(prescription.id_pacienteNavigation.cedula)}}</div></div>
+                <div><div class="label">Profesional</div><strong>{{Html(doctorName)}}</strong><div>{{Html(prescription.id_medicoNavigation.especialidad)}}</div></div>
+            </div>
+            <div><div class="label">Diagnostico</div><strong>{{Html(prescription.diagnostico_resumen)}}</strong></div>
+            <table>
+                <thead>
+                    <tr><th>Tipo</th><th>Item prescrito</th><th>Cantidad</th><th>Unidad</th><th>Indicaciones</th></tr>
+                </thead>
+                <tbody>
+                    {{rows}}
+                </tbody>
+            </table>
+            <div class="notes"><div class="label">Observaciones</div>{{Html(prescription.observaciones)}}</div>
+        </div>
+    </body>
+    </html>
+    """;
+
+    return Results.Content(html, "text/html; charset=utf-8");
+}).RequireAuthorization("FullAccess");
+
 // Automatic database menu route updates to Spanish at startup
 using (var scope = app.Services.CreateScope())
 {
@@ -3009,6 +3095,10 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
                 descuento_porcentaje DECIMAL(5,2) NULL,
                 aceptar_citas_telefonicas BIT NOT NULL CONSTRAINT DF_tbl_medico_tel DEFAULT (1),
                 aceptar_citas_presenciales BIT NOT NULL CONSTRAINT DF_tbl_medico_pre DEFAULT (1),
+                puede_gestionar_agenda BIT NOT NULL CONSTRAINT DF_tbl_medico_agenda DEFAULT (1),
+                puede_gestionar_disponibilidad BIT NOT NULL CONSTRAINT DF_tbl_medico_disponibilidad DEFAULT (1),
+                puede_gestionar_historia_clinica BIT NOT NULL CONSTRAINT DF_tbl_medico_historia DEFAULT (1),
+                puede_gestionar_facturacion BIT NOT NULL CONSTRAINT DF_tbl_medico_facturacion DEFAULT (0),
                 duracion_consulta_minutos INT NOT NULL CONSTRAINT DF_tbl_medico_duracion DEFAULT (30),
                 observaciones VARCHAR(MAX) NULL,
                 activo BIT NOT NULL CONSTRAINT DF_tbl_medico_activo DEFAULT (1),
@@ -3123,13 +3213,20 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
                 id_medico INT NOT NULL,
                 fecha_inicio DATE NOT NULL,
                 fecha_fin DATE NOT NULL,
+                alcance_bloqueo VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_bloqueo_horarios_alcance DEFAULT ('Completo'),
+                hora_inicio TIME NULL,
+                hora_fin TIME NULL,
                 tipo_bloqueo VARCHAR(50) NULL,
                 razon_bloqueo VARCHAR(300) NULL,
                 activo BIT NOT NULL CONSTRAINT DF_tbl_bloqueo_horarios_activo DEFAULT (1),
                 fecha_creacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_bloqueo_horarios_fecha DEFAULT (GETDATE()),
                 usuario_creacion VARCHAR(100) NULL,
                 CONSTRAINT fk_bloqueo_medico FOREIGN KEY (id_medico) REFERENCES dbo.tbl_medico(id_medico) ON DELETE CASCADE,
-                CONSTRAINT chk_bloqueo_fechas CHECK (fecha_inicio <= fecha_fin)
+                CONSTRAINT chk_bloqueo_fechas CHECK (fecha_inicio <= fecha_fin),
+                CONSTRAINT chk_bloqueo_horas CHECK (
+                    (hora_inicio IS NULL AND hora_fin IS NULL)
+                    OR (hora_inicio IS NOT NULL AND hora_fin IS NOT NULL AND hora_inicio < hora_fin)
+                )
             );
         END;
 
@@ -3173,6 +3270,18 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
             CREATE NONCLUSTERED INDEX idx_bloqueo_medico ON dbo.tbl_bloqueo_horarios(id_medico);
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_bloqueo_fechas' AND object_id = OBJECT_ID('dbo.tbl_bloqueo_horarios'))
             CREATE NONCLUSTERED INDEX idx_bloqueo_fechas ON dbo.tbl_bloqueo_horarios(fecha_inicio, fecha_fin);
+
+        IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_agenda') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_agenda BIT NOT NULL CONSTRAINT DF_tbl_medico_agenda_legacy DEFAULT (1);
+        IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_disponibilidad') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_disponibilidad BIT NOT NULL CONSTRAINT DF_tbl_medico_disponibilidad_legacy DEFAULT (1);
+        IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_historia_clinica') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_historia_clinica BIT NOT NULL CONSTRAINT DF_tbl_medico_historia_legacy DEFAULT (1);
+        IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_facturacion') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_facturacion BIT NOT NULL CONSTRAINT DF_tbl_medico_facturacion_legacy DEFAULT (0);
+
+        IF COL_LENGTH('dbo.tbl_bloqueo_horarios', 'alcance_bloqueo') IS NULL ALTER TABLE dbo.tbl_bloqueo_horarios ADD alcance_bloqueo VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_bloqueo_horarios_alcance_legacy DEFAULT ('Completo');
+        IF COL_LENGTH('dbo.tbl_bloqueo_horarios', 'hora_inicio') IS NULL ALTER TABLE dbo.tbl_bloqueo_horarios ADD hora_inicio TIME NULL;
+        IF COL_LENGTH('dbo.tbl_bloqueo_horarios', 'hora_fin') IS NULL ALTER TABLE dbo.tbl_bloqueo_horarios ADD hora_fin TIME NULL;
+        UPDATE dbo.tbl_bloqueo_horarios
+        SET alcance_bloqueo = 'Completo'
+        WHERE alcance_bloqueo IS NULL OR LTRIM(RTRIM(alcance_bloqueo)) = '';
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_cancelaciones_paciente' AND object_id = OBJECT_ID('dbo.tbl_cancelaciones_paciente'))
             CREATE NONCLUSTERED INDEX idx_cancelaciones_paciente ON dbo.tbl_cancelaciones_paciente(id_paciente);
 
@@ -3830,6 +3939,56 @@ static async Task EnsureClinicalHistorySchemaAsync(WebApplication app)
         BEGIN
             CREATE NONCLUSTERED INDEX IX_tbl_historia_evento_historia_fecha ON dbo.tbl_historia_clinica_optometria_evento(id_historia_clinica, fecha_evento DESC);
         END;
+
+        IF OBJECT_ID('dbo.tbl_receta_medica', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_receta_medica
+            (
+                id_receta INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_consulta INT NOT NULL,
+                id_paciente INT NOT NULL,
+                id_medico INT NOT NULL,
+                numero_receta VARCHAR(50) NOT NULL,
+                estado VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_receta_medica_estado DEFAULT ('Activa'),
+                diagnostico_resumen VARCHAR(MAX) NULL,
+                observaciones VARCHAR(MAX) NULL,
+                fecha_emision DATETIME2 NOT NULL CONSTRAINT DF_tbl_receta_medica_fecha DEFAULT (GETDATE()),
+                fecha_actualizacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_receta_medica_actualizacion DEFAULT (GETDATE()),
+                usuario_creacion VARCHAR(100) NULL,
+                CONSTRAINT UQ_tbl_receta_medica_consulta UNIQUE (id_consulta),
+                CONSTRAINT UQ_tbl_receta_medica_numero UNIQUE (numero_receta),
+                CONSTRAINT FK_tbl_receta_medica_tbl_consulta FOREIGN KEY (id_consulta) REFERENCES dbo.tbl_consulta(id_consulta) ON DELETE CASCADE,
+                CONSTRAINT FK_tbl_receta_medica_tbl_paciente FOREIGN KEY (id_paciente) REFERENCES dbo.tbl_paciente(id_paciente),
+                CONSTRAINT FK_tbl_receta_medica_tbl_medico FOREIGN KEY (id_medico) REFERENCES dbo.tbl_medico(id_medico)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_receta_medica_detalle', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_receta_medica_detalle
+            (
+                id_receta_detalle INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_receta INT NOT NULL,
+                tipo_item_prescrito VARCHAR(30) NOT NULL,
+                id_producto INT NULL,
+                nombre_item VARCHAR(200) NOT NULL,
+                indicaciones VARCHAR(500) NULL,
+                cantidad INT NOT NULL CONSTRAINT DF_tbl_receta_medica_detalle_cantidad DEFAULT (1),
+                unidad VARCHAR(40) NULL,
+                enviar_a_facturacion BIT NOT NULL CONSTRAINT DF_tbl_receta_medica_detalle_facturar DEFAULT (0),
+                disponible_facturacion BIT NOT NULL CONSTRAINT DF_tbl_receta_medica_detalle_disponible DEFAULT (0),
+                stock_disponible INT NULL,
+                observaciones VARCHAR(300) NULL,
+                fecha_creacion DATETIME2 NOT NULL CONSTRAINT DF_tbl_receta_medica_detalle_fecha DEFAULT (GETDATE()),
+                CONSTRAINT FK_tbl_receta_medica_detalle_tbl_receta_medica FOREIGN KEY (id_receta) REFERENCES dbo.tbl_receta_medica(id_receta) ON DELETE CASCADE,
+                CONSTRAINT FK_tbl_receta_medica_detalle_tbl_producto FOREIGN KEY (id_producto) REFERENCES dbo.tbl_producto(id_producto) ON DELETE SET NULL
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_receta_medica_paciente_fecha' AND object_id = OBJECT_ID('dbo.tbl_receta_medica'))
+            CREATE NONCLUSTERED INDEX IX_tbl_receta_medica_paciente_fecha ON dbo.tbl_receta_medica(id_paciente, fecha_emision DESC);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_receta_medica_detalle_receta' AND object_id = OBJECT_ID('dbo.tbl_receta_medica_detalle'))
+            CREATE NONCLUSTERED INDEX IX_tbl_receta_medica_detalle_receta ON dbo.tbl_receta_medica_detalle(id_receta);
         """);
 }
 

@@ -144,4 +144,6 @@ public partial class tbl_producto
     public virtual ICollection<tbl_detalle_orden_compra> tbl_detalle_orden_compra { get; set; } = new List<tbl_detalle_orden_compra>();
 
     public virtual ICollection<tbl_kardex> tbl_kardex { get; set; } = new List<tbl_kardex>();
+
+    public virtual ICollection<tbl_receta_medica_detalle> tbl_receta_medica_detalle { get; set; } = new List<tbl_receta_medica_detalle>();
 }
