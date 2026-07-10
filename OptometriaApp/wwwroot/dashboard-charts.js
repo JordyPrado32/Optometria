@@ -80,12 +80,18 @@ window.initializeDashboardCharts = (labels, activityData, financesData, totalTex
     const el2 = document.getElementById('chartFinances');
     if (el2) {
         const ctx2 = el2.getContext('2d');
+        const rawFinances = Array.isArray(financesData) ? financesData.map(value => Number(value) || 0) : [0, 0, 0];
+        const financeTotal = rawFinances.reduce((sum, value) => sum + Math.max(value, 0), 0);
+        const visibleFinances = financeTotal > 0
+            ? rawFinances.map(value => Math.max(value, 0))
+            : [1, 1, 1];
+
         window.dashboardChart2 = new Chart(ctx2, {
             type: 'doughnut',
             data: {
                 labels: ['Ganancias', 'Gastos', 'Cartera'],
                 datasets: [{
-                    data: financesData,
+                    data: visibleFinances,
                     backgroundColor: ['#5DA181', '#E53935', '#7F6951'],
                     borderWidth: 2,
                     borderColor: '#FFFDF9',

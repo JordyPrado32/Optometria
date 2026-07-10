@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Security.Claims
+@using System.Globalization
 @using Microsoft.EntityFrameworkCore
 @using OptometriaApp.Data
 @using OptometriaApp.Models
@@ -327,80 +328,152 @@ else
                     <div class="alert alert-success" role="alert" style="margin-bottom: 1rem;">@statusMessage</div>
                 }
 
-                <div class="management-form-grid">
-                    <div>
-                        <label class="form-label" for="modalAppointmentDoctor">Medico</label>
-                        <select id="modalAppointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
-                            <option value="0">Selecciona</option>
-                            @foreach (var doctor in doctors)
-                            {
-                                <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
-                            }
-                        </select>
-                    </div>
-
-                    @if (isAdmin || isDoctor)
-                    {
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
+                <div class="appointment-modal-layout">
+                    <div class="appointment-modal-fields">
                         <div>
-                            <label class="form-label" for="modalAppointmentPatient">Paciente</label>
-                            <select id="modalAppointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
+                            <label class="form-label" for="modalAppointmentDoctor">Medico *</label>
+                            <select id="modalAppointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
                                 <option value="0">Selecciona</option>
-                                @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                @foreach (var doctor in doctors)
                                 {
-                                    <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
+                                    <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
                                 }
                             </select>
                         </div>
-                    }
-                    else
-                    {
+
+                        @if (isAdmin || isDoctor)
+                        {
+                            <div>
+                                <label class="form-label" for="modalAppointmentPatient">Paciente *</label>
+                                <select id="modalAppointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
+                                    <option value="0">Selecciona</option>
+                                    @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                    {
+                                        <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        else
+                        {
+                            <div>
+                                <label class="form-label" for="modalAppointmentTarget">La cita es para</label>
+                                <select id="modalAppointmentTarget" class="form-select" value="@appointmentEditor.TargetType" @onchange="OnAppointmentTargetChanged" disabled="@(!CanEditAppointments)">
+                                    <option value="self">Mi usuario</option>
+                                    <option value="family">Un familiar</option>
+                                </select>
+                            </div>
+                        }
+
+                        @if (isClient)
+                        {
+                            <div>
+                                <label class="form-label">Paciente</label>
+                                <input class="form-control" value="@CurrentPatientLabel" readonly />
+                            </div>
+                        }
+
                         <div>
-                            <label class="form-label" for="modalAppointmentTarget">La cita es para</label>
-                            <select id="modalAppointmentTarget" class="form-select" value="@appointmentEditor.TargetType" @onchange="OnAppointmentTargetChanged" disabled="@(!CanEditAppointments)">
-                                <option value="self">Mi usuario</option>
-                                <option value="family">Un familiar</option>
+                            <label class="form-label" for="modalAppointmentType">Tipo *</label>
+                            <select id="modalAppointmentType" class="form-select" @bind="appointmentEditor.TipoCita" disabled="@(!CanEditAppointments)">
+                                @foreach (var option in appointmentTypeOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
                             </select>
                         </div>
-                    }
 
-                    @if (isClient)
-                    {
                         <div>
-                            <label class="form-label">Paciente</label>
-                            <input class="form-control" value="@CurrentPatientLabel" readonly />
+                            <label class="form-label">Estado *</label>
+                            <input class="form-control" value="@appointmentEditor.Estado" readonly />
                         </div>
-                    }
 
-                    <div>
-                        <label class="form-label" for="modalAppointmentDate">Fecha</label>
-                        <input id="modalAppointmentDate" type="date" class="form-control" value="@appointmentEditor.FechaCita" @onchange="OnAppointmentDateChanged" readonly="@(!CanEditAppointments)" />
+                        <div class="appointment-reason-field">
+                            <label class="form-label" for="modalAppointmentReason">Motivo</label>
+                            <textarea id="modalAppointmentReason" class="form-control" @bind="appointmentEditor.Motivo" maxlength="255" readonly="@(!CanEditAppointments)"></textarea>
+                        </div>
+
+                        @if (ShowCancellationReasonInForm)
+                        {
+                            <div>
+                                <label class="form-label" for="modalAppointmentCancelReason">Razon de cancelacion</label>
+                                <textarea id="modalAppointmentCancelReason" class="form-control" rows="2" @bind="appointmentEditor.RazonCancelacion" readonly="@(!CanCancelAppointments)"></textarea>
+                            </div>
+                        }
                     </div>
 
-                    <div>
-                        <label class="form-label" for="modalAppointmentSlot">Horario disponible</label>
-                        <select id="modalAppointmentSlot" class="form-select" @bind="appointmentEditor.SelectedSlotKey" disabled="@(!CanEditAppointments)">
-                            <option value="">Selecciona</option>
-                            @foreach (var slot in availableSlots)
+                    <section class="appointment-scheduler-panel" aria-label="Seleccion de fecha y turno">
+                        <div class="appointment-scheduler-header">
+                            <button type="button" class="calendar-nav-button" title="Mes anterior" @onclick="() => ChangeAppointmentCalendarMonthAsync(-1)" disabled="@(!CanEditAppointments)">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <strong>@AppointmentMonthLabel</strong>
+                            <button type="button" class="calendar-nav-button" title="Mes siguiente" @onclick="() => ChangeAppointmentCalendarMonthAsync(1)" disabled="@(!CanEditAppointments)">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <div class="calendar-legend">
+                            <span><i class="legend-dot free"></i> Libre</span>
+                            <span><i class="legend-dot partial"></i> Parcial</span>
+                            <span><i class="legend-dot full"></i> Lleno</span>
+                            <span><i class="legend-dot past"></i> Pasado</span>
+                        </div>
+
+                        <div class="appointment-calendar-grid">
+                            @foreach (var dayName in CalendarWeekDays)
                             {
-                                <option value="@slot.Key">@slot.Label</option>
+                                <div class="calendar-weekday">@dayName</div>
                             }
-                        </select>
-                    </div>
 
-                    <div>
-                        <label class="form-label" for="modalAppointmentType">Tipo</label>
-                        <select id="modalAppointmentType" class="form-select" @bind="appointmentEditor.TipoCita" disabled="@(!CanEditAppointments)">
-                            @foreach (var option in appointmentTypeOptions)
+                            @foreach (var day in appointmentCalendarDays)
                             {
-                                <option value="@option">@option</option>
+                                if (day.IsPlaceholder)
+                                {
+                                    <div class="calendar-day is-placeholder"></div>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="calendar-day @GetCalendarDayCss(day)"
+                                            disabled="@(!CanEditAppointments || !day.CanSelect)"
+                                            title="@day.StatusLabel"
+                                            @onclick="() => SelectAppointmentCalendarDateAsync(day.Date!.Value)">
+                                        @day.Date!.Value.Day
+                                    </button>
+                                }
                             }
-                        </select>
-                    </div>
+                        </div>
 
-                    <div>
-                        <label class="form-label">Estado</label>
-                        <input class="form-control" value="@appointmentEditor.Estado" readonly />
-                    </div>
+                        <div class="appointment-slots-panel">
+                            <div class="slots-title">
+                                <strong>Turnos para el @SelectedAppointmentDateLabel</strong>
+                                <span>@availableSlots.Count libres</span>
+                            </div>
+
+                            <div class="slots-grid">
+                                @foreach (var slot in SchedulerSlots)
+                                {
+                                    <button type="button"
+                                            class="slot-button @(slot.IsOccupied ? "is-occupied" : slot.Key == appointmentEditor.SelectedSlotKey ? "is-selected" : string.Empty)"
+                                            disabled="@(slot.IsOccupied || !CanEditAppointments)"
+                                            @onclick="() => SelectAppointmentSlot(slot.Key)">
+                                        @slot.Label
+                                        @if (slot.IsOccupied)
+                                        {
+                                            <br /><small>Ocupado</small>
+                                        }
+                                    </button>
+                                }
+
+                                @if (!SchedulerSlots.Any())
+                                {
+                                    <div class="slots-empty">No hay turnos para esta fecha.</div>
+                                }
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 @if (isClient && appointmentEditor.TargetType == "family")
@@ -443,30 +516,23 @@ else
                     </div>
                 }
 
-                <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
-                    <div class="patient-form-span">
-                        <label class="form-label" for="modalAppointmentReason">Motivo</label>
-                        <input id="modalAppointmentReason" class="form-control" @bind="appointmentEditor.Motivo" maxlength="255" readonly="@(!CanEditAppointments)" />
-                    </div>
-
-                    <div class="patient-form-span">
-                        <label class="form-label" for="modalAppointmentDescription">Descripcion adicional</label>
-                        <textarea id="modalAppointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
-                    </div>
-
-                    @if (CanWriteMedicalNotes)
-                    {
-                        <div class="patient-form-span">
-                            <label class="form-label" for="modalAppointmentNotes">Notas medicas</label>
-                            <textarea id="modalAppointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico"></textarea>
+                <details class="additional-details">
+                    <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                    <div class="additional-details-body is-single">
+                        <div>
+                            <label class="form-label" for="modalAppointmentDescription">Descripcion adicional</label>
+                            <textarea id="modalAppointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
                         </div>
-                    }
 
-                    <div class="patient-form-span">
-                        <label class="form-label" for="modalAppointmentCancelReason">Razon de cancelacion</label>
-                        <textarea id="modalAppointmentCancelReason" class="form-control" rows="2" @bind="appointmentEditor.RazonCancelacion" readonly="@(!CanCancelAppointments)"></textarea>
+                        @if (CanWriteMedicalNotes)
+                        {
+                            <div>
+                                <label class="form-label" for="modalAppointmentNotes">Notas medicas</label>
+                                <textarea id="modalAppointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico"></textarea>
+                            </div>
+                        }
                     </div>
-                </div>
+                </details>
             </div>
 
             <footer class="custom-modal-footer">
@@ -488,7 +554,7 @@ else
                 @if (!isCreatingAppointment && CanCancelAppointments)
                 {
                     <button type="button" class="btn btn-outline-primary" style="color: #dc3545 !important; border-color: rgba(220,53,69,0.3) !important;"
-                            @onclick='() => ChangeAppointmentStateAsync("Cancelada")'>Cancelar cita</button>
+                            @onclick="HandleFormCancelClickAsync">Cancelar cita</button>
                 }
                 <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cerrar</button>
             </footer>
@@ -579,6 +645,8 @@ else
     private readonly List<tbl_estado_cita> appointmentStates = [];
     private readonly List<tbl_log_auditoria> appointmentAuditEntries = [];
     private readonly List<SlotOption> availableSlots = [];
+    private readonly List<SlotOption> occupiedSlots = [];
+    private readonly List<CalendarDayOption> appointmentCalendarDays = [];
     private readonly List<tbl_disponibilidad_medico> currentAvailabilityRows = [];
     private readonly List<tbl_bloqueo_horarios> currentBlocks = [];
 
@@ -598,6 +666,7 @@ else
     private bool showFormModal;
     private bool showAuditModal;
     private bool showCancellationChoiceModal;
+    private bool showFormCancellationReason;
     private int selectedAppointmentId;
     private int currentUserId;
     private int currentRoleId;
@@ -608,6 +677,7 @@ else
     private string selectedTemporalFilter = "upcoming";
     private string selectedStatusFilter = string.Empty;
     private int selectedDoctorFilter;
+    private DateOnly appointmentCalendarMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private string dateFromFilter = string.Empty;
     private string dateToFilter = string.Empty;
     private string? statusMessage;
@@ -615,6 +685,7 @@ else
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private static readonly string[] appointmentTypeOptions = ["Presencial", "Telefonica", "Virtual"];
+    private static readonly string[] CalendarWeekDays = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
     private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
     private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Mantenimiento", "Otro"];
     private static readonly DayOption[] dayOptions =
@@ -636,6 +707,7 @@ else
     private bool CanManageAvailability => permissions.CanEdit && (isAdmin || isDoctor);
     private bool CanWriteMedicalNotes => appointmentEditor is not null && (isAdmin || isDoctor) && permissions.CanEdit;
     private bool CanChangeDoctor => CanEditAppointments && (isAdmin || (isDoctor && currentDoctorId == appointmentEditor!.IdMedico));
+    private bool ShowCancellationReasonInForm => appointmentEditor is not null && (showFormCancellationReason || IsCanceledState(appointmentEditor.Estado));
     private string CurrentEditorLabel => isCreatingAppointment ? "Nuevo registro" : (selectedAppointmentId > 0 ? $"Cita #{selectedAppointmentId}" : "Sin seleccion");
     private string CurrentEditorModeLabel => appointmentEditor is null ? "Sin seleccion" : isCreatingAppointment ? "Creacion" : CanEditAppointments ? "Edicion" : "Consulta";
     private string CurrentPatientLabel => appointmentEditor is null
@@ -662,6 +734,14 @@ else
         : isDoctor
             ? "Revisa todas tus citas asignadas, su motivo, su estado y mantien tu agenda diaria bajo control."
             : "Agenda para ti o para un familiar, revisa tus estados, filtra citas anteriores y reprograma o cancela cuando lo necesites.";
+    private string AppointmentMonthLabel => CultureInfo.GetCultureInfo("es-ES").TextInfo.ToTitleCase(appointmentCalendarMonth.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("es-ES")));
+    private string SelectedAppointmentDateLabel => DateOnly.TryParse(appointmentEditor?.FechaCita, out var selectedDate)
+        ? selectedDate.ToString("yyyy-MM-dd")
+        : "fecha seleccionada";
+    private IEnumerable<SlotDisplayOption> SchedulerSlots => occupiedSlots
+        .Select(x => new SlotDisplayOption(x.Key, x.Label, true, GetSlotStart(x.Key)))
+        .Concat(availableSlots.Select(x => new SlotDisplayOption(x.Key, x.Label.Split(" - ")[0], false, GetSlotStart(x.Key))))
+        .OrderBy(x => x.Start);
 
     private List<tbl_citas> FilteredAppointments => appointments
         .Where(MatchesFilters)
@@ -845,8 +925,10 @@ else
         selectedAppointment = appointments.FirstOrDefault(a => a.id_cita == appointmentId);
         appointmentEditor = BuildAppointmentEditor(selectedAppointment);
         isCreatingAppointment = false;
+        showFormCancellationReason = false;
 
         await RebuildAvailableSlotsAsync();
+        await BuildAppointmentCalendarAsync();
         await LoadAppointmentAuditAsync(appointmentId);
     }
 
@@ -877,9 +959,14 @@ else
         selectedAppointmentId = 0;
         selectedAppointment = null;
         isCreatingAppointment = true;
+        showFormCancellationReason = false;
         appointmentAuditEntries.Clear();
+        appointmentCalendarMonth = DateOnly.TryParse(appointmentEditor.FechaCita, out var defaultDate)
+            ? new DateOnly(defaultDate.Year, defaultDate.Month, 1)
+            : new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1);
 
         await RebuildAvailableSlotsAsync();
+        await BuildAppointmentCalendarAsync();
     }
 
     private async Task CancelAppointmentCreationAsync()
@@ -953,9 +1040,27 @@ else
         }
     }
 
+    private async Task HandleFormCancelClickAsync()
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        if (!showFormCancellationReason && string.IsNullOrWhiteSpace(appointmentEditor.RazonCancelacion))
+        {
+            showFormCancellationReason = true;
+            errorMessage = null;
+            return;
+        }
+
+        await ChangeAppointmentStateAsync("Cancelada");
+    }
+
     private void CloseFormModal()
     {
         showFormModal = false;
+        showFormCancellationReason = false;
         if (isCreatingAppointment)
         {
             isCreatingAppointment = false;
@@ -1457,6 +1562,7 @@ else
     private async Task RebuildAvailableSlotsAsync()
     {
         availableSlots.Clear();
+        occupiedSlots.Clear();
 
         if (appointmentEditor is null || appointmentEditor.IdMedico <= 0 || !DateOnly.TryParse(appointmentEditor.FechaCita, out var appointmentDate))
         {
@@ -1500,6 +1606,10 @@ else
             .Select(c => new { c.hora_inicio, c.hora_fin })
             .ToListAsync();
 
+        occupiedSlots.AddRange(busySlots
+            .OrderBy(x => x.hora_inicio)
+            .Select(x => new SlotOption(BuildSlotKey(x.hora_inicio, x.hora_fin), $"{x.hora_inicio:HH\\:mm}")));
+
         foreach (var schedule in schedules)
         {
             var cursor = schedule.hora_inicio;
@@ -1527,6 +1637,97 @@ else
             if (TryParseSlot(appointmentEditor.SelectedSlotKey, out var currentStart, out var currentEnd))
             {
                 availableSlots.Insert(0, new SlotOption(appointmentEditor.SelectedSlotKey, $"{currentStart:HH\\:mm} - {currentEnd:HH\\:mm} (actual)"));
+            }
+        }
+    }
+
+    private async Task BuildAppointmentCalendarAsync()
+    {
+        appointmentCalendarDays.Clear();
+
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        var firstDay = appointmentCalendarMonth;
+        var daysInMonth = DateTime.DaysInMonth(firstDay.Year, firstDay.Month);
+        var leadingBlanks = (int)new DateTime(firstDay.Year, firstDay.Month, 1).DayOfWeek;
+
+        for (var index = 0; index < leadingBlanks; index++)
+        {
+            appointmentCalendarDays.Add(CalendarDayOption.Placeholder());
+        }
+
+        if (appointmentEditor.IdMedico <= 0)
+        {
+            for (var day = 1; day <= daysInMonth; day++)
+            {
+                appointmentCalendarDays.Add(CalendarDayOption.Unavailable(new DateOnly(firstDay.Year, firstDay.Month, day), "Selecciona un medico"));
+            }
+
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var doctor = await dbContext.tbl_medico.AsNoTracking().FirstOrDefaultAsync(m => m.id_medico == appointmentEditor.IdMedico && m.activo == true);
+        if (doctor is null)
+        {
+            return;
+        }
+
+        var monthStart = firstDay;
+        var monthEnd = new DateOnly(firstDay.Year, firstDay.Month, daysInMonth);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var selectedDate = DateOnly.TryParse(appointmentEditor.FechaCita, out var parsedSelectedDate) ? parsedSelectedDate : today;
+        var durationMinutes = Math.Max(10, doctor.duracion_consulta_minutos ?? 30);
+
+        var schedules = await dbContext.tbl_disponibilidad_medico
+            .AsNoTracking()
+            .Where(x => x.id_medico == doctor.id_medico && x.disponible == true)
+            .ToListAsync();
+
+        var blocks = await dbContext.tbl_bloqueo_horarios
+            .AsNoTracking()
+            .Where(x => x.id_medico == doctor.id_medico && x.activo == true && x.fecha_inicio <= monthEnd && x.fecha_fin >= monthStart)
+            .ToListAsync();
+
+        var monthAppointments = await dbContext.tbl_citas
+            .AsNoTracking()
+            .Include(c => c.id_estadoNavigation)
+            .Where(c => c.id_medico == doctor.id_medico && c.fecha_cita >= monthStart && c.fecha_cita <= monthEnd)
+            .Where(c => c.id_estadoNavigation != null && c.id_estadoNavigation.nombre_estado != "Cancelada" && c.id_cita != appointmentEditor.IdCita)
+            .Select(c => new { c.fecha_cita, c.hora_inicio, c.hora_fin })
+            .ToListAsync();
+
+        for (var day = 1; day <= daysInMonth; day++)
+        {
+            var date = new DateOnly(firstDay.Year, firstDay.Month, day);
+            var isPast = date < today;
+            var isBlocked = blocks.Any(x => x.fecha_inicio <= date && x.fecha_fin >= date);
+            var daySchedules = schedules.Where(x => x.dia_semana == ToDatabaseDayOfWeek(date.DayOfWeek)).ToList();
+            var capacity = isBlocked ? 0 : daySchedules.Sum(x => CountScheduleSlots(x, durationMinutes));
+            var occupied = monthAppointments.Count(x => x.fecha_cita == date);
+
+            if (isPast)
+            {
+                appointmentCalendarDays.Add(new CalendarDayOption(date, "past", "Pasado", false, date == selectedDate));
+            }
+            else if (capacity <= 0)
+            {
+                appointmentCalendarDays.Add(new CalendarDayOption(date, "unavailable", isBlocked ? "Bloqueado" : "Sin disponibilidad", false, date == selectedDate));
+            }
+            else if (occupied >= capacity)
+            {
+                appointmentCalendarDays.Add(new CalendarDayOption(date, "full", "Lleno", true, date == selectedDate));
+            }
+            else if (occupied > 0)
+            {
+                appointmentCalendarDays.Add(new CalendarDayOption(date, "partial", "Parcial", true, date == selectedDate));
+            }
+            else
+            {
+                appointmentCalendarDays.Add(new CalendarDayOption(date, "free", "Libre", true, date == selectedDate));
             }
         }
     }
@@ -1620,7 +1821,9 @@ else
         }
 
         appointmentEditor.IdMedico = int.TryParse(args.Value?.ToString(), out var parsedDoctorId) ? parsedDoctorId : 0;
+        appointmentEditor.SelectedSlotKey = string.Empty;
         await RebuildAvailableSlotsAsync();
+        await BuildAppointmentCalendarAsync();
     }
 
     private void OnSelfPatientBirthDateChanged(ChangeEventArgs args)
@@ -1711,7 +1914,44 @@ else
         }
 
         appointmentEditor.FechaCita = args.Value?.ToString() ?? string.Empty;
+        if (DateOnly.TryParse(appointmentEditor.FechaCita, out var selectedDate))
+        {
+            appointmentCalendarMonth = new DateOnly(selectedDate.Year, selectedDate.Month, 1);
+        }
+
+        appointmentEditor.SelectedSlotKey = string.Empty;
         await RebuildAvailableSlotsAsync();
+        await BuildAppointmentCalendarAsync();
+    }
+
+    private async Task ChangeAppointmentCalendarMonthAsync(int monthOffset)
+    {
+        appointmentCalendarMonth = appointmentCalendarMonth.AddMonths(monthOffset);
+        await BuildAppointmentCalendarAsync();
+    }
+
+    private async Task SelectAppointmentCalendarDateAsync(DateOnly date)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.FechaCita = date.ToString("yyyy-MM-dd");
+        appointmentCalendarMonth = new DateOnly(date.Year, date.Month, 1);
+        appointmentEditor.SelectedSlotKey = string.Empty;
+        await RebuildAvailableSlotsAsync();
+        await BuildAppointmentCalendarAsync();
+    }
+
+    private void SelectAppointmentSlot(string slotKey)
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        appointmentEditor.SelectedSlotKey = slotKey;
     }
 
     private async Task OnAvailabilityDoctorChanged(ChangeEventArgs args)
@@ -1787,6 +2027,18 @@ else
         if ((isAdmin || isDoctor) && appointmentEditor.IdPaciente <= 0)
         {
             errorMessage = "Selecciona un paciente.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(appointmentEditor.TipoCita))
+        {
+            errorMessage = "Selecciona el tipo de cita.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(appointmentEditor.Estado))
+        {
+            errorMessage = "La cita debe tener un estado.";
             return false;
         }
 
@@ -2184,6 +2436,46 @@ else
 
     private static string BuildSlotKey(TimeOnly start, TimeOnly end) => $"{start:HH\\:mm}|{end:HH\\:mm}";
 
+    private static TimeOnly GetSlotStart(string slotKey)
+    {
+        return TryParseSlot(slotKey, out var start, out _) ? start : TimeOnly.MinValue;
+    }
+
+    private static int CountScheduleSlots(tbl_disponibilidad_medico schedule, int durationMinutes)
+    {
+        var count = 0;
+        var cursor = schedule.hora_inicio;
+
+        while (cursor.AddMinutes(durationMinutes) <= schedule.hora_fin)
+        {
+            var slotEnd = cursor.AddMinutes(durationMinutes);
+            var overlapsBreak = schedule.hora_descanso_inicio.HasValue &&
+                schedule.hora_descanso_fin.HasValue &&
+                cursor < schedule.hora_descanso_fin.Value &&
+                slotEnd > schedule.hora_descanso_inicio.Value;
+
+            if (!overlapsBreak)
+            {
+                count++;
+            }
+
+            cursor = cursor.AddMinutes(durationMinutes);
+        }
+
+        return count;
+    }
+
+    private static string GetCalendarDayCss(CalendarDayOption day)
+    {
+        var classes = $"is-{day.Status}";
+        if (day.IsSelected)
+        {
+            classes += " is-selected";
+        }
+
+        return classes;
+    }
+
     private static bool TryParseSlot(string? rawSlot, out TimeOnly start, out TimeOnly end)
     {
         start = default;
@@ -2356,6 +2648,11 @@ else
         return stateName is "Programada" or "Reprogramada";
     }
 
+    private static bool IsCanceledState(string? stateName)
+    {
+        return string.Equals(stateName, "Cancelada", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -2462,4 +2759,10 @@ else
 
     private sealed record DayOption(int Value, string Label);
     private sealed record SlotOption(string Key, string Label);
+    private sealed record SlotDisplayOption(string Key, string Label, bool IsOccupied, TimeOnly Start);
+    private sealed record CalendarDayOption(DateOnly? Date, string Status, string StatusLabel, bool CanSelect, bool IsSelected, bool IsPlaceholder = false)
+    {
+        public static CalendarDayOption Placeholder() => new(null, "placeholder", string.Empty, false, false, true);
+        public static CalendarDayOption Unavailable(DateOnly date, string label) => new(date, "unavailable", label, false, false);
+    }
 }

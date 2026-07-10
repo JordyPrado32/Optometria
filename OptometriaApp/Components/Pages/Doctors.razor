@@ -195,7 +195,7 @@ else
                                                 @if (permissions.CanCreate && CanManageUser(user))
                                                 {
                                                     <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => PrepareEditDoctor(user)">
-                                                        Completar ficha
+                                                        <i class="bi bi-clipboard-plus-fill"></i> Completar ficha
                                                     </button>
                                                 }
                                             }
@@ -216,6 +216,7 @@ else
                                             @if (CanToggleDoctorProfile(user))
                                             {
                                                 <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(user)">
+                                                    <i class="bi @(user.tbl_medico!.activo == true ? "bi-toggle-off" : "bi-toggle-on")"></i>
                                                     @(user.tbl_medico!.activo == true ? "Inactivar" : "Activar")
                                                 </button>
                                             }
@@ -265,96 +266,118 @@ else
                     </div>
                 }
 
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="doctorLicense">Numero de licencia</label>
+                        <label class="form-label" for="doctorLicense">Numero de licencia *</label>
                         <input id="doctorLicense" class="form-control" @bind="editor.NumeroLicencia" maxlength="50" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="doctorSpecialty">Especialidad</label>
+                        <label class="form-label" for="doctorSpecialty">Especialidad *</label>
                         <input id="doctorSpecialty" class="form-control" @bind="editor.Especialidad" maxlength="100" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="doctorProfessionalId">Cedula profesional</label>
+                        <label class="form-label" for="doctorProfessionalId">Cedula profesional *</label>
                         <input id="doctorProfessionalId" class="form-control" @bind="editor.CedulaProfesional" maxlength="50" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="doctorOfficePhone">Telefono consultorio</label>
-                        <input id="doctorOfficePhone" class="form-control" @bind="editor.TelefonoConsultorio" maxlength="20" readonly="@(!CanModifyEditor)" />
+                        <label class="form-label" for="doctorOfficePhone">Telefono consultorio *</label>
+                        <input id="doctorOfficePhone" class="form-control" @bind="editor.TelefonoConsultorio" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="doctorSchool">Institucion de egreso</label>
-                        <input id="doctorSchool" class="form-control" @bind="editor.InstitucionEgreso" maxlength="200" readonly="@(!CanModifyEditor)" />
+                        <label class="form-label" for="doctorDuration">Duracion consulta (min) *</label>
+                        <select id="doctorDuration" class="form-select" @bind="editor.DuracionConsultaMinutos" disabled="@(!CanModifyEditor)">
+                            <option value="">Selecciona</option>
+                            <option value="15">15 min</option>
+                            <option value="30">30 min</option>
+                            <option value="60">1 hora</option>
+                        </select>
                     </div>
 
                     <div>
-                        <label class="form-label" for="doctorGraduationYear">Año de egreso</label>
-                        <input id="doctorGraduationYear" type="number" class="form-control" @bind="editor.AnioEgreso" readonly="@(!CanModifyEditor)" />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="doctorLanguages">Idiomas</label>
-                        <input id="doctorLanguages" class="form-control" @bind="editor.Idiomas" maxlength="200" readonly="@(!CanModifyEditor)" />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="doctorDuration">Duracion consulta (min)</label>
-                        <input id="doctorDuration" type="number" class="form-control" @bind="editor.DuracionConsultaMinutos" readonly="@(!CanModifyEditor)" />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="doctorPrice">Precio base</label>
+                        <label class="form-label" for="doctorPrice">Precio base *</label>
                         <input id="doctorPrice" type="number" step="0.01" class="form-control" @bind="editor.PrecioConsultaBase" readonly="@(!CanModifyEditor)" />
                     </div>
 
-                    <div>
-                        <label class="form-label" for="doctorDiscount">Descuento (%)</label>
-                        <input id="doctorDiscount" type="number" step="0.01" class="form-control" @bind="editor.DescuentoPorcentaje" readonly="@(!CanModifyEditor)" />
-                    </div>
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                        <div class="additional-details-body">
+                            <div>
+                                <label class="form-label" for="doctorSchool">Institucion de egreso</label>
+                                <input id="doctorSchool" class="form-control" @bind="editor.InstitucionEgreso" maxlength="200" readonly="@(!CanModifyEditor)" />
+                            </div>
 
-                    <div>
-                        <label class="form-label d-block">Acepta citas telefónicas</label>
-                        <div class="form-check form-switch">
-                            <input id="doctorPhoneAppointments" class="form-check-input" type="checkbox" @bind="editor.AceptarCitasTelefonicas" disabled="@(!CanModifyEditor)" />
-                            <label class="form-check-label" for="doctorPhoneAppointments">@((editor.AceptarCitasTelefonicas ? "Sí" : "No"))</label>
+                            <div>
+                                <label class="form-label" for="doctorGraduationYear">Año de egreso</label>
+                                <select id="doctorGraduationYear" class="form-select" @bind="editor.AnioEgreso" disabled="@(!CanModifyEditor)">
+                                    <option value="">Selecciona</option>
+                                    @for (var year = DateTime.Today.Year; year >= 1980; year--)
+                                    {
+                                        <option value="@year">@year</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorLanguages">Idiomas</label>
+                                <input id="doctorLanguages" class="form-control" @bind="editor.Idiomas" maxlength="200" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label" for="doctorDiscount">Descuento (%)</label>
+                                <input id="doctorDiscount" type="number" step="0.01" class="form-control" @bind="editor.DescuentoPorcentaje" readonly="@(!CanModifyEditor)" />
+                            </div>
+
+                            <div>
+                                <label class="form-label d-block">Acepta citas telefónicas</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorPhoneAppointments" class="form-check-input" type="checkbox" @bind="editor.AceptarCitasTelefonicas" disabled="@(!CanModifyEditor)" />
+                                    <label class="form-check-label" for="doctorPhoneAppointments">@((editor.AceptarCitasTelefonicas ? "Sí" : "No"))</label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label d-block">Acepta citas presenciales</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorInPersonAppointments" class="form-check-input" type="checkbox" @bind="editor.AceptarCitasPresenciales" disabled="@(!CanModifyEditor)" />
+                                    <label class="form-check-label" for="doctorInPersonAppointments">@((editor.AceptarCitasPresenciales ? "Sí" : "No"))</label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label d-block">Estado de ficha</label>
+                                <div class="form-check form-switch">
+                                    <input id="doctorProfileStatus" class="form-check-input" type="checkbox" @bind="editor.Activo" disabled="@(!CanModifyEditor || selfManagedMode)" />
+                                    <label class="form-check-label" for="doctorProfileStatus">@((editor.Activo ? "Activa" : "Inactiva"))</label>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <details class="additional-details">
+                    <summary><span><i class="bi bi-info-circle"></i> Mas detalles</span></summary>
+                    <div class="additional-details-body is-single">
+                        <div>
+                            <label class="form-label" for="doctorBio">Biografia</label>
+                            <textarea id="doctorBio" class="form-control" rows="3" @bind="editor.Biografia" readonly="@(!CanModifyEditor)"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="doctorCerts">Certificaciones</label>
+                            <textarea id="doctorCerts" class="form-control" rows="3" @bind="editor.Certificaciones" readonly="@(!CanModifyEditor)"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="form-label" for="doctorObservations">Observaciones</label>
+                            <textarea id="doctorObservations" class="form-control" rows="3" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
                         </div>
                     </div>
-
-                    <div>
-                        <label class="form-label d-block">Acepta citas presenciales</label>
-                        <div class="form-check form-switch">
-                            <input id="doctorInPersonAppointments" class="form-check-input" type="checkbox" @bind="editor.AceptarCitasPresenciales" disabled="@(!CanModifyEditor)" />
-                            <label class="form-check-label" for="doctorInPersonAppointments">@((editor.AceptarCitasPresenciales ? "Sí" : "No"))</label>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="form-label d-block">Estado de ficha</label>
-                        <div class="form-check form-switch">
-                            <input id="doctorProfileStatus" class="form-check-input" type="checkbox" @bind="editor.Activo" disabled="@(!CanModifyEditor || selfManagedMode)" />
-                            <label class="form-check-label" for="doctorProfileStatus">@((editor.Activo ? "Activa" : "Inactiva"))</label>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-top: 1rem;">
-                    <label class="form-label" for="doctorBio">Biografia</label>
-                    <textarea id="doctorBio" class="form-control" rows="3" @bind="editor.Biografia" readonly="@(!CanModifyEditor)"></textarea>
-                </div>
-
-                <div style="margin-top: 1rem;">
-                    <label class="form-label" for="doctorCerts">Certificaciones</label>
-                    <textarea id="doctorCerts" class="form-control" rows="3" @bind="editor.Certificaciones" readonly="@(!CanModifyEditor)"></textarea>
-                </div>
-
-                <div style="margin-top: 1rem;">
-                    <label class="form-label" for="doctorObservations">Observaciones</label>
-                    <textarea id="doctorObservations" class="form-control" rows="3" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
-                </div>
+                </details>
             </div>
             <footer class="custom-modal-footer">
                 <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cancelar</button>
@@ -928,32 +951,44 @@ else
             return false;
         }
 
+        if (string.IsNullOrWhiteSpace(editor.CedulaProfesional))
+        {
+            errorMessage = "La cédula profesional es obligatoria.";
+            return false;
+        }
+
+        if (!AppValidation.IsDigitsOnly(editor.TelefonoConsultorio) || editor.TelefonoConsultorio.Length != 10)
+        {
+            errorMessage = "El teléfono del consultorio debe tener exactamente 10 dígitos y solo números.";
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(editor.AnioEgreso))
         {
-            var currentYear = DateTime.Today.Year + 1;
-            if (!int.TryParse(editor.AnioEgreso, out var graduationYear) || graduationYear < 1900 || graduationYear > currentYear)
+            var currentYear = DateTime.Today.Year;
+            if (!int.TryParse(editor.AnioEgreso, out var graduationYear) || graduationYear < 1980 || graduationYear > currentYear)
             {
-                errorMessage = "El anio de egreso no es valido.";
+                errorMessage = "El año de egreso debe estar entre 1980 y el año actual.";
                 return false;
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.DuracionConsultaMinutos))
+        if (string.IsNullOrWhiteSpace(editor.DuracionConsultaMinutos) || editor.DuracionConsultaMinutos is not ("15" or "30" or "60"))
         {
-            if (!int.TryParse(editor.DuracionConsultaMinutos, out var duration) || duration < 10 || duration > 480)
-            {
-                errorMessage = "La duracion de consulta debe estar entre 10 y 480 minutos.";
-                return false;
-            }
+            errorMessage = "Selecciona una duración de consulta de 15, 30 o 60 minutos.";
+            return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.PrecioConsultaBase))
+        if (string.IsNullOrWhiteSpace(editor.PrecioConsultaBase))
         {
-            if (!decimal.TryParse(editor.PrecioConsultaBase, out var basePrice) || basePrice < 0)
-            {
-                errorMessage = "El precio base no es valido.";
-                return false;
-            }
+            errorMessage = "El precio base es obligatorio.";
+            return false;
+        }
+
+        if (!AppValidation.TryParseDecimal(editor.PrecioConsultaBase, out var basePrice) || basePrice < 0)
+        {
+            errorMessage = "El precio base no es valido.";
+            return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.DescuentoPorcentaje))

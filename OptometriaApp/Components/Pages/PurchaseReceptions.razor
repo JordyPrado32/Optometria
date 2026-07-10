@@ -93,10 +93,14 @@ else
                                     <td>@(item.cantidad_total_recibida ?? 0)</td>
                                     <td style="text-align:right;">
                                         <div style="display:inline-flex; gap:0.4rem;">
-                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">Editar</button>
+                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">
+                                                <i class="bi bi-pencil-fill"></i> Editar
+                                            </button>
                                             @if (permissions.CanDelete)
                                             {
-                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">Eliminar</button>
+                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
+                                                </button>
                                             }
                                         </div>
                                     </td>

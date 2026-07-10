@@ -113,11 +113,17 @@ else
                                     <td>@order.tbl_detalle_orden_compra.Count</td>
                                     <td style="text-align:right;">
                                         <div style="display:inline-flex; gap:0.4rem;">
-                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(order)">Editar</button>
-                                            <button class="btn btn-outline-primary" @onclick="() => ShowAudit(order)">Auditoria</button>
+                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(order)">
+                                                <i class="bi bi-pencil-fill"></i> Editar
+                                            </button>
+                                            <button class="btn btn-outline-primary" @onclick="() => ShowAudit(order)">
+                                                <i class="bi bi-clock-history"></i> Auditoria
+                                            </button>
                                             @if (permissions.CanDelete)
                                             {
-                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(order)">Eliminar</button>
+                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(order)">
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
+                                                </button>
                                             }
                                         </div>
                                     </td>
@@ -141,13 +147,14 @@ else
                 <button type="button" class="btn-close-modal" @onclick="CloseForm">×</button>
             </header>
             <div class="custom-modal-body">
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label">Numero</label>
+                        <label class="form-label">Numero *</label>
                         <input class="form-control" @bind="editor.NumeroOrden" maxlength="20" />
                     </div>
                     <div>
-                        <label class="form-label">Proveedor</label>
+                        <label class="form-label">Proveedor *</label>
                         <select class="form-select" @bind="editor.IdProveedor">
                             <option value="0">Selecciona</option>
                             @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
@@ -157,32 +164,15 @@ else
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Fecha requerida</label>
-                        <input type="date" class="form-control" @bind="editor.FechaRequerida" />
+                        <label class="form-label">Fecha requerida * <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
+                        <input type="date" class="form-control" @bind="editor.FechaRequerida" min="@TodayDateIso" />
                     </div>
                     <div>
-                        <label class="form-label">Recepcion esperada</label>
-                        <input type="date" class="form-control" @bind="editor.FechaRecepcionEsperada" />
+                        <label class="form-label">Recepcion esperada * <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
+                        <input type="date" class="form-control" @bind="editor.FechaRecepcionEsperada" min="@TodayDateIso" />
                     </div>
                     <div>
-                        <label class="form-label">Condicion pago</label>
-                        <select class="form-select" @bind="editor.CondicionPago">
-                            @foreach (var option in paymentOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label">Dias credito</label>
-                        <input type="number" class="form-control" @bind="editor.DiasCredito" min="0" />
-                    </div>
-                    <div>
-                        <label class="form-label">Moneda</label>
-                        <input class="form-control" @bind="editor.Moneda" maxlength="3" />
-                    </div>
-                    <div>
-                        <label class="form-label">Estado</label>
+                        <label class="form-label">Estado *</label>
                         <select class="form-select" @bind="editor.EstadoOrden">
                             @foreach (var option in stateOptions)
                             {
@@ -190,14 +180,36 @@ else
                             }
                         </select>
                     </div>
-                    <div class="patient-form-span">
-                        <label class="form-label">Referencia externa</label>
-                        <input class="form-control" @bind="editor.ReferenciaExterna" maxlength="100" />
-                    </div>
-                    <div class="patient-form-span">
-                        <label class="form-label">Observaciones</label>
-                        <textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea>
-                    </div>
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                        <div class="additional-details-body">
+                            <div>
+                                <label class="form-label">Condicion pago</label>
+                                <select class="form-select" @bind="editor.CondicionPago">
+                                    @foreach (var option in paymentOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Dias credito</label>
+                                <input type="number" class="form-control" @bind="editor.DiasCredito" min="0" />
+                            </div>
+                            <div>
+                                <label class="form-label">Moneda</label>
+                                <input class="form-control" @bind="editor.Moneda" maxlength="3" />
+                            </div>
+                            <div>
+                                <label class="form-label">Referencia externa</label>
+                                <input class="form-control" @bind="editor.ReferenciaExterna" maxlength="100" />
+                            </div>
+                            <div class="patient-form-span">
+                                <label class="form-label">Observaciones</label>
+                                <textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea>
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 <div class="management-card" style="margin-top:1rem; padding:1rem;">
@@ -211,7 +223,7 @@ else
                             var line = editor.Lines[i];
                             <div class="management-form-grid" style="padding:0.8rem; border:1px solid rgba(127,105,81,0.1); border-radius:12px;">
                                 <div>
-                                    <label class="form-label">Producto</label>
+                                    <label class="form-label">Producto *</label>
                                     <select class="form-select" @bind="line.IdProducto">
                                         <option value="0">Selecciona</option>
                                         @foreach (var product in products.OrderBy(p => p.nombre_producto))
@@ -221,21 +233,26 @@ else
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="form-label">Cantidad</label>
+                                    <label class="form-label">Cantidad *</label>
                                     <input type="number" class="form-control" @bind="line.CantidadSolicitada" min="1" />
                                 </div>
                                 <div>
-                                    <label class="form-label">Precio unitario</label>
+                                    <label class="form-label">Precio unitario *</label>
                                     <input type="number" step="0.01" class="form-control" @bind="line.PrecioUnitario" min="0" />
                                 </div>
-                                <div>
-                                    <label class="form-label">Descuento %</label>
-                                    <input type="number" step="0.01" class="form-control" @bind="line.DescuentoLinea" min="0" />
-                                </div>
-                                <div class="patient-form-span">
-                                    <label class="form-label">Observaciones linea</label>
-                                    <input class="form-control" @bind="line.Observaciones" maxlength="500" />
-                                </div>
+                                <details class="additional-details">
+                                    <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                                    <div class="additional-details-body">
+                                        <div>
+                                            <label class="form-label">Descuento %</label>
+                                            <input type="number" step="0.01" class="form-control" @bind="line.DescuentoLinea" min="0" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Observaciones linea</label>
+                                            <input class="form-control" @bind="line.Observaciones" maxlength="500" />
+                                        </div>
+                                    </div>
+                                </details>
                                 <div>
                                     <button type="button" class="btn btn-outline-primary" @onclick="() => RemoveLine(i)">Quitar</button>
                                 </div>
@@ -302,6 +319,7 @@ else
     private bool isLoading = true, canView, isCreating, showForm, showAudit, showAlert, alertIsError;
     private int currentUserId, currentRoleId;
     private string searchTerm = string.Empty, stateFilter = string.Empty, supplierFilter = string.Empty, alertMessage = string.Empty;
+    private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private List<tbl_orden_compra> FilteredOrders => orders.Where(MatchesFilters).ToList();
     private const int TablePageSize = 5;
@@ -406,9 +424,22 @@ else
 
     private async Task SaveAsync()
     {
-        if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroOrden) || editor.IdProveedor <= 0 || editor.Lines.Count == 0 || editor.Lines.Any(x => x.IdProducto <= 0 || x.CantidadSolicitada <= 0))
+        if (editor is null ||
+            string.IsNullOrWhiteSpace(editor.NumeroOrden) ||
+            editor.IdProveedor <= 0 ||
+            string.IsNullOrWhiteSpace(editor.EstadoOrden) ||
+            !editor.FechaRequerida.HasValue ||
+            !editor.FechaRecepcionEsperada.HasValue ||
+            editor.Lines.Count == 0 ||
+            editor.Lines.Any(x => x.IdProducto <= 0 || x.CantidadSolicitada <= 0 || x.PrecioUnitario < 0))
         {
-            ShowAlert("Completa cabecera y lineas validas.", true);
+            ShowAlert("Completa proveedor, fechas, estado y al menos una linea valida con producto, cantidad y precio.", true);
+            return;
+        }
+
+        if (!AppValidation.IsNotPast(editor.FechaRequerida) || !AppValidation.IsNotPast(editor.FechaRecepcionEsperada))
+        {
+            ShowAlert("Las fechas de la orden de compra no pueden ser anteriores a hoy.", true);
             return;
         }
 

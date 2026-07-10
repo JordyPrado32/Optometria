@@ -72,7 +72,9 @@ else
                                 <td>@(string.IsNullOrWhiteSpace(role.descripcion) ? "Sin descripcion" : role.descripcion)</td>
                                 <td>@GetVisibleMenuCount(role.id_rol)</td>
                                 <td class="table-actions-cell">
-                                    <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditRole(role.id_rol)">Editar</button>
+                                    <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditRole(role.id_rol)">
+                                        <i class="bi bi-pencil-fill"></i> Editar
+                                    </button>
                                 </td>
                             </tr>
                         }

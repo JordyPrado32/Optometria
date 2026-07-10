@@ -186,7 +186,7 @@ else
                                             @if (permissions.CanDelete)
                                             {
                                                 <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => DeleteProductAsync(product)">
-                                                    Eliminar
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
                                                 </button>
                                             }
                                         </div>
@@ -260,6 +260,9 @@ else
                             }
                         </select>
                     </div>
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-cash-coin"></i> Costos e impuestos</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label">Precio costo</label>
                         <input type="number" step="0.01" min="0" class="form-control" @bind="editor.PrecioCosto" readonly="@(!CanModifyEditor)" />
@@ -284,6 +287,12 @@ else
                             }
                         </select>
                     </div>
+                        </div>
+                    </details>
+
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-boxes"></i> Stock y ubicación</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label">Stock actual</label>
                         <input type="number" class="form-control" @bind="editor.StockActual" readonly="@(!CanModifyEditor)" />
@@ -320,6 +329,12 @@ else
                         <label class="form-label">Nivel</label>
                         <input class="form-control" @bind="editor.Nivel" readonly="@(!CanModifyEditor)" maxlength="10" />
                     </div>
+                        </div>
+                    </details>
+
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-rulers"></i> Medidas y vencimiento</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label">Peso unitario (kg)</label>
                         <input type="number" step="0.0001" min="0" class="form-control" @bind="editor.PesoUnitario" readonly="@(!CanModifyEditor)" />
@@ -344,6 +359,12 @@ else
                         <label class="form-label">Dias vencimiento</label>
                         <input type="number" class="form-control" @bind="editor.DiasVencimiento" readonly="@(!CanModifyEditor)" />
                     </div>
+                        </div>
+                    </details>
+
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-graph-up-arrow"></i> Rotación, descuentos y contabilidad</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label">Cuenta contable</label>
                         <input class="form-control" @bind="editor.CuentaContable" readonly="@(!CanModifyEditor)" maxlength="20" />
@@ -402,6 +423,12 @@ else
                         <label class="form-label">Movimientos mes</label>
                         <input type="number" class="form-control" @bind="editor.CantidadMovimientosMes" readonly="@(!CanModifyEditor)" />
                     </div>
+                        </div>
+                    </details>
+
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                        <div class="additional-details-body">
                     <div class="patient-form-span">
                         <label class="form-label">Etiquetas</label>
                         <input class="form-control" @bind="editor.Etiquetas" readonly="@(!CanModifyEditor)" maxlength="500" />
@@ -486,6 +513,8 @@ else
                         <label class="form-label">Notas internas</label>
                         <textarea class="form-control" rows="4" @bind="editor.NotasInternas" readonly="@(!CanModifyEditor)"></textarea>
                     </div>
+                        </div>
+                    </details>
                 </div>
 
                 <div class="management-form-grid" style="margin-top: 1rem;">

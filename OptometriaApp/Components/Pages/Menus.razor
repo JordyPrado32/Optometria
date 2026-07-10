@@ -120,8 +120,11 @@ else
                                         </span>
                                     </td>
                                     <td class="table-actions-cell">
-                                        <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditMenu(menu.id_menu)">Editar</button>
+                                        <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditMenu(menu.id_menu)">
+                                            <i class="bi bi-pencil-fill"></i> Editar
+                                        </button>
                                         <button type="button" class="btn @(menu.activo == true ? "btn-outline-primary" : "btn-primary") compact-action" @onclick="() => ToggleMenuActiveAsync(menu)">
+                                            <i class="bi @(menu.activo == true ? "bi-toggle-off" : "bi-toggle-on")"></i>
                                             @(menu.activo == true ? "Desactivar" : "Activar")
                                         </button>
                                     </td>

@@ -132,6 +132,7 @@ else
                                             @if (permissions.CanDelete)
                                             {
                                                 <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(category)">
+                                                    <i class="bi @(category.activo != false ? "bi-toggle-off" : "bi-toggle-on")"></i>
                                                     @(category.activo != false ? "Inactivar" : "Activar")
                                                 </button>
                                             }
@@ -162,14 +163,15 @@ else
                     <div class="alert alert-danger" role="alert">@errorMessage</div>
                 }
 
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="categoryName">Nombre</label>
+                        <label class="form-label" for="categoryName">Nombre *</label>
                         <input id="categoryName" class="form-control" @bind="editor.Nombre" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="categoryStatusField">Estado</label>
+                        <label class="form-label" for="categoryStatusField">Estado *</label>
                         <select id="categoryStatusField" class="form-select" @bind="EditorActivoValue" disabled="@(!CanModifyEditor)">
                             <option value="true">Activa</option>
                             <option value="false">Inactiva</option>
@@ -177,10 +179,15 @@ else
                     </div>
                 </div>
 
-                <div style="margin-top: 1rem;">
-                    <label class="form-label" for="categoryDescription">Descripcion</label>
-                    <textarea id="categoryDescription" class="form-control" rows="4" @bind="editor.Descripcion" readonly="@(!CanModifyEditor)"></textarea>
-                </div>
+                <details class="additional-details">
+                    <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                    <div class="additional-details-body is-single">
+                        <div>
+                            <label class="form-label" for="categoryDescription">Descripcion</label>
+                            <textarea id="categoryDescription" class="form-control" rows="4" @bind="editor.Descripcion" readonly="@(!CanModifyEditor)"></textarea>
+                        </div>
+                    </div>
+                </details>
             </div>
             <footer class="custom-modal-footer">
                 <button type="button" class="btn btn-outline-primary" @onclick="CloseFormModal">Cancelar</button>

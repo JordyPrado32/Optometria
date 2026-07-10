@@ -157,7 +157,7 @@ else
                                             @if (permissions.CanDelete)
                                             {
                                                 <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => DeleteClientAsync(item)">
-                                                    Eliminar
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
                                                 </button>
                                             }
                                         </div>
@@ -212,7 +212,7 @@ else
 
                     <div>
                         <label class="form-label" for="clientNumeroId">Numero de identificacion *</label>
-                        <input id="clientNumeroId" class="form-control" @bind="editor.NumeroIdentificacion" readonly="@(!CanModifyEditor)" maxlength="20" />
+                        <input id="clientNumeroId" class="form-control" @bind="editor.NumeroIdentificacion" readonly="@(!CanModifyEditor)" maxlength="13" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
@@ -230,6 +230,9 @@ else
                         <input id="clientApellidos" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="200" />
                     </div>
 
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-person-lines-fill"></i> Contacto y ubicación</span></summary>
+                        <div class="additional-details-body">
                     <div class="patient-form-span">
                         <label class="form-label" for="clientNombreComercial">@CommercialNameLabel</label>
                         <input id="clientNombreComercial" class="form-control" @bind="editor.NombreComercial" readonly="@(!CanModifyEditor)" maxlength="300" />
@@ -257,14 +260,19 @@ else
 
                     <div>
                         <label class="form-label" for="clientPhone">Telefono</label>
-                        <input id="clientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
+                        <input id="clientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
                         <label class="form-label" for="clientEmail">Correo electronico</label>
                         <input id="clientEmail" type="email" class="form-control" @bind="editor.CorreoElectronico" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
+                        </div>
+                    </details>
 
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-wallet2"></i> Crédito y cobranza</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label" for="clientCountry">Pais codigo</label>
                         <input id="clientCountry" class="form-control" @bind="editor.PaisCodigo" readonly="@(!CanModifyEditor)" maxlength="2" />
@@ -294,7 +302,12 @@ else
                         <label class="form-label" for="clientBalance">Saldo deudor</label>
                         <input id="clientBalance" type="number" step="0.01" class="form-control" @bind="editor.SaldoDeudor" readonly="@(!CanModifyEditor)" min="0" />
                     </div>
+                        </div>
+                    </details>
 
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-person-vcard"></i> Contacto secundario</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label" for="clientContactoNombre">Contacto nombre</label>
                         <input id="clientContactoNombre" class="form-control" @bind="editor.ContactoNombre" readonly="@(!CanModifyEditor)" maxlength="200" />
@@ -302,14 +315,19 @@ else
 
                     <div>
                         <label class="form-label" for="clientContactoTelefono">Contacto telefono</label>
-                        <input id="clientContactoTelefono" class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="20" />
+                        <input id="clientContactoTelefono" class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
                         <label class="form-label" for="clientContactoCorreo">Contacto correo</label>
                         <input id="clientContactoCorreo" type="email" class="form-control" @bind="editor.ContactoCorreo" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
+                        </div>
+                    </details>
 
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-receipt"></i> Datos tributarios y estado</span></summary>
+                        <div class="additional-details-body">
                     <div>
                         <label class="form-label" for="clientContribuyente">No. contribuyente especial</label>
                         <input id="clientContribuyente" class="form-control" @bind="editor.NumeroContribuyenteEspecial" readonly="@(!CanModifyEditor)" maxlength="10" />
@@ -327,9 +345,13 @@ else
                         <label class="form-label" for="clientObservaciones">Observaciones</label>
                         <textarea id="clientObservaciones" class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)" maxlength="500"></textarea>
                     </div>
+                        </div>
+                    </details>
                 </div>
 
-                <div class="management-form-grid" style="margin-top: 1rem;">
+                <details class="additional-details">
+                    <summary><span><i class="bi bi-sliders"></i> Detalles adicionales</span></summary>
+                    <div class="additional-details-body">
                     <label class="form-check" style="display: flex; gap: 0.55rem; align-items: center;">
                         <input type="checkbox" class="form-check-input" @bind="editor.EsContribuyenteEspecial" disabled="@(!CanModifyEditor)" />
                         <span class="form-check-label">Contribuyente especial</span>
@@ -349,7 +371,8 @@ else
                         <input type="checkbox" class="form-check-input" @bind="editor.EsObligadoContabilidad" disabled="@(!CanModifyEditor)" />
                         <span class="form-check-label">Obligado a contabilidad</span>
                     </label>
-                </div>
+                    </div>
+                </details>
             </div>
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
@@ -826,11 +849,41 @@ else
                 errorMessage = "Para personas, nombres y apellidos son obligatorios.";
                 return false;
             }
+
+            if (!AppValidation.IsPersonName(editor.Nombres) || !AppValidation.IsPersonName(editor.Apellidos))
+            {
+                errorMessage = "Nombres y apellidos solo pueden contener letras y cada nombre o apellido debe tener al menos 3 letras.";
+                return false;
+            }
+        }
+
+        if (editor.TipoIdentificacion == "05" && !AppValidation.IsValidEcuadorianCedula(editor.NumeroIdentificacion))
+        {
+            errorMessage = "Ingresa una cédula ecuatoriana válida.";
+            return false;
+        }
+
+        if (editor.TipoIdentificacion == "04" && (editor.NumeroIdentificacion.Length != 13 || !AppValidation.IsDigitsOnly(editor.NumeroIdentificacion)))
+        {
+            errorMessage = "El RUC debe tener exactamente 13 dígitos.";
+            return false;
         }
 
         if (editor.NumeroIdentificacion.Length > 20 || editor.RazonSocial.Length > 300 || editor.PaisCodigo.Length != 2)
         {
             errorMessage = "Revisa la longitud de identificacion, razon social o codigo de pais.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Telefono) && !AppValidation.IsDigitsOnly(editor.Telefono))
+        {
+            errorMessage = "El teléfono solo puede contener números.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.ContactoTelefono) && !AppValidation.IsDigitsOnly(editor.ContactoTelefono))
+        {
+            errorMessage = "El teléfono de contacto solo puede contener números.";
             return false;
         }
 

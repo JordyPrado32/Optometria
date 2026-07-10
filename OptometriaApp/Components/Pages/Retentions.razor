@@ -1,0 +1,105 @@
+@page "/retenciones"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Retenciones</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Compras</span>
+            <h1>Retencion de compra</h1>
+            <p>Continua la retencion desde la liquidacion seleccionada.</p>
+        </div>
+        <div class="workspace-actions">
+            <button class="btn btn-outline-primary" @onclick='() => NavigationManager.NavigateTo("/liquidaciones-de-compra")'>
+                <i class="bi bi-arrow-left" style="margin-right:6px;"></i> Volver
+            </button>
+        </div>
+    </div>
+
+    <section class="management-card">
+        @if (isLoading)
+        {
+            <p>Cargando liquidacion...</p>
+        }
+        else if (liquidation is null)
+        {
+            <div class="alert alert-warning">No se encontro una liquidacion para generar retencion.</div>
+        }
+        else
+        {
+            <div class="management-card-header">
+                <h2>Documento base</h2>
+                <span>@liquidation.numero_liquidacion</span>
+            </div>
+
+            <div class="management-form-grid" style="margin-top:1rem;">
+                <div>
+                    <label class="form-label">Liquidacion</label>
+                    <input class="form-control" value="@liquidation.numero_liquidacion" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Orden de compra</label>
+                    <input class="form-control" value="@(liquidation.id_orden_compraNavigation?.numero_orden ?? "-")" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Factura</label>
+                    <input class="form-control" value="@(liquidation.numero_factura ?? "-")" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Total base</label>
+                    <input class="form-control" value="@((liquidation.total ?? 0).ToString("0.00"))" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Estado</label>
+                    <input class="form-control" value="@(liquidation.estado_liquidacion ?? "Pendiente")" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Autorizacion</label>
+                    <input class="form-control" value="@(liquidation.numero_autorizacion ?? "-")" readonly />
+                </div>
+            </div>
+
+            <div class="alert alert-success" style="margin-top:1rem;">
+                Documento listo para retencion. Cuando tengas definida la tabla fiscal, aqui se puede completar el formulario de retencion.
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "liquidacionId")]
+    public int LiquidationId { get; set; }
+
+    private bool isLoading = true;
+    private int currentUserId;
+    private tbl_liquidacion_compra? liquidation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : 0;
+
+        if (LiquidationId <= 0)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        liquidation = await db.tbl_liquidacion_compra
+            .AsNoTracking()
+            .Include(x => x.id_orden_compraNavigation)
+            .FirstOrDefaultAsync(x => x.id_liquidacion_compra == LiquidationId && x.id_usuario_registro == currentUserId);
+
+        isLoading = false;
+    }
+}
