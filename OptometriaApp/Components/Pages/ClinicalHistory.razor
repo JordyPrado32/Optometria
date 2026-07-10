@@ -78,8 +78,8 @@ else
                 </div>
                 <div class="clinical-guide-card">
                     <span class="eyebrow">2. Consulta</span>
-                    <strong>Llena motivo y examen</strong>
-                    <p>Primero diligencia motivo, anamnesis y diagnostico. Luego completa los hallazgos tecnicos.</p>
+                    <strong>Llena anamnesis y examen</strong>
+                    <p>Resume lo que cuenta el paciente y completa los hallazgos tecnicos.</p>
                 </div>
                 <div class="clinical-guide-card">
                     <span class="eyebrow">3. Cierre</span>
@@ -227,7 +227,7 @@ else
                 <h2>Motivo y anamnesis</h2>
                 <span>Bloque principal de consulta</span>
             </div>
-            <p class="clinical-helper-text">Si no sabes por donde empezar, llena primero motivo de consulta y luego resume lo que el paciente cuenta en anamnesis.</p>
+            <p class="clinical-helper-text">El motivo de consulta es opcional. Si queda vacio, continua con anamnesis y los hallazgos del examen.</p>
             <div class="clinical-stack">
                 <div>
                     <label class="form-label">Motivo de consulta</label>
@@ -277,9 +277,9 @@ else
                 <div><label class="form-label">ADD</label><input class="form-control" @bind="editor.Lentes.Addicion" /></div>
                 <div><label class="form-label">Prismas</label><input class="form-control" @bind="editor.Lentes.Prismas" /></div>
                 <div><label class="form-label">Dist. pupilar</label><input class="form-control" @bind="editor.Lentes.DistPupilar" /></div>
-                <div><label class="form-label">OD</label><input class="form-control" @bind="editor.Lentes.Od" /></div>
-                <div><label class="form-label">OI</label><input class="form-control" @bind="editor.Lentes.Oi" /></div>
-                <div><label class="form-label">AO</label><input class="form-control" @bind="editor.Lentes.Ao" /></div>
+                <div><label class="form-label">Ojo derecho</label><input class="form-control" @bind="editor.Lentes.Od" /></div>
+                <div><label class="form-label">Ojo izquierdo</label><input class="form-control" @bind="editor.Lentes.Oi" /></div>
+                <div><label class="form-label">Ambos ojos</label><input class="form-control" @bind="editor.Lentes.Ao" /></div>
                 <div><label class="form-label">Tipo de lente</label><input class="form-control" @bind="editor.Lentes.TipoLente" /></div>
                 <div><label class="form-label">Material</label><input class="form-control" @bind="editor.Lentes.Material" /></div>
                 <div><label class="form-label">Filtro</label><input class="form-control" @bind="editor.Lentes.Filtro" /></div>
@@ -288,13 +288,13 @@ else
             </div>
 
             <div class="clinical-grid-4" style="margin-top: 1rem;">
-                <div><label class="form-label">AV VL SC OD</label><input class="form-control" @bind="editor.Visual.OdVlSc" /></div>
-                <div><label class="form-label">AV VL SC OI</label><input class="form-control" @bind="editor.Visual.OiVlSc" /></div>
-                <div><label class="form-label">AV VL SC AO</label><input class="form-control" @bind="editor.Visual.AoVlSc" /></div>
+                <div><label class="form-label">Agudeza visual lejos sin correccion - ojo derecho</label><input class="form-control" @bind="editor.Visual.OdVlSc" /></div>
+                <div><label class="form-label">Agudeza visual lejos sin correccion - ojo izquierdo</label><input class="form-control" @bind="editor.Visual.OiVlSc" /></div>
+                <div><label class="form-label">Agudeza visual lejos sin correccion - ambos ojos</label><input class="form-control" @bind="editor.Visual.AoVlSc" /></div>
                 <div><label class="form-label">PH</label><input class="form-control" @bind="editor.Visual.Ph" /></div>
-                <div><label class="form-label">AV VP SC OD</label><input class="form-control" @bind="editor.Visual.OdVpSc" /></div>
-                <div><label class="form-label">AV VP SC OI</label><input class="form-control" @bind="editor.Visual.OiVpSc" /></div>
-                <div><label class="form-label">AV VP SC AO</label><input class="form-control" @bind="editor.Visual.AoVpSc" /></div>
+                <div><label class="form-label">Agudeza visual cerca sin correccion - ojo derecho</label><input class="form-control" @bind="editor.Visual.OdVpSc" /></div>
+                <div><label class="form-label">Agudeza visual cerca sin correccion - ojo izquierdo</label><input class="form-control" @bind="editor.Visual.OiVpSc" /></div>
+                <div><label class="form-label">Agudeza visual cerca sin correccion - ambos ojos</label><input class="form-control" @bind="editor.Visual.AoVpSc" /></div>
                 <div><label class="form-label">Dominancia</label><input class="form-control" @bind="editor.Visual.Dominancia" /></div>
                 <div><label class="form-label">Optotipo</label><input class="form-control" @bind="editor.Visual.Optotipo" /></div>
                 <div><label class="form-label">Distancia VL</label><input class="form-control" @bind="editor.Visual.DistanciaVl" /></div>
@@ -311,13 +311,13 @@ else
                 <span>Grafico ocular y hallazgos</span>
             </div>
             <div class="clinical-grid-2" style="margin-top: 1rem;">
-                <EyeDiagramEditor Label="OD" @bind-Value="editor.Biomicroscopia.GraphicOd" />
-                <EyeDiagramEditor Label="OI" @bind-Value="editor.Biomicroscopia.GraphicOi" />
+                <EyeDiagramEditor Label="Ojo derecho" @bind-Value="editor.Biomicroscopia.GraphicOd" />
+                <EyeDiagramEditor Label="Ojo izquierdo" @bind-Value="editor.Biomicroscopia.GraphicOi" />
             </div>
             <div class="clinical-odoi-grid">
                 <div class="clinical-odoi-head">Hallazgo</div>
-                <div class="clinical-odoi-head">OD</div>
-                <div class="clinical-odoi-head">OI</div>
+                <div class="clinical-odoi-head">Ojo derecho</div>
+                <div class="clinical-odoi-head">Ojo izquierdo</div>
                 <div class="clinical-odoi-label">Orbita / cejas</div>
                 <input class="form-control" @bind="editor.Biomicroscopia.OrbitaOd" />
                 <input class="form-control" @bind="editor.Biomicroscopia.OrbitaOi" />
@@ -351,13 +351,13 @@ else
                 <span>Fondo de ojo y hallazgos</span>
             </div>
             <div class="clinical-grid-2" style="margin-top: 1rem;">
-                <EyeDiagramEditor Label="OD" @bind-Value="editor.Oftalmoscopia.GraphicOd" />
-                <EyeDiagramEditor Label="OI" @bind-Value="editor.Oftalmoscopia.GraphicOi" />
+                <EyeDiagramEditor Label="Ojo derecho" @bind-Value="editor.Oftalmoscopia.GraphicOd" />
+                <EyeDiagramEditor Label="Ojo izquierdo" @bind-Value="editor.Oftalmoscopia.GraphicOi" />
             </div>
             <div class="clinical-odoi-grid">
                 <div class="clinical-odoi-head">Hallazgo</div>
-                <div class="clinical-odoi-head">OD</div>
-                <div class="clinical-odoi-head">OI</div>
+                <div class="clinical-odoi-head">Ojo derecho</div>
+                <div class="clinical-odoi-head">Ojo izquierdo</div>
                 <div class="clinical-odoi-label">Papila / excavacion</div>
                 <input class="form-control" @bind="editor.Oftalmoscopia.PapilaOd" />
                 <input class="form-control" @bind="editor.Oftalmoscopia.PapilaOi" />
@@ -427,9 +427,9 @@ else
             </div>
             <p class="clinical-helper-text">Aqui defines la conclusion de la consulta y cualquier examen o medicacion que deba pasar despues a facturacion.</p>
             <div class="clinical-grid-4" style="margin-top: 1rem;">
-                <div class="clinical-span-3"><label class="form-label">Diagnostico OD</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOd" /></div>
+                <div class="clinical-span-3"><label class="form-label">Diagnostico ojo derecho</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOd" /></div>
                 <div><label class="form-label">CIE10</label><input class="form-control" @bind="editor.Diagnostico.Cie10" /></div>
-                <div class="clinical-span-2"><label class="form-label">Diagnostico OI</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOi" /></div>
+                <div class="clinical-span-2"><label class="form-label">Diagnostico ojo izquierdo</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOi" /></div>
                 <div class="clinical-span-2"><label class="form-label">Motor</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoMotor" /></div>
                 <div class="clinical-span-4"><label class="form-label">Patologico presuntivo</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.PatologicoPresuntivo"></textarea></div>
                 <div class="clinical-span-4"><label class="form-label">Tratamiento / disposicion / conducta</label><textarea class="form-control" rows="4" @bind="editor.Diagnostico.TratamientoConducta"></textarea></div>
@@ -616,12 +616,6 @@ else
         if (patient is null || editor is null || openingSnapshot is null)
         {
             errorMessage = "No existe un paciente valido para guardar la historia clinica.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta))
-        {
-            errorMessage = "Ingresa el motivo de consulta.";
             return;
         }
 
@@ -884,7 +878,6 @@ else
 
         var checks = new[]
         {
-            !string.IsNullOrWhiteSpace(editor.MotivoConsulta),
             !string.IsNullOrWhiteSpace(editor.Anamnesis),
             HasAnyAntecedent(editor),
             HasAnyVisualData(editor),
@@ -931,7 +924,7 @@ else
         => step switch
         {
             1 => "Verifica datos del paciente e historia.",
-            2 => "Motivo, anamnesis, antecedentes y agudeza visual.",
+            2 => "Anamnesis, antecedentes y agudeza visual.",
             3 => "Biomicroscopia, oftalmoscopia y refraccion.",
             4 => "Conclusion clinica, examenes y medicamentos.",
             5 => "Firma, autorizacion y guardado final.",
@@ -978,14 +971,9 @@ else
             return "Solo falta revisar consentimiento, firma y guardar.";
         }
 
-        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta))
-        {
-            return "Empieza escribiendo el motivo de consulta.";
-        }
-
         if (string.IsNullOrWhiteSpace(editor.Anamnesis))
         {
-            return "Continua con anamnesis para dejar clara la historia del paciente.";
+            return "Empieza con anamnesis para dejar clara la historia del paciente.";
         }
 
         return "Sigue los bloques en orden hasta completar diagnostico, conducta y consentimiento.";
