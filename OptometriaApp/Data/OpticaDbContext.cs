@@ -28,6 +28,8 @@ public partial class OpticaDbContext : DbContext
 
     public virtual DbSet<tbl_historia_clinica_optometria> tbl_historia_clinica_optometrias { get; set; }
 
+    public virtual DbSet<tbl_historia_clinica_optometria_evento> tbl_historia_clinica_optometria_eventos { get; set; }
+
     public virtual DbSet<tbl_cta_cobrar> tbl_cta_cobrar { get; set; }
 
     public virtual DbSet<tbl_detalle_venta> tbl_detalle_venta { get; set; }
@@ -316,6 +318,53 @@ public partial class OpticaDbContext : DbContext
                 .HasForeignKey(e => e.id_optometra_ultima_actualizacion)
                 .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_tbl_historia_clinica_optometria_optometra_actualiza");
+        });
+
+        modelBuilder.Entity<tbl_historia_clinica_optometria_evento>(entity =>
+        {
+            entity.HasKey(e => e.id_historia_evento).HasName("PK_tbl_historia_clinica_optometria_evento");
+
+            entity.ToTable("tbl_historia_clinica_optometria_evento");
+
+            entity.HasIndex(e => new { e.id_historia_clinica, e.fecha_evento }, "IX_tbl_historia_evento_historia_fecha");
+            entity.HasIndex(e => e.id_consulta, "UQ_tbl_historia_evento_consulta").IsUnique();
+
+            entity.Property(e => e.estado).HasMaxLength(30).IsUnicode(false).HasDefaultValue("Borrador");
+            entity.Property(e => e.fecha_evento).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.fecha_ultima_actualizacion).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.motivo_consulta).IsUnicode(false);
+            entity.Property(e => e.anamnesis).IsUnicode(false);
+            entity.Property(e => e.diagnostico_resumen).IsUnicode(false);
+            entity.Property(e => e.cie10).HasMaxLength(32).IsUnicode(false);
+            entity.Property(e => e.payload_json).IsUnicode(false);
+            entity.Property(e => e.activo).HasDefaultValue(true);
+            entity.Property(e => e.consentimiento_firmado).HasDefaultValue(false);
+            entity.Property(e => e.es_legado_migrado).HasDefaultValue(false);
+            entity.Property(e => e.resumen_progreso).HasDefaultValue(0);
+
+            entity.HasOne<tbl_historia_clinica_optometria>()
+                .WithMany()
+                .HasForeignKey(e => e.id_historia_clinica)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_tbl_historia_evento_historia");
+
+            entity.HasOne<tbl_paciente>()
+                .WithMany()
+                .HasForeignKey(e => e.id_paciente)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_tbl_historia_evento_paciente");
+
+            entity.HasOne<tbl_consulta>()
+                .WithMany()
+                .HasForeignKey(e => e.id_consulta)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_tbl_historia_evento_consulta");
+
+            entity.HasOne<tbl_usuario>()
+                .WithMany()
+                .HasForeignKey(e => e.id_optometra)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("FK_tbl_historia_evento_optometra");
         });
 
         modelBuilder.Entity<tbl_cta_cobrar>(entity =>

@@ -1,0 +1,39 @@
+<div class="clinical-stepper" style="margin-top: 1rem;">
+    @foreach (var step in Steps)
+    {
+        <button type="button" class="@GetCssClass(step.Number)" @onclick="() => OnSelect.InvokeAsync(step.Number)">
+            <span class="clinical-stepper-index">@step.Number</span>
+            <span class="clinical-stepper-copy">
+                <strong>@step.Title</strong>
+                <small>@step.Description</small>
+            </span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public int ActiveStep { get; set; }
+    [Parameter] public required IReadOnlyList<ClinicalStepDefinition> Steps { get; set; }
+    [Parameter] public EventCallback<int> OnSelect { get; set; }
+
+    private string GetCssClass(int step)
+    {
+        const string baseClass = "clinical-stepper-item";
+
+        if (step == ActiveStep)
+        {
+            return $"{baseClass} clinical-stepper-item--active";
+        }
+
+        if (step < ActiveStep)
+        {
+            return $"{baseClass} clinical-stepper-item--done";
+        }
+
+        return baseClass;
+    }
+}
+
+@code {
+    public sealed record ClinicalStepDefinition(int Number, string Title, string Description);
+}

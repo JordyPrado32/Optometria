@@ -89,6 +89,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQue
 builder.Services.AddScoped<MenuAccessService>();
 builder.Services.AddScoped<KardexService>();
 builder.Services.AddScoped<BillingDraftService>();
+builder.Services.AddScoped<ClinicalHistoryService>();
 builder.Services.AddScoped<AccountStatementService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
 
@@ -3794,6 +3795,40 @@ static async Task EnsureClinicalHistorySchemaAsync(WebApplication app)
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_historia_clinica_optometria_optometra' AND object_id = OBJECT_ID('dbo.tbl_historia_clinica_optometria'))
         BEGIN
             CREATE NONCLUSTERED INDEX IX_tbl_historia_clinica_optometria_optometra ON dbo.tbl_historia_clinica_optometria(id_optometra_apertura);
+        END;
+
+        IF OBJECT_ID('dbo.tbl_historia_clinica_optometria_evento', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_historia_clinica_optometria_evento
+            (
+                id_historia_evento INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                id_historia_clinica INT NOT NULL,
+                id_paciente INT NOT NULL,
+                id_consulta INT NOT NULL,
+                id_optometra INT NOT NULL,
+                fecha_evento DATETIME NOT NULL CONSTRAINT DF_tbl_historia_evento_fecha DEFAULT (GETDATE()),
+                fecha_ultima_actualizacion DATETIME NOT NULL CONSTRAINT DF_tbl_historia_evento_actualizacion DEFAULT (GETDATE()),
+                estado VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_historia_evento_estado DEFAULT ('Borrador'),
+                resumen_progreso INT NOT NULL CONSTRAINT DF_tbl_historia_evento_progreso DEFAULT (0),
+                motivo_consulta VARCHAR(MAX) NULL,
+                anamnesis VARCHAR(MAX) NULL,
+                diagnostico_resumen VARCHAR(MAX) NULL,
+                cie10 VARCHAR(32) NULL,
+                payload_json VARCHAR(MAX) NULL,
+                consentimiento_firmado BIT NOT NULL CONSTRAINT DF_tbl_historia_evento_consentimiento DEFAULT (0),
+                es_legado_migrado BIT NOT NULL CONSTRAINT DF_tbl_historia_evento_legado DEFAULT (0),
+                activo BIT NOT NULL CONSTRAINT DF_tbl_historia_evento_activo DEFAULT (1),
+                CONSTRAINT UQ_tbl_historia_evento_consulta UNIQUE (id_consulta),
+                CONSTRAINT FK_tbl_historia_evento_historia FOREIGN KEY (id_historia_clinica) REFERENCES dbo.tbl_historia_clinica_optometria(id_historia_clinica) ON DELETE CASCADE,
+                CONSTRAINT FK_tbl_historia_evento_paciente FOREIGN KEY (id_paciente) REFERENCES dbo.tbl_paciente(id_paciente),
+                CONSTRAINT FK_tbl_historia_evento_consulta FOREIGN KEY (id_consulta) REFERENCES dbo.tbl_consulta(id_consulta) ON DELETE CASCADE,
+                CONSTRAINT FK_tbl_historia_evento_optometra FOREIGN KEY (id_optometra) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_historia_evento_historia_fecha' AND object_id = OBJECT_ID('dbo.tbl_historia_clinica_optometria_evento'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_tbl_historia_evento_historia_fecha ON dbo.tbl_historia_clinica_optometria_evento(id_historia_clinica, fecha_evento DESC);
         END;
         """);
 }
