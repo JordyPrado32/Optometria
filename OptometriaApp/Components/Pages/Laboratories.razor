@@ -60,7 +60,7 @@ else
             <div class="filters-row-1-1">
                 <div>
                     <label class="form-label" for="laboratorySearch">Buscador</label>
-                    <input id="laboratorySearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, correo, contacto, dirección o whatsapp" />
+                    <input id="laboratorySearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, correo, contacto, dirección o teléfono" />
                 </div>
 
                 <div>
@@ -94,7 +94,7 @@ else
                             <th>Código</th>
                             <th>Nombre</th>
                             <th>Correo</th>
-                            <th>WhatsApp</th>
+                            <th>Teléfono</th>
                             <th>Contacto</th>
                             <th>Estado</th>
                             <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
@@ -146,13 +146,13 @@ else
                                                 @if (laboratory.activo == true)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(laboratory)">
-                                                        Desactivar
+                                                        <i class="bi bi-toggle-off"></i> Desactivar
                                                     </button>
                                                 }
                                                 else
                                                 {
                                                     <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; background-color: var(--color-sage) !important; border-color: var(--color-sage) !important;" @onclick="() => ToggleActiveAsync(laboratory)">
-                                                        Activar
+                                                        <i class="bi bi-toggle-on"></i> Activar
                                                     </button>
                                                 }
                                             }
@@ -193,24 +193,29 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="labContact">Persona de contacto</label>
+                        <label class="form-label" for="labContact">Persona de contacto *</label>
                         <input id="labContact" class="form-control" @bind="editor.PersonaContacto" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="labEmail">Correo</label>
+                        <label class="form-label" for="labEmail">Correo *</label>
                         <input id="labEmail" type="email" class="form-control" @bind="editor.Correo" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="labWhatsapp">Whatsapp</label>
-                        <input id="labWhatsapp" class="form-control" @bind="editor.Whatsapp" readonly="@(!CanModifyEditor)" maxlength="30" />
+                        <label class="form-label" for="labWhatsapp">Teléfono</label>
+                        <input id="labWhatsapp" class="form-control" @bind="editor.Whatsapp" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
-                    <div class="patient-form-span">
-                        <label class="form-label" for="labAddress">Dirección</label>
-                        <input id="labAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
-                    </div>
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                        <div class="additional-details-body is-single">
+                            <div>
+                                <label class="form-label" for="labAddress">Dirección</label>
+                                <input id="labAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
             <footer class="custom-modal-footer">
@@ -772,9 +777,11 @@ else
         editor.PersonaContacto = editor.PersonaContacto.Trim();
         editor.Direccion = editor.Direccion.Trim();
 
-        if (string.IsNullOrWhiteSpace(editor.Nombre))
+        if (string.IsNullOrWhiteSpace(editor.Nombre) ||
+            string.IsNullOrWhiteSpace(editor.Correo) ||
+            string.IsNullOrWhiteSpace(editor.PersonaContacto))
         {
-            errorMessage = "Ingresa el nombre del laboratorio.";
+            errorMessage = "Nombre, correo y persona de contacto son obligatorios.";
             return false;
         }
 
@@ -784,7 +791,7 @@ else
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Correo) && !IsValidEmail(editor.Correo))
+        if (!AppValidation.IsValidEmail(editor.Correo))
         {
             errorMessage = "Ingresa un correo electrónico válido.";
             return false;
@@ -792,10 +799,9 @@ else
 
         if (!string.IsNullOrWhiteSpace(editor.Whatsapp))
         {
-            var cleaned = new string(editor.Whatsapp.Where(char.IsDigit).ToArray());
-            if (cleaned.Length != 10)
+            if (!AppValidation.IsDigitsOnly(editor.Whatsapp) || editor.Whatsapp.Length != 10)
             {
-                errorMessage = "El número de WhatsApp debe tener exactamente 10 dígitos.";
+                errorMessage = "El teléfono debe tener exactamente 10 dígitos y solo números.";
                 return false;
             }
         }

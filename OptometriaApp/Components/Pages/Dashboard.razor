@@ -14,7 +14,7 @@
 <PageTitle>Dashboard</PageTitle>
 
 <style>
-    /* Premium Hover Animation for Quick Access Cards */
+    /* Premium highlight for Quick Access Cards */
     .quick-access-animated {
         position: relative;
         overflow: hidden;
@@ -23,6 +23,11 @@
         background: rgba(255, 250, 244, 0.8) !important;
         backdrop-filter: blur(10px);
         min-height: 120px;
+    }
+
+    .quick-access-animated > * {
+        position: relative;
+        z-index: 1;
     }
     
     .quick-access-animated:hover {
@@ -34,16 +39,20 @@
     .quick-access-animated::after {
         content: '';
         position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
+        top: -35%;
+        right: -18%;
+        width: 58%;
         height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(93, 161, 129, 0.08), transparent);
-        transition: 0.5s;
+        background: linear-gradient(135deg, transparent 0%, rgba(93, 161, 129, 0.16) 34%, rgba(254, 188, 100, 0.2) 52%, rgba(236, 204, 197, 0.16) 72%, transparent 100%);
+        transform: rotate(18deg);
+        opacity: 1;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        pointer-events: none;
     }
     
     .quick-access-animated:hover::after {
-        left: 100%;
+        opacity: 1;
+        transform: rotate(18deg) translateX(-8px);
     }
 
     /* Icon-specific animations and colors */
@@ -187,6 +196,24 @@
         width: 120px;
         height: 120px;
         margin: 0 auto;
+        border-radius: 50%;
+        background: var(--finance-ring, conic-gradient(#5DA181 0deg 120deg, #E53935 120deg 180deg, #7F6951 180deg 360deg));
+        box-shadow: inset 0 0 0 1px rgba(127, 105, 81, 0.08);
+    }
+
+    .donut-chart-wrapper::before {
+        content: '';
+        position: absolute;
+        inset: 26px;
+        border-radius: 50%;
+        background: #FFFDF9;
+        box-shadow: inset 0 0 0 1px rgba(127, 105, 81, 0.06);
+        z-index: 0;
+    }
+
+    .donut-chart-wrapper canvas {
+        position: relative;
+        z-index: 1;
     }
 
     .donut-chart-center {
@@ -384,7 +411,7 @@ else
                     
                     <div class="stats-card-content">
                         <div>
-                            <div class="donut-chart-wrapper">
+                            <div class="donut-chart-wrapper" style="@GetFinanceRingStyle()">
                                 <canvas id="chartFinances"></canvas>
                                 <div class="donut-chart-center">
                                     <span id="chartFinancesTotal" style="display: block; font-size: 11px; font-weight: 900; color: var(--color-taupe-deep); line-height: 1;">$0.0K</span>
@@ -568,4 +595,22 @@ else
 
     private static string FormatPercentage(decimal value) =>
         $"{(value >= 0 ? "+" : string.Empty)}{value:0.#}%";
+
+    private string GetFinanceRingStyle()
+    {
+        var earned = Math.Max(totalEarnings, 0m);
+        var expenses = Math.Max(totalExpenses, 0m);
+        var receivable = Math.Max(totalReceivable, 0m);
+        var total = earned + expenses + receivable;
+
+        if (total <= 0)
+        {
+            return "--finance-ring: conic-gradient(#5DA181 0deg 120deg, #E53935 120deg 240deg, #7F6951 240deg 360deg);";
+        }
+
+        var earnedEnd = decimal.ToDouble(earned / total * 360m);
+        var expensesEnd = decimal.ToDouble((earned + expenses) / total * 360m);
+
+        return $"--finance-ring: conic-gradient(#5DA181 0deg {earnedEnd:0.##}deg, #E53935 {earnedEnd:0.##}deg {expensesEnd:0.##}deg, #7F6951 {expensesEnd:0.##}deg 360deg);";
+    }
 }

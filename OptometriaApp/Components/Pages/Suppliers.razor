@@ -159,7 +159,7 @@ else
                                             @if (permissions.CanDelete)
                                             {
                                                 <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => DeleteSupplierAsync(supplier)">
-                                                    Eliminar
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
                                                 </button>
                                             }
                                         </div>
@@ -198,17 +198,12 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label">Razon social</label>
-                        <input class="form-control" @bind="editor.RazonSocial" readonly="@(!CanModifyEditor)" maxlength="300" />
+                        <label class="form-label">Número identificación *</label>
+                        <input class="form-control" @bind="editor.Ruc" readonly="@(!CanModifyEditor)" maxlength="13" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
-                        <label class="form-label">RUC</label>
-                        <input class="form-control" @bind="editor.Ruc" readonly="@(!CanModifyEditor)" maxlength="13" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Tipo identificacion</label>
+                        <label class="form-label">Tipo identificacion *</label>
                         <select class="form-select" @bind="editor.TipoIdentificacion" disabled="@(!CanModifyEditor)">
                             @foreach (var option in identificationOptions)
                             {
@@ -218,128 +213,150 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label">Nombre comercial</label>
-                        <input class="form-control" @bind="editor.NombreComercial" readonly="@(!CanModifyEditor)" maxlength="300" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Telefono</label>
-                        <input class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="30" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Correo</label>
+                        <label class="form-label">Correo *</label>
                         <input type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" maxlength="150" />
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label">Direccion</label>
+                        <label class="form-label">Direccion *</label>
                         <input class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
                     </div>
 
                     <div>
-                        <label class="form-label">Ciudad</label>
-                        <input class="form-control" @bind="editor.Ciudad" readonly="@(!CanModifyEditor)" maxlength="100" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Provincia</label>
-                        <input class="form-control" @bind="editor.Provincia" readonly="@(!CanModifyEditor)" maxlength="100" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Codigo postal</label>
-                        <input class="form-control" @bind="editor.CodigoPostal" readonly="@(!CanModifyEditor)" maxlength="10" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Contacto nombre</label>
-                        <input class="form-control" @bind="editor.ContactoNombre" readonly="@(!CanModifyEditor)" maxlength="200" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Contacto telefono</label>
-                        <input class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="20" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Contacto correo</label>
-                        <input type="email" class="form-control" @bind="editor.ContactoCorreo" readonly="@(!CanModifyEditor)" maxlength="100" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Dias credito promedio</label>
-                        <input type="number" class="form-control" @bind="editor.DiasCreditoPromedio" readonly="@(!CanModifyEditor)" min="0" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Saldo pendiente</label>
-                        <input type="number" step="0.01" class="form-control" @bind="editor.SaldoPendiente" readonly="@(!CanModifyEditor)" min="0" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Limite credito</label>
-                        <input type="number" step="0.01" class="form-control" @bind="editor.LimiteCredito" readonly="@(!CanModifyEditor)" min="0" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Condicion pago</label>
-                        <select class="form-select" @bind="editor.CondicionPago" disabled="@(!CanModifyEditor)">
-                            @foreach (var option in paymentConditionOptions)
+                        <label class="form-label">Provincia *</label>
+                        <select class="form-select" value="@editor.Provincia" @onchange="OnSupplierProvinceChanged" disabled="@(!CanModifyEditor)">
+                            <option value="">Selecciona</option>
+                            @foreach (var province in AppValidation.EcuadorProvinces)
                             {
-                                <option value="@option">@option</option>
+                                <option value="@province">@province</option>
                             }
                         </select>
                     </div>
 
                     <div>
-                        <label class="form-label">Banco</label>
-                        <input class="form-control" @bind="editor.BancoNombre" readonly="@(!CanModifyEditor)" maxlength="100" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Cuenta bancaria</label>
-                        <input class="form-control" @bind="editor.CuentaBancaria" readonly="@(!CanModifyEditor)" maxlength="20" />
-                    </div>
-
-                    <div>
-                        <label class="form-label">Tipo cuenta</label>
-                        <select class="form-select" @bind="editor.TipoCuenta" disabled="@(!CanModifyEditor)">
-                            @foreach (var option in accountTypeOptions)
+                        <label class="form-label">Ciudad *</label>
+                        <select class="form-select" @bind="editor.Ciudad" disabled="@(!CanModifyEditor || string.IsNullOrWhiteSpace(editor.Provincia))">
+                            <option value="">Selecciona</option>
+                            @foreach (var city in AppValidation.GetCitiesForProvince(editor.Provincia))
                             {
-                                <option value="@option">@option</option>
+                                <option value="@city">@city</option>
                             }
                         </select>
                     </div>
 
-                    <div>
-                        <label class="form-label">Calificacion</label>
-                        <select class="form-select" @bind="editor.Calificacion" disabled="@(!CanModifyEditor)">
-                            <option value="">Sin asignar</option>
-                            @foreach (var option in ratingOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        </select>
-                    </div>
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                        <div class="additional-details-body">
+                            <div>
+                                <label class="form-label">Razon social</label>
+                                <input class="form-control" @bind="editor.RazonSocial" readonly="@(!CanModifyEditor)" maxlength="300" />
+                            </div>
 
-                    <div>
-                        <label class="form-label">Tiempo entrega promedio</label>
-                        <input type="number" class="form-control" @bind="editor.TiempoEntregaPromedio" readonly="@(!CanModifyEditor)" min="0" />
-                    </div>
+                            <div>
+                                <label class="form-label">Nombre comercial</label>
+                                <input class="form-control" @bind="editor.NombreComercial" readonly="@(!CanModifyEditor)" maxlength="300" />
+                            </div>
 
-                    <div>
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" @bind="EditorEsActivoValue" disabled="@(!CanModifyEditor)">
-                            <option value="true">Activo</option>
-                            <option value="false">Inactivo</option>
-                        </select>
-                    </div>
+                            <div>
+                                <label class="form-label">Telefono</label>
+                                <input class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
+                            </div>
 
-                    <div class="patient-form-span">
-                        <label class="form-label">Observaciones</label>
-                        <textarea class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
-                    </div>
+                            <div>
+                                <label class="form-label">Codigo postal</label>
+                                <input class="form-control" @bind="editor.CodigoPostal" readonly="@(!CanModifyEditor)" maxlength="10" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Contacto nombre</label>
+                                <input class="form-control" @bind="editor.ContactoNombre" readonly="@(!CanModifyEditor)" maxlength="200" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Contacto telefono</label>
+                                <input class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Contacto correo</label>
+                                <input type="email" class="form-control" @bind="editor.ContactoCorreo" readonly="@(!CanModifyEditor)" maxlength="100" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Dias credito promedio</label>
+                                <input type="number" class="form-control" @bind="editor.DiasCreditoPromedio" readonly="@(!CanModifyEditor)" min="0" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Saldo pendiente</label>
+                                <input type="number" step="0.01" class="form-control" @bind="editor.SaldoPendiente" readonly="@(!CanModifyEditor)" min="0" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Limite credito</label>
+                                <input type="number" step="0.01" class="form-control" @bind="editor.LimiteCredito" readonly="@(!CanModifyEditor)" min="0" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Condicion pago</label>
+                                <select class="form-select" @bind="editor.CondicionPago" disabled="@(!CanModifyEditor)">
+                                    @foreach (var option in paymentConditionOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Banco</label>
+                                <input class="form-control" @bind="editor.BancoNombre" readonly="@(!CanModifyEditor)" maxlength="100" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Cuenta bancaria</label>
+                                <input class="form-control" @bind="editor.CuentaBancaria" readonly="@(!CanModifyEditor)" maxlength="20" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Tipo cuenta</label>
+                                <select class="form-select" @bind="editor.TipoCuenta" disabled="@(!CanModifyEditor)">
+                                    @foreach (var option in accountTypeOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Calificacion</label>
+                                <select class="form-select" @bind="editor.Calificacion" disabled="@(!CanModifyEditor)">
+                                    <option value="">Sin asignar</option>
+                                    @foreach (var option in ratingOptions)
+                                    {
+                                        <option value="@option">@option</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Tiempo entrega promedio</label>
+                                <input type="number" class="form-control" @bind="editor.TiempoEntregaPromedio" readonly="@(!CanModifyEditor)" min="0" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" @bind="EditorEsActivoValue" disabled="@(!CanModifyEditor)">
+                                    <option value="true">Activo</option>
+                                    <option value="false">Inactivo</option>
+                                </select>
+                            </div>
+
+                            <div class="patient-form-span">
+                                <label class="form-label">Observaciones</label>
+                                <textarea class="form-control" rows="4" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
             <footer class="custom-modal-footer">
@@ -527,6 +544,20 @@ else
         selectedSupplier = supplier;
         await LoadAuditEntriesAsync(supplier.id_proveedor);
         showAuditModal = true;
+    }
+
+    private void OnSupplierProvinceChanged(ChangeEventArgs args)
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.Provincia = args.Value?.ToString() ?? string.Empty;
+        if (!AppValidation.GetCitiesForProvince(editor.Provincia).Contains(editor.Ciudad))
+        {
+            editor.Ciudad = string.Empty;
+        }
     }
 
     private void ShowAlert(string message, bool isError)
@@ -873,6 +904,9 @@ else
         editor.ContactoCorreo = editor.ContactoCorreo.Trim();
         editor.Telefono = editor.Telefono.Trim();
         editor.ContactoTelefono = editor.ContactoTelefono.Trim();
+        editor.Direccion = editor.Direccion.Trim();
+        editor.Ciudad = editor.Ciudad.Trim();
+        editor.Provincia = editor.Provincia.Trim();
 
         if (string.IsNullOrWhiteSpace(editor.Nombre))
         {
@@ -880,13 +914,36 @@ else
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Ruc) && (editor.Ruc.Length != 13 || !editor.Ruc.All(char.IsDigit)))
+        if (string.IsNullOrWhiteSpace(editor.TipoIdentificacion) ||
+            string.IsNullOrWhiteSpace(editor.Ruc) ||
+            string.IsNullOrWhiteSpace(editor.Email) ||
+            string.IsNullOrWhiteSpace(editor.Direccion) ||
+            string.IsNullOrWhiteSpace(editor.Provincia) ||
+            string.IsNullOrWhiteSpace(editor.Ciudad))
         {
-            errorMessage = "El RUC debe tener exactamente 13 digitos.";
+            errorMessage = "Tipo y número de identificación, correo, dirección, provincia y ciudad son obligatorios.";
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
+        if (editor.TipoIdentificacion == "05" && !AppValidation.IsValidEcuadorianCedula(editor.Ruc))
+        {
+            errorMessage = "Ingresa una cédula ecuatoriana válida.";
+            return false;
+        }
+
+        if (!AppValidation.GetCitiesForProvince(editor.Provincia).Contains(editor.Ciudad))
+        {
+            errorMessage = "Selecciona una ciudad válida para la provincia elegida.";
+            return false;
+        }
+
+        if (editor.TipoIdentificacion != "05" && (editor.Ruc.Length != 13 || !AppValidation.IsDigitsOnly(editor.Ruc)))
+        {
+            errorMessage = "El RUC debe tener exactamente 13 dígitos.";
+            return false;
+        }
+
+        if (!AppValidation.IsValidEmail(editor.Email))
         {
             errorMessage = "Ingresa un correo electronico valido.";
             return false;
@@ -895,6 +952,18 @@ else
         if (!string.IsNullOrWhiteSpace(editor.ContactoCorreo) && !IsValidEmail(editor.ContactoCorreo))
         {
             errorMessage = "Ingresa un correo del contacto valido.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Telefono) && !AppValidation.IsDigitsOnly(editor.Telefono))
+        {
+            errorMessage = "El teléfono del proveedor solo puede contener números.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.ContactoTelefono) && !AppValidation.IsDigitsOnly(editor.ContactoTelefono))
+        {
+            errorMessage = "El teléfono del contacto solo puede contener números.";
             return false;
         }
 

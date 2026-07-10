@@ -94,10 +94,14 @@ else
                                     <td>@(item.comprobante_numero ?? item.tipo_documento_referencia ?? "-")</td>
                                     <td style="text-align:right;">
                                         <div style="display:inline-flex; gap:0.4rem;">
-                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">Editar</button>
+                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">
+                                                <i class="bi bi-pencil-fill"></i> Editar
+                                            </button>
                                             @if (permissions.CanDelete)
                                             {
-                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">Eliminar</button>
+                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
+                                                </button>
                                             }
                                         </div>
                                     </td>
@@ -141,9 +145,10 @@ else
         <div class="custom-modal-card">
             <header class="custom-modal-header rose-header"><h2>@(isCreating ? "Nuevo movimiento" : "Editar movimiento")</h2><button class="btn-close-modal" @onclick="CloseForm">×</button></header>
             <div class="custom-modal-body">
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label">Producto</label>
+                        <label class="form-label">Producto *</label>
                         <select class="form-select" @bind="editor.IdProducto">
                             <option value="0">Selecciona</option>
                             @foreach (var product in products)
@@ -153,7 +158,7 @@ else
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Tipo</label>
+                        <label class="form-label">Tipo *</label>
                         <select class="form-select" @bind="editor.TipoMovimiento">
                             @foreach (var option in movementTypes)
                             {
@@ -161,10 +166,24 @@ else
                             }
                         </select>
                     </div>
-                    <div><label class="form-label">Cantidad</label><input type="number" class="form-control" @bind="editor.Cantidad" min="1" /></div>
-                    <div><label class="form-label">Comprobante</label><input class="form-control" @bind="editor.ComprobanteNumero" /></div>
-                    <div><label class="form-label">Metodo valuacion</label><input class="form-control" @bind="editor.MetodoValuacion" /></div>
-                    <div class="patient-form-span"><label class="form-label">Observaciones</label><textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea></div>
+                    <div><label class="form-label">Cantidad *</label><input type="number" class="form-control" @bind="editor.Cantidad" min="1" /></div>
+                    <div>
+                        <label class="form-label">Metodo valuacion *</label>
+                        <select class="form-select" @bind="editor.MetodoValuacion">
+                            <option value="">Selecciona</option>
+                            @foreach (var method in valuationMethods)
+                            {
+                                <option value="@method">@method</option>
+                            }
+                        </select>
+                    </div>
+                    <details class="additional-details">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                        <div class="additional-details-body">
+                            <div><label class="form-label">Comprobante</label><input class="form-control" @bind="editor.ComprobanteNumero" /></div>
+                            <div class="patient-form-span"><label class="form-label">Observaciones</label><textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea></div>
+                        </div>
+                    </details>
                 </div>
             </div>
             <footer class="custom-modal-footer"><button class="btn btn-primary" @onclick="SaveAsync">Guardar</button><button class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button></footer>
@@ -182,6 +201,7 @@ else
     private readonly List<tbl_lote_producto> lots = [];
     private readonly List<tbl_producto> products = [];
     private readonly string[] movementTypes = ["Entrada", "Salida", "Ajuste"];
+    private readonly string[] valuationMethods = ["Promedio", "FIFO", "LIFO"];
     private Permissions permissions = new();
     private MovementEditor? editor;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError;
@@ -246,7 +266,16 @@ else
 
     private async Task SaveAsync()
     {
-        if (editor is null || editor.IdProducto <= 0 || editor.Cantidad <= 0) { ShowAlert("Completa los datos del movimiento.", true); return; }
+        if (editor is null ||
+            editor.IdProducto <= 0 ||
+            string.IsNullOrWhiteSpace(editor.TipoMovimiento) ||
+            editor.Cantidad <= 0 ||
+            string.IsNullOrWhiteSpace(editor.MetodoValuacion) ||
+            !valuationMethods.Contains(editor.MetodoValuacion))
+        {
+            ShowAlert("Completa producto, tipo, cantidad y método de valuación.", true);
+            return;
+        }
         await using var db = await DbContextFactory.CreateDbContextAsync();
         var product = await db.tbl_productos.FirstOrDefaultAsync(x =>
             x.id_producto == editor.IdProducto &&

@@ -328,10 +328,11 @@ else
                     <div class="alert alert-success" role="alert" style="margin-bottom: 1rem;">@statusMessage</div>
                 }
 
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="appointment-modal-layout">
                     <div class="appointment-modal-fields">
                         <div>
-                            <label class="form-label" for="modalAppointmentDoctor">Medico</label>
+                            <label class="form-label" for="modalAppointmentDoctor">Medico *</label>
                             <select id="modalAppointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
                                 <option value="0">Selecciona</option>
                                 @foreach (var doctor in doctors)
@@ -344,7 +345,7 @@ else
                         @if (isAdmin || isDoctor)
                         {
                             <div>
-                                <label class="form-label" for="modalAppointmentPatient">Paciente</label>
+                                <label class="form-label" for="modalAppointmentPatient">Paciente *</label>
                                 <select id="modalAppointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
                                     <option value="0">Selecciona</option>
                                     @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
@@ -374,7 +375,7 @@ else
                         }
 
                         <div>
-                            <label class="form-label" for="modalAppointmentType">Tipo</label>
+                            <label class="form-label" for="modalAppointmentType">Tipo *</label>
                             <select id="modalAppointmentType" class="form-select" @bind="appointmentEditor.TipoCita" disabled="@(!CanEditAppointments)">
                                 @foreach (var option in appointmentTypeOptions)
                                 {
@@ -384,7 +385,7 @@ else
                         </div>
 
                         <div>
-                            <label class="form-label">Estado</label>
+                            <label class="form-label">Estado *</label>
                             <input class="form-control" value="@appointmentEditor.Estado" readonly />
                         </div>
 
@@ -515,21 +516,23 @@ else
                     </div>
                 }
 
-                <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
-                    <div class="patient-form-span">
-                        <label class="form-label" for="modalAppointmentDescription">Descripcion adicional</label>
-                        <textarea id="modalAppointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
-                    </div>
-
-                    @if (CanWriteMedicalNotes)
-                    {
-                        <div class="patient-form-span">
-                            <label class="form-label" for="modalAppointmentNotes">Notas medicas</label>
-                            <textarea id="modalAppointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico"></textarea>
+                <details class="additional-details">
+                    <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                    <div class="additional-details-body is-single">
+                        <div>
+                            <label class="form-label" for="modalAppointmentDescription">Descripcion adicional</label>
+                            <textarea id="modalAppointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
                         </div>
-                    }
 
-                </div>
+                        @if (CanWriteMedicalNotes)
+                        {
+                            <div>
+                                <label class="form-label" for="modalAppointmentNotes">Notas medicas</label>
+                                <textarea id="modalAppointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico"></textarea>
+                            </div>
+                        }
+                    </div>
+                </details>
             </div>
 
             <footer class="custom-modal-footer">
@@ -2024,6 +2027,18 @@ else
         if ((isAdmin || isDoctor) && appointmentEditor.IdPaciente <= 0)
         {
             errorMessage = "Selecciona un paciente.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(appointmentEditor.TipoCita))
+        {
+            errorMessage = "Selecciona el tipo de cita.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(appointmentEditor.Estado))
+        {
+            errorMessage = "La cita debe tener un estado.";
             return false;
         }
 

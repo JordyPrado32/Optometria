@@ -169,13 +169,13 @@ else
                                                 @if (patient.activo == true)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(patient)">
-                                                        Desactivar
+                                                        <i class="bi bi-toggle-off"></i> Desactivar
                                                     </button>
                                                 }
                                                 else
                                                 {
                                                     <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; background-color: var(--color-sage) !important; border-color: var(--color-sage) !important;" @onclick="() => ToggleActiveAsync(patient)">
-                                                        Activar
+                                                        <i class="bi bi-toggle-on"></i> Activar
                                                     </button>
                                                 }
                                             }
@@ -202,6 +202,7 @@ else
                 <button type="button" class="btn-close-modal" @onclick="() => showFormModal = false">×</button>
             </header>
             <div class="custom-modal-body">
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
                         <label class="form-label" for="patientCode">Código paciente</label>
@@ -209,22 +210,22 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="patientDocument">Cédula</label>
-                        <input id="patientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
+                        <label class="form-label" for="patientDocument">Cédula *</label>
+                        <input id="patientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="patientNames">Nombres</label>
+                        <label class="form-label" for="patientNames">Nombres *</label>
                         <input id="patientNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="patientLastNames">Apellidos</label>
+                        <label class="form-label" for="patientLastNames">Apellidos *</label>
                         <input id="patientLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="patientBirthDate">Fecha de nacimiento <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
+                        <label class="form-label" for="patientBirthDate">Fecha de nacimiento * <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
                         <input id="patientBirthDate" type="date" class="form-control" value="@editor.FechaNacimiento" @onchange="OnBirthDateChanged" readonly="@(!CanModifyEditor)" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
                     </div>
 
@@ -262,7 +263,7 @@ else
 
                     <div>
                         <label class="form-label" for="patientPhone">Teléfono / Celular</label>
-                        <input id="patientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" placeholder="10 dígitos (opcional)" />
+                        <input id="patientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" placeholder="10 dígitos" />
                     </div>
 
                     <div>
@@ -271,17 +272,20 @@ else
                     </div>
                 </div>
 
-                <div class="management-form-grid patient-form-block" style="grid-template-columns: 1fr; margin-top: 1rem;">
-                    <div>
-                        <label class="form-label" for="patientAddress">Dirección</label>
-                        <input id="patientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
-                    </div>
+                <details class="additional-details">
+                    <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                    <div class="additional-details-body is-single">
+                        <div>
+                            <label class="form-label" for="patientAddress">Dirección</label>
+                            <input id="patientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
+                        </div>
 
-                    <div style="margin-top: 1rem;">
-                        <label class="form-label" for="patientObservations">Observaciones</label>
-                        <textarea id="patientObservations" class="form-control" rows="3" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                        <div>
+                            <label class="form-label" for="patientObservations">Observaciones</label>
+                            <textarea id="patientObservations" class="form-control" rows="3" @bind="editor.Observaciones" readonly="@(!CanModifyEditor)"></textarea>
+                        </div>
                     </div>
-                </div>
+                </details>
             </div>
             <footer class="custom-modal-footer">
                 <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cancelar</button>
@@ -927,9 +931,22 @@ else
 
         if (string.IsNullOrWhiteSpace(editor.Cedula) ||
             string.IsNullOrWhiteSpace(editor.Nombres) ||
-            string.IsNullOrWhiteSpace(editor.Apellidos))
+            string.IsNullOrWhiteSpace(editor.Apellidos) ||
+            string.IsNullOrWhiteSpace(editor.FechaNacimiento))
         {
-            errorMessage = "Cédula, Nombres y Apellidos son obligatorios.";
+            errorMessage = "Cédula, fecha de nacimiento, nombres y apellidos son obligatorios.";
+            return false;
+        }
+
+        if (!AppValidation.IsValidEcuadorianCedula(editor.Cedula))
+        {
+            errorMessage = "Ingresa una cédula ecuatoriana válida.";
+            return false;
+        }
+
+        if (!AppValidation.IsPersonName(editor.Nombres) || !AppValidation.IsPersonName(editor.Apellidos))
+        {
+            errorMessage = "Nombres y apellidos solo pueden contener letras y cada nombre o apellido debe tener al menos 3 letras.";
             return false;
         }
 
@@ -949,18 +966,19 @@ else
             return false;
         }
 
-        // Validate cellphone number exactly 10 digits if entered
-        if (!string.IsNullOrWhiteSpace(editor.Telefono))
+        if (string.IsNullOrWhiteSpace(editor.Telefono) && string.IsNullOrWhiteSpace(editor.Email))
         {
-            var digitsOnly = new string(editor.Telefono.Where(char.IsDigit).ToArray());
-            if (digitsOnly.Length != 10)
-            {
-                errorMessage = "El número de celular debe tener exactamente 10 dígitos (solo se permiten números).";
-                return false;
-            }
+            errorMessage = "Ingresa al menos una forma de contacto: teléfono o correo.";
+            return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
+        if (!string.IsNullOrWhiteSpace(editor.Telefono) && (!AppValidation.IsDigitsOnly(editor.Telefono) || editor.Telefono.Length != 10))
+        {
+            errorMessage = "El número de celular debe tener exactamente 10 dígitos y solo números.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(editor.Email) && !AppValidation.IsValidEmail(editor.Email))
         {
             errorMessage = "Ingresa un correo electrónico válido.";
             return false;

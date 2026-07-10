@@ -197,13 +197,13 @@ else
                                                 @if (u.activo == true)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(u)">
-                                                        Desactivar
+                                                        <i class="bi bi-toggle-off"></i> Desactivar
                                                     </button>
                                                 }
                                                 else
                                                 {
                                                     <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; background-color: var(--color-sage) !important; border-color: var(--color-sage) !important;" @onclick="() => ToggleActiveAsync(u)">
-                                                        Activar
+                                                        <i class="bi bi-toggle-on"></i> Activar
                                                     </button>
                                                 }
                                             }
@@ -240,34 +240,35 @@ else
                     <div class="alert alert-danger" role="alert">@errorMessage</div>
                 }
 
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="editNames">Nombres</label>
+                        <label class="form-label" for="editNames">Nombres *</label>
                         <input id="editNames" class="form-control" @bind="editor.Nombres" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="editLastNames">Apellidos</label>
+                        <label class="form-label" for="editLastNames">Apellidos *</label>
                         <input id="editLastNames" class="form-control" @bind="editor.Apellidos" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="editUserName">Usuario</label>
+                        <label class="form-label" for="editUserName">Usuario *</label>
                         <input id="editUserName" class="form-control" @bind="editor.Usuario" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="editEmail">Correo</label>
+                        <label class="form-label" for="editEmail">Correo *</label>
                         <input id="editEmail" type="email" class="form-control" @bind="editor.Email" readonly="@(!CanModifyEditor)" />
                     </div>
 
                     <div>
                         <label class="form-label" for="editPhone">Teléfono</label>
-                        <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" />
+                        <input id="editPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="editBirthDate">Fecha de nacimiento</label>
+                        <label class="form-label" for="editBirthDate">Fecha de nacimiento <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
                         <input id="editBirthDate"
                                type="date"
                                class="form-control"
@@ -1117,12 +1118,17 @@ else
             return false;
         }
 
+        if (!AppValidation.IsPersonName(editor.Nombres) || !AppValidation.IsPersonName(editor.Apellidos))
+        {
+            errorMessage = "Nombres y apellidos solo pueden contener letras y cada nombre o apellido debe tener al menos 3 letras.";
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(editor.Telefono))
         {
-            var cleaned = new string(editor.Telefono.Where(char.IsDigit).ToArray());
-            if (cleaned.Length != 10)
+            if (!AppValidation.IsDigitsOnly(editor.Telefono) || editor.Telefono.Length != 10)
             {
-                errorMessage = "El número de teléfono debe tener exactamente 10 dígitos.";
+                errorMessage = "El número de teléfono debe tener exactamente 10 dígitos y solo números.";
                 return false;
             }
         }

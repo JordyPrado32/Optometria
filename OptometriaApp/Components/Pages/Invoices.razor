@@ -1692,6 +1692,12 @@ else
             return;
         }
 
+        if (draftSale.fecha_venta.HasValue && draftSale.fecha_venta.Value.Date < DateTime.Today)
+        {
+            errorMessage = "La fecha de emisión de la factura no puede ser anterior a hoy.";
+            return;
+        }
+
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var issuer = await dbContext.emisor.FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
         if (issuer is null)
