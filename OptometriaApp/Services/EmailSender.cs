@@ -65,6 +65,8 @@ Si no solicitaste este acceso, ignora este correo y avisa al administrador.
         string appointmentType,
         string statusLabel,
         string reminderWindow,
+        string? customBody = null,
+        string? customSubject = null,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured())
@@ -75,8 +77,8 @@ Si no solicitaste este acceso, ignora este correo y avisa al administrador.
         using var message = new MailMessage
         {
             From = BuildFromAddress(),
-            Subject = $"Recordatorio de cita optometrica ({reminderWindow})",
-            Body = $"""
+            Subject = string.IsNullOrWhiteSpace(customSubject) ? $"Recordatorio de cita optometrica ({reminderWindow})" : customSubject,
+            Body = string.IsNullOrWhiteSpace(customBody) ? $"""
 Hola {destinationName},
 
 Te recordamos que tienes una cita {reminderWindow} con el profesional {doctorName}.
@@ -87,7 +89,7 @@ Tipo: {appointmentType}
 Estado actual: {statusLabel}
 
 Si necesitas reprogramarla o cancelarla, ingresa al sistema cuanto antes.
-""",
+""" : customBody,
             IsBodyHtml = false
         };
 

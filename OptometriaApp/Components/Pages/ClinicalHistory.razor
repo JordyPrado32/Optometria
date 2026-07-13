@@ -44,6 +44,8 @@ else
                 <a class="btn btn-outline-primary" href="/doctor/historia-clinica">Cambiar paciente</a>
                 @if (patient is not null && editor is not null)
                 {
+                    <a class="btn btn-outline-primary" href="@GetExamModuleUrl()">Modulo de examenes</a>
+                    <a class="btn btn-outline-primary" href="@GetAppointmentPrefillUrl()">Agendar cita</a>
                     <button type="button" class="btn btn-outline-primary" @onclick="StartNewEncounterAsync">Nueva evolucion</button>
                     <button type="button" class="btn btn-primary" @onclick="SaveDraftAsync">Guardar borrador</button>
                 }
@@ -140,6 +142,61 @@ else
                 <p class="clinical-helper-text">Cada atencion se guarda como una evolucion independiente. Puedes reabrir un borrador, revisar encuentros cerrados o iniciar una nueva evolucion sin perder la trazabilidad anterior.</p>
                 <ClinicalHistoryEncounterList Encounters="encounterSummaries" SelectedEncounterId="EncounterId" LegacyLabel="legacyEncounterLabel" OnSelect="SelectEncounterAsync" />
             </section>
+
+            <section class="management-card clinical-card">
+                <div class="management-card-header">
+                    <h2>Examenes y estudios</h2>
+                    <span>@examTimeline.Count registrados</span>
+                </div>
+                <p class="clinical-helper-text">Aqui se consolidan los examenes hechos dentro de la consulta y tambien los registrados desde el modulo separado, incluso si fueron en fechas distintas.</p>
+                @if (examTimeline.Count == 0)
+                {
+                    <p style="margin-top: 1rem;">Aun no hay examenes longitudinales registrados para este paciente.</p>
+                }
+                else
+                {
+                    <div class="management-list clinical-list-spaced">
+                        @foreach (var exam in examTimeline)
+                        {
+                            <article class="management-list-item">
+                                <strong>@exam.ExamType</strong>
+                                <span>@exam.EventDate.ToString("yyyy-MM-dd")</span>
+                                <span>@exam.SourceModule</span>
+                                <span>@exam.ResultSummary</span>
+                                @if (exam.IsAlarm)
+                                {
+                                    <span class="clinical-badge clinical-badge--danger">Alarma</span>
+                                }
+                                @if (exam.RequestedFollowUp)
+                                {
+                                    <span class="clinical-badge clinical-badge--warning">Requiere control</span>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+
+            @if (alertSummaries.Count > 0)
+            {
+                <section class="management-card clinical-card">
+                    <div class="management-card-header">
+                        <h2>Alertas clinicas activas</h2>
+                        <span>@alertSummaries.Count detectadas</span>
+                    </div>
+                    <div class="management-list clinical-list-spaced" style="margin-top: 1rem;">
+                        @foreach (var alert in alertSummaries.Take(8))
+                        {
+                            <article class="management-list-item">
+                                <strong>@alert.Title</strong>
+                                <span>@alert.Category</span>
+                                <span>@alert.EventDate.ToString("yyyy-MM-dd")</span>
+                                <span>@(string.IsNullOrWhiteSpace(alert.Notes) ? "Sin nota adicional" : alert.Notes)</span>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
 
             <section class="management-card clinical-card clinical-wizard-shell">
                 <div class="management-card-header">
@@ -522,6 +579,82 @@ else
                         </div>
                     </div>
                 </section>
+
+                <section class="management-card clinical-card">
+                    <div class="management-card-header">
+                        <h2>Registro longitudinal de examenes</h2>
+                        <span>@editor.ExamenesClinicos.Count en este encuentro</span>
+                    </div>
+                    <p class="clinical-helper-text">Usa esta seccion cuando en una misma historia se agregan varios examenes en consultas o fechas distintas. Tambien puedes completarlos luego desde el modulo de examenes.</p>
+                    <div class="clinical-stack" style="margin-top: 1rem;">
+                        @foreach (var exam in editor.ExamenesClinicos.Select((value, index) => new { value, index }))
+                        {
+                            <div class="clinical-grid-4 clinical-inline-card">
+                                <div>
+                                    <label class="form-label">Tipo</label>
+                                    <select class="form-select" @bind="exam.value.TipoExamen">
+                                        <option value="">Selecciona</option>
+                                        @foreach (var option in ClinicalExamTypeOptions)
+                                        {
+                                            <option value="@option">@option</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Fecha</label>
+                                    <input type="date" class="form-control" value="@FormatDateInput(exam.value.FechaExamen)" @onchange="args => OnExamDateChanged(exam.index, args)" />
+                                </div>
+                                <div>
+                                    <label class="form-label">Origen</label>
+                                    <select class="form-select" @bind="exam.value.ModuloOrigen">
+                                        <option value="Historia clinica">Historia clinica</option>
+                                        <option value="Modulo de examenes">Modulo de examenes</option>
+                                        <option value="Externo">Externo</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Profesional</label>
+                                    <input class="form-control" @bind="exam.value.ProfesionalResponsable" maxlength="120" />
+                                </div>
+                                <div class="clinical-span-2">
+                                    <label class="form-label">Motivo / solicitud</label>
+                                    <input class="form-control" @bind="exam.value.MotivoRegistro" maxlength="180" />
+                                </div>
+                                <div class="clinical-span-2">
+                                    <label class="form-label">Resultado resumido</label>
+                                    <input class="form-control" @bind="exam.value.ResultadoResumen" maxlength="220" />
+                                </div>
+                                <div class="clinical-span-3">
+                                    <label class="form-label">Detalle / interpretacion</label>
+                                    <textarea class="form-control" rows="3" @bind="exam.value.DetalleResultados"></textarea>
+                                </div>
+                                <div>
+                                    <label class="form-label">Resultado alarmante</label>
+                                    <div class="form-check form-switch" style="margin-top: 0.45rem;">
+                                        <input class="form-check-input" type="checkbox" @bind="exam.value.EsResultadoAlarmante" />
+                                    </div>
+                                </div>
+                                <div class="clinical-span-3">
+                                    <label class="form-label">Notas de alarma / accion</label>
+                                    <input class="form-control" @bind="exam.value.NotasAlarma" maxlength="220" />
+                                </div>
+                                <div>
+                                    <label class="form-label">Seguimiento</label>
+                                    <div class="form-check form-switch" style="margin-top: 0.45rem;">
+                                        <input class="form-check-input" type="checkbox" @bind="exam.value.RequiereSeguimiento" />
+                                    </div>
+                                </div>
+                                <div class="clinical-span-4">
+                                    <button type="button" class="btn btn-outline-primary" @onclick="() => RemoveClinicalExamRecord(exam.index)">Quitar examen</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="workspace-actions" style="margin-top: 0.85rem;">
+                        <button type="button" class="btn btn-outline-primary" @onclick="AddClinicalExamRecord">Agregar examen al encuentro</button>
+                        <a class="btn btn-outline-primary" href="@GetExamModuleUrl()">Abrir modulo separado</a>
+                    </div>
+                </section>
             }
 
             @if (activeWizardStep == 4)
@@ -607,6 +740,53 @@ else
                         <div class="clinical-span-2"><label class="form-label">Nivel paralelo y jornada</label><input class="form-control" @bind="editor.NivelParaleloJornada" /></div>
                     </div>
                 </section>
+
+                <section class="management-card clinical-card">
+                    <div class="management-card-header">
+                        <h2>Seguimiento y nueva cita</h2>
+                        <span>@(editor.Seguimiento.RequiereNuevaCita ? "Pendiente de agendar" : "Sin control pendiente")</span>
+                    </div>
+                    <div class="clinical-grid-4" style="margin-top: 1rem;">
+                        <div>
+                            <label class="form-label">Requiere nueva cita</label>
+                            <div class="form-check form-switch" style="margin-top: 0.45rem;">
+                                <input class="form-check-input" type="checkbox" @bind="editor.Seguimiento.RequiereNuevaCita" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Prioridad</label>
+                            <select class="form-select" @bind="editor.Seguimiento.Prioridad">
+                                @foreach (var option in FollowUpPriorityOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Dias sugeridos</label>
+                            <input type="number" min="1" max="365" class="form-control" @bind="editor.Seguimiento.DiasSugeridos" />
+                        </div>
+                        <div>
+                            <label class="form-label">Accion</label>
+                            <a class="btn btn-outline-primary" style="width:100%;" href="@GetAppointmentPrefillUrl()">Agendar control</a>
+                        </div>
+                        <div class="clinical-span-2">
+                            <label class="form-label">Motivo de seguimiento</label>
+                            <input class="form-control" @bind="editor.Seguimiento.Motivo" maxlength="220" />
+                        </div>
+                        <div class="clinical-span-2">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" rows="3" @bind="editor.Seguimiento.Observaciones"></textarea>
+                        </div>
+                    </div>
+                    @if (followUpSummaries.Count > 0)
+                    {
+                        <div class="clinical-preview-card" style="margin-top: 1rem;">
+                            <span class="eyebrow">Controles previos</span>
+                            <p>@string.Join(" | ", followUpSummaries.Take(3).Select(x => $"{x.EventDate:yyyy-MM-dd}: {x.Priority} - {x.Reason}"))</p>
+                        </div>
+                    }
+                </section>
             }
 
             @if (activeWizardStep == 5)
@@ -685,6 +865,8 @@ else
     private static readonly string[] SymptomOptions = ["Vision borrosa", "Prurito", "Lagrimeo", "Cefalea", "Fotofobia", "Diplopia", "Cuerpo extrano", "Secrecion", "Moscas volantes", "Destellos"];
     private static readonly string[] RedFlagOptions = ["Dolor intenso", "Perdida subita de vision", "Trauma", "Destellos nuevos", "Moscas volantes nuevas", "Diplopia aguda", "Ojo rojo severo", "Cefalea intensa"];
     private static readonly string[] PrescriptionTypeOptions = ["Medicamento", "Examen", "Insumo"];
+    private static readonly string[] ClinicalExamTypeOptions = ["Tonometria", "Campimetria", "Topografia corneal", "Retinografia", "OCT", "Paquimetria", "Biometria", "Prueba de color", "Test lagrimal", "Otro"];
+    private static readonly string[] FollowUpPriorityOptions = ["Control", "Preferente", "Urgente"];
     private static readonly IReadOnlyList<ClinicalHistoryStepNavigation.ClinicalStepDefinition> WizardSteps = new[]
     {
         new ClinicalHistoryStepNavigation.ClinicalStepDefinition(1, "Apertura", "Historia maestra y control del paciente."),
@@ -699,6 +881,9 @@ else
     private OpeningSnapshot? openingSnapshot;
     private ClinicalHistoryEditorModel? editor;
     private List<ClinicalEncounterSummary> encounterSummaries = [];
+    private List<ClinicalExamTimelineItem> examTimeline = [];
+    private List<ClinicalAlertSummary> alertSummaries = [];
+    private List<ClinicalFollowUpSummary> followUpSummaries = [];
     private ClinicalEncounterSummary? selectedEncounterSummary;
     private bool hasLegacyDataPendingMigration;
     private string? legacyEncounterLabel;
@@ -806,6 +991,9 @@ else
         openingSnapshot = loadResult.OpeningSnapshot;
         editor = loadResult.Editor;
         encounterSummaries = loadResult.Encounters;
+        examTimeline = loadResult.ExamTimeline;
+        alertSummaries = loadResult.AlertSummaries;
+        followUpSummaries = loadResult.FollowUpSummaries;
         selectedEncounterSummary = loadResult.SelectedEncounter;
         hasLegacyDataPendingMigration = loadResult.HasLegacyDataPendingMigration;
         legacyEncounterLabel = loadResult.LegacyEncounterLabel;
@@ -1058,6 +1246,9 @@ else
         openingSnapshot = null;
         editor = null;
         encounterSummaries = [];
+        examTimeline = [];
+        alertSummaries = [];
+        followUpSummaries = [];
         selectedEncounterSummary = null;
         hasLegacyDataPendingMigration = false;
         legacyEncounterLabel = null;
@@ -1137,6 +1328,37 @@ else
         }
 
         editor.Diagnostico.PrescripcionItems.RemoveAt(index);
+    }
+
+    private void AddClinicalExamRecord()
+    {
+        editor?.ExamenesClinicos.Add(new ClinicalExamRecord
+        {
+            FechaExamen = DateTime.Today,
+            ModuloOrigen = "Historia clinica"
+        });
+    }
+
+    private void RemoveClinicalExamRecord(int index)
+    {
+        if (editor is null || index < 0 || index >= editor.ExamenesClinicos.Count)
+        {
+            return;
+        }
+
+        editor.ExamenesClinicos.RemoveAt(index);
+    }
+
+    private void OnExamDateChanged(int index, ChangeEventArgs args)
+    {
+        if (editor is null || index < 0 || index >= editor.ExamenesClinicos.Count)
+        {
+            return;
+        }
+
+        editor.ExamenesClinicos[index].FechaExamen = DateTime.TryParse(args.Value?.ToString(), out var parsedDate)
+            ? parsedDate
+            : null;
     }
 
     private void OnPrescriptionProductChanged(int index, ChangeEventArgs args)
@@ -1230,6 +1452,34 @@ else
 
     private string GetStructuredAnamnesisPreview()
         => editor is null ? string.Empty : ClinicalHistoryService.BuildStructuredAnamnesisSummary(editor.AnamnesisGuiada);
+
+    private string GetExamModuleUrl()
+        => PatientId.HasValue
+            ? NavigationManager.GetUriWithQueryParameters("/doctor/examenes", new Dictionary<string, object?> { ["patientId"] = PatientId })
+            : "/doctor/examenes";
+
+    private string GetAppointmentPrefillUrl()
+    {
+        var reason = editor?.Seguimiento.Motivo;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            reason = editor?.MotivoConsulta;
+        }
+
+        var suggestedDate = editor?.Seguimiento.RequiereNuevaCita == true
+            ? DateOnly.FromDateTime(DateTime.Today.AddDays(Math.Max(editor.Seguimiento.DiasSugeridos, 1))).ToString("yyyy-MM-dd")
+            : null;
+
+        return NavigationManager.GetUriWithQueryParameters("/citas", new Dictionary<string, object?>
+        {
+            ["patientId"] = PatientId,
+            ["reason"] = reason,
+            ["date"] = suggestedDate
+        });
+    }
+
+    private static string FormatDateInput(DateTime? value)
+        => value?.ToString("yyyy-MM-dd") ?? string.Empty;
 }
 
 <style>
@@ -1257,6 +1507,16 @@ else
 
     .clinical-grid-4 {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .clinical-list-spaced {
+        margin-top: 1rem;
+    }
+
+    .clinical-inline-card {
+        padding: 0.85rem;
+        border: 1px dashed rgba(127, 105, 81, 0.18);
+        border-radius: 0.9rem;
     }
 
     .clinical-stack {
@@ -1517,6 +1777,11 @@ else
     .clinical-badge--warning {
         background: rgba(176, 124, 71, 0.14);
         color: #8c5c2f;
+    }
+
+    .clinical-badge--danger {
+        background: rgba(220, 53, 69, 0.14);
+        color: #b42333;
     }
 
     .clinical-badge--neutral {

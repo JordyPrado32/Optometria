@@ -84,6 +84,7 @@ else
                 }
 
                 <form method="post" action="/auth/profile" class="auth-form" autocomplete="off">
+                    <AntiforgeryToken />
                     <input type="hidden" name="avatar_url" value="@AvatarFormValue" />
 
                     <div class="auth-grid">
@@ -120,6 +121,33 @@ else
                         <div>
                             <label class="form-label" for="fechaNacimiento">Fecha de nacimiento</label>
                             <input id="fechaNacimiento" name="fechaNacimiento" type="date" class="form-control" value="@BirthDateValue" />
+                        </div>
+                    </div>
+
+                    <div class="profile-password-section">
+                        <div class="management-card-header">
+                            <h2>Verificacion en dos pasos</h2>
+                            <span>@(TwoFactorEnabled ? "Activa" : "Desactivada")</span>
+                        </div>
+
+                        <div class="password-policy profile-password-policy">
+                            <strong>Estado actual</strong>
+                            <p>
+                                @(TwoFactorEnabled
+                                    ? "La cuenta solicita codigo de autenticador al iniciar sesion."
+                                    : "La cuenta iniciara con 2FA desactivado hasta que el usuario decida activarlo.")
+                            </p>
+                        </div>
+
+                        <div class="workspace-actions">
+                            @if (TwoFactorEnabled)
+                            {
+                                <button type="submit" class="btn btn-outline-primary" name="twoFactorAction" value="disable">Desactivar 2FA</button>
+                            }
+                            else
+                            {
+                                <button type="submit" class="btn btn-outline-primary" name="twoFactorAction" value="enable">Activar 2FA</button>
+                            }
                         </div>
                     </div>
 
@@ -257,6 +285,7 @@ else
     private string AvatarSelectionPreviewPath => $"/images/avatars/{AvatarSelectionPreviewFile}";
     private string AvatarFormValue => avatarTouched ? SelectedAvatarFile : (string.IsNullOrWhiteSpace(profile?.avatar_url) ? string.Empty : CurrentAvatarFile);
     private string BirthDateValue => profile?.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty;
+    private bool TwoFactorEnabled => profile?.tbl_usuario_seguridad?.two_factor_enabled == true;
     private IReadOnlyList<string> CurrentAvatars => activeCategory == "mujeres" ? womenAvatars : menAvatars;
 
     protected override async Task OnInitializedAsync()
@@ -274,6 +303,7 @@ else
         profile = await dbContext.tbl_usuarios
             .AsNoTracking()
             .Include(u => u.id_rolNavigation)
+            .Include(u => u.tbl_usuario_seguridad)
             .FirstOrDefaultAsync(u => u.id_usuario == userId);
 
         if (profile is not null)

@@ -156,6 +156,9 @@ else
                                             <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditSupplier(supplier)">
                                                 <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoria
                                             </button>
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => PreparePurchaseHistorySupplierAsync(supplier)">
+                                                <i class="bi bi-bag-check" style="margin-right: 4px;"></i> Compras
+                                            </button>
                                             @if (permissions.CanDelete)
                                             {
                                                 <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => DeleteSupplierAsync(supplier)">
@@ -173,6 +176,45 @@ else
             <TablePager TotalItems="@FilteredSuppliers.Count" CurrentPage="@supplierPage" CurrentPageChanged="SetSupplierPage" />
         </section>
     </section>
+}
+
+@if (showPurchaseHistoryModal && selectedSupplier is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card audit-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>Historial de compras - @selectedSupplier.nombre</h2>
+                <button type="button" class="btn-close-modal" @onclick="ClosePurchaseHistoryModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="workspace-actions" style="margin-bottom: 1rem;">
+                    <a class="btn btn-outline-primary" href="@GetSupplierPurchaseExportUrl(selectedSupplier.id_proveedor)" target="_blank" rel="noopener noreferrer">Exportar historial CSV</a>
+                </div>
+                @if (supplierPurchaseHistory.Count == 0)
+                {
+                    <p style="text-align: center; color: var(--color-taupe); margin: 2rem 0;">No hay compras registradas para este proveedor.</p>
+                }
+                else
+                {
+                    <div class="management-list">
+                        @foreach (var purchase in supplierPurchaseHistory)
+                        {
+                            <article class="management-list-item">
+                                <strong>@purchase.OrderNumber</strong>
+                                <span>@purchase.OrderDate</span>
+                                <span>@purchase.Status</span>
+                                <span>@purchase.TotalText</span>
+                                <span>@purchase.LinesText</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClosePurchaseHistoryModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
 }
 
 @if (showFormModal && editor is not null)
@@ -440,6 +482,7 @@ else
     private readonly string[] accountTypeOptions = ["Ahorros", "Corriente"];
     private readonly string[] ratingOptions = ["A", "B", "C", "D"];
     private List<tbl_log_auditoria> auditEntries = [];
+    private List<SupplierPurchaseHistoryRow> supplierPurchaseHistory = [];
     private SupplierEditorModel? editor;
     private ModulePermissions permissions = new();
     private bool isLoading = true;
@@ -454,6 +497,7 @@ else
     private string? errorMessage;
     private bool showFormModal;
     private bool showAuditModal;
+    private bool showPurchaseHistoryModal;
     private bool showAlertModal;
     private string alertMessage = string.Empty;
     private bool alertIsError;
@@ -544,6 +588,19 @@ else
         selectedSupplier = supplier;
         await LoadAuditEntriesAsync(supplier.id_proveedor);
         showAuditModal = true;
+    }
+
+    private async Task PreparePurchaseHistorySupplierAsync(tbl_proveedor supplier)
+    {
+        selectedSupplier = supplier;
+        await LoadSupplierPurchaseHistoryAsync(supplier.id_proveedor);
+        showPurchaseHistoryModal = true;
+    }
+
+    private void ClosePurchaseHistoryModal()
+    {
+        showPurchaseHistoryModal = false;
+        supplierPurchaseHistory = [];
     }
 
     private void OnSupplierProvinceChanged(ChangeEventArgs args)
@@ -827,6 +884,26 @@ else
             .ToListAsync();
     }
 
+    private async Task LoadSupplierPurchaseHistoryAsync(int supplierId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        supplierPurchaseHistory = await dbContext.tbl_orden_compra
+            .AsNoTracking()
+            .Include(x => x.tbl_detalle_orden_compra)
+            .Where(x => x.id_proveedor == supplierId && (x.activo ?? true))
+            .OrderByDescending(x => x.fecha_orden)
+            .ThenByDescending(x => x.id_orden_compra)
+            .Select(x => new SupplierPurchaseHistoryRow
+            {
+                OrderNumber = x.numero_orden,
+                OrderDate = x.fecha_orden.HasValue ? x.fecha_orden.Value.ToString("yyyy-MM-dd") : "Sin fecha",
+                Status = string.IsNullOrWhiteSpace(x.estado_orden) ? "Sin estado" : x.estado_orden!,
+                TotalText = (x.total ?? 0m).ToString("0.00"),
+                LinesText = $"{x.tbl_detalle_orden_compra.Count} lineas"
+            })
+            .ToListAsync();
+    }
+
     private void ClearFilters()
     {
         searchTerm = string.Empty;
@@ -854,6 +931,9 @@ else
 
         NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
+
+    private static string GetSupplierPurchaseExportUrl(int supplierId)
+        => $"/exports/supplier-purchase-history/{supplierId}.csv";
 
     private bool MatchesFilters(tbl_proveedor supplier)
     {
@@ -1127,5 +1207,14 @@ else
         public bool EsActivo { get; set; } = true;
         public string Observaciones { get; set; } = string.Empty;
         public string TotalProductos { get; set; } = "0";
+    }
+
+    private sealed class SupplierPurchaseHistoryRow
+    {
+        public string OrderNumber { get; set; } = string.Empty;
+        public string OrderDate { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string TotalText { get; set; } = string.Empty;
+        public string LinesText { get; set; } = string.Empty;
     }
 }

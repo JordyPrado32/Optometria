@@ -194,6 +194,9 @@ else
                                             </button>
                                             @if (permissions.CanDelete)
                                             {
+                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(205, 92, 92, 0.28) !important; color: #b75a5a !important;" @onclick="() => DeleteUserAsync(u)">
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
+                                                </button>
                                                 @if (u.activo == true)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(u)">
@@ -931,6 +934,21 @@ else
             return;
         }
 
+        var selectedRoleName = roles.FirstOrDefault(r => r.id_rol == user.id_rol)?.nombre ?? string.Empty;
+        if ((user.activo ?? false) && selectedRoleName.Contains("admin", StringComparison.OrdinalIgnoreCase))
+        {
+            await using var adminCheckContext = await DbContextFactory.CreateDbContextAsync();
+            var activeAdminCount = await adminCheckContext.tbl_usuarios
+                .Include(u => u.id_rolNavigation)
+                .CountAsync(u => u.activo == true && u.id_rolNavigation.nombre.ToLower().Contains("admin"));
+
+            if (activeAdminCount <= 1)
+            {
+                ShowAlert("Debe existir al menos un administrador activo.", true);
+                return;
+            }
+        }
+
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var userEntity = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == user.id_usuario);
         if (userEntity is null)
@@ -951,6 +969,90 @@ else
             : "El usuario fue desactivado correctamente.", false);
 
         await LoadAsync(userEntity.id_usuario);
+    }
+
+    private async Task DeleteUserAsync(tbl_usuario user)
+    {
+        errorMessage = null;
+
+        if (!permissions.CanDelete || user is null || user.id_usuario <= 0)
+        {
+            return;
+        }
+
+        if (user.id_usuario == currentUserId)
+        {
+            ShowAlert("No puedes eliminar tu propio usuario.", true);
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var userEntity = await dbContext.tbl_usuarios
+            .Include(u => u.id_rolNavigation)
+            .Include(u => u.tbl_consulta)
+            .Include(u => u.tbl_pacientes)
+            .Include(u => u.tbl_movimiento_inventarios)
+            .Include(u => u.tbl_venta)
+            .Include(u => u.tbl_log_auditoria)
+            .Include(u => u.tbl_sesions)
+            .Include(u => u.tbl_comunicacions)
+            .Include(u => u.tbl_envio_laboratorioid_usuarioNavigations)
+            .Include(u => u.tbl_envio_laboratorioid_usuario_entregaNavigations)
+            .FirstOrDefaultAsync(u => u.id_usuario == user.id_usuario);
+
+        if (userEntity is null)
+        {
+            ShowAlert("No se encontró el usuario seleccionado.", true);
+            return;
+        }
+
+        var isAdminUser = userEntity.id_rolNavigation?.nombre.Contains("admin", StringComparison.OrdinalIgnoreCase) == true;
+        if (isAdminUser)
+        {
+            var activeAdminCount = await dbContext.tbl_usuarios
+                .Include(u => u.id_rolNavigation)
+                .CountAsync(u => u.activo == true && u.id_rolNavigation.nombre.ToLower().Contains("admin"));
+
+            if (activeAdminCount <= 1)
+            {
+                ShowAlert("Debe existir al menos un administrador activo.", true);
+                return;
+            }
+        }
+
+        var hasRelatedRecords =
+            userEntity.tbl_consulta.Count > 0 ||
+            userEntity.tbl_pacientes.Count > 0 ||
+            userEntity.tbl_movimiento_inventarios.Count > 0 ||
+            userEntity.tbl_venta.Count > 0 ||
+            userEntity.tbl_log_auditoria.Count > 0 ||
+            userEntity.tbl_sesions.Count > 0 ||
+            userEntity.tbl_comunicacions.Count > 0 ||
+            userEntity.tbl_envio_laboratorioid_usuarioNavigations.Count > 0 ||
+            userEntity.tbl_envio_laboratorioid_usuario_entregaNavigations.Count > 0;
+
+        if (hasRelatedRecords)
+        {
+            ShowAlert("No puedes eliminar un usuario con historial relacionado. Desactívalo para conservar la trazabilidad.", true);
+            return;
+        }
+
+        var security = await dbContext.tbl_usuario_seguridad.FirstOrDefaultAsync(x => x.id_usuario == userEntity.id_usuario);
+        if (security is not null)
+        {
+            dbContext.tbl_usuario_seguridad.Remove(security);
+        }
+
+        WriteAudit(
+            dbContext,
+            "Eliminar usuario",
+            $"UsuarioId={userEntity.id_usuario}; Usuario={userEntity.usuario}; RolId={userEntity.id_rol}");
+
+        dbContext.tbl_usuarios.Remove(userEntity);
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert("El usuario fue eliminado correctamente.", false);
+        await LoadAsync();
     }
 
     private void ExportUsers()

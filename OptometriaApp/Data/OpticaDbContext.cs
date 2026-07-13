@@ -86,10 +86,18 @@ public partial class OpticaDbContext : DbContext
 
             entity.Property(e => e.fecha_abono).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.fecha_registro).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.id_abono_referencia);
             entity.Property(e => e.monto_abono).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.motivo_movimiento)
+                .HasMaxLength(255)
+                .IsUnicode(false);
             entity.Property(e => e.referencia_pago)
                 .HasMaxLength(100)
                 .IsUnicode(false);
+            entity.Property(e => e.tipo_movimiento)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Abono");
             entity.Property(e => e.usuario_registro)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -157,12 +165,39 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.estado_comprobante)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.estado_sri)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ambiente_sri)
+                .HasMaxLength(1)
+                .IsUnicode(false);
+            entity.Property(e => e.tipo_emision_sri)
+                .HasMaxLength(1)
+                .IsUnicode(false);
+            entity.Property(e => e.version_xml)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.clave_acceso)
+                .HasMaxLength(49)
+                .IsUnicode(false);
+            entity.Property(e => e.codigo_numerico)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.hash_xml)
+                .HasMaxLength(128)
+                .IsUnicode(false);
+            entity.Property(e => e.ruta_xml)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.tipo_comprobante)
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.ruta_pdf)
                 .HasMaxLength(255)
                 .IsUnicode(false);
+            entity.Property(e => e.xml_firmado).IsUnicode(false);
+            entity.Property(e => e.xml_no_firmado).IsUnicode(false);
+            entity.Property(e => e.mensajes_sri).IsUnicode(false);
 
             entity.HasOne(d => d.id_ventaNavigation).WithMany(p => p.tbl_comprobantes)
                 .HasForeignKey(d => d.id_venta)
@@ -441,10 +476,44 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.canal)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.direccion_entrega)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.estado)
                 .HasMaxLength(30)
                 .IsUnicode(false);
+            entity.Property(e => e.estado_tracking)
+                .HasMaxLength(30)
+                .IsUnicode(false);
             entity.Property(e => e.fecha_envio).HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.metodo_entrega)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.nombre_receptor)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.numero_guia_remision)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.referencia_entrega)
+                .HasMaxLength(255)
+                .IsUnicode(false);
+            entity.Property(e => e.repartidor_nombre)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.repartidor_telefono)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.tarifa_entrega).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.telefono_entrega)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.url_mapa_seguimiento)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.observaciones_logistica).IsUnicode(false);
+            entity.Property(e => e.latitud_actual).HasColumnType("decimal(10, 6)");
+            entity.Property(e => e.longitud_actual).HasColumnType("decimal(10, 6)");
 
             entity.HasOne(d => d.id_orden_rxNavigation).WithMany(p => p.tbl_envio_laboratorios)
                 .HasForeignKey(d => d.id_orden_rx)
@@ -572,14 +641,37 @@ public partial class OpticaDbContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasDefaultValue("Emitida");
+            entity.Property(e => e.estado_sri)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ambiente_sri)
+                .HasMaxLength(1)
+                .IsUnicode(false);
+            entity.Property(e => e.tipo_emision_sri)
+                .HasMaxLength(1)
+                .IsUnicode(false);
             entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.fecha_firma).HasColumnType("datetime2");
             entity.Property(e => e.fecha_emision).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.monto_total).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.clave_acceso)
+                .HasMaxLength(49)
+                .IsUnicode(false);
+            entity.Property(e => e.codigo_numerico)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.hash_xml)
+                .HasMaxLength(128)
+                .IsUnicode(false);
+            entity.Property(e => e.mensajes_sri).IsUnicode(false);
             entity.Property(e => e.motivo)
                 .HasMaxLength(255)
                 .IsUnicode(false);
             entity.Property(e => e.numero_nota)
                 .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.ruta_xml)
+                .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.tipo_nota)
                 .HasMaxLength(20)
@@ -588,6 +680,11 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.usuario_creacion)
                 .HasMaxLength(100)
                 .IsUnicode(false);
+            entity.Property(e => e.version_xml)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.xml_firmado).IsUnicode(false);
+            entity.Property(e => e.xml_no_firmado).IsUnicode(false);
 
             entity.HasOne(d => d.id_comprobante_relacionadoNavigation).WithMany()
                 .HasForeignKey(d => d.id_comprobante_relacionado)

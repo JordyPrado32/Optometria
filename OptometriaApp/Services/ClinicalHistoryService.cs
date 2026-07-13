@@ -35,6 +35,19 @@ public sealed class ClinicalHistoryService
             ? events.FirstOrDefault(x => x.id_historia_evento == selectedEncounterId.Value)
             : events.FirstOrDefault();
 
+        var eventEditors = events
+            .Select(x => new ClinicalEncounterProjection(x, BuildEditorFromEvent(x)))
+            .ToList();
+        var consultationIds = events.Select(x => x.id_consulta).Distinct().ToList();
+        var consultationIdsWithLabOrder = events.Count == 0
+            ? new HashSet<int>()
+            : await dbContext.tbl_orden_rxes
+                .AsNoTracking()
+                .Where(x => consultationIds.Contains(x.id_consulta))
+                .Select(x => x.id_consulta)
+                .Distinct()
+                .ToHashSetAsync();
+
         var legacyEditor = BuildLegacyEditor(history, patient);
         var editor = selectedEvent is not null
             ? BuildEditorFromEvent(selectedEvent)
@@ -44,8 +57,11 @@ public sealed class ClinicalHistoryService
         {
             History = history,
             OpeningSnapshot = openingSnapshot,
-            Encounters = events.Select(MapEncounterSummary).ToList(),
-            SelectedEncounter = selectedEvent is null ? null : MapEncounterSummary(selectedEvent),
+            Encounters = events.Select(x => MapEncounterSummary(x, consultationIdsWithLabOrder.Contains(x.id_consulta))).ToList(),
+            SelectedEncounter = selectedEvent is null ? null : MapEncounterSummary(selectedEvent, consultationIdsWithLabOrder.Contains(selectedEvent.id_consulta)),
+            ExamTimeline = BuildExamTimeline(eventEditors),
+            AlertSummaries = BuildAlertSummaries(eventEditors),
+            FollowUpSummaries = BuildFollowUpSummaries(eventEditors),
             Editor = editor,
             HasLegacyDataPendingMigration = selectedEvent is null && legacyEditor is not null,
             LegacyEncounterLabel = legacyEditor is null || history is null
@@ -198,6 +214,131 @@ public sealed class ClinicalHistoryService
             StatusMessage = request.Mode == ClinicalHistorySaveMode.Finalize
                 ? "La evolucion clinica se cerro correctamente."
                 : "El borrador de la evolucion clinica se guardo correctamente."
+        };
+    }
+
+    public async Task<ClinicalExamSaveResult> SaveStandaloneExamAsync(
+        OpticaDbContext dbContext,
+        ClinicalStandaloneExamRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Exam.TipoExamen))
+        {
+            return new ClinicalExamSaveResult
+            {
+                ValidationErrors = ["Selecciona el tipo de examen."]
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Exam.ResultadoResumen))
+        {
+            return new ClinicalExamSaveResult
+            {
+                ValidationErrors = ["Resume el resultado principal del examen."]
+            };
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var history = await dbContext.tbl_historia_clinica_optometrias
+            .FirstOrDefaultAsync(
+                x => x.id_paciente == request.Patient.id_paciente && x.activo == true,
+                cancellationToken);
+
+        if (history is null)
+        {
+            history = new tbl_historia_clinica_optometria
+            {
+                id_paciente = request.Patient.id_paciente,
+                id_optometra_apertura = request.ActorUserId,
+                fecha_apertura = DateTime.Now,
+                activo = true,
+                datos_apertura_json = Serialize(BuildOpeningSnapshot(request.Patient))
+            };
+
+            dbContext.tbl_historia_clinica_optometrias.Add(history);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        history.id_optometra_ultima_actualizacion = request.ActorUserId;
+        history.fecha_ultima_actualizacion = DateTime.Now;
+        history.numero_historia ??= NormalizeOptional(string.IsNullOrWhiteSpace(request.Patient.codigo_paciente)
+            ? $"HC-{request.Patient.id_paciente:D5}"
+            : request.Patient.codigo_paciente);
+
+        var consultationDate = request.Exam.FechaExamen?.Date ?? DateTime.Today;
+        var consultation = new tbl_consulta
+        {
+            id_paciente = request.Patient.id_paciente,
+            id_optometra = request.ActorUserId,
+            fecha_consulta = consultationDate,
+            motivo_consulta = NormalizeOptional(request.Exam.MotivoRegistro) ?? "Registro de examen complementario",
+            historia_clinica = history.numero_historia,
+            examenes_preliminares = NormalizeOptional(request.Exam.TipoExamen),
+            examenes_varios = NormalizeOptional(request.Exam.ResultadoResumen),
+            evaluaciones = NormalizeOptional(request.Exam.InterpretacionClinica),
+            notas = NormalizeOptional(request.Exam.NotasAlarma)
+        };
+
+        dbContext.tbl_consulta.Add(consultation);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var examRecord = new ClinicalExamRecord
+        {
+            Id = string.IsNullOrWhiteSpace(request.Exam.Id) ? Guid.NewGuid().ToString("N") : request.Exam.Id,
+            TipoExamen = request.Exam.TipoExamen,
+            FechaExamen = consultationDate,
+            ModuloOrigen = string.IsNullOrWhiteSpace(request.Exam.ModuloOrigen) ? "Modulo de examenes" : request.Exam.ModuloOrigen,
+            ProfesionalResponsable = request.Exam.ProfesionalResponsable,
+            MotivoRegistro = request.Exam.MotivoRegistro,
+            ResultadoResumen = request.Exam.ResultadoResumen,
+            DetalleResultados = request.Exam.DetalleResultados,
+            InterpretacionClinica = request.Exam.InterpretacionClinica,
+            EsResultadoAlarmante = request.Exam.EsResultadoAlarmante,
+            NotasAlarma = request.Exam.NotasAlarma,
+            RequiereSeguimiento = request.Exam.RequiereSeguimiento
+        };
+
+        var editor = BuildNewEditor(request.Patient);
+        editor.NumeroHistoria = history.numero_historia ?? editor.NumeroHistoria;
+        editor.MotivoConsulta = consultation.motivo_consulta ?? "Registro de examen complementario";
+        editor.Anamnesis = $"Registro longitudinal de examen: {examRecord.TipoExamen}.";
+        editor.NombreExaminador = string.IsNullOrWhiteSpace(request.Exam.ProfesionalResponsable)
+            ? request.ActorDisplayName
+            : request.Exam.ProfesionalResponsable;
+        editor.ObservacionesGenerales = request.Exam.DetalleResultados;
+        editor.Diagnostico.TratamientoConducta = request.Exam.InterpretacionClinica;
+        editor.ExamenesClinicos.Add(examRecord);
+        editor.Seguimiento = request.FollowUp ?? new FollowUpSection();
+
+        var encounter = new tbl_historia_clinica_optometria_evento
+        {
+            id_historia_clinica = history.id_historia_clinica,
+            id_paciente = request.Patient.id_paciente,
+            id_consulta = consultation.id_consulta,
+            id_optometra = request.ActorUserId,
+            fecha_evento = consultationDate,
+            fecha_ultima_actualizacion = DateTime.Now,
+            estado = "Cerrada",
+            resumen_progreso = 100,
+            motivo_consulta = consultation.motivo_consulta,
+            anamnesis = editor.Anamnesis,
+            diagnostico_resumen = NormalizeOptional(request.Exam.InterpretacionClinica) ?? NormalizeOptional(request.Exam.ResultadoResumen),
+            payload_json = Serialize(editor),
+            consentimiento_firmado = false,
+            es_legado_migrado = false,
+            activo = true
+        };
+
+        dbContext.tbl_historia_clinica_optometria_eventos.Add(encounter);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new ClinicalExamSaveResult
+        {
+            EncounterId = encounter.id_historia_evento,
+            ConsultationId = consultation.id_consulta,
+            StatusMessage = "El examen se registro y ya aparece en la historia clinica del paciente."
         };
     }
 
@@ -559,7 +700,7 @@ public sealed class ClinicalHistoryService
     private static ClinicalHistoryEditorModel BuildEditorFromEvent(tbl_historia_clinica_optometria_evento encounter)
         => Deserialize<ClinicalHistoryEditorModel>(encounter.payload_json) ?? new ClinicalHistoryEditorModel();
 
-    private static ClinicalEncounterSummary MapEncounterSummary(tbl_historia_clinica_optometria_evento encounter)
+    private static ClinicalEncounterSummary MapEncounterSummary(tbl_historia_clinica_optometria_evento encounter, bool wasSentToLab)
     {
         return new ClinicalEncounterSummary
         {
@@ -569,6 +710,7 @@ public sealed class ClinicalHistoryService
             Progress = encounter.resumen_progreso,
             Motive = encounter.motivo_consulta ?? "Sin motivo registrado",
             Diagnosis = encounter.diagnostico_resumen ?? "Sin diagnostico registrado",
+            WasSentToLab = wasSentToLab,
             EventDate = encounter.fecha_evento,
             UpdatedAt = encounter.fecha_ultima_actualizacion
         };
@@ -848,6 +990,99 @@ public sealed class ClinicalHistoryService
 
     private static string? NormalizeOptional(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static List<ClinicalExamTimelineItem> BuildExamTimeline(IEnumerable<ClinicalEncounterProjection> projections)
+    {
+        return projections
+            .SelectMany(projection => projection.Editor.ExamenesClinicos.Select(exam => new ClinicalExamTimelineItem
+            {
+                EncounterId = projection.Encounter.id_historia_evento,
+                ConsultationId = projection.Encounter.id_consulta,
+                EventDate = exam.FechaExamen ?? projection.Encounter.fecha_evento,
+                ExamType = exam.TipoExamen,
+                ResultSummary = exam.ResultadoResumen,
+                SourceModule = string.IsNullOrWhiteSpace(exam.ModuloOrigen) ? "Historia clinica" : exam.ModuloOrigen,
+                IsAlarm = exam.EsResultadoAlarmante || LooksCriticalMeasurement(exam.ResultadoResumen) || LooksCriticalMeasurement(exam.DetalleResultados),
+                AlertNotes = exam.NotasAlarma,
+                RequestedFollowUp = exam.RequiereSeguimiento
+            }))
+            .OrderByDescending(x => x.EventDate)
+            .ThenByDescending(x => x.EncounterId)
+            .ToList();
+    }
+
+    private static List<ClinicalAlertSummary> BuildAlertSummaries(IEnumerable<ClinicalEncounterProjection> projections)
+    {
+        return projections
+            .SelectMany(projection =>
+            {
+                var items = new List<ClinicalAlertSummary>();
+
+                items.AddRange(projection.Editor.AnamnesisGuiada.BanderasAlerta.Select(flag => new ClinicalAlertSummary
+                {
+                    EncounterId = projection.Encounter.id_historia_evento,
+                    EventDate = projection.Encounter.fecha_evento,
+                    Title = flag,
+                    Category = "Bandera de anamnesis",
+                    Notes = projection.Encounter.motivo_consulta
+                }));
+
+                items.AddRange(projection.Editor.ExamenesClinicos
+                    .Where(exam => exam.EsResultadoAlarmante || LooksCriticalMeasurement(exam.ResultadoResumen) || LooksCriticalMeasurement(exam.DetalleResultados))
+                    .Select(exam => new ClinicalAlertSummary
+                    {
+                        EncounterId = projection.Encounter.id_historia_evento,
+                        EventDate = exam.FechaExamen ?? projection.Encounter.fecha_evento,
+                        Title = exam.TipoExamen,
+                        Category = "Resultado alarmante",
+                        Notes = string.IsNullOrWhiteSpace(exam.NotasAlarma) ? exam.ResultadoResumen : exam.NotasAlarma
+                    }));
+
+                return items;
+            })
+            .OrderByDescending(x => x.EventDate)
+            .ToList();
+    }
+
+    private static List<ClinicalFollowUpSummary> BuildFollowUpSummaries(IEnumerable<ClinicalEncounterProjection> projections)
+    {
+        return projections
+            .Where(x => x.Editor.Seguimiento.RequiereNuevaCita)
+            .Select(x => new ClinicalFollowUpSummary
+            {
+                EncounterId = x.Encounter.id_historia_evento,
+                EventDate = x.Encounter.fecha_evento,
+                Priority = x.Editor.Seguimiento.Prioridad,
+                Reason = x.Editor.Seguimiento.Motivo,
+                DiasSugeridos = x.Editor.Seguimiento.DiasSugeridos,
+                Notes = x.Editor.Seguimiento.Observaciones
+            })
+            .OrderByDescending(x => x.EventDate)
+            .ToList();
+    }
+
+    private static bool LooksCriticalMeasurement(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized.Contains("20/200", StringComparison.Ordinal) ||
+               normalized.Contains("20/400", StringComparison.Ordinal) ||
+               normalized.Contains("nlp", StringComparison.Ordinal) ||
+               normalized.Contains("no percibe luz", StringComparison.Ordinal) ||
+               normalized.Contains("edema", StringComparison.Ordinal) ||
+               normalized.Contains("hemorrag", StringComparison.Ordinal) ||
+               normalized.Contains("desprend", StringComparison.Ordinal) ||
+               normalized.Contains("ulcera", StringComparison.Ordinal) ||
+               normalized.Contains("presion alta", StringComparison.Ordinal);
+    }
+
+    private sealed record ClinicalEncounterProjection(
+        tbl_historia_clinica_optometria_evento Encounter,
+        ClinicalHistoryEditorModel Editor);
 }
 
 public sealed class ClinicalHistoryLoadResult
@@ -856,6 +1091,9 @@ public sealed class ClinicalHistoryLoadResult
     public required OpeningSnapshot OpeningSnapshot { get; init; }
     public required ClinicalHistoryEditorModel Editor { get; init; }
     public required List<ClinicalEncounterSummary> Encounters { get; init; }
+    public List<ClinicalExamTimelineItem> ExamTimeline { get; init; } = [];
+    public List<ClinicalAlertSummary> AlertSummaries { get; init; } = [];
+    public List<ClinicalFollowUpSummary> FollowUpSummaries { get; init; } = [];
     public ClinicalEncounterSummary? SelectedEncounter { get; init; }
     public bool HasLegacyDataPendingMigration { get; init; }
     public string? LegacyEncounterLabel { get; init; }
@@ -881,6 +1119,23 @@ public sealed class ClinicalHistorySaveResult
     public List<string> ValidationErrors { get; init; } = [];
 }
 
+public sealed class ClinicalExamSaveResult
+{
+    public int? EncounterId { get; init; }
+    public int? ConsultationId { get; init; }
+    public string? StatusMessage { get; init; }
+    public List<string> ValidationErrors { get; init; } = [];
+}
+
+public sealed class ClinicalStandaloneExamRequest
+{
+    public required tbl_paciente Patient { get; init; }
+    public required int ActorUserId { get; init; }
+    public required string ActorDisplayName { get; init; }
+    public required ClinicalExamRecord Exam { get; init; }
+    public FollowUpSection? FollowUp { get; init; }
+}
+
 public sealed class ClinicalEncounterSummary
 {
     public int EncounterId { get; init; }
@@ -889,6 +1144,7 @@ public sealed class ClinicalEncounterSummary
     public int Progress { get; init; }
     public required string Motive { get; init; }
     public required string Diagnosis { get; init; }
+    public bool WasSentToLab { get; init; }
     public DateTime EventDate { get; init; }
     public DateTime UpdatedAt { get; init; }
 }
@@ -922,8 +1178,67 @@ public sealed class ClinicalHistoryEditorModel
     public MotorExamSection Motor { get; set; } = new();
     public KeratometrySection Keratometria { get; set; } = new();
     public RefractionSection Refraction { get; set; } = new();
+    public List<ClinicalExamRecord> ExamenesClinicos { get; set; } = [];
     public DiagnosisSection Diagnostico { get; set; } = new();
+    public FollowUpSection Seguimiento { get; set; } = new();
     public ConsentSection Consentimiento { get; set; } = new();
+}
+
+public sealed class ClinicalExamRecord
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string TipoExamen { get; set; } = string.Empty;
+    public DateTime? FechaExamen { get; set; } = DateTime.Today;
+    public string ModuloOrigen { get; set; } = "Historia clinica";
+    public string ProfesionalResponsable { get; set; } = string.Empty;
+    public string MotivoRegistro { get; set; } = string.Empty;
+    public string ResultadoResumen { get; set; } = string.Empty;
+    public string DetalleResultados { get; set; } = string.Empty;
+    public string InterpretacionClinica { get; set; } = string.Empty;
+    public bool EsResultadoAlarmante { get; set; }
+    public string NotasAlarma { get; set; } = string.Empty;
+    public bool RequiereSeguimiento { get; set; }
+}
+
+public sealed class FollowUpSection
+{
+    public bool RequiereNuevaCita { get; set; }
+    public string Prioridad { get; set; } = "Control";
+    public string Motivo { get; set; } = string.Empty;
+    public int DiasSugeridos { get; set; } = 30;
+    public string Observaciones { get; set; } = string.Empty;
+}
+
+public sealed class ClinicalExamTimelineItem
+{
+    public int EncounterId { get; init; }
+    public int ConsultationId { get; init; }
+    public DateTime EventDate { get; init; }
+    public required string ExamType { get; init; }
+    public required string ResultSummary { get; init; }
+    public required string SourceModule { get; init; }
+    public bool IsAlarm { get; init; }
+    public string? AlertNotes { get; init; }
+    public bool RequestedFollowUp { get; init; }
+}
+
+public sealed class ClinicalAlertSummary
+{
+    public int EncounterId { get; init; }
+    public DateTime EventDate { get; init; }
+    public required string Title { get; init; }
+    public required string Category { get; init; }
+    public string? Notes { get; init; }
+}
+
+public sealed class ClinicalFollowUpSummary
+{
+    public int EncounterId { get; init; }
+    public DateTime EventDate { get; init; }
+    public required string Priority { get; init; }
+    public required string Reason { get; init; }
+    public int DiasSugeridos { get; init; }
+    public string? Notes { get; init; }
 }
 
 public sealed class AnamnesisGuidedSection

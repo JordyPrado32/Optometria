@@ -143,6 +143,9 @@ else
                                             </button>
                                             @if (permissions.CanDelete)
                                             {
+                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(205, 92, 92, 0.28) !important; color: #b75a5a !important;" @onclick="() => DeleteLaboratoryAsync(laboratory)">
+                                                    <i class="bi bi-trash3-fill"></i> Eliminar
+                                                </button>
                                                 @if (laboratory.activo == true)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(laboratory)">
@@ -688,6 +691,44 @@ else
             : "El laboratorio fue inactivado correctamente.", false);
 
         await LoadAsync(laboratoryEntity.id_laboratorio);
+    }
+
+    private async Task DeleteLaboratoryAsync(tbl_laboratorio lab)
+    {
+        errorMessage = null;
+
+        if (!permissions.CanDelete || lab is null || lab.id_laboratorio <= 0)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var laboratoryEntity = await dbContext.tbl_laboratorios
+            .Include(l => l.tbl_orden_rxes)
+            .FirstOrDefaultAsync(l => l.id_laboratorio == lab.id_laboratorio);
+
+        if (laboratoryEntity is null)
+        {
+            ShowAlert("No se encontró el laboratorio seleccionado.", true);
+            return;
+        }
+
+        if (laboratoryEntity.tbl_orden_rxes.Count > 0)
+        {
+            ShowAlert("No puedes eliminar un laboratorio con órdenes históricas. Inactívalo para conservar la trazabilidad.", true);
+            return;
+        }
+
+        WriteAudit(
+            dbContext,
+            "Eliminar laboratorio",
+            $"LaboratorioId={laboratoryEntity.id_laboratorio}; Nombre={laboratoryEntity.nombre}; Correo={laboratoryEntity.correo}");
+
+        dbContext.tbl_laboratorios.Remove(laboratoryEntity);
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert("El laboratorio fue eliminado correctamente.", false);
+        await LoadAsync();
     }
 
     private async Task LoadAuditEntriesAsync(int laboratoryId)

@@ -90,8 +90,14 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQue
 builder.Services.AddScoped<MenuAccessService>();
 builder.Services.AddScoped<KardexService>();
 builder.Services.AddScoped<BillingDraftService>();
+builder.Services.AddScoped<ElectronicBillingDocumentService>();
 builder.Services.AddScoped<ClinicalHistoryService>();
 builder.Services.AddScoped<AccountStatementService>();
+builder.Services.AddScoped<LabMessagingService>();
+builder.Services.AddScoped<SystemReportsService>();
+builder.Services.AddScoped<InventoryInsightsService>();
+builder.Services.AddScoped<PurchaseOrderDocumentService>();
+builder.Services.AddScoped<OpticaCustomizationService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddRazorComponents()
@@ -109,6 +115,7 @@ await EnsureSupplierSchemaAsync(app);
 await EnsureProcurementSchemaAsync(app);
 await EnsureAppointmentSchemaAsync(app);
 await EnsureClinicalHistorySchemaAsync(app);
+await EnsureRoleSecurityMatrixAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -149,6 +156,7 @@ app.MapPost("/auth/login", async (
 
     if (usuarioDb is null)
     {
+        await WriteSecurityAuditAsync(dbContext, null, "Login fallido", $"Usuario={usuario}; Motivo=Credenciales invalidas");
         return Results.LocalRedirect("/?error=Usuario+o+contrasena+incorrectos");
     }
 
@@ -156,6 +164,7 @@ app.MapPost("/auth/login", async (
 
     if (usuarioDb.activo == false)
     {
+        await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login rechazado", "Motivo=Cuenta inactiva");
         return Results.LocalRedirect("/?error=Tu+cuenta+esta+inactiva");
     }
 
@@ -173,6 +182,7 @@ app.MapPost("/auth/login", async (
     {
         if (temporaryPasswordResult == PasswordVerificationResult.Failed)
         {
+            await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login rechazado", "Motivo=Cuenta bloqueada");
             return Results.LocalRedirect("/?error=Tu+cuenta+esta+bloqueada.+Usa+la+clave+temporal+enviada+al+correo+o+recupera+tu+acceso");
         }
 
@@ -215,10 +225,12 @@ app.MapPost("/auth/login", async (
                 blockedMessage = "Tu cuenta fue bloqueada y no se pudo enviar la clave temporal porque falta correo o configuracion SMTP";
             }
 
+            await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login bloqueado", $"IntentosFallidos={usuarioDb.intentos_fallidos ?? 0}");
             return Results.LocalRedirect($"/?error={Uri.EscapeDataString(blockedMessage)}");
         }
 
         seguridad.updated_at = DateTime.Now;
+        await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login fallido", $"IntentosFallidos={usuarioDb.intentos_fallidos ?? 0}");
         await dbContext.SaveChangesAsync();
         return Results.LocalRedirect("/?error=Usuario+o+contrasena+incorrectos");
     }
@@ -244,6 +256,8 @@ app.MapPost("/auth/login", async (
     }
 
     seguridad.updated_at = DateTime.Now;
+    await RegisterSessionStartAsync(dbContext, usuarioDb.id_usuario, httpContext.Connection.RemoteIpAddress?.ToString());
+    await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login exitoso", $"Rol={usuarioDb.id_rolNavigation?.nombre ?? usuarioDb.id_rol.ToString()}");
     await dbContext.SaveChangesAsync();
 
     var forcePasswordChange = seguridad.must_change_password;
@@ -598,6 +612,7 @@ app.MapPost("/auth/profile", async (
     var telefono = form["telefono"].ToString().Trim();
     var avatarUrl = form["avatar_url"].ToString().Trim();
     var fechaNacimientoRaw = form["fechaNacimiento"].ToString().Trim();
+    var twoFactorAction = form["twoFactorAction"].ToString().Trim().ToLowerInvariant();
 
     var currentPassword = form["currentPassword"].ToString();
     var newPassword = form["newPassword"].ToString();
@@ -631,6 +646,28 @@ app.MapPost("/auth/profile", async (
     usuarioDb.telefono = string.IsNullOrWhiteSpace(telefono) ? null : telefono;
     usuarioDb.avatar_url = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl;
     usuarioDb.fecha_nacimiento = fechaNacimiento;
+
+    if (twoFactorAction == "disable")
+    {
+        seguridad.two_factor_enabled = false;
+        seguridad.authenticator_secret = null;
+        seguridad.updated_at = DateTime.Now;
+        await dbContext.SaveChangesAsync();
+
+        await httpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            BuildPrincipal(usuarioDb, AuthStages.FullAccess, false, IsRemembered(httpContext.User)),
+            BuildAuthenticationProperties(IsRemembered(httpContext.User)));
+
+        return Results.LocalRedirect("/perfil?message=La+verificacion+2FA+fue+desactivada");
+    }
+
+    if (twoFactorAction == "enable" && seguridad.two_factor_enabled != true)
+    {
+        seguridad.updated_at = DateTime.Now;
+        await dbContext.SaveChangesAsync();
+        return Results.LocalRedirect("/configurar-2fa");
+    }
 
     var hasCurrentPassword = !string.IsNullOrWhiteSpace(currentPassword);
     var hasNewPassword = !string.IsNullOrWhiteSpace(newPassword);
@@ -683,10 +720,20 @@ app.MapPost("/auth/profile", async (
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
     return Results.LocalRedirect("/perfil?message=Perfil+actualizado");
-}).DisableAntiforgery();
+});
 
 app.MapGet("/auth/logout", async (HttpContext httpContext) =>
 {
+    var userId = GetUserId(httpContext.User);
+    if (userId.HasValue)
+    {
+        await using var scope = httpContext.RequestServices.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+        await RegisterSessionEndAsync(dbContext, userId.Value);
+        await WriteSecurityAuditAsync(dbContext, userId.Value, "Logout", "Cierre de sesion manual");
+        await dbContext.SaveChangesAsync();
+    }
+
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.LocalRedirect("/?message=Sesion+cerrada");
 });
@@ -1611,6 +1658,82 @@ app.MapGet("/exports/suppliers.csv", async (
         $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/supplier-purchase-history/{supplierId:int}.csv", async (
+    int supplierId,
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var actorUserId = GetUserId(httpContext.User);
+    if (!int.TryParse(roleIdValue, out var roleId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewSuppliers = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/proveedores"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewSuppliers)
+    {
+        return Results.Forbid();
+    }
+
+    var supplier = await dbContext.tbl_proveedors
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.id_proveedor == supplierId);
+
+    if (supplier is null)
+    {
+        return Results.NotFound();
+    }
+
+    var orders = await dbContext.tbl_orden_compra
+        .AsNoTracking()
+        .Include(x => x.tbl_detalle_orden_compra)
+        .Where(x => x.id_proveedor == supplierId && (x.activo ?? true))
+        .OrderByDescending(x => x.fecha_orden)
+        .ThenByDescending(x => x.id_orden_compra)
+        .ToListAsync();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Proveedor,Orden,Fecha,Estado,Total,Lineas,CantidadSolicitada");
+
+    foreach (var order in orders)
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(supplier.nombre),
+            EscapeCsv(order.numero_orden),
+            EscapeCsv(order.fecha_orden?.ToString("yyyy-MM-dd")),
+            EscapeCsv(order.estado_orden),
+            EscapeCsv(order.total?.ToString("0.00", CultureInfo.InvariantCulture)),
+            EscapeCsv(order.tbl_detalle_orden_compra.Count.ToString()),
+            EscapeCsv(order.tbl_detalle_orden_compra.Sum(x => x.cantidad_solicitada).ToString())));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = actorUserId,
+        accion = "Exportar CSV",
+        modulo = "Proveedores",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=HistorialCompras; ProveedorId={supplierId}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"proveedor-compras-{supplierId}-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
 app.MapGet("/exports/clients.csv", async (
     HttpContext httpContext,
     OpticaDbContext dbContext) =>
@@ -1932,6 +2055,8 @@ app.MapGet("/exports/purchase-orders.csv", async (
     var search = httpContext.Request.Query["search"].ToString().Trim();
     var state = httpContext.Request.Query["state"].ToString().Trim();
     var supplierIdRaw = httpContext.Request.Query["supplierId"].ToString().Trim();
+    var dateFromRaw = httpContext.Request.Query["dateFrom"].ToString().Trim();
+    var dateToRaw = httpContext.Request.Query["dateTo"].ToString().Trim();
 
     var ordersQuery = dbContext.tbl_orden_compra
         .AsNoTracking()
@@ -1957,6 +2082,18 @@ app.MapGet("/exports/purchase-orders.csv", async (
     if (int.TryParse(supplierIdRaw, out var supplierId) && supplierId > 0)
     {
         ordersQuery = ordersQuery.Where(x => x.id_proveedor == supplierId);
+    }
+
+    if (DateOnly.TryParse(dateFromRaw, out var dateFrom))
+    {
+        var fromDateTime = dateFrom.ToDateTime(TimeOnly.MinValue);
+        ordersQuery = ordersQuery.Where(x => x.fecha_orden.HasValue && x.fecha_orden.Value >= fromDateTime);
+    }
+
+    if (DateOnly.TryParse(dateToRaw, out var dateTo))
+    {
+        var toDateTime = dateTo.ToDateTime(TimeOnly.MaxValue);
+        ordersQuery = ordersQuery.Where(x => x.fecha_orden.HasValue && x.fecha_orden.Value <= toDateTime);
     }
 
     var orders = await ordersQuery.OrderByDescending(x => x.fecha_orden).ToListAsync();
@@ -1985,7 +2122,7 @@ app.MapGet("/exports/purchase-orders.csv", async (
         accion = "Exportar CSV",
         modulo = "OrdenesCompra",
         fecha = DateTime.Now,
-        detalle = $"Tipo=Exportacion; Filtros=search:{search}|state:{state}|supplierId:{supplierIdRaw}"
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|state:{state}|supplierId:{supplierIdRaw}|dateFrom:{dateFromRaw}|dateTo:{dateToRaw}"
     });
 
     await dbContext.SaveChangesAsync();
@@ -1994,6 +2131,103 @@ app.MapGet("/exports/purchase-orders.csv", async (
         Encoding.UTF8.GetBytes(csvBuilder.ToString()),
         "text/csv; charset=utf-8",
         $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/purchase-orders.pdf", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canView = await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/ordenes-de-compra"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canView)
+    {
+        return Results.Forbid();
+    }
+
+    var orders = await dbContext.tbl_orden_compra
+        .AsNoTracking()
+        .Include(x => x.id_proveedorNavigation)
+        .Include(x => x.tbl_detalle_orden_compra)
+        .Where(x => x.id_usuario_solicita == userId)
+        .OrderByDescending(x => x.fecha_orden)
+        .Take(50)
+        .ToListAsync();
+
+    var lines = new List<string>();
+    lines.AddRange(orders.Select(x => $"{x.numero_orden} | {x.id_proveedorNavigation.nombre} | {x.fecha_orden:yyyy-MM-dd} | {(x.total ?? 0m):0.00} | {x.estado_orden}"));
+    var contentBuilder = new StringBuilder();
+    contentBuilder.AppendLine("BT");
+    contentBuilder.AppendLine("/F1 16 Tf");
+    contentBuilder.AppendLine("50 760 Td");
+    contentBuilder.AppendLine("(Ordenes de compra) Tj");
+    contentBuilder.AppendLine("/F1 10 Tf");
+    contentBuilder.AppendLine("0 -22 Td");
+    foreach (var line in lines)
+    {
+        var escaped = line.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+        contentBuilder.AppendLine($"({escaped}) Tj");
+        contentBuilder.AppendLine("0 -14 Td");
+    }
+    contentBuilder.AppendLine("ET");
+    var contentBytes = Encoding.ASCII.GetBytes(contentBuilder.ToString());
+
+    using var stream = new MemoryStream();
+    using var writer = new StreamWriter(stream, Encoding.ASCII, 1024, true);
+    var offsets = new List<long>();
+    writer.WriteLine("%PDF-1.4");
+    writer.Flush();
+    offsets.Add(stream.Position); writer.WriteLine("1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj"); writer.Flush();
+    offsets.Add(stream.Position); writer.WriteLine("2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj"); writer.Flush();
+    offsets.Add(stream.Position); writer.WriteLine("3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>endobj"); writer.Flush();
+    offsets.Add(stream.Position); writer.WriteLine("4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj"); writer.Flush();
+    offsets.Add(stream.Position); writer.WriteLine($"5 0 obj<< /Length {contentBytes.Length} >>stream"); writer.Flush();
+    stream.Write(contentBytes, 0, contentBytes.Length);
+    writer.WriteLine();
+    writer.WriteLine("endstream endobj");
+    writer.Flush();
+    var xref = stream.Position;
+    writer.WriteLine($"xref\n0 {offsets.Count + 1}\n0000000000 65535 f ");
+    foreach (var offset in offsets)
+    {
+        writer.WriteLine($"{offset:0000000000} 00000 n ");
+    }
+    writer.WriteLine($"trailer<< /Size {offsets.Count + 1} /Root 1 0 R >>");
+    writer.WriteLine($"startxref\n{xref}\n%%EOF");
+    writer.Flush();
+
+    return Results.File(stream.ToArray(), "application/pdf", $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/purchase-orders/{orderId:int}.xml", async (
+    int orderId,
+    ClaimsPrincipal user,
+    OpticaDbContext dbContext,
+    PurchaseOrderDocumentService purchaseOrderDocumentService,
+    CancellationToken cancellationToken) =>
+{
+    var currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId) ? parsedUserId : 0;
+    var document = await purchaseOrderDocumentService.BuildAsync(dbContext, orderId, currentUserId, cancellationToken);
+    if (document is null)
+    {
+        return Results.NotFound();
+    }
+
+    return Results.Text(document.XmlContent, "application/xml", Encoding.UTF8);
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-receptions.csv", async (
@@ -2402,6 +2636,197 @@ app.MapGet("/exports/kardex.csv", async (
         $"kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
+app.MapGet("/exports/income-report.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext) =>
+{
+    var roleIdValue = httpContext.User.FindFirstValue(AuthClaimTypes.RoleId);
+    var userIdValue = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    if (!int.TryParse(roleIdValue, out var roleId) || !int.TryParse(userIdValue, out var userId))
+    {
+        return Results.Forbid();
+    }
+
+    var canViewModule = roleId == 1 || await dbContext.tbl_rol_menu_permisos
+        .AsNoTracking()
+        .Where(p => p.id_rol == roleId && p.puede_ver)
+        .Join(
+            dbContext.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/ingresos"),
+            permission => permission.id_menu,
+            menu => menu.id_menu,
+            (_, _) => true)
+        .AnyAsync();
+
+    if (!canViewModule)
+    {
+        return Results.Forbid();
+    }
+
+    var startRaw = httpContext.Request.Query["start"].ToString().Trim();
+    var endRaw = httpContext.Request.Query["end"].ToString().Trim();
+    var methodsRaw = httpContext.Request.Query["methods"].ToString().Trim();
+
+    if (!DateOnly.TryParseExact(startRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startDate) ||
+        !DateOnly.TryParseExact(endRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var endDate))
+    {
+        return Results.BadRequest("Rango de fechas invalido.");
+    }
+
+    if (endDate < startDate)
+    {
+        return Results.BadRequest("La fecha final no puede ser menor a la inicial.");
+    }
+
+    var selectedMethods = methodsRaw
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    var startDateTime = startDate.ToDateTime(TimeOnly.MinValue);
+    var endDateTime = endDate.ToDateTime(TimeOnly.MaxValue);
+
+    var movements = new List<(DateTime Date, string Method, decimal Amount, string Source)>();
+
+    var sales = await dbContext.tbl_venta
+        .AsNoTracking()
+        .Where(x => x.fecha_venta.HasValue && x.fecha_venta.Value >= startDateTime && x.fecha_venta.Value <= endDateTime)
+        .Select(x => new
+        {
+            Date = x.fecha_venta!.Value,
+            Method = string.IsNullOrWhiteSpace(x.forma_pago) ? "No especificado" : x.forma_pago!,
+            Amount = x.valor_cobrado ?? 0m
+        })
+        .ToListAsync();
+
+    movements.AddRange(sales
+        .Where(x => x.Amount != 0m)
+        .Select(x => (x.Date, x.Method, x.Amount, "Venta")));
+
+    var abonos = await (
+        from abono in dbContext.tbl_abonos.AsNoTracking()
+        join method in dbContext.tbl_metodo_pagos.AsNoTracking() on abono.metodo_pago_id equals method.id_metodo_pago into methodJoin
+        from method in methodJoin.DefaultIfEmpty()
+        where (abono.fecha_abono ?? abono.fecha_registro).HasValue
+        let movementDate = abono.fecha_abono ?? abono.fecha_registro
+        where movementDate!.Value >= startDateTime && movementDate.Value <= endDateTime
+        select new
+        {
+            Date = movementDate!.Value,
+            Method = method != null ? method.nombre : "No especificado",
+            Amount = abono.monto_abono
+        })
+        .ToListAsync();
+
+    movements.AddRange(abonos
+        .Where(x => x.Amount != 0m)
+        .Select(x => (x.Date, x.Method, x.Amount, x.Amount < 0 ? "Reversion" : "Abono")));
+
+    var filteredMovements = selectedMethods.Count == 0
+        ? movements
+        : movements.Where(x => selectedMethods.Contains(x.Method)).ToList();
+
+    var csvBuilder = new StringBuilder();
+    csvBuilder.AppendLine("Fecha,Origen,Metodo,Monto");
+    foreach (var movement in filteredMovements.OrderBy(x => x.Date))
+    {
+        csvBuilder.AppendLine(string.Join(",",
+            EscapeCsv(movement.Date.ToString("yyyy-MM-dd HH:mm:ss")),
+            EscapeCsv(movement.Source),
+            EscapeCsv(movement.Method),
+            EscapeCsv(movement.Amount.ToString("0.00", CultureInfo.InvariantCulture))));
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = "Exportar CSV",
+        modulo = "Ingresos",
+        fecha = DateTime.Now,
+        detalle = $"Tipo=Exportacion; Filtros=start:{startRaw}|end:{endRaw}|methods:{methodsRaw}"
+    });
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(
+        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
+        "text/csv; charset=utf-8",
+        $"ingresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/system-reports.csv", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext,
+    SystemReportsService systemReportsService) =>
+{
+    if (!DateOnly.TryParse(httpContext.Request.Query["start"], out var startDate) ||
+        !DateOnly.TryParse(httpContext.Request.Query["end"], out var endDate))
+    {
+        return Results.BadRequest("Rango invalido.");
+    }
+
+    var filters = new SystemReportFilters(
+        startDate,
+        endDate,
+        int.TryParse(httpContext.Request.Query["userId"], out var userIdFilter) ? userIdFilter : 0,
+        int.TryParse(httpContext.Request.Query["productId"], out var productIdFilter) ? productIdFilter : 0,
+        int.TryParse(httpContext.Request.Query["supplierId"], out var supplierIdFilter) ? supplierIdFilter : 0,
+        int.TryParse(httpContext.Request.Query["categoryId"], out var categoryIdFilter) ? categoryIdFilter : 0,
+        httpContext.Request.Query["state"].ToString().Trim());
+
+    var report = await systemReportsService.BuildAsync(dbContext, filters);
+    var csv = systemReportsService.BuildCsv(report);
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = GetUserId(httpContext.User),
+        accion = "Exportar reporte sistema CSV",
+        modulo = "Reportes",
+        fecha = DateTime.Now,
+        detalle = $"Desde={startDate:yyyy-MM-dd}; Hasta={endDate:yyyy-MM-dd}; User={filters.UserId}; Product={filters.ProductId}; Supplier={filters.SupplierId}; Category={filters.CategoryId}; State={filters.State}"
+    });
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(Encoding.UTF8.GetBytes(csv), "text/csv; charset=utf-8", $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+}).RequireAuthorization("FullAccess");
+
+app.MapGet("/exports/system-reports.pdf", async (
+    HttpContext httpContext,
+    OpticaDbContext dbContext,
+    SystemReportsService systemReportsService) =>
+{
+    if (!DateOnly.TryParse(httpContext.Request.Query["start"], out var startDate) ||
+        !DateOnly.TryParse(httpContext.Request.Query["end"], out var endDate))
+    {
+        return Results.BadRequest("Rango invalido.");
+    }
+
+    var filters = new SystemReportFilters(
+        startDate,
+        endDate,
+        int.TryParse(httpContext.Request.Query["userId"], out var userIdFilter) ? userIdFilter : 0,
+        int.TryParse(httpContext.Request.Query["productId"], out var productIdFilter) ? productIdFilter : 0,
+        int.TryParse(httpContext.Request.Query["supplierId"], out var supplierIdFilter) ? supplierIdFilter : 0,
+        int.TryParse(httpContext.Request.Query["categoryId"], out var categoryIdFilter) ? categoryIdFilter : 0,
+        httpContext.Request.Query["state"].ToString().Trim());
+
+    var report = await systemReportsService.BuildAsync(dbContext, filters);
+    var pdf = systemReportsService.BuildPdf(report);
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = GetUserId(httpContext.User),
+        accion = "Exportar reporte sistema PDF",
+        modulo = "Reportes",
+        fecha = DateTime.Now,
+        detalle = $"Desde={startDate:yyyy-MM-dd}; Hasta={endDate:yyyy-MM-dd}; User={filters.UserId}; Product={filters.ProductId}; Supplier={filters.SupplierId}; Category={filters.CategoryId}; State={filters.State}"
+    });
+    await dbContext.SaveChangesAsync();
+
+    return Results.File(pdf, "application/pdf", $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
+}).RequireAuthorization("FullAccess");
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -2441,6 +2866,55 @@ app.MapGet("/exports/account-statements/{accountId:int}.pdf", async (
     var pdf = statementService.BuildPdf(statement);
     var fileName = $"{Regex.Replace(statement.InvoiceNumber, "[^A-Za-z0-9_-]", "_")}-estado-cuenta.pdf";
     return Results.File(pdf, "application/pdf", fileName);
+}).RequireAuthorization("OperationalAccess");
+
+app.MapGet("/exports/lab-orders/{orderId:int}.html", async (
+    int orderId,
+    ClaimsPrincipal user,
+    OpticaDbContext dbContext,
+    LabMessagingService labMessagingService,
+    CancellationToken cancellationToken) =>
+{
+    var currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : 0;
+    var currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var roleId) ? roleId : 0;
+    if (currentUserId <= 0 || currentRoleId <= 0)
+    {
+        return Results.Forbid();
+    }
+
+    if (currentRoleId != 1)
+    {
+        var hasPermission = await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Include(x => x.id_menuNavigation)
+            .AnyAsync(x => x.id_rol == currentRoleId &&
+                x.puede_ver &&
+                (x.id_menuNavigation.ruta == "/pedidos-laboratorio" || x.id_menuNavigation.ruta == "/envios-laboratorio"),
+                cancellationToken);
+
+        if (!hasPermission)
+        {
+            return Results.Forbid();
+        }
+    }
+
+    var document = await labMessagingService.BuildOrderDocumentAsync(orderId, cancellationToken);
+    if (document is null)
+    {
+        return Results.NotFound();
+    }
+
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = currentUserId,
+        accion = "Exportar receta RX",
+        modulo = "Laboratorio",
+        fecha = DateTime.Now,
+        detalle = $"OrdenRxId={orderId}; Numero={document.OrderNumber}"
+    });
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.File(document.PdfContent, "application/pdf", $"{document.OrderNumber}-rx.pdf");
 }).RequireAuthorization("OperationalAccess");
 
 app.MapGet("/prescriptions/{consultationId:int}/print", async (
@@ -2626,9 +3100,9 @@ using (var scope = app.Services.CreateScope())
                     SELECT
                         2 AS id_rol,
                         m.id_menu,
-                        CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                        CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                        CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                        CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/envios-laboratorio') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                        CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/envios-laboratorio') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                        CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/envios-laboratorio') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                         CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                     FROM dbo.tbl_menu_app m
                 ) AS source
@@ -2726,6 +3200,98 @@ static async Task EnsureSecuritySchemaAsync(WebApplication app)
         """);
 }
 
+static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF NOT EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE LOWER(nombre) = 'bodeguero')
+        BEGIN
+            INSERT INTO dbo.tbl_rol (nombre, descripcion)
+            VALUES ('Bodeguero', 'Gestion operativa de inventario, kardex y reposicion');
+        END;
+
+        DECLARE @bodegueroId INT = (
+            SELECT TOP (1) id_rol
+            FROM dbo.tbl_rol
+            WHERE LOWER(nombre) = 'bodeguero');
+
+        DECLARE @recepcionId INT = (
+            SELECT TOP (1) id_rol
+            FROM dbo.tbl_rol
+            WHERE LOWER(nombre) LIKE '%recepcion%' OR LOWER(nombre) LIKE '%venta%');
+
+        DECLARE @optometraId INT = (
+            SELECT TOP (1) id_rol
+            FROM dbo.tbl_rol
+            WHERE LOWER(nombre) LIKE '%optomet%');
+
+        IF @bodegueroId IS NOT NULL
+        BEGIN
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING (
+                SELECT
+                    @bodegueroId AS id_rol,
+                    m.id_menu,
+                    CAST(1 AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/productos', '/categorias-de-productos', '/inventarios', '/kardex') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/productos', '/categorias-de-productos', '/inventarios', '/kardex') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(0 AS BIT) AS puede_eliminar
+                FROM dbo.tbl_menu_app m
+                WHERE m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/productos', '/categorias-de-productos', '/inventarios', '/kardex', '/pedidos-laboratorio')
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.puede_ver = source.puede_ver,
+                    target.puede_crear = source.puede_crear,
+                    target.puede_editar = source.puede_editar,
+                    target.puede_eliminar = source.puede_eliminar
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+        END;
+
+        IF @recepcionId IS NOT NULL
+        BEGIN
+            UPDATE p
+            SET p.puede_ver = 1
+            FROM dbo.tbl_rol_menu_permiso p
+            INNER JOIN dbo.tbl_menu_app m ON m.id_menu = p.id_menu
+            WHERE p.id_rol = @recepcionId
+              AND m.ruta IN ('/productos', '/pedidos-laboratorio', '/envios-laboratorio');
+        END;
+
+        IF @optometraId IS NOT NULL
+        BEGIN
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING (
+                SELECT
+                    @optometraId AS id_rol,
+                    m.id_menu,
+                    CAST(1 AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta = '/pedidos-laboratorio' THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta = '/pedidos-laboratorio' THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(0 AS BIT) AS puede_eliminar
+                FROM dbo.tbl_menu_app m
+                WHERE m.ruta IN ('/pedidos-laboratorio', '/envios-laboratorio')
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.puede_ver = source.puede_ver,
+                    target.puede_crear = CASE WHEN source.puede_crear = 1 THEN 1 ELSE target.puede_crear END,
+                    target.puede_editar = CASE WHEN source.puede_editar = 1 THEN 1 ELSE target.puede_editar END
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
+        END;
+        """
+    );
+}
+
 static async Task EnsureNavigationSchemaAsync(WebApplication app)
 {
     await using var scope = app.Services.CreateAsyncScope();
@@ -2810,51 +3376,55 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
             );
         END;
 
-        IF NOT EXISTS (SELECT 1 FROM dbo.tbl_menu_app)
-        BEGIN
-            MERGE dbo.tbl_menu_app AS target
-            USING
-            (
-                VALUES
-                    ('Dashboard', '/dashboard', 'dashboard', 1, 1),
-                    ('Mi perfil', '/perfil', 'user', 2, 1),
-                    ('Pacientes', '/pacientes', 'patients', 3, 1),
-                    ('Ingresar pacientes', '/doctor/ingresar-pacientes', 'doctor-entry', 4, 1),
-                    ('Ver mis pacientes', '/doctor/mis-pacientes', 'doctor-patients', 5, 1),
-                    ('Historia clinica', '/doctor/historia-clinica', 'journal-medical', 5, 1),
-                    ('Citas y turnos', '/citas', 'calendar-check', 6, 1),
-                    ('Disponibilidad medica', '/disponibilidad-medica', 'calendar-availability', 7, 1),
-                    ('Medicos', '/doctores', 'doctor-profile', 8, 1),
-                    ('Laboratorios', '/laboratorios', 'lab', 9, 1),
-                    ('Proveedores', '/proveedores', 'suppliers', 10, 1),
-                    ('Productos', '/productos', 'products', 11, 1),
-                    ('Categorias de productos', '/categorias-de-productos', 'tags', 12, 1),
-                    ('Ordenes de compra', '/ordenes-de-compra', 'purchase-orders', 14, 1),
-                    ('Recepciones de compra', '/recepciones-de-compra', 'purchase-receptions', 15, 1),
-                    ('Liquidaciones de compra', '/liquidaciones-de-compra', 'purchase-liquidations', 16, 1),
-                    ('Inventarios', '/inventarios', 'inventories', 17, 1),
-                    ('Kardex', '/kardex', 'kardex', 18, 1),
-                    ('Clientes', '/clientes', 'clients', 19, 1),
-                    ('Emisor', '/emisor', 'issuer', 20, 1),
-                    ('Facturas', '/facturas', 'invoice', 21, 1),
-                    ('Mis facturas', '/mis-facturas', 'receipt', 22, 1),
-                    ('Mis notas de credito', '/mis-notas-de-credito', 'arrow-counterclockwise', 23, 1),
-                    ('Cuentas por cobrar', '/cuentas-por-cobrar', 'cash-coin', 24, 1),
-                    ('Usuarios', '/usuarios', 'users', 25, 1),
-                    ('Roles', '/roles', 'roles', 26, 1),
-                    ('Menus', '/menus', 'menu', 27, 1),
-                    ('Registrar usuario', '/registro', 'user-plus', 28, 1),
-                    ('Seguridad', '/configurar-2fa', 'shield', 29, 1)
-            ) AS source(nombre, ruta, icono, orden, activo)
-            ON target.ruta = source.ruta
-            WHEN MATCHED THEN
-                UPDATE SET
-                    target.nombre = source.nombre,
-                    target.icono = source.icono
-            WHEN NOT MATCHED THEN
-                INSERT (nombre, ruta, icono, orden, activo)
-                VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
-        END;
+        MERGE dbo.tbl_menu_app AS target
+        USING
+        (
+            VALUES
+                ('Dashboard', '/dashboard', 'dashboard', 1, 1),
+                ('Mi perfil', '/perfil', 'user', 2, 1),
+                ('Pacientes', '/pacientes', 'patients', 3, 1),
+                ('Ingresar pacientes', '/doctor/ingresar-pacientes', 'doctor-entry', 4, 1),
+                ('Ver mis pacientes', '/doctor/mis-pacientes', 'doctor-patients', 5, 1),
+                ('Historia clinica', '/doctor/historia-clinica', 'journal-medical', 5, 1),
+                ('Citas y turnos', '/citas', 'calendar-check', 6, 1),
+                ('Disponibilidad medica', '/disponibilidad-medica', 'calendar-availability', 7, 1),
+                ('Medicos', '/doctores', 'doctor-profile', 8, 1),
+                ('Laboratorios', '/laboratorios', 'lab', 9, 1),
+                ('Pedidos a laboratorio', '/pedidos-laboratorio', 'clipboard-check', 10, 1),
+                ('Envios de laboratorio', '/envios-laboratorio', 'truck', 11, 1),
+                ('Proveedores', '/proveedores', 'suppliers', 12, 1),
+                ('Productos', '/productos', 'products', 13, 1),
+                ('Categorias de productos', '/categorias-de-productos', 'tags', 14, 1),
+                ('Ordenes de compra', '/ordenes-de-compra', 'purchase-orders', 15, 1),
+                ('Recepciones de compra', '/recepciones-de-compra', 'purchase-receptions', 16, 1),
+                ('Liquidaciones de compra', '/liquidaciones-de-compra', 'purchase-liquidations', 17, 1),
+                ('Inventarios', '/inventarios', 'inventories', 18, 1),
+                ('Kardex', '/kardex', 'kardex', 19, 1),
+                ('Clientes', '/clientes', 'clients', 20, 1),
+                ('Emisor', '/emisor', 'issuer', 21, 1),
+                ('Facturas', '/facturas', 'invoice', 22, 1),
+                ('Mis facturas', '/mis-facturas', 'receipt', 23, 1),
+                ('Mis notas de credito', '/mis-notas-de-credito', 'arrow-counterclockwise', 24, 1),
+                ('Cuentas por cobrar', '/cuentas-por-cobrar', 'cash-coin', 25, 1),
+                ('Ingresos', '/ingresos', 'graph-up-arrow', 26, 1),
+                ('Tienda online', '/tienda-online', 'shop', 27, 1),
+                ('Usuarios', '/usuarios', 'users', 28, 1),
+                ('Roles', '/roles', 'roles', 29, 1),
+                ('Menus', '/menus', 'menu', 30, 1),
+                ('Registrar usuario', '/registro', 'user-plus', 31, 1),
+                ('Seguridad', '/configurar-2fa', 'shield', 32, 1),
+                ('Configuracion optica', '/configuracion-optica', 'sliders', 33, 1)
+        ) AS source(nombre, ruta, icono, orden, activo)
+        ON target.ruta = source.ruta
+        WHEN MATCHED THEN
+            UPDATE SET
+                target.nombre = source.nombre,
+                target.icono = source.icono,
+                target.orden = source.orden,
+                target.activo = source.activo
+        WHEN NOT MATCHED THEN
+            INSERT (nombre, ruta, icono, orden, activo)
+            VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
 
         IF NOT EXISTS (SELECT 1 FROM dbo.tbl_menu_app WHERE ruta = '/doctor/historia-clinica')
         BEGIN
@@ -2977,9 +3547,9 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
-                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
-                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                     CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
                 FROM dbo.tbl_menu_app m
             ) AS source
@@ -3449,6 +4019,69 @@ static async Task EnsureElectronicBillingSchemaAsync(WebApplication app)
             CREATE NONCLUSTERED INDEX IX_clients_razon_social ON dbo.clients (razon_social);
         END;
 
+        IF COL_LENGTH('dbo.emisor', 'direccion_establecimiento') IS NULL ALTER TABLE dbo.emisor ADD direccion_establecimiento VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.emisor', 'obligado_contabilidad') IS NULL ALTER TABLE dbo.emisor ADD obligado_contabilidad BIT NOT NULL CONSTRAINT DF_emisor_obligado_contabilidad DEFAULT (0);
+        IF COL_LENGTH('dbo.emisor', 'ambiente_codigo') IS NULL ALTER TABLE dbo.emisor ADD ambiente_codigo VARCHAR(1) NOT NULL CONSTRAINT DF_emisor_ambiente_codigo DEFAULT ('1');
+        IF COL_LENGTH('dbo.emisor', 'tipo_emision_codigo') IS NULL ALTER TABLE dbo.emisor ADD tipo_emision_codigo VARCHAR(1) NOT NULL CONSTRAINT DF_emisor_tipo_emision_codigo DEFAULT ('1');
+        IF COL_LENGTH('dbo.emisor', 'certificado_digital_ruta') IS NULL ALTER TABLE dbo.emisor ADD certificado_digital_ruta VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.emisor', 'certificado_digital_clave') IS NULL ALTER TABLE dbo.emisor ADD certificado_digital_clave VARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.emisor', 'regimen_rimpe') IS NULL ALTER TABLE dbo.emisor ADD regimen_rimpe VARCHAR(50) NULL;
+
+        IF COL_LENGTH('dbo.tbl_comprobante', 'clave_acceso') IS NULL ALTER TABLE dbo.tbl_comprobante ADD clave_acceso VARCHAR(49) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'codigo_numerico') IS NULL ALTER TABLE dbo.tbl_comprobante ADD codigo_numerico VARCHAR(8) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'ambiente_sri') IS NULL ALTER TABLE dbo.tbl_comprobante ADD ambiente_sri VARCHAR(1) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'tipo_emision_sri') IS NULL ALTER TABLE dbo.tbl_comprobante ADD tipo_emision_sri VARCHAR(1) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'version_xml') IS NULL ALTER TABLE dbo.tbl_comprobante ADD version_xml VARCHAR(10) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'ruta_xml') IS NULL ALTER TABLE dbo.tbl_comprobante ADD ruta_xml VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'xml_no_firmado') IS NULL ALTER TABLE dbo.tbl_comprobante ADD xml_no_firmado VARCHAR(MAX) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'xml_firmado') IS NULL ALTER TABLE dbo.tbl_comprobante ADD xml_firmado VARCHAR(MAX) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'hash_xml') IS NULL ALTER TABLE dbo.tbl_comprobante ADD hash_xml VARCHAR(128) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'fecha_firma') IS NULL ALTER TABLE dbo.tbl_comprobante ADD fecha_firma DATETIME2 NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'estado_sri') IS NULL ALTER TABLE dbo.tbl_comprobante ADD estado_sri VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_comprobante', 'mensajes_sri') IS NULL ALTER TABLE dbo.tbl_comprobante ADD mensajes_sri VARCHAR(MAX) NULL;
+
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'secuencial') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD secuencial BIGINT NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'saldo_disponible') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD saldo_disponible DECIMAL(15,2) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'fecha_vencimiento') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD fecha_vencimiento DATETIME2 NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'clave_acceso') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD clave_acceso VARCHAR(49) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'codigo_numerico') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD codigo_numerico VARCHAR(8) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'ambiente_sri') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD ambiente_sri VARCHAR(1) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'tipo_emision_sri') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD tipo_emision_sri VARCHAR(1) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'version_xml') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD version_xml VARCHAR(10) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'ruta_xml') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD ruta_xml VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'xml_no_firmado') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD xml_no_firmado VARCHAR(MAX) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'xml_firmado') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD xml_firmado VARCHAR(MAX) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'hash_xml') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD hash_xml VARCHAR(128) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'fecha_firma') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD fecha_firma DATETIME2 NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'estado_sri') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD estado_sri VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_nota_credito', 'mensajes_sri') IS NULL ALTER TABLE dbo.tbl_nota_credito ADD mensajes_sri VARCHAR(MAX) NULL;
+
+        IF COL_LENGTH('dbo.tbl_abono', 'tipo_movimiento') IS NULL ALTER TABLE dbo.tbl_abono ADD tipo_movimiento VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_abono_tipo_movimiento DEFAULT ('Abono');
+        IF COL_LENGTH('dbo.tbl_abono', 'id_abono_referencia') IS NULL ALTER TABLE dbo.tbl_abono ADD id_abono_referencia INT NULL;
+        IF COL_LENGTH('dbo.tbl_abono', 'motivo_movimiento') IS NULL ALTER TABLE dbo.tbl_abono ADD motivo_movimiento VARCHAR(255) NULL;
+        UPDATE dbo.tbl_nota_credito
+        SET saldo_disponible = ISNULL(saldo_disponible, monto_total),
+            fecha_vencimiento = ISNULL(fecha_vencimiento, DATEADD(DAY, 365, fecha_emision))
+        WHERE saldo_disponible IS NULL OR fecha_vencimiento IS NULL;
+
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'metodo_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD metodo_entrega VARCHAR(30) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'tarifa_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD tarifa_entrega DECIMAL(10,2) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'direccion_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD direccion_entrega VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'referencia_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD referencia_entrega VARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'telefono_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD telefono_entrega VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'nombre_receptor') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD nombre_receptor VARCHAR(200) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'fecha_listo_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD fecha_listo_entrega DATETIME2 NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'fecha_entregado') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD fecha_entregado DATETIME2 NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'id_comprobante_entrega') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD id_comprobante_entrega INT NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'numero_guia_remision') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD numero_guia_remision VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'repartidor_nombre') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD repartidor_nombre VARCHAR(200) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'repartidor_telefono') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD repartidor_telefono VARCHAR(20) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'estado_tracking') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD estado_tracking VARCHAR(30) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'latitud_actual') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD latitud_actual DECIMAL(10,6) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'longitud_actual') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD longitud_actual DECIMAL(10,6) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'url_mapa_seguimiento') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD url_mapa_seguimiento VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'observaciones_logistica') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD observaciones_logistica VARCHAR(MAX) NULL;
+
         """);
 }
 
@@ -3501,6 +4134,33 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_producto', 'tratamiento_lente') IS NULL ALTER TABLE dbo.tbl_producto ADD tratamiento_lente VARCHAR(200) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'estado_producto') IS NULL ALTER TABLE dbo.tbl_producto ADD estado_producto VARCHAR(20) NOT NULL CONSTRAINT DF_tbl_producto_estado_producto DEFAULT ('Disponible');
         IF COL_LENGTH('dbo.tbl_producto', 'motivo_estado') IS NULL ALTER TABLE dbo.tbl_producto ADD motivo_estado VARCHAR(300) NULL;
+        IF OBJECT_ID('dbo.tbl_configuracion_optica', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_configuracion_optica
+            (
+                id_configuracion INT IDENTITY(1,1) PRIMARY KEY,
+                nombre_comercial VARCHAR(150) NULL,
+                ruc VARCHAR(20) NULL,
+                direccion VARCHAR(255) NULL,
+                telefono VARCHAR(30) NULL,
+                prefijo_pais VARCHAR(8) NULL,
+                porcentaje_impuesto DECIMAL(10,2) NULL,
+                carpeta_rx VARCHAR(255) NULL,
+                ruta_logo VARCHAR(255) NULL,
+                ruta_fondo VARCHAR(255) NULL
+            );
+        END;
+        IF OBJECT_ID('dbo.tbl_plantilla_mensaje', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_plantilla_mensaje
+            (
+                id_plantilla_mensaje INT IDENTITY(1,1) PRIMARY KEY,
+                nombre VARCHAR(150) NULL,
+                canal VARCHAR(20) NULL,
+                tipo VARCHAR(100) NULL,
+                contenido VARCHAR(MAX) NULL
+            );
+        END;
         IF COL_LENGTH('dbo.tbl_producto', 'codigo_barras') IS NULL ALTER TABLE dbo.tbl_producto ADD codigo_barras VARCHAR(50) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'sku_alterno') IS NULL ALTER TABLE dbo.tbl_producto ADD sku_alterno VARCHAR(50) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'referencia_fabricante') IS NULL ALTER TABLE dbo.tbl_producto ADD referencia_fabricante VARCHAR(100) NULL;
@@ -4147,6 +4807,45 @@ static bool HasPasswordExpired(DateOnly? ultimoCambioPassword, DateTime now)
     var fechaActual = DateOnly.FromDateTime(now);
 
     return fechaActual >= fechaLimite;
+}
+
+static Task RegisterSessionStartAsync(OpticaDbContext dbContext, int userId, string? ip)
+{
+    dbContext.tbl_sesions.Add(new tbl_sesion
+    {
+        id_usuario = userId,
+        fecha_inicio = DateTime.Now,
+        ip = string.IsNullOrWhiteSpace(ip) ? null : ip.Trim()
+    });
+
+    return Task.CompletedTask;
+}
+
+static async Task RegisterSessionEndAsync(OpticaDbContext dbContext, int userId)
+{
+    var openSession = await dbContext.tbl_sesions
+        .Where(x => x.id_usuario == userId && x.fecha_fin == null)
+        .OrderByDescending(x => x.fecha_inicio)
+        .FirstOrDefaultAsync();
+
+    if (openSession is not null)
+    {
+        openSession.fecha_fin = DateTime.Now;
+    }
+}
+
+static Task WriteSecurityAuditAsync(OpticaDbContext dbContext, int? userId, string action, string detail)
+{
+    dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+    {
+        id_usuario = userId,
+        accion = action,
+        modulo = "Seguridad",
+        fecha = DateTime.Now,
+        detalle = detail
+    });
+
+    return Task.CompletedTask;
 }
 
 static string? ValidatePassword(string password, string usuario, string nombres, string apellidos, string email)

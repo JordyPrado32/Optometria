@@ -1,0 +1,691 @@
+@page "/envios-laboratorio"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject LabMessagingService LabMessagingService
+
+<PageTitle>Envios de laboratorio</PageTitle>
+
+<style>
+    .shipment-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .shipment-status-enviado {
+        background: rgba(254, 188, 100, 0.18);
+        color: #b86a00;
+    }
+
+    .shipment-status-listo {
+        background: rgba(255, 224, 102, 0.22);
+        color: #8a6a00;
+    }
+
+    .shipment-status-entregado {
+        background: rgba(93, 161, 129, 0.16);
+        color: #2f7a57;
+    }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando envios...</h1>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Logistica</span>
+                <h1>Envios de laboratorio y entregas</h1>
+                <p>Controla el pedido al laboratorio, el alistamiento para entrega y la salida a domicilio con una sola bandeja operativa.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card compact-filter-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredShipments.Count resultados</span>
+            </div>
+
+            <div class="filters-row-2">
+                <div>
+                    <label class="form-label" for="shipmentSearch">Paciente</label>
+                    <input id="shipmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre del paciente, cedula u orden" />
+                </div>
+                <div>
+                    <label class="form-label" for="shipmentStatus">Estado</label>
+                    <select id="shipmentStatus" class="form-select" @bind="statusFilter">
+                        <option value="">Todos</option>
+                        <option value="Enviado a laboratorio">Enviado a laboratorio</option>
+                        <option value="Listo para entrega">Listo para entrega</option>
+                        <option value="Entregado">Entregado</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="management-actions" style="margin-top: 0.3rem;">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters">Limpiar filtros</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top:1.25rem;">
+            <div class="management-card-header">
+                <h2>Bandeja de envios</h2>
+                <span>@FilteredShipments.Count registrados</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Orden</th>
+                            <th>Paciente</th>
+                            <th>Laboratorio</th>
+                            <th>Estado</th>
+                            <th>Entrega</th>
+                            <th>Tarifa</th>
+                            <th>Guia</th>
+                            <th>Repartidor</th>
+                            <th style="text-align:right;">Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (PagedShipments.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="9" style="text-align:center; padding:2rem; color:var(--color-taupe);">
+                                    No hay envios que coincidan con los filtros aplicados.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in PagedShipments)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@item.OrderNumber</strong>
+                                        <div style="font-size:0.78rem; color:var(--color-taupe);">@item.ShipmentDateLabel</div>
+                                    </td>
+                                    <td>
+                                        @item.PatientName
+                                        <div style="font-size:0.78rem; color:var(--color-taupe);">@item.PatientIdentifier</div>
+                                    </td>
+                                    <td>@item.LaboratoryName</td>
+                                    <td>
+                                        <span class="@GetStatusBadgeClass(item.DisplayStatus)">
+                                            <i class="@GetStatusIcon(item.DisplayStatus)"></i>
+                                            @item.DisplayStatus
+                                        </span>
+                                        @if (!string.IsNullOrWhiteSpace(item.StatusAuditLabel))
+                                        {
+                                            <div style="font-size:0.76rem; color:var(--color-taupe); margin-top:0.25rem;">@item.StatusAuditLabel</div>
+                                        }
+                                    </td>
+                                    <td>@item.DeliveryMethodLabel</td>
+                                    <td>@item.DeliveryFeeLabel</td>
+                                    <td>@item.GuideNumber</td>
+                                    <td>@item.CourierLabel</td>
+                                    <td style="text-align:right;">
+                                        <div style="display:inline-flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+                                            <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => BeginEdit(item.Id)">Gestionar</button>
+                                            @if (!string.IsNullOrWhiteSpace(item.WhatsappUrl))
+                                            {
+                                                <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@item.WhatsappUrl" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                                            }
+                                            <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@item.PatientTrackingUrl" target="_blank" rel="noopener noreferrer">Portal paciente</a>
+                                            <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@item.RxDownloadUrl" target="_blank" rel="noopener noreferrer">RX</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <TablePager TotalItems="@FilteredShipments.Count" CurrentPage="@currentPage" CurrentPageChanged="SetPage" />
+        </section>
+    </section>
+}
+
+@if (editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>Gestionar envio #@editor.IdEnvio</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseEditor">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="editor.Estado">
+                            @foreach (var statusOption in editor.AvailableStatusOptions)
+                            {
+                                <option value="@statusOption">@statusOption</option>
+                            }
+                        </select>
+                        <small style="color:var(--color-taupe);">
+                            El pedido solo puede avanzar al siguiente estado y no puede retroceder.
+                        </small>
+                    </div>
+                    <div>
+                        <label class="form-label">Metodo de entrega</label>
+                        <select class="form-select" @bind="editor.MetodoEntrega">
+                            <option value="">Por definir</option>
+                            <option value="Retiro en tienda">Retiro en tienda</option>
+                            <option value="Domicilio">Domicilio</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Tarifa de entrega</label>
+                        <input class="form-control" type="number" step="0.01" @bind="editor.TarifaEntrega" />
+                    </div>
+                    <div>
+                        <label class="form-label">Numero guia remision</label>
+                        <input class="form-control" @bind="editor.NumeroGuiaRemision" maxlength="50" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Direccion de entrega</label>
+                        <input class="form-control" @bind="editor.DireccionEntrega" maxlength="500" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Referencia de entrega</label>
+                        <input class="form-control" @bind="editor.ReferenciaEntrega" maxlength="255" />
+                    </div>
+                    <div>
+                        <label class="form-label">Telefono receptor</label>
+                        <input class="form-control" @bind="editor.TelefonoEntrega" maxlength="20" />
+                    </div>
+                    <div>
+                        <label class="form-label">Nombre receptor</label>
+                        <input class="form-control" @bind="editor.NombreReceptor" maxlength="200" />
+                    </div>
+                    <div>
+                        <label class="form-label">Repartidor</label>
+                        <input class="form-control" @bind="editor.RepartidorNombre" maxlength="200" />
+                    </div>
+                    <div>
+                        <label class="form-label">Telefono repartidor</label>
+                        <input class="form-control" @bind="editor.RepartidorTelefono" maxlength="20" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">URL de seguimiento o mapa</label>
+                        <input class="form-control" @bind="editor.UrlMapaSeguimiento" maxlength="500" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Observaciones logisticas</label>
+                        <textarea class="form-control" rows="4" @bind="editor.ObservacionesLogistica"></textarea>
+                    </div>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseEditor">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@if (showDeliveryConfirmation && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Confirmar entrega</h2>
+            </header>
+            <div class="custom-modal-body">
+                <p style="margin:0; color:var(--color-ink); line-height:1.5;">
+                    Vas a marcar este pedido como <strong>Entregado al paciente</strong>. Se registrará el usuario que realizó la entrega y la fecha/hora del cambio.
+                </p>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="ConfirmDeliveryAsync">Confirmar entrega</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CancelDeliveryConfirmation">Cancelar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<ShipmentRow> shipments = [];
+    private bool isLoading = true;
+    private int currentUserId;
+    private string currentUserName = string.Empty;
+    private int currentPage = 1;
+    private string searchTerm = string.Empty;
+    private string statusFilter = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+    private ShipmentEditor? editor;
+    private bool showDeliveryConfirmation;
+    private bool deliveryConfirmationApproved;
+
+    private const int PageSize = 10;
+
+    private List<ShipmentRow> FilteredShipments => shipments
+        .Where(MatchesFilters)
+        .OrderByDescending(x => x.ShipmentDate)
+        .ToList();
+
+    private IReadOnlyList<ShipmentRow> PagedShipments => FilteredShipments
+        .Skip((EffectivePage - 1) * PageSize)
+        .Take(PageSize)
+        .ToList();
+
+    private int EffectivePage => Math.Min(currentPage, Math.Max(1, (int)Math.Ceiling(FilteredShipments.Count / (double)PageSize)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentUserName = authState.User.FindFirst("NombreCompleto")?.Value
+            ?? authState.User.Identity?.Name
+            ?? $"USER_{currentUserId}";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var data = await dbContext.tbl_envio_laboratorios
+                .AsNoTracking()
+                .Include(x => x.id_orden_rxNavigation)
+                .ThenInclude(x => x.id_laboratorioNavigation)
+                .Include(x => x.id_orden_rxNavigation)
+                .ThenInclude(x => x.id_consultaNavigation)
+                .ThenInclude(x => x.id_pacienteNavigation)
+                .Include(x => x.id_usuario_entregaNavigation)
+                .ToListAsync();
+
+            shipments.Clear();
+            shipments.AddRange(data.Select(x =>
+            {
+                var order = x.id_orden_rxNavigation;
+                var consultation = order?.id_consultaNavigation;
+                var patient = consultation?.id_pacienteNavigation;
+                var patientName = patient is null
+                    ? "Paciente no asociado"
+                    : $"{patient.nombres} {patient.apellidos}".Trim();
+                var patientIdentifier = patient?.cedula ?? "Sin cedula";
+                var orderNumber = order?.numero_orden ?? $"RX-{x.id_orden_rx}";
+                var laboratoryName = order?.id_laboratorioNavigation?.nombre ?? "Laboratorio no asociado";
+                return new ShipmentRow
+                {
+                    Id = x.id_envio_laboratorio,
+                    OrderNumber = orderNumber,
+                    LaboratoryName = laboratoryName,
+                    PatientName = patientName,
+                    PatientIdentifier = patientIdentifier,
+                    ShipmentDate = x.fecha_envio ?? DateTime.MinValue,
+                    DisplayStatus = NormalizeStatus(x.estado),
+                    StatusAuditLabel = BuildStatusAuditLabel(x),
+                    DeliveryMethodLabel = string.IsNullOrWhiteSpace(x.metodo_entrega) ? "Pendiente" : x.metodo_entrega!,
+                    DeliveryFeeLabel = (x.tarifa_entrega ?? 0m) > 0m ? (x.tarifa_entrega ?? 0m).ToString("0.00") : "0.00",
+                    GuideNumber = string.IsNullOrWhiteSpace(x.numero_guia_remision) ? "-" : x.numero_guia_remision!,
+                    CourierLabel = string.IsNullOrWhiteSpace(x.repartidor_nombre) ? "-" : x.repartidor_nombre!,
+                    SearchBlob = $"{orderNumber} {patientName} {patientIdentifier}".ToLowerInvariant(),
+                    RxDownloadUrl = $"/exports/lab-orders/{x.id_orden_rx}.html",
+                    PatientTrackingUrl = BuildPatientTrackingUrl(orderNumber),
+                    WhatsappUrl = BuildWhatsappUrl(
+                        order?.id_laboratorioNavigation?.whatsapp,
+                        orderNumber,
+                        patientName,
+                        order?.tipo_rx ?? "Lente",
+                        laboratoryName,
+                        order?.observaciones)
+                };
+            }));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"No se pudo cargar el modulo de envios: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private bool MatchesFilters(ShipmentRow item)
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm) && !item.SearchBlob.Contains(searchTerm.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(statusFilter) && !string.Equals(item.DisplayStatus, statusFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task BeginEdit(int shipmentId)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_envio_laboratorios.FirstOrDefaultAsync(x => x.id_envio_laboratorio == shipmentId);
+        if (entity is null)
+        {
+            errorMessage = "No se encontro el envio seleccionado.";
+            return;
+        }
+
+        deliveryConfirmationApproved = false;
+        showDeliveryConfirmation = false;
+        editor = new ShipmentEditor
+        {
+            IdEnvio = entity.id_envio_laboratorio,
+            EstadoActual = NormalizeStatus(entity.estado),
+            Estado = NormalizeStatus(entity.estado),
+            MetodoEntrega = entity.metodo_entrega ?? string.Empty,
+            TarifaEntrega = entity.tarifa_entrega ?? 0m,
+            DireccionEntrega = entity.direccion_entrega ?? string.Empty,
+            ReferenciaEntrega = entity.referencia_entrega ?? string.Empty,
+            TelefonoEntrega = entity.telefono_entrega ?? string.Empty,
+            NombreReceptor = entity.nombre_receptor ?? string.Empty,
+            NumeroGuiaRemision = entity.numero_guia_remision ?? string.Empty,
+            RepartidorNombre = entity.repartidor_nombre ?? string.Empty,
+            RepartidorTelefono = entity.repartidor_telefono ?? string.Empty,
+            UrlMapaSeguimiento = entity.url_mapa_seguimiento ?? string.Empty,
+            ObservacionesLogistica = entity.observaciones_logistica ?? string.Empty,
+            AvailableStatusOptions = GetAllowedNextStatuses(NormalizeStatus(entity.estado))
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var entity = await dbContext.tbl_envio_laboratorios.FirstOrDefaultAsync(x => x.id_envio_laboratorio == editor.IdEnvio);
+        if (entity is null)
+        {
+            errorMessage = "No se encontro el envio seleccionado.";
+            return;
+        }
+
+        var currentStatus = NormalizeStatus(entity.estado);
+        var targetStatus = NormalizeStatus(editor.Estado);
+        if (!CanTransition(currentStatus, targetStatus))
+        {
+            errorMessage = "El pedido solo puede avanzar al siguiente estado disponible.";
+            return;
+        }
+
+        if (targetStatus == "Entregado" && !deliveryConfirmationApproved)
+        {
+            showDeliveryConfirmation = true;
+            return;
+        }
+
+        entity.estado = targetStatus;
+        entity.metodo_entrega = NullIfBlank(editor.MetodoEntrega);
+        entity.tarifa_entrega = editor.TarifaEntrega <= 0 ? 0m : editor.TarifaEntrega;
+        entity.direccion_entrega = NullIfBlank(editor.DireccionEntrega);
+        entity.referencia_entrega = NullIfBlank(editor.ReferenciaEntrega);
+        entity.telefono_entrega = NullIfBlank(editor.TelefonoEntrega);
+        entity.nombre_receptor = NullIfBlank(editor.NombreReceptor);
+        entity.numero_guia_remision = NullIfBlank(editor.NumeroGuiaRemision);
+        entity.repartidor_nombre = NullIfBlank(editor.RepartidorNombre);
+        entity.repartidor_telefono = NullIfBlank(editor.RepartidorTelefono);
+        entity.url_mapa_seguimiento = NullIfBlank(editor.UrlMapaSeguimiento);
+        entity.observaciones_logistica = NullIfBlank(editor.ObservacionesLogistica);
+        entity.estado_tracking = targetStatus;
+        entity.fecha_cambio_estado = DateTime.Now;
+
+        if (targetStatus == "Listo para entrega" && entity.fecha_listo_entrega is null)
+        {
+            entity.fecha_listo_entrega = DateTime.Now;
+        }
+
+        if (targetStatus == "Entregado")
+        {
+            entity.fecha_entregado ??= DateTime.Now;
+            entity.id_usuario_entrega = currentUserId > 0 ? currentUserId : entity.id_usuario_entrega;
+        }
+
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = "Gestionar envio laboratorio",
+            modulo = "EnviosLaboratorio",
+            fecha = DateTime.Now,
+            detalle = $"EnvioId={entity.id_envio_laboratorio}; Estado={entity.estado}; Metodo={entity.metodo_entrega}; Guia={entity.numero_guia_remision}; Repartidor={entity.repartidor_nombre}; EntregadoPor={currentUserName}"
+        });
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = "El envio se actualizo correctamente.";
+        errorMessage = null;
+        showDeliveryConfirmation = false;
+        deliveryConfirmationApproved = false;
+        editor = null;
+        await LoadAsync();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        statusFilter = string.Empty;
+        currentPage = 1;
+    }
+
+    private void SetPage(int page)
+    {
+        currentPage = page;
+    }
+
+    private void CloseEditor()
+    {
+        showDeliveryConfirmation = false;
+        deliveryConfirmationApproved = false;
+        editor = null;
+    }
+
+    private async Task ConfirmDeliveryAsync()
+    {
+        deliveryConfirmationApproved = true;
+        showDeliveryConfirmation = false;
+        await SaveAsync();
+    }
+
+    private void CancelDeliveryConfirmation()
+    {
+        showDeliveryConfirmation = false;
+        deliveryConfirmationApproved = false;
+    }
+
+    private static string NormalizeStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Enviado a laboratorio";
+        }
+
+        if (value.Contains("listo", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Listo para entrega";
+        }
+
+        if (value.Contains("entregado", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Entregado";
+        }
+
+        return "Enviado a laboratorio";
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string BuildStatusAuditLabel(tbl_envio_laboratorio shipment)
+    {
+        var normalized = NormalizeStatus(shipment.estado);
+        return normalized switch
+        {
+            "Listo para entrega" when shipment.fecha_listo_entrega.HasValue
+                => $"Listo desde {shipment.fecha_listo_entrega.Value:yyyy-MM-dd HH:mm}",
+            "Entregado" when shipment.fecha_entregado.HasValue
+                => $"Entregado por {shipment.id_usuario_entregaNavigation?.usuario ?? "usuario"} el {shipment.fecha_entregado.Value:yyyy-MM-dd HH:mm}",
+            _ when shipment.fecha_envio.HasValue
+                => $"Enviado el {shipment.fecha_envio.Value:yyyy-MM-dd HH:mm}",
+            _ => string.Empty
+        };
+    }
+
+    private static bool CanTransition(string currentStatus, string targetStatus)
+    {
+        if (string.Equals(currentStatus, targetStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return currentStatus switch
+        {
+            "Enviado a laboratorio" => targetStatus == "Listo para entrega",
+            "Listo para entrega" => targetStatus == "Entregado",
+            "Entregado" => false,
+            _ => false
+        };
+    }
+
+    private static List<string> GetAllowedNextStatuses(string currentStatus)
+    {
+        return currentStatus switch
+        {
+            "Enviado a laboratorio" => ["Enviado a laboratorio", "Listo para entrega"],
+            "Listo para entrega" => ["Listo para entrega", "Entregado"],
+            "Entregado" => ["Entregado"],
+            _ => ["Enviado a laboratorio"]
+        };
+    }
+
+    private static string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Listo para entrega" => "shipment-status-badge shipment-status-listo",
+            "Entregado" => "shipment-status-badge shipment-status-entregado",
+            _ => "shipment-status-badge shipment-status-enviado"
+        };
+    }
+
+    private static string GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            "Listo para entrega" => "bi bi-hourglass-split",
+            "Entregado" => "bi bi-check-circle-fill",
+            _ => "bi bi-send-fill"
+        };
+    }
+
+    private string BuildWhatsappUrl(
+        string? laboratoryWhatsapp,
+        string orderNumber,
+        string patientName,
+        string rxType,
+        string laboratoryName,
+        string? observations)
+    {
+        var phone = NormalizeWhatsapp(laboratoryWhatsapp);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return string.Empty;
+        }
+
+        var message = $"Hola, compartimos la orden RX {orderNumber} del paciente {patientName}. Tipo: {rxType}. Laboratorio: {laboratoryName}.";
+        if (!string.IsNullOrWhiteSpace(observations))
+        {
+            message = $"{message} Observaciones: {observations.Trim()}.";
+        }
+
+        message = $"{message} La receta puede descargarse desde el sistema.";
+        return LabMessagingService.BuildWhatsAppLink(phone, message);
+    }
+
+    private static string NormalizeWhatsapp(string? rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return string.Empty;
+        }
+
+        return new string(rawValue.Where(char.IsDigit).ToArray());
+    }
+
+    private static string BuildPatientTrackingUrl(string orderNumber)
+        => $"/seguimiento-pedido?orden={Uri.EscapeDataString(orderNumber)}";
+
+    private sealed class ShipmentRow
+    {
+        public int Id { get; set; }
+        public string OrderNumber { get; set; } = string.Empty;
+        public string PatientName { get; set; } = string.Empty;
+        public string PatientIdentifier { get; set; } = string.Empty;
+        public string LaboratoryName { get; set; } = string.Empty;
+        public DateTime ShipmentDate { get; set; }
+        public string DisplayStatus { get; set; } = "Enviado";
+        public string DeliveryMethodLabel { get; set; } = "Pendiente";
+        public string DeliveryFeeLabel { get; set; } = "0.00";
+        public string GuideNumber { get; set; } = "-";
+        public string CourierLabel { get; set; } = "-";
+        public string StatusAuditLabel { get; set; } = string.Empty;
+        public string SearchBlob { get; set; } = string.Empty;
+        public string WhatsappUrl { get; set; } = string.Empty;
+        public string RxDownloadUrl { get; set; } = string.Empty;
+        public string PatientTrackingUrl { get; set; } = string.Empty;
+        public string ShipmentDateLabel => ShipmentDate == DateTime.MinValue ? "Sin fecha" : ShipmentDate.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private sealed class ShipmentEditor
+    {
+        public int IdEnvio { get; set; }
+        public string EstadoActual { get; set; } = "Enviado a laboratorio";
+        public string Estado { get; set; } = "Enviado a laboratorio";
+        public string MetodoEntrega { get; set; } = string.Empty;
+        public decimal TarifaEntrega { get; set; }
+        public string DireccionEntrega { get; set; } = string.Empty;
+        public string ReferenciaEntrega { get; set; } = string.Empty;
+        public string TelefonoEntrega { get; set; } = string.Empty;
+        public string NombreReceptor { get; set; } = string.Empty;
+        public string NumeroGuiaRemision { get; set; } = string.Empty;
+        public string RepartidorNombre { get; set; } = string.Empty;
+        public string RepartidorTelefono { get; set; } = string.Empty;
+        public string UrlMapaSeguimiento { get; set; } = string.Empty;
+        public string ObservacionesLogistica { get; set; } = string.Empty;
+        public List<string> AvailableStatusOptions { get; set; } = [];
+    }
+}

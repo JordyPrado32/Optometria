@@ -1,0 +1,495 @@
+@page "/ingresos"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Globalization
+@using System.Security.Claims
+@using OptometriaApp.Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Ingresos</PageTitle>
+
+<style>
+    .income-shell { display:grid; gap:1.5rem; }
+    .income-kpis { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); }
+    .income-card { border:1px solid rgba(127, 105, 81, 0.12); border-radius:1rem; padding:1rem; background:rgba(255,255,255,0.82); }
+    .income-card span { display:block; font-size:0.8rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--color-taupe); }
+    .income-card strong { display:block; margin-top:0.35rem; font-size:1.5rem; color:var(--color-ink); }
+    .income-grid { display:grid; gap:1.5rem; grid-template-columns:minmax(0, 1.15fr) minmax(300px, 0.85fr); }
+    .income-bars { display:grid; gap:0.8rem; }
+    .income-bar-row { display:grid; gap:0.4rem; }
+    .income-bar-track { height:0.75rem; border-radius:999px; background:rgba(127,105,81,0.12); overflow:hidden; }
+    .income-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #5DA181, #FEBC64); }
+    .income-chip-group { display:flex; gap:0.6rem; flex-wrap:wrap; }
+    .income-chip { border:1px solid rgba(127,105,81,0.14); border-radius:999px; padding:0.45rem 0.8rem; background:#fff; color:var(--color-ink); }
+    .income-chip.is-active { background:rgba(93,161,129,0.12); border-color:rgba(93,161,129,0.28); color:var(--color-sage); }
+    @@media (max-width: 992px) { .income-grid { grid-template-columns:1fr; } }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando ingresos...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Ingresos</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Analitica financiera</span>
+                <h1>Ingresos</h1>
+                <p>Monitorea ingresos cobrados, cartera activa, cuentas pendientes y el comportamiento por metodo de pago dentro del periodo seleccionado.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>Periodo y metodos</span>
+            </div>
+
+            <div class="management-actions" style="margin-top: 1rem;">
+                @foreach (var preset in Presets)
+                {
+                    <button type="button" class="btn @(selectedPreset == preset.Key ? "btn-primary" : "btn-outline-primary")" @onclick="() => ApplyPresetAsync(preset.Key)">
+                        @preset.Label
+                    </button>
+                }
+            </div>
+
+            <div class="management-form-grid" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" value="@startDateText" @onchange="OnStartDateChanged" />
+                </div>
+                <div>
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" value="@endDateText" @onchange="OnEndDateChanged" />
+                </div>
+                <div class="management-actions" style="align-items:end;">
+                    <button type="button" class="btn btn-primary" @onclick="ReloadAsync">Aplicar</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="ClearMethodFilters">Todos los metodos</button>
+                    <a class="btn btn-outline-primary" href="@BuildExportUrl()">Exportar CSV</a>
+                </div>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                <label class="form-label">Metodos de pago</label>
+                <div class="income-chip-group">
+                    @foreach (var method in paymentMethodOptions)
+                    {
+                        <button type="button" class="income-chip @(selectedMethods.Contains(method) ? "is-active" : string.Empty)" @onclick="() => ToggleMethodAsync(method)">
+                            @method
+                        </button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="income-shell">
+            <div class="income-kpis">
+                <div class="income-card">
+                    <span>Ingresos del periodo</span>
+                    <strong>@periodIncome.ToString("0.00")</strong>
+                </div>
+                <div class="income-card">
+                    <span>Cuentas por cobrar</span>
+                    <strong>@totalReceivables.ToString("0.00")</strong>
+                </div>
+                <div class="income-card">
+                    <span>Cuentas pendientes</span>
+                    <strong>@pendingAccountsCount</strong>
+                </div>
+                <div class="income-card">
+                    <span>Mayor metodo</span>
+                    <strong>@topMethodLabel</strong>
+                </div>
+            </div>
+
+            <div class="income-grid">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Evolucion</h2>
+                        <span>@seriesCaption</span>
+                    </div>
+
+                    @if (series.Count == 0)
+                    {
+                        <p style="margin-top: 1rem; color: var(--color-taupe);">No hay movimientos de ingreso en el rango seleccionado.</p>
+                    }
+                    else
+                    {
+                        <div class="income-bars" style="margin-top: 1rem;">
+                            @foreach (var item in series)
+                            {
+                                <div class="income-bar-row">
+                                    <div style="display:flex; justify-content:space-between; gap:1rem;">
+                                        <strong>@item.Label</strong>
+                                        <span>@item.Amount.ToString("0.00")</span>
+                                    </div>
+                                    <div class="income-bar-track">
+                                        <div class="income-bar-fill" style="width:@GetSeriesWidth(item.Amount)%"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Metodos de pago</h2>
+                        <span>@methodBreakdown.Count metodos</span>
+                    </div>
+
+                    <div class="table-responsive" style="margin-top: 1rem;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Metodo</th>
+                                    <th>Monto</th>
+                                    <th>%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (methodBreakdown.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3" style="text-align:center; color:var(--color-taupe);">Sin datos para el periodo.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in methodBreakdown)
+                                    {
+                                        <tr>
+                                            <td>@item.Method</td>
+                                            <td>@item.Amount.ToString("0.00")</td>
+                                            <td>@item.Share.ToString("0.0")%</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </section>
+}
+
+@code {
+    private readonly List<string> paymentMethodOptions = [];
+    private readonly HashSet<string> selectedMethods = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<IncomeMovementRow> movements = [];
+    private readonly List<IncomeSeriesRow> series = [];
+    private readonly List<IncomeMethodRow> methodBreakdown = [];
+    private bool isLoading = true;
+    private bool canViewModule;
+    private string? errorMessage;
+    private int currentRoleId;
+    private int currentUserId;
+    private string selectedPreset = "month";
+    private string startDateText = DateTime.Today.AddDays(-29).ToString("yyyy-MM-dd");
+    private string endDateText = DateTime.Today.ToString("yyyy-MM-dd");
+    private decimal periodIncome;
+    private decimal totalReceivables;
+    private int pendingAccountsCount;
+    private string topMethodLabel = "Sin datos";
+    private string seriesCaption = "Semanal";
+
+    private static readonly IReadOnlyList<(string Key, string Label)> Presets =
+    [
+        ("today", "Hoy"),
+        ("week", "Esta semana"),
+        ("month", "Este mes"),
+        ("custom", "Personalizado")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ApplyPresetAsync(string preset)
+    {
+        selectedPreset = preset;
+        var today = DateTime.Today;
+        switch (preset)
+        {
+            case "today":
+                startDateText = today.ToString("yyyy-MM-dd");
+                endDateText = today.ToString("yyyy-MM-dd");
+                break;
+            case "week":
+                var diff = ((int)today.DayOfWeek + 6) % 7;
+                startDateText = today.AddDays(-diff).ToString("yyyy-MM-dd");
+                endDateText = today.ToString("yyyy-MM-dd");
+                break;
+            case "month":
+                startDateText = new DateTime(today.Year, today.Month, 1).ToString("yyyy-MM-dd");
+                endDateText = today.ToString("yyyy-MM-dd");
+                break;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ToggleMethodAsync(string method)
+    {
+        if (!selectedMethods.Add(method))
+        {
+            selectedMethods.Remove(method);
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ClearMethodFilters()
+    {
+        selectedMethods.Clear();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            if (!DateOnly.TryParseExact(startDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startDate) ||
+                !DateOnly.TryParseExact(endDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var endDate))
+            {
+                errorMessage = "Selecciona un rango de fechas valido.";
+                return;
+            }
+
+            if (endDate < startDate)
+            {
+                errorMessage = "La fecha final no puede ser menor a la inicial.";
+                return;
+            }
+
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId) ? parsedUserId : 0;
+            currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var parsedRoleId) ? parsedRoleId : 0;
+
+            canViewModule = currentRoleId == 1 || await dbContext.tbl_rol_menu_permisos
+                .AsNoTracking()
+                .Where(x => x.id_rol == currentRoleId && x.puede_ver)
+                .Join(
+                    dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/ingresos"),
+                    permission => permission.id_menu,
+                    menu => menu.id_menu,
+                    (_, _) => true)
+                .AnyAsync();
+
+            if (!canViewModule)
+            {
+                return;
+            }
+
+            await LoadPaymentMethodsAsync(dbContext);
+            await LoadIncomeDataAsync(dbContext, startDate, endDate);
+            BuildDerivedViews(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"No se pudo cargar el dashboard de ingresos: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadPaymentMethodsAsync(OpticaDbContext dbContext)
+    {
+        paymentMethodOptions.Clear();
+
+        var saleMethods = await dbContext.tbl_venta.AsNoTracking()
+            .Where(x => x.forma_pago != null && x.forma_pago != "")
+            .Select(x => x.forma_pago!)
+            .Distinct()
+            .ToListAsync();
+
+        var abonoMethods = await dbContext.tbl_abonos.AsNoTracking()
+            .Join(
+                dbContext.tbl_metodo_pagos.AsNoTracking(),
+                abono => abono.metodo_pago_id,
+                metodo => metodo.id_metodo_pago,
+                (_, metodo) => metodo.nombre)
+            .Distinct()
+            .ToListAsync();
+
+        paymentMethodOptions.AddRange(saleMethods
+            .Concat(abonoMethods)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x));
+    }
+
+    private async Task LoadIncomeDataAsync(OpticaDbContext dbContext, DateOnly startDate, DateOnly endDate)
+    {
+        movements.Clear();
+
+        var startDateTime = startDate.ToDateTime(TimeOnly.MinValue);
+        var endDateTime = endDate.ToDateTime(TimeOnly.MaxValue);
+
+        var sales = await dbContext.tbl_venta.AsNoTracking()
+            .Where(x => x.fecha_venta.HasValue && x.fecha_venta.Value >= startDateTime && x.fecha_venta.Value <= endDateTime)
+            .Select(x => new
+            {
+                Date = x.fecha_venta!.Value,
+                Method = string.IsNullOrWhiteSpace(x.forma_pago) ? "No especificado" : x.forma_pago!,
+                Amount = x.valor_cobrado ?? 0m
+            })
+            .ToListAsync();
+
+        var abonos = await (
+            from abono in dbContext.tbl_abonos.AsNoTracking()
+            join method in dbContext.tbl_metodo_pagos.AsNoTracking() on abono.metodo_pago_id equals method.id_metodo_pago into methodJoin
+            from method in methodJoin.DefaultIfEmpty()
+            where (abono.fecha_abono ?? abono.fecha_registro).HasValue
+            let movementDate = abono.fecha_abono ?? abono.fecha_registro
+            where movementDate!.Value >= startDateTime && movementDate.Value <= endDateTime
+            select new
+            {
+                Date = movementDate!.Value,
+                Method = method != null ? method.nombre : "No especificado",
+                Amount = abono.monto_abono
+            })
+            .ToListAsync();
+
+        movements.AddRange(sales
+            .Where(x => x.Amount != 0m)
+            .Select(x => new IncomeMovementRow(x.Date, x.Method, x.Amount, "Venta")));
+        movements.AddRange(abonos
+            .Where(x => x.Amount != 0m)
+            .Select(x => new IncomeMovementRow(x.Date, x.Method, x.Amount, x.Amount < 0 ? "Reversion" : "Abono")));
+
+        var saleQuery = dbContext.tbl_venta.AsNoTracking()
+            .Where(x => x.fecha_venta.HasValue && x.fecha_venta.Value >= startDateTime && x.fecha_venta.Value <= endDateTime);
+
+        if (selectedMethods.Count > 0)
+        {
+            saleQuery = saleQuery.Where(x => x.forma_pago != null && selectedMethods.Contains(x.forma_pago));
+        }
+
+        totalReceivables = await saleQuery.SumAsync(x => x.saldo_pendiente ?? 0m);
+        pendingAccountsCount = await saleQuery.CountAsync(x => (x.saldo_pendiente ?? 0m) > 0m);
+    }
+
+    private void BuildDerivedViews(DateOnly startDate, DateOnly endDate)
+    {
+        var filteredMovements = selectedMethods.Count == 0
+            ? movements.ToList()
+            : movements.Where(x => selectedMethods.Contains(x.Method)).ToList();
+
+        periodIncome = filteredMovements.Sum(x => x.Amount);
+
+        methodBreakdown.Clear();
+        methodBreakdown.AddRange(filteredMovements
+            .GroupBy(x => x.Method)
+            .Select(group => new IncomeMethodRow
+            {
+                Method = group.Key,
+                Amount = group.Sum(x => x.Amount)
+            })
+            .OrderByDescending(x => x.Amount)
+            .ToList());
+
+        var totalMethods = methodBreakdown.Sum(x => x.Amount);
+        foreach (var item in methodBreakdown)
+        {
+            item.Share = totalMethods == 0m ? 0m : Math.Round(item.Amount * 100m / totalMethods, 1);
+        }
+
+        topMethodLabel = methodBreakdown.FirstOrDefault()?.Method ?? "Sin datos";
+        series.Clear();
+
+        var totalDays = endDate.DayNumber - startDate.DayNumber + 1;
+        if (totalDays <= 62)
+        {
+            seriesCaption = "Semanal";
+            series.AddRange(filteredMovements
+                .GroupBy(x => StartOfWeek(x.Date.Date))
+                .OrderBy(x => x.Key)
+                .Select(group => new IncomeSeriesRow($"Semana {group.Key:dd/MM}", group.Sum(x => x.Amount))));
+        }
+        else
+        {
+            seriesCaption = "Mensual";
+            series.AddRange(filteredMovements
+                .GroupBy(x => new DateTime(x.Date.Year, x.Date.Month, 1))
+                .OrderBy(x => x.Key)
+                .Select(group => new IncomeSeriesRow(group.Key.ToString("yyyy-MM"), group.Sum(x => x.Amount))));
+        }
+    }
+
+    private double GetSeriesWidth(decimal amount)
+    {
+        var max = series.Count == 0 ? 0m : series.Max(x => x.Amount);
+        if (max <= 0m)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, Math.Min(100, decimal.ToDouble(amount * 100m / max)));
+    }
+
+    private string BuildExportUrl()
+    {
+        var methods = selectedMethods.Count == 0 ? string.Empty : string.Join(",", selectedMethods);
+        return $"/exports/income-report.csv?start={startDateText}&end={endDateText}&methods={Uri.EscapeDataString(methods)}";
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs args)
+    {
+        startDateText = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs args)
+    {
+        endDateText = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private static DateTime StartOfWeek(DateTime date)
+    {
+        var diff = ((int)date.DayOfWeek + 6) % 7;
+        return date.AddDays(-diff).Date;
+    }
+
+    private sealed record IncomeMovementRow(DateTime Date, string Method, decimal Amount, string Source);
+
+    private sealed record IncomeSeriesRow(string Label, decimal Amount);
+
+    private sealed class IncomeMethodRow
+    {
+        public string Method { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public decimal Share { get; set; }
+    }
+}

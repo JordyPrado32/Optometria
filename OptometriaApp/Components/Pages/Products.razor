@@ -4,6 +4,7 @@
 @using System.Net.Mail
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject KardexService KardexService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Productos</PageTitle>
@@ -170,7 +171,21 @@ else
                                     <td>@(product.id_categoriaNavigation?.nombre ?? "-")</td>
                                     <td>@(product.id_proveedorNavigation?.nombre ?? "-")</td>
                                     <td>@product.precio_venta.ToString("0.00")</td>
-                                    <td>@($"{product.stock_actual ?? 0} / min {(product.stock_minimo ?? 0)}")</td>
+                                    <td>
+                                        <div>@($"{product.stock_actual ?? 0} / min {(product.stock_minimo ?? 0)}")</div>
+                                        @if ((product.stock_actual ?? 0) <= 0)
+                                        {
+                                            <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
+                                                <i class="bi bi-exclamation-triangle-fill"></i> Sin stock
+                                            </div>
+                                        }
+                                        else if ((product.stock_minimo ?? 0) > 0 && (product.stock_actual ?? 0) <= (product.stock_minimo ?? 0))
+                                        {
+                                            <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
+                                                <i class="bi bi-exclamation-triangle-fill"></i> Bajo minimo
+                                            </div>
+                                        }
+                                    </td>
                                     <td>
                                         <div>@((product.activo ?? false) ? "Activo" : "Inactivo")</div>
                                         <div style="font-size: 0.78rem; color: var(--color-taupe);">@(product.estado_producto ?? "Disponible")</div>
@@ -294,8 +309,12 @@ else
                         <summary><span><i class="bi bi-boxes"></i> Stock y ubicación</span></summary>
                         <div class="additional-details-body">
                     <div>
-                        <label class="form-label">Stock actual</label>
-                        <input type="number" class="form-control" @bind="editor.StockActual" readonly="@(!CanModifyEditor)" />
+                        <label class="form-label">@(isCreatingNewProduct ? "Stock inicial" : "Stock actual")</label>
+                        <input type="number" class="form-control" @bind="editor.StockActual" readonly="@(!CanModifyEditor || !isCreatingNewProduct)" />
+                        @if (!isCreatingNewProduct)
+                        {
+                            <small style="color: var(--color-taupe);">El stock actual solo se ajusta desde Inventarios para mantener kardex y auditoria.</small>
+                        }
                     </div>
                     <div>
                         <label class="form-label">Stock minimo</label>
@@ -848,10 +867,32 @@ else
                 ?? throw new InvalidOperationException("No se encontro el producto seleccionado.");
         }
 
-        ApplyEditorToEntity(productEntity);
+        var initialStock = editor.StockActual;
+        ApplyEditorToEntity(productEntity, preserveExistingStock: !isCreatingNewProduct);
         productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
 
         await dbContext.SaveChangesAsync();
+
+        if (isCreatingNewProduct && initialStock > 0)
+        {
+            dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+            {
+                id_producto = productEntity.id_producto,
+                id_usuario = currentUserId,
+                fecha_movimiento = DateTime.Now,
+                tipo_movimiento = "Entrada",
+                cantidad = initialStock,
+                stock_anterior = 0,
+                stock_resultante = initialStock,
+                tipo_documento_referencia = "StockInicial",
+                observaciones = "Stock inicial del producto",
+                metodo_valuacion = "Promedio",
+                costo_unitario = productEntity.precio_costo
+            });
+
+            await dbContext.SaveChangesAsync();
+            await KardexService.RebuildForProductAsync(productEntity.id_producto, currentUserId, "Stock inicial producto");
+        }
 
         WriteAudit(
             dbContext,
@@ -939,10 +980,32 @@ else
                 }
             }
 
-            ApplyEditorToEntity(productEntity);
+            var initialStock = editor.StockActual;
+            ApplyEditorToEntity(productEntity, preserveExistingStock: !isCreatingNewProduct);
             productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
 
             await dbContext.SaveChangesAsync();
+
+            if (isCreatingNewProduct && initialStock > 0)
+            {
+                dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+                {
+                    id_producto = productEntity.id_producto,
+                    id_usuario = currentUserId,
+                    fecha_movimiento = DateTime.Now,
+                    tipo_movimiento = "Entrada",
+                    cantidad = initialStock,
+                    stock_anterior = 0,
+                    stock_resultante = initialStock,
+                    tipo_documento_referencia = "StockInicial",
+                    observaciones = "Stock inicial del producto",
+                    metodo_valuacion = "Promedio",
+                    costo_unitario = productEntity.precio_costo
+                });
+
+                await dbContext.SaveChangesAsync();
+                await KardexService.RebuildForProductAsync(productEntity.id_producto, currentUserId, "Stock inicial producto");
+            }
 
             WriteAudit(
                 dbContext,
@@ -1005,7 +1068,7 @@ else
         await LoadAsync();
     }
 
-    private void ApplyEditorToEntity(tbl_producto entity)
+    private void ApplyEditorToEntity(tbl_producto entity, bool preserveExistingStock)
     {
         entity.id_proveedor = editor!.IdProveedor;
         entity.id_categoria = editor.IdCategoria;
@@ -1017,7 +1080,10 @@ else
         entity.precio_venta = editor.PrecioVenta;
         entity.tiene_iva = editor.TieneIva;
         entity.porcentaje_iva = editor.TieneIva ? editor.PorcentajeIva : 0;
-        entity.stock_actual = editor.StockActual;
+        if (!preserveExistingStock)
+        {
+            entity.stock_actual = editor.StockActual;
+        }
         entity.stock_minimo = editor.StockMinimo;
         entity.activo = editor.Activo;
         entity.almacen = NormalizeOptional(editor.Almacen);

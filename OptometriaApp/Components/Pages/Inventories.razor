@@ -93,17 +93,7 @@ else
                                     <td>@($"{item.stock_anterior ?? 0} -> {item.stock_resultante ?? 0}")</td>
                                     <td>@(item.comprobante_numero ?? item.tipo_documento_referencia ?? "-")</td>
                                     <td style="text-align:right;">
-                                        <div style="display:inline-flex; gap:0.4rem;">
-                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">
-                                                <i class="bi bi-pencil-fill"></i> Editar
-                                            </button>
-                                            @if (permissions.CanDelete)
-                                            {
-                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">
-                                                    <i class="bi bi-trash3-fill"></i> Eliminar
-                                                </button>
-                                            }
-                                        </div>
+                                        <span style="font-size:0.78rem; color:var(--color-taupe);">Solo lectura</span>
                                     </td>
                                 </tr>
                             }
@@ -262,7 +252,6 @@ else
     }
 
     private void PrepareNew() { isCreating = true; editor = new MovementEditor { TipoMovimiento = "Entrada", MetodoValuacion = "Promedio" }; showForm = true; }
-    private void PrepareEdit(tbl_movimiento_inventario item) { isCreating = false; editor = new MovementEditor { Id = item.id_movimiento_inventario, IdProducto = item.id_producto, TipoMovimiento = item.tipo_movimiento ?? "Entrada", Cantidad = item.cantidad, ComprobanteNumero = item.comprobante_numero ?? string.Empty, MetodoValuacion = item.metodo_valuacion ?? "Promedio", Observaciones = item.observaciones ?? string.Empty }; showForm = true; }
 
     private async Task SaveAsync()
     {
@@ -290,44 +279,11 @@ else
         }
 
         tbl_movimiento_inventario entity;
-        tbl_producto? originalProduct = null;
         var affectedProductIds = new HashSet<int> { product.id_producto };
         var previousStock = product.stock_actual ?? 0;
-        var resultingStock = previousStock;
-
-        if (isCreating)
-        {
-            entity = new tbl_movimiento_inventario { id_usuario = currentUserId, fecha_movimiento = DateTime.Now };
-            db.tbl_movimiento_inventarios.Add(entity);
-            resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
-        }
-        else
-        {
-            entity = await db.tbl_movimiento_inventarios.FirstAsync(x => x.id_movimiento_inventario == editor.Id && x.id_usuario == currentUserId);
-            originalProduct = await db.tbl_productos.FirstAsync(x => x.id_producto == entity.id_producto);
-            affectedProductIds.Add(originalProduct.id_producto);
-
-            var originalDelta = ResolveMovementDelta(entity.tipo_movimiento, entity.cantidad, entity.stock_anterior, entity.stock_resultante);
-
-            if (originalProduct.id_producto == product.id_producto)
-            {
-                previousStock = (product.stock_actual ?? 0) - originalDelta;
-                resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
-            }
-            else
-            {
-                var restoredOriginalStock = (originalProduct.stock_actual ?? 0) - originalDelta;
-                if (restoredOriginalStock < 0)
-                {
-                    ShowAlert("El movimiento original dejo el inventario en un estado invalido. Revisa el kardex del producto.", true);
-                    return;
-                }
-
-                originalProduct.stock_actual = restoredOriginalStock;
-                previousStock = product.stock_actual ?? 0;
-                resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
-            }
-        }
+        var resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
+        entity = new tbl_movimiento_inventario { id_usuario = currentUserId, fecha_movimiento = DateTime.Now };
+        db.tbl_movimiento_inventarios.Add(entity);
 
         if (resultingStock < 0) { ShowAlert("El stock no puede quedar negativo.", true); return; }
 
@@ -344,28 +300,25 @@ else
 
         product.stock_actual = resultingStock;
 
-        if (isCreating)
+        db.tbl_kardex.Add(new tbl_kardex
         {
-            db.tbl_kardex.Add(new tbl_kardex
-            {
-                id_producto = product.id_producto,
-                fecha_movimiento = DateTime.Now,
-                tipo_movimiento = editor.TipoMovimiento,
-                tipo_referencia = "InventarioManual",
-                comprobante_numero = entity.comprobante_numero,
-                cantidad_movimiento = editor.Cantidad,
-                stock_anterior = previousStock,
-                stock_nuevo = resultingStock,
-                metodo_valuacion = entity.metodo_valuacion,
-                id_usuario_movimiento = currentUserId,
-                descripcion_movimiento = $"Movimiento manual {editor.TipoMovimiento}",
-                estado_kardex = "Registrado"
-            });
-        }
+            id_producto = product.id_producto,
+            fecha_movimiento = DateTime.Now,
+            tipo_movimiento = editor.TipoMovimiento,
+            tipo_referencia = "InventarioManual",
+            comprobante_numero = entity.comprobante_numero,
+            cantidad_movimiento = editor.Cantidad,
+            stock_anterior = previousStock,
+            stock_nuevo = resultingStock,
+            metodo_valuacion = entity.metodo_valuacion,
+            id_usuario_movimiento = currentUserId,
+            descripcion_movimiento = $"Movimiento manual {editor.TipoMovimiento}",
+            estado_kardex = "Registrado"
+        });
 
-        WriteAudit(db, isCreating ? "Crear movimiento inventario" : "Editar movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
+        WriteAudit(db, "Crear movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
         await db.SaveChangesAsync();
-        await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, isCreating ? "Movimiento manual" : "Edicion movimiento manual");
+        await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Movimiento manual");
         CloseForm();
         ShowAlert("Movimiento guardado.", false);
         await LoadAsync();
@@ -373,15 +326,7 @@ else
 
     private async Task DeleteAsync(tbl_movimiento_inventario item)
     {
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        var entity = await db.tbl_movimiento_inventarios.FirstAsync(x => x.id_movimiento_inventario == item.id_movimiento_inventario && x.id_usuario == currentUserId);
-        var productId = entity.id_producto;
-        WriteAudit(db, "Eliminar movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
-        db.tbl_movimiento_inventarios.Remove(entity);
-        await db.SaveChangesAsync();
-        await KardexService.RebuildForProductAsync(productId, currentUserId, "Eliminacion movimiento manual");
-        ShowAlert("Movimiento eliminado.", false);
-        await LoadAsync();
+        ShowAlert("Los movimientos historicos no se eliminan. Registra un movimiento compensatorio para corregir el stock.", true);
     }
 
     private void ClearFilters()

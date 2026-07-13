@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject AccountStatementService AccountStatementService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Cuentas por cobrar</PageTitle>
 
@@ -186,13 +187,13 @@ else
             <div class="filters-row-2" style="margin-top: 1rem;">
                 <div>
                     <label class="form-label" for="receivableSearch">Buscador</label>
-                    <input id="receivableSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Cliente, factura, paciente o referencia" />
+                    <input id="receivableSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" @bind:after="PersistFiltersAsync" placeholder="Cliente, factura, paciente o referencia" />
                 </div>
 
                 <div class="filter-selects-col-2">
                     <div>
                         <label class="form-label" for="receivableClient">Cliente</label>
-                        <select id="receivableClient" class="form-select" @bind="selectedClientFilter">
+                        <select id="receivableClient" class="form-select" @bind="selectedClientFilter" @bind:after="PersistFiltersAsync">
                             <option value="0">Todos</option>
                             @foreach (var client in clientFilters)
                             {
@@ -203,7 +204,7 @@ else
 
                     <div>
                         <label class="form-label" for="receivableState">Estado</label>
-                        <select id="receivableState" class="form-select" @bind="selectedStateFilter">
+                        <select id="receivableState" class="form-select" @bind="selectedStateFilter" @bind:after="PersistFiltersAsync">
                             <option value="Todos">Todos</option>
                             <option value="Pendiente">Pendiente</option>
                             <option value="Vencida">Vencida</option>
@@ -216,7 +217,7 @@ else
             <div class="filters-row-2" style="margin-top: 1rem;">
                 <div>
                     <label class="form-label" for="receivableDue">Vencimiento</label>
-                    <select id="receivableDue" class="form-select" @bind="selectedDueFilter">
+                    <select id="receivableDue" class="form-select" @bind="selectedDueFilter" @bind:after="PersistFiltersAsync">
                         <option value="Todos">Todos</option>
                         <option value="Vencidas">Vencidas</option>
                         <option value="Hoy">Vencen hoy</option>
@@ -230,6 +231,109 @@ else
                         Limpiar filtros
                     </button>
                 </div>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Alerta de mora</h2>
+                <span>Configuracion operativa</span>
+            </div>
+
+            <div class="management-form-grid" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label" for="overdueAlertDays">Dias de alerta</label>
+                    <input id="overdueAlertDays" type="number" min="1" class="form-control" @bind="overdueAlertDays" />
+                </div>
+                <div>
+                    <label class="form-label">Clientes alertados</label>
+                    <input class="form-control" value="@OverdueAlertClients.Count" readonly />
+                </div>
+                <div>
+                    <label class="form-label">Saldo en alerta</label>
+                    <input class="form-control" value="@OverdueAlertBalance.ToString("0.00")" readonly />
+                </div>
+            </div>
+
+            @if (OverdueAlertClients.Count == 0)
+            {
+                <p style="margin: 1rem 0 0; color: var(--color-taupe);">No hay clientes que superen el umbral configurado.</p>
+            }
+            else
+            {
+                <div class="table-responsive" style="margin-top: 1rem;">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Cuentas abiertas</th>
+                                <th>Mayor atraso</th>
+                                <th>Saldo vencido</th>
+                                <th>Saldo total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in OverdueAlertClients)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@item.ClientName</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@item.ClientDocument</div>
+                                    </td>
+                                    <td>@item.OpenAccounts</td>
+                                    <td>@item.MaxDaysPastDue dias</td>
+                                    <td>@item.OverdueBalance.ToString("0.00")</td>
+                                    <td>@item.CurrentBalance.ToString("0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Cartera por cliente</h2>
+                <span>@ClientPortfolioRows.Count clientes</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Facturas</th>
+                            <th>Monto original</th>
+                            <th>Total abonado</th>
+                            <th>Saldo vigente</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (ClientPortfolioRows.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 1rem; color: var(--color-taupe);">No hay clientes para consolidar con los filtros actuales.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in ClientPortfolioRows)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@item.ClientName</strong>
+                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@item.ClientDocument</div>
+                                    </td>
+                                    <td>@item.AccountCount</td>
+                                    <td>@item.OriginalAmount.ToString("0.00")</td>
+                                    <td>@item.TotalPaid.ToString("0.00")</td>
+                                    <td><strong>@item.CurrentBalance.ToString("0.00")</strong></td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -394,6 +498,47 @@ else
 
                     <div class="receivable-detail-block">
                         <div class="management-card-header" style="margin-bottom: 1rem;">
+                            <h2 style="font-size: 1rem;">Notas de credito disponibles</h2>
+                            <span>@availableCreditNotes.Count vigentes</span>
+                        </div>
+
+                        @if (availableCreditNotes.Count == 0)
+                        {
+                            <p style="margin: 0; color: var(--color-taupe);">Este cliente no tiene notas de credito disponibles para aplicar.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Nota</th>
+                                            <th>Vence</th>
+                                            <th>Disponible</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var note in availableCreditNotes)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <strong>@note.NoteNumber</strong>
+                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@note.InvoiceNumber</div>
+                                                </td>
+                                                <td>@note.ExpirationDateLabel</td>
+                                                <td>@note.AvailableBalance.ToString("0.00")</td>
+                                                <td>@note.State</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="receivable-detail-block">
+                        <div class="management-card-header" style="margin-bottom: 1rem;">
                             <h2 style="font-size: 1rem;">Abonos</h2>
                             <span>@abonos.Count registrados</span>
                         </div>
@@ -403,15 +548,17 @@ else
                                 <thead>
                                     <tr>
                                         <th>Fecha</th>
+                                        <th>Tipo</th>
                                         <th>Monto</th>
                                         <th>Metodo</th>
+                                        <th style="text-align: right;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @if (abonos.Count == 0)
                                     {
                                         <tr>
-                                            <td colspan="3" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin abonos registrados.</td>
+                                            <td colspan="5" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin movimientos de pago registrados.</td>
                                         </tr>
                                     }
                                     else
@@ -423,10 +570,23 @@ else
                                                     <strong>@abono.DateLabel</strong>
                                                     <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.Reference</div>
                                                 </td>
-                                                <td>@abono.Amount.ToString("0.00")</td>
+                                                <td>@abono.TypeLabel</td>
+                                                <td style="color:@(abono.Amount < 0 ? "#c62828" : "var(--color-ink)")">@abono.Amount.ToString("0.00")</td>
                                                 <td>
                                                     @abono.MethodName
                                                     <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.UserLabel</div>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    @if (canEditModule && abono.CanReverse)
+                                                    {
+                                                        <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => OpenReversePaymentModal(abono.Id)">
+                                                            Revertir
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span style="font-size: 0.75rem; color: var(--color-taupe);">@abono.StatusLabel</span>
+                                                    }
                                                 </td>
                                             </tr>
                                         }
@@ -453,12 +613,29 @@ else
                                 <div>
                                     <label class="form-label" for="abonoMetodo">Metodo de pago</label>
                                     <select id="abonoMetodo" class="form-select" @bind="abonoEditor.MetodoPagoId">
+                                        @if (availableCreditNotes.Count > 0)
+                                        {
+                                            <option value="-1">Nota de credito</option>
+                                        }
                                         @foreach (var method in paymentMethods)
                                         {
                                             <option value="@method.Id">@method.Name</option>
                                         }
                                     </select>
                                 </div>
+                                @if (abonoEditor.MetodoPagoId == -1)
+                                {
+                                    <div style="grid-column: 1 / -1;">
+                                        <label class="form-label" for="abonoNotaCredito">Nota de credito disponible</label>
+                                        <select id="abonoNotaCredito" class="form-select" @bind="abonoEditor.CreditNoteId">
+                                            <option value="0">Selecciona una nota</option>
+                                            @foreach (var note in availableCreditNotes)
+                                            {
+                                                <option value="@note.CreditNoteId">@note.NoteNumber | saldo @note.AvailableBalance.ToString("0.00") | vence @note.ExpirationDateLabel</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
                                 <div style="grid-column: 1 / -1;">
                                     <label class="form-label" for="abonoReferencia">Referencia</label>
                                     <input id="abonoReferencia" class="form-control" maxlength="100" @bind="abonoEditor.Referencia" placeholder="Transferencia, recibo o nota interna" />
@@ -578,11 +755,36 @@ else
     </section>
 }
 
+@if (showReversePaymentModal && paymentToReverse is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card alert-modal-card">
+            <header class="custom-modal-header apricot-header">
+                <h2>Revertir abono</h2>
+            </header>
+            <div class="custom-modal-body">
+                <p style="margin:0 0 1rem; color:var(--color-ink); line-height:1.5;">
+                    Se va a registrar una reversion por <strong>@paymentToReverse.Amount.ToString("0.00")</strong> para este movimiento. El saldo pendiente aumentara nuevamente.
+                </p>
+                <div>
+                    <label class="form-label" for="reverseReason">Motivo de reversion</label>
+                    <textarea id="reverseReason" class="form-control" rows="3" maxlength="255" @bind="reversePaymentReason"></textarea>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="ReversePaymentAsync">Confirmar reversion</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseReversePaymentModal">Cancelar</button>
+            </footer>
+        </div>
+    </div>
+}
+
 @code {
     private readonly List<AccountReceivableRow> accounts = [];
     private readonly List<ClientFilterOption> clientFilters = [];
     private readonly List<PaymentMethodOption> paymentMethods = [];
     private readonly List<AbonoRow> abonos = [];
+    private readonly List<AvailableCreditNoteRow> availableCreditNotes = [];
     private readonly List<StatementMovementRow> statementMovements = [];
     private ModulePermissions permissions = new();
     private AccountReceivableRow? selectedAccount;
@@ -591,17 +793,23 @@ else
     private bool isLoading = true;
     private bool canViewModule;
     private bool canEditModule;
+    private bool showReversePaymentModal;
     private bool statementEmailSending;
     private int currentUserId;
     private int currentRoleId;
+    private int overdueAlertDays = 30;
     private string currentActorLabel = "Sistema";
+    private string reversePaymentReason = string.Empty;
     private string statementEmail = string.Empty;
     private string searchTerm = string.Empty;
     private int selectedClientFilter;
     private string selectedStateFilter = "Todos";
     private string selectedDueFilter = "Todos";
+    private bool filtersRestored;
+    private const string FilterStorageKey = "accounts-receivable.filters";
     private string? statusMessage;
     private string? errorMessage;
+    private int? reversePaymentId;
 
     private List<AccountReceivableRow> FilteredAccounts => accounts
         .Where(MatchesSearch)
@@ -634,10 +842,57 @@ else
     private decimal SelectedClientOpenBalance => selectedAccount is null ? 0m : accounts.Where(x => x.ClientId == selectedAccount.ClientId && x.Balance > 0).Sum(x => x.Balance);
     private decimal SelectedClientOverdueBalance => selectedAccount is null ? 0m : accounts.Where(x => x.ClientId == selectedAccount.ClientId && x.DisplayStatus == "Vencida" && x.Balance > 0).Sum(x => x.Balance);
     private int SelectedClientOpenInvoices => selectedAccount is null ? 0 : accounts.Count(x => x.ClientId == selectedAccount.ClientId && x.Balance > 0);
+    private List<ClientPortfolioRow> ClientPortfolioRows => FilteredAccounts
+        .GroupBy(x => new { x.ClientId, x.ClientName, x.ClientDocument })
+        .Select(group => new ClientPortfolioRow
+        {
+            ClientId = group.Key.ClientId,
+            ClientName = group.Key.ClientName,
+            ClientDocument = group.Key.ClientDocument,
+            AccountCount = group.Count(),
+            OriginalAmount = group.Sum(x => x.TotalAmount),
+            TotalPaid = group.Sum(x => x.PaidAmount),
+            CurrentBalance = group.Sum(x => x.Balance),
+            Accounts = group.ToList()
+        })
+        .OrderByDescending(x => x.CurrentBalance)
+        .ThenBy(x => x.ClientName)
+        .ToList();
+    private List<ClientPortfolioRow> OverdueAlertClients => ClientPortfolioRows
+        .Where(x => x.MaxDaysPastDue >= overdueAlertDays && x.OverdueBalance > 0)
+        .OrderByDescending(x => x.MaxDaysPastDue)
+        .ThenByDescending(x => x.OverdueBalance)
+        .ToList();
+    private decimal OverdueAlertBalance => OverdueAlertClients.Sum(x => x.OverdueBalance);
+    private AbonoRow? paymentToReverse => abonos.FirstOrDefault(x => x.Id == reversePaymentId);
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || filtersRestored)
+        {
+            return;
+        }
+
+        var rawFilters = await JSRuntime.InvokeAsync<string?>("optometriaSession.get", FilterStorageKey);
+        if (!string.IsNullOrWhiteSpace(rawFilters))
+        {
+            var restored = System.Text.Json.JsonSerializer.Deserialize<ReceivableFilters>(rawFilters);
+            if (restored is not null)
+            {
+                searchTerm = restored.SearchTerm ?? string.Empty;
+                selectedClientFilter = restored.ClientId;
+                selectedStateFilter = string.IsNullOrWhiteSpace(restored.StateFilter) ? "Todos" : restored.StateFilter;
+                selectedDueFilter = string.IsNullOrWhiteSpace(restored.DueFilter) ? "Todos" : restored.DueFilter;
+                StateHasChanged();
+            }
+        }
+
+        filtersRestored = true;
     }
 
     private async Task LoadAsync(int? selectedAccountId = null)
@@ -672,15 +927,19 @@ else
         if (selectedAccount is not null)
         {
             await LoadAbonosAsync(dbContext, selectedAccount.Id);
+            await LoadAvailableCreditNotesAsync(dbContext, selectedAccount.ClientId, selectedAccount.Id);
             await LoadStatementAsync(selectedAccount.Id);
             ResetAbonoEditor();
+            CloseReversePaymentModal();
         }
         else
         {
             abonos.Clear();
+            availableCreditNotes.Clear();
             statementMovements.Clear();
             statementDocument = null;
             statementEmail = string.Empty;
+            CloseReversePaymentModal();
         }
 
         isLoading = false;
@@ -774,16 +1033,50 @@ else
             orderby abono.fecha_abono descending, abono.id_abono descending
             select new AbonoRow
             {
+                Id = abono.id_abono,
                 Amount = abono.monto_abono,
                 DateLabel = (abono.fecha_abono ?? abono.fecha_registro ?? DateTime.Now).ToString("yyyy-MM-dd HH:mm"),
-                MethodName = method != null ? method.nombre : "Sin metodo",
+                MethodName = string.Equals(abono.tipo_movimiento, "AbonoNotaCredito", StringComparison.OrdinalIgnoreCase)
+                    ? "Nota de credito"
+                    : (method != null ? method.nombre : "Sin metodo"),
                 Reference = string.IsNullOrWhiteSpace(abono.referencia_pago) ? "Sin referencia" : abono.referencia_pago!,
-                UserLabel = string.IsNullOrWhiteSpace(abono.usuario_registro) ? "Sistema" : abono.usuario_registro!
+                UserLabel = string.IsNullOrWhiteSpace(abono.usuario_registro) ? "Sistema" : abono.usuario_registro!,
+                TypeLabel = string.Equals(abono.tipo_movimiento, "Reversion", StringComparison.OrdinalIgnoreCase) ? "Reversion" : "Abono",
+                StatusLabel = string.Equals(abono.tipo_movimiento, "Reversion", StringComparison.OrdinalIgnoreCase) ? "Aplicada" : (abono.id_abono_referencia.HasValue ? "Revertido" : "Activo"),
+                CanReverse = !string.Equals(abono.tipo_movimiento, "Reversion", StringComparison.OrdinalIgnoreCase)
+                    && !dbContext.tbl_abonos.Any(x => x.id_abono_referencia == abono.id_abono)
             })
             .ToListAsync();
 
         abonos.Clear();
         abonos.AddRange(rows);
+    }
+
+    private async Task LoadAvailableCreditNotesAsync(OpticaDbContext dbContext, int clientId, int selectedAccountId)
+    {
+        var rows = await (
+            from note in dbContext.tbl_nota_credito.AsNoTracking()
+            join comprobante in dbContext.tbl_comprobantes.AsNoTracking() on note.id_comprobante_relacionado equals comprobante.id_comprobante
+            join sale in dbContext.tbl_venta.AsNoTracking() on comprobante.id_venta equals sale.id_venta
+            where sale.id_cliente_facturacion == clientId
+               && (note.saldo_disponible ?? note.monto_total) > 0m
+               && (note.fecha_vencimiento == null || note.fecha_vencimiento >= DateTime.Today)
+               && note.estado != "Anulada"
+               && (note.id_cta_cobrar == null || note.id_cta_cobrar != selectedAccountId || (note.saldo_disponible ?? note.monto_total) > 0m)
+            orderby note.fecha_emision descending
+            select new AvailableCreditNoteRow
+            {
+                CreditNoteId = note.id_nota_credito,
+                NoteNumber = note.numero_nota,
+                InvoiceNumber = comprobante.numero_comprobante ?? $"Factura #{comprobante.id_comprobante}",
+                AvailableBalance = note.saldo_disponible ?? note.monto_total,
+                ExpirationDate = note.fecha_vencimiento,
+                State = ResolveCreditNoteStatus(note.estado, note.saldo_disponible, note.fecha_vencimiento)
+            })
+            .ToListAsync();
+
+        availableCreditNotes.Clear();
+        availableCreditNotes.AddRange(rows);
     }
 
     private async Task LoadStatementAsync(int accountId)
@@ -839,68 +1132,197 @@ else
             return;
         }
 
+        if (abonoEditor.MetodoPagoId == -1 && abonoEditor.CreditNoteId <= 0)
+        {
+            errorMessage = "Selecciona la nota de credito que deseas aplicar.";
+            return;
+        }
+
         if (IsReferenceRequired(abonoEditor.MetodoPagoId) && string.IsNullOrWhiteSpace(abonoEditor.Referencia))
         {
             errorMessage = "La referencia es obligatoria para este metodo de pago.";
             return;
         }
 
-        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var account = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_cta_cobrar == selectedAccount.Id);
-        if (account is null)
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Se registrara un abono por {abonoEditor.Monto:0.00} en la cuenta seleccionada. Deseas continuar?");
+        if (!confirmed)
         {
-            errorMessage = "La cuenta por cobrar ya no existe.";
             return;
         }
 
-        int? paymentMethodId = paymentMethods.Any(x => x.Id == abonoEditor.MetodoPagoId) && abonoEditor.MetodoPagoId > 0
-            ? abonoEditor.MetodoPagoId
-            : null;
-
-        dbContext.tbl_abonos.Add(new tbl_abono
+        try
         {
-            id_cta_cobrar = account.id_cta_cobrar,
-            fecha_abono = DateTime.Now,
-            monto_abono = abonoEditor.Monto,
-            metodo_pago_id = paymentMethodId,
-            referencia_pago = NormalizeOptional(abonoEditor.Referencia),
-            usuario_registro = currentActorLabel,
-            fecha_registro = DateTime.Now
-        });
-
-        account.saldo = Math.Max(0m, account.saldo - abonoEditor.Monto);
-        account.estado = account.saldo <= 0 ? "Pagada" : "Pendiente";
-
-        if (account.id_venta is int saleId)
-        {
-            var sale = await dbContext.tbl_venta.FirstOrDefaultAsync(x => x.id_venta == saleId);
-            if (sale is not null)
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            await using var transaction = await dbContext.Database.BeginTransactionAsync();
+            var account = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_cta_cobrar == selectedAccount.Id);
+            if (account is null)
             {
-                var total = sale.total ?? account.monto_total;
-                sale.valor_cobrado = Math.Min(total, (sale.valor_cobrado ?? 0m) + abonoEditor.Monto);
-                sale.saldo_pendiente = Math.Max(0m, total - (sale.valor_cobrado ?? 0m));
-                sale.estado = "Pendiente";
+                errorMessage = "La cuenta por cobrar ya no existe.";
+                return;
             }
-        }
 
-        var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == account.id_cliente);
-        if (client is not null)
+            int? paymentMethodId = paymentMethods.Any(x => x.Id == abonoEditor.MetodoPagoId) && abonoEditor.MetodoPagoId > 0
+                ? abonoEditor.MetodoPagoId
+                : null;
+
+            tbl_nota_credito? creditNote = null;
+            if (abonoEditor.MetodoPagoId == -1)
+            {
+                creditNote = await ResolveApplicableCreditNoteAsync(dbContext, selectedAccount.ClientId, abonoEditor.CreditNoteId);
+                if (creditNote is null)
+                {
+                    errorMessage = "La nota de credito seleccionada ya no esta disponible.";
+                    return;
+                }
+
+                var availableBalance = creditNote.saldo_disponible ?? creditNote.monto_total;
+                if (abonoEditor.Monto > availableBalance)
+                {
+                    errorMessage = $"El abono supera el saldo disponible de la nota {creditNote.numero_nota}.";
+                    return;
+                }
+            }
+
+            dbContext.tbl_abonos.Add(new tbl_abono
+            {
+                id_cta_cobrar = account.id_cta_cobrar,
+                fecha_abono = DateTime.Now,
+                monto_abono = abonoEditor.Monto,
+                metodo_pago_id = paymentMethodId,
+                referencia_pago = abonoEditor.MetodoPagoId == -1
+                    ? NormalizeOptional($"NC:{creditNote!.numero_nota} {(abonoEditor.Referencia ?? string.Empty)}")
+                    : NormalizeOptional(abonoEditor.Referencia),
+                usuario_registro = currentActorLabel,
+                fecha_registro = DateTime.Now,
+                tipo_movimiento = abonoEditor.MetodoPagoId == -1 ? "AbonoNotaCredito" : "Abono"
+            });
+
+            if (creditNote is not null)
+            {
+                UpdateCreditNoteBalance(creditNote, -abonoEditor.Monto);
+                WriteAudit(dbContext, "NotasCredito", "Aplicar nota de credito", $"CuentaId={account.id_cta_cobrar}; NotaId={creditNote.id_nota_credito}; Nota={creditNote.numero_nota}; Monto={abonoEditor.Monto:0.00}");
+            }
+
+            await ApplyAccountBalanceAsync(dbContext, account, abonoEditor.Monto, selectedAccount.CreditDays);
+            WriteAudit(dbContext, "CuentasPorCobrar", "Registrar abono", $"CuentaId={account.id_cta_cobrar}; Monto={abonoEditor.Monto:0.00}; Metodo={(abonoEditor.MetodoPagoId == -1 ? "NotaCredito" : paymentMethodId?.ToString() ?? "SinMetodo")}");
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            statusMessage = "Abono registrado correctamente.";
+            await LoadAsync(account.id_cta_cobrar);
+        }
+        catch (Exception ex)
         {
-            var clientBalance = await dbContext.tbl_cta_cobrar
-                .Where(x => x.id_cliente == client.cliente_id && x.id_cta_cobrar != account.id_cta_cobrar && x.estado == "Pendiente")
-                .SumAsync(x => x.saldo);
+            errorMessage = $"No se pudo registrar el abono: {ex.Message}";
+        }
+    }
 
-            client.saldo_deudor = clientBalance + account.saldo;
-            client.condicion_pago = client.saldo_deudor > 0 ? "Credito" : "Contado";
-            client.dias_plazo = client.saldo_deudor > 0 ? Math.Max(client.dias_plazo, selectedAccount.CreditDays) : 0;
-            client.fecha_actualizacion = DateTime.Now;
-            client.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : client.id_usuario_actualizacion;
+    private void OpenReversePaymentModal(int abonoId)
+    {
+        reversePaymentId = abonoId;
+        reversePaymentReason = string.Empty;
+        showReversePaymentModal = true;
+    }
+
+    private void CloseReversePaymentModal()
+    {
+        showReversePaymentModal = false;
+        reversePaymentId = null;
+        reversePaymentReason = string.Empty;
+    }
+
+    private async Task ReversePaymentAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (!canEditModule || selectedAccount is null || paymentToReverse is null || reversePaymentId is null)
+        {
+            return;
         }
 
-        await dbContext.SaveChangesAsync();
+        if (string.IsNullOrWhiteSpace(reversePaymentReason))
+        {
+            errorMessage = "Ingresa el motivo de la reversion.";
+            return;
+        }
 
-        statusMessage = "Abono registrado correctamente.";
-        await LoadAsync(account.id_cta_cobrar);
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Se revertira el movimiento por {paymentToReverse.Amount:0.00}. Deseas continuar?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+            var originalPayment = await dbContext.tbl_abonos.FirstOrDefaultAsync(x => x.id_abono == reversePaymentId.Value && x.id_cta_cobrar == selectedAccount.Id);
+            if (originalPayment is null)
+            {
+                errorMessage = "El abono seleccionado ya no existe.";
+                return;
+            }
+
+            if (string.Equals(originalPayment.tipo_movimiento, "Reversion", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "No se puede revertir un movimiento de reversion.";
+                return;
+            }
+
+            var alreadyReversed = await dbContext.tbl_abonos.AnyAsync(x => x.id_abono_referencia == originalPayment.id_abono);
+            if (alreadyReversed)
+            {
+                errorMessage = "Este abono ya fue revertido previamente.";
+                return;
+            }
+
+            var account = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_cta_cobrar == selectedAccount.Id);
+            if (account is null)
+            {
+                errorMessage = "La cuenta por cobrar ya no existe.";
+                return;
+            }
+
+            var reversalAmount = -Math.Abs(originalPayment.monto_abono);
+            dbContext.tbl_abonos.Add(new tbl_abono
+            {
+                id_cta_cobrar = account.id_cta_cobrar,
+                fecha_abono = DateTime.Now,
+                monto_abono = reversalAmount,
+                metodo_pago_id = originalPayment.metodo_pago_id,
+                referencia_pago = NormalizeOptional(originalPayment.referencia_pago),
+                usuario_registro = currentActorLabel,
+                fecha_registro = DateTime.Now,
+                tipo_movimiento = "Reversion",
+                id_abono_referencia = originalPayment.id_abono,
+                motivo_movimiento = NormalizeOptional(reversePaymentReason)
+            });
+
+            if (string.Equals(originalPayment.tipo_movimiento, "AbonoNotaCredito", StringComparison.OrdinalIgnoreCase))
+            {
+                var creditNote = await ResolveCreditNoteFromReferenceAsync(dbContext, selectedAccount.ClientId, originalPayment.referencia_pago);
+                if (creditNote is not null)
+                {
+                    UpdateCreditNoteBalance(creditNote, Math.Abs(originalPayment.monto_abono));
+                    WriteAudit(dbContext, "NotasCredito", "Revertir aplicacion nota de credito", $"CuentaId={account.id_cta_cobrar}; NotaId={creditNote.id_nota_credito}; Nota={creditNote.numero_nota}; Monto={Math.Abs(originalPayment.monto_abono):0.00}");
+                }
+            }
+
+            await ApplyAccountBalanceAsync(dbContext, account, reversalAmount, selectedAccount.CreditDays);
+            WriteAudit(dbContext, "CuentasPorCobrar", "Revertir abono", $"CuentaId={account.id_cta_cobrar}; AbonoId={originalPayment.id_abono}; Monto={Math.Abs(originalPayment.monto_abono):0.00}");
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            CloseReversePaymentModal();
+            statusMessage = "Reversion registrada correctamente.";
+            await LoadAsync(account.id_cta_cobrar);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"No se pudo revertir el abono: {ex.Message}";
+        }
     }
 
     private async Task SendStatementByEmailAsync()
@@ -941,6 +1363,20 @@ else
         selectedClientFilter = 0;
         selectedStateFilter = "Todos";
         selectedDueFilter = "Todos";
+        _ = PersistFiltersAsync();
+    }
+
+    private async Task PersistFiltersAsync()
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new ReceivableFilters
+        {
+            SearchTerm = searchTerm,
+            ClientId = selectedClientFilter,
+            StateFilter = selectedStateFilter,
+            DueFilter = selectedDueFilter
+        });
+
+        await JSRuntime.InvokeVoidAsync("optometriaSession.set", FilterStorageKey, payload);
     }
 
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
@@ -1024,6 +1460,7 @@ else
         abonoEditor = new AbonoEditor
         {
             MetodoPagoId = paymentMethods.FirstOrDefault()?.Id ?? 0,
+            CreditNoteId = 0,
             Referencia = string.Empty
         };
     }
@@ -1139,10 +1576,103 @@ else
 
     private bool IsReferenceRequired(int paymentMethodId)
     {
+        if (paymentMethodId == -1)
+        {
+            return false;
+        }
+
         var methodName = paymentMethods.FirstOrDefault(x => x.Id == paymentMethodId)?.Name ?? string.Empty;
         return methodName.Contains("transfer", StringComparison.OrdinalIgnoreCase)
             || methodName.Contains("tarjeta", StringComparison.OrdinalIgnoreCase)
             || methodName.Contains("deposit", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveCreditNoteStatus(string? state, decimal? availableBalance, DateTime? expirationDate)
+    {
+        if (expirationDate.HasValue && expirationDate.Value.Date < DateTime.Today && (availableBalance ?? 0m) > 0m)
+        {
+            return "Vencida";
+        }
+
+        if ((availableBalance ?? 0m) <= 0.009m)
+        {
+            return "Aplicada";
+        }
+
+        return string.IsNullOrWhiteSpace(state) || string.Equals(state, "Emitida", StringComparison.OrdinalIgnoreCase)
+            ? "Disponible"
+            : state!;
+    }
+
+    private async Task<tbl_nota_credito?> ResolveApplicableCreditNoteAsync(OpticaDbContext dbContext, int clientId, int creditNoteId)
+    {
+        return await (
+            from note in dbContext.tbl_nota_credito
+            join comprobante in dbContext.tbl_comprobantes on note.id_comprobante_relacionado equals comprobante.id_comprobante
+            join sale in dbContext.tbl_venta on comprobante.id_venta equals sale.id_venta
+            where note.id_nota_credito == creditNoteId
+               && sale.id_cliente_facturacion == clientId
+               && (note.saldo_disponible ?? note.monto_total) > 0m
+               && (note.fecha_vencimiento == null || note.fecha_vencimiento >= DateTime.Today)
+               && note.estado != "Anulada"
+            select note)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<tbl_nota_credito?> ResolveCreditNoteFromReferenceAsync(OpticaDbContext dbContext, int clientId, string? reference)
+    {
+        var noteNumber = ParseCreditNoteNumber(reference);
+        if (string.IsNullOrWhiteSpace(noteNumber))
+        {
+            return null;
+        }
+
+        return await (
+            from note in dbContext.tbl_nota_credito
+            join comprobante in dbContext.tbl_comprobantes on note.id_comprobante_relacionado equals comprobante.id_comprobante
+            join sale in dbContext.tbl_venta on comprobante.id_venta equals sale.id_venta
+            where note.numero_nota == noteNumber
+               && sale.id_cliente_facturacion == clientId
+               && note.estado != "Anulada"
+            select note)
+            .FirstOrDefaultAsync();
+    }
+
+    private static string? ParseCreditNoteNumber(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return null;
+        }
+
+        var normalized = reference.Trim();
+        if (!normalized.StartsWith("NC:", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var value = normalized[3..].Trim();
+        var separator = value.IndexOf(' ');
+        return separator > 0 ? value[..separator].Trim() : value;
+    }
+
+    private static void UpdateCreditNoteBalance(tbl_nota_credito note, decimal delta)
+    {
+        var newBalance = Math.Max(0m, (note.saldo_disponible ?? note.monto_total) + delta);
+        note.saldo_disponible = newBalance;
+        note.estado = ResolveCreditNoteStatus(note.estado, newBalance, note.fecha_vencimiento);
+    }
+
+    private void WriteAudit(OpticaDbContext dbContext, string module, string action, string detail)
+    {
+        dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+        {
+            id_usuario = currentUserId > 0 ? currentUserId : null,
+            accion = action,
+            modulo = module,
+            fecha = DateTime.Now,
+            detalle = detail
+        });
     }
 
     private static string RenderStatusBadge(string status) => status switch
@@ -1162,6 +1692,42 @@ else
 
         return user.Identity?.Name ?? "Sistema";
     }
+
+    private async Task ApplyAccountBalanceAsync(OpticaDbContext dbContext, tbl_cta_cobrar account, decimal paymentDelta, int creditDays)
+    {
+        var newBalance = Math.Max(0m, account.saldo - paymentDelta);
+        account.saldo = newBalance;
+        account.estado = newBalance <= 0m ? "Pagada" : "Pendiente";
+
+        if (account.id_venta is int saleId)
+        {
+            var sale = await dbContext.tbl_venta.FirstOrDefaultAsync(x => x.id_venta == saleId);
+            if (sale is not null)
+            {
+                var total = Math.Max(0m, sale.total ?? account.monto_total);
+                var newCollected = Math.Max(0m, Math.Min(total, (sale.valor_cobrado ?? 0m) + paymentDelta));
+                sale.valor_cobrado = newCollected;
+                sale.saldo_pendiente = Math.Max(0m, total - newCollected);
+                sale.estado = ResolveSaleStatus(sale.saldo_pendiente ?? 0m);
+            }
+        }
+
+        var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == account.id_cliente);
+        if (client is not null)
+        {
+            var clientBalance = await dbContext.tbl_cta_cobrar
+                .Where(x => x.id_cliente == client.cliente_id && x.id_cta_cobrar != account.id_cta_cobrar && x.estado == "Pendiente")
+                .SumAsync(x => x.saldo);
+
+            client.saldo_deudor = clientBalance + account.saldo;
+            client.condicion_pago = client.saldo_deudor > 0 ? "Credito" : "Contado";
+            client.dias_plazo = client.saldo_deudor > 0 ? Math.Max(client.dias_plazo, creditDays) : 0;
+            client.fecha_actualizacion = DateTime.Now;
+            client.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : client.id_usuario_actualizacion;
+        }
+    }
+
+    private static string ResolveSaleStatus(decimal balance) => balance <= 0m ? "Completada" : "Pendiente";
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -1186,18 +1752,34 @@ else
 
     private sealed class AbonoRow
     {
+        public int Id { get; set; }
         public string DateLabel { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public string MethodName { get; set; } = string.Empty;
         public string Reference { get; set; } = string.Empty;
         public string UserLabel { get; set; } = string.Empty;
+        public string TypeLabel { get; set; } = "Abono";
+        public string StatusLabel { get; set; } = "Activo";
+        public bool CanReverse { get; set; }
     }
 
     private sealed class AbonoEditor
     {
         public decimal Monto { get; set; }
         public int MetodoPagoId { get; set; }
+        public int CreditNoteId { get; set; }
         public string Referencia { get; set; } = string.Empty;
+    }
+
+    private sealed class AvailableCreditNoteRow
+    {
+        public int CreditNoteId { get; set; }
+        public string NoteNumber { get; set; } = string.Empty;
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public decimal AvailableBalance { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+        public string State { get; set; } = "Disponible";
+        public string ExpirationDateLabel => ExpirationDate?.ToString("yyyy-MM-dd") ?? "Sin vencimiento";
     }
 
     private sealed class StatementMovementRow
@@ -1211,9 +1793,32 @@ else
         public decimal Balance { get; set; }
     }
 
+    private sealed class ReceivableFilters
+    {
+        public string? SearchTerm { get; set; }
+        public int ClientId { get; set; }
+        public string? StateFilter { get; set; }
+        public string? DueFilter { get; set; }
+    }
+
     private sealed record ClientFilterOption(int Id, string Label);
 
     private sealed record PaymentMethodOption(int Id, string Name);
+
+    private sealed class ClientPortfolioRow
+    {
+        public int ClientId { get; set; }
+        public string ClientName { get; set; } = string.Empty;
+        public string ClientDocument { get; set; } = string.Empty;
+        public int AccountCount { get; set; }
+        public decimal OriginalAmount { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal CurrentBalance { get; set; }
+        public List<AccountReceivableRow> Accounts { get; set; } = [];
+        public decimal OverdueBalance => Accounts.Where(x => x.DisplayStatus == "Vencida").Sum(x => x.Balance);
+        public int MaxDaysPastDue => Accounts.Count == 0 ? 0 : Accounts.Max(GetDaysPastDue);
+        public int OpenAccounts => Accounts.Count(x => x.Balance > 0);
+    }
 
     private sealed class ModulePermissions
     {

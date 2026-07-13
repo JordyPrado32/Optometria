@@ -70,8 +70,12 @@ public sealed class AccountStatementService
             {
                 Date = abono.fecha_abono ?? abono.fecha_registro ?? DateTime.Now,
                 Amount = abono.monto_abono,
-                Description = method != null ? $"Abono registrado - {method.nombre}" : "Abono registrado",
-                Reference = string.IsNullOrWhiteSpace(abono.referencia_pago) ? "Sin referencia" : abono.referencia_pago!,
+                Description = string.Equals(abono.tipo_movimiento, "Reversion", StringComparison.OrdinalIgnoreCase)
+                    ? (method != null ? $"Reversion de abono - {method.nombre}" : "Reversion de abono")
+                    : (method != null ? $"Abono registrado - {method.nombre}" : "Abono registrado"),
+                Reference = string.IsNullOrWhiteSpace(abono.motivo_movimiento)
+                    ? (string.IsNullOrWhiteSpace(abono.referencia_pago) ? "Sin referencia" : abono.referencia_pago!)
+                    : abono.motivo_movimiento!,
                 UserLabel = string.IsNullOrWhiteSpace(abono.usuario_registro) ? "Sistema" : abono.usuario_registro!
             })
             .ToListAsync(cancellationToken);
@@ -137,11 +141,11 @@ public sealed class AccountStatementService
         movements.AddRange(abonos.Select(abono => new AccountStatementMovement
         {
             MovementDate = abono.Date,
-            Type = "Abono",
+            Type = abono.Amount < 0 ? "Reversion" : "Abono",
             Description = abono.Description,
             Reference = abono.Reference,
-            Debit = 0m,
-            Credit = abono.Amount,
+            Debit = abono.Amount < 0 ? Math.Abs(abono.Amount) : 0m,
+            Credit = abono.Amount < 0 ? 0m : abono.Amount,
             UserLabel = abono.UserLabel
         }));
 
@@ -175,7 +179,7 @@ public sealed class AccountStatementService
             OriginalInvoiceAmount = originalInvoiceAmount,
             CurrentTotalAmount = header.monto_total,
             Balance = header.saldo,
-            TotalPaid = Math.Max(0m, header.monto_total - header.saldo),
+            TotalPaid = Math.Max(0m, abonos.Sum(x => x.Amount)),
             TotalCredited = totalCredited,
             Movements = orderedMovements,
             Lines = invoiceLines
@@ -621,6 +625,7 @@ public sealed class AccountStatementMovement
     {
         "Factura" => "Factura",
         "Abono" => "Abono",
+        "Reversion" => "Reversion",
         "NotaCredito" => "Nota credito",
         _ => Type
     };

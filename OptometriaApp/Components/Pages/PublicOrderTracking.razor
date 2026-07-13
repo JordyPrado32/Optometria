@@ -1,0 +1,410 @@
+@page "/seguimiento-pedido"
+@layout AuthLayout
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Seguimiento de pedido</PageTitle>
+
+<style>
+    .tracking-shell {
+        min-height: 100vh;
+        padding: 2rem 1rem;
+        background:
+            radial-gradient(circle at top left, rgba(93,161,129,0.14), transparent 32%),
+            radial-gradient(circle at bottom right, rgba(236,204,197,0.55), transparent 30%),
+            linear-gradient(180deg, #f9f6ef 0%, #f4efe5 100%);
+    }
+
+    .tracking-wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    .tracking-card {
+        background: rgba(255,255,255,0.95);
+        border: 1px solid rgba(127,105,81,0.12);
+        border-radius: 1.4rem;
+        padding: 1.4rem;
+        box-shadow: 0 18px 44px rgba(127,105,81,0.08);
+    }
+
+    .tracking-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+
+    .tracking-kpi {
+        border-radius: 1rem;
+        padding: 1rem;
+        background: linear-gradient(180deg, rgba(244,240,228,0.95), rgba(255,255,255,1));
+        border: 1px solid rgba(127,105,81,0.08);
+    }
+
+    .tracking-kpi span {
+        display: block;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--color-taupe);
+    }
+
+    .tracking-kpi strong {
+        display: block;
+        margin-top: 0.4rem;
+        color: var(--color-ink);
+        font-size: 1.05rem;
+    }
+
+    .tracking-stage-row {
+        display: grid;
+        gap: 0.8rem;
+        margin-top: 1rem;
+    }
+
+    .tracking-stage {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 0.9rem 1rem;
+        border-radius: 1rem;
+        border: 1px solid rgba(127,105,81,0.12);
+        background: rgba(255,255,255,0.8);
+    }
+
+    .tracking-stage.is-active {
+        border-color: rgba(93,161,129,0.28);
+        background: rgba(93,161,129,0.08);
+    }
+
+    .tracking-stage.is-done {
+        border-color: rgba(93,161,129,0.2);
+        background: rgba(93,161,129,0.12);
+    }
+
+    .tracking-stage-bullet {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(127,105,81,0.12);
+        color: var(--color-taupe);
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+    .tracking-stage.is-active .tracking-stage-bullet,
+    .tracking-stage.is-done .tracking-stage-bullet {
+        background: var(--color-sage);
+        color: #fff;
+    }
+</style>
+
+<section class="tracking-shell">
+    <div class="tracking-wrap">
+        <section class="tracking-card">
+            <span class="eyebrow">Portal paciente</span>
+            <h1 style="margin:0.25rem 0 0.6rem;">Seguimiento de pedido de laboratorio</h1>
+            <p style="color:var(--color-taupe); margin:0;">
+                Consulta el estado de tu pedido ingresando el numero de orden y tu documento. No necesitas iniciar sesion.
+            </p>
+
+            <div class="tracking-grid" style="margin-top:1.25rem;">
+                <div>
+                    <label class="form-label">Numero de orden</label>
+                    <input class="form-control" @bind="orderNumber" maxlength="50" placeholder="Ej. RX-000123" />
+                </div>
+                <div>
+                    <label class="form-label">Documento del paciente</label>
+                    <input class="form-control" @bind="patientDocument" maxlength="20" placeholder="Cedula o documento" />
+                </div>
+                <div style="display:flex; align-items:end;">
+                    <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@isLoadingResult">Consultar estado</button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert" style="margin-top:1rem;">@errorMessage</div>
+            }
+        </section>
+
+        @if (isLoadingResult)
+        {
+            <section class="tracking-card">
+                <h2 style="margin:0;">Consultando pedido...</h2>
+            </section>
+        }
+        else if (result is not null)
+        {
+            <section class="tracking-card">
+                <div class="tracking-grid">
+                    <div class="tracking-kpi">
+                        <span>Estado actual</span>
+                        <strong>@result.CurrentStatus</strong>
+                    </div>
+                    <div class="tracking-kpi">
+                        <span>Paciente</span>
+                        <strong>@result.PatientName</strong>
+                    </div>
+                    <div class="tracking-kpi">
+                        <span>Laboratorio</span>
+                        <strong>@result.LaboratoryName</strong>
+                    </div>
+                    <div class="tracking-kpi">
+                        <span>Ultima actualizacion</span>
+                        <strong>@result.LastUpdatedLabel</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tracking-card">
+                <div class="management-card-header">
+                    <h2>Etapas del pedido</h2>
+                    <span>@result.OrderNumber</span>
+                </div>
+
+                <div class="tracking-stage-row">
+                    @foreach (var stage in result.Stages)
+                    {
+                        <article class="tracking-stage @(stage.IsCompleted ? "is-done" : stage.IsCurrent ? "is-active" : string.Empty)">
+                            <span class="tracking-stage-bullet">@(stage.IsCompleted ? "✓" : stage.Order.ToString())</span>
+                            <div>
+                                <strong style="display:block; color:var(--color-ink);">@stage.Title</strong>
+                                <span style="color:var(--color-taupe); font-size:0.9rem;">@stage.Description</span>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+
+            <section class="tracking-card">
+                <div class="management-card-header">
+                    <h2>Detalle logistica</h2>
+                    <span>@result.RxType</span>
+                </div>
+
+                <div class="tracking-grid" style="margin-top:1rem;">
+                    <div class="tracking-kpi">
+                        <span>Metodo de entrega</span>
+                        <strong>@result.DeliveryMethod</strong>
+                    </div>
+                    <div class="tracking-kpi">
+                        <span>Guia</span>
+                        <strong>@result.GuideNumber</strong>
+                    </div>
+                    <div class="tracking-kpi">
+                        <span>Repartidor</span>
+                        <strong>@result.CourierLabel</strong>
+                    </div>
+                    <div class="tracking-kpi">
+                        <span>Contacto laboratorio</span>
+                        <strong>@result.LaboratoryContactLabel</strong>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(result.DeliveryAddress))
+                {
+                    <div style="margin-top:1rem;">
+                        <strong style="color:var(--color-ink);">Direccion de entrega</strong>
+                        <p style="margin:0.35rem 0 0; color:var(--color-taupe);">@result.DeliveryAddress</p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(result.TrackingMapUrl))
+                {
+                    <div style="margin-top:1rem;">
+                        <a class="btn btn-outline-primary" href="@result.TrackingMapUrl" target="_blank" rel="noopener noreferrer">Ver seguimiento en mapa</a>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(result.Observations))
+                {
+                    <div style="margin-top:1rem;">
+                        <strong style="color:var(--color-ink);">Observaciones</strong>
+                        <p style="margin:0.35rem 0 0; color:var(--color-taupe);">@result.Observations</p>
+                    </div>
+                }
+            </section>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "orden")]
+    public string? PrefillOrderNumber { get; set; }
+
+    private string orderNumber = string.Empty;
+    private string patientDocument = string.Empty;
+    private string? errorMessage;
+    private bool isLoadingResult;
+    private TrackingPortalResult? result;
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(PrefillOrderNumber) && string.IsNullOrWhiteSpace(orderNumber))
+        {
+            orderNumber = PrefillOrderNumber.Trim();
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        errorMessage = null;
+        result = null;
+
+        var normalizedOrder = Normalize(orderNumber);
+        var normalizedDocument = Normalize(patientDocument);
+        if (string.IsNullOrWhiteSpace(normalizedOrder) || string.IsNullOrWhiteSpace(normalizedDocument))
+        {
+            errorMessage = "Ingresa el numero de orden y el documento del paciente.";
+            return;
+        }
+
+        isLoadingResult = true;
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var entity = await dbContext.tbl_orden_rxes
+                .AsNoTracking()
+                .Include(x => x.id_laboratorioNavigation)
+                .Include(x => x.id_consultaNavigation)
+                    .ThenInclude(x => x.id_pacienteNavigation)
+                .Include(x => x.tbl_envio_laboratorios)
+                .FirstOrDefaultAsync(x =>
+                    x.numero_orden != null &&
+                    x.numero_orden.ToLower() == normalizedOrder &&
+                    x.id_consultaNavigation.id_pacienteNavigation.cedula.ToLower() == normalizedDocument);
+
+            if (entity is null)
+            {
+                errorMessage = "No encontramos un pedido con esos datos. Verifica numero de orden y documento.";
+                return;
+            }
+
+            var shipment = entity.tbl_envio_laboratorios
+                .OrderByDescending(x => x.fecha_cambio_estado ?? x.fecha_envio)
+                .FirstOrDefault();
+            var patient = entity.id_consultaNavigation.id_pacienteNavigation;
+            var currentStatus = NormalizeStatus(shipment?.estado ?? entity.estado);
+            var lastUpdated = shipment?.fecha_cambio_estado
+                ?? shipment?.fecha_entregado
+                ?? shipment?.fecha_listo_entrega
+                ?? shipment?.fecha_envio
+                ?? entity.fecha_creacion;
+
+            result = new TrackingPortalResult
+            {
+                OrderNumber = entity.numero_orden ?? $"RX-{entity.id_orden_rx}",
+                PatientName = $"{patient.nombres} {patient.apellidos}".Trim(),
+                LaboratoryName = entity.id_laboratorioNavigation.nombre,
+                CurrentStatus = currentStatus,
+                LastUpdatedLabel = lastUpdated?.ToString("yyyy-MM-dd HH:mm") ?? "Sin actualizacion",
+                RxType = string.IsNullOrWhiteSpace(entity.tipo_rx) ? "Lente" : entity.tipo_rx!,
+                DeliveryMethod = string.IsNullOrWhiteSpace(shipment?.metodo_entrega) ? "Pendiente de definir" : shipment!.metodo_entrega!,
+                GuideNumber = string.IsNullOrWhiteSpace(shipment?.numero_guia_remision) ? "Sin guia" : shipment!.numero_guia_remision!,
+                CourierLabel = string.IsNullOrWhiteSpace(shipment?.repartidor_nombre) ? "Pendiente" : shipment!.repartidor_nombre!,
+                DeliveryAddress = shipment?.direccion_entrega,
+                TrackingMapUrl = shipment?.url_mapa_seguimiento,
+                Observations = shipment?.observaciones_logistica ?? entity.observaciones,
+                LaboratoryContactLabel = BuildLaboratoryContactLabel(entity.id_laboratorioNavigation),
+                Stages = BuildStages(currentStatus)
+            };
+        }
+        finally
+        {
+            isLoadingResult = false;
+        }
+    }
+
+    private static string Normalize(string? value) => (value ?? string.Empty).Trim().ToLowerInvariant();
+
+    private static string NormalizeStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Enviado a laboratorio";
+        }
+
+        if (value.Contains("entregado", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Entregado";
+        }
+
+        if (value.Contains("listo", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Listo para entrega";
+        }
+
+        return "Enviado a laboratorio";
+    }
+
+    private static string BuildLaboratoryContactLabel(tbl_laboratorio laboratory)
+    {
+        var parts = new[]
+        {
+            laboratory.persona_contacto,
+            laboratory.whatsapp,
+            laboratory.correo
+        }.Where(x => !string.IsNullOrWhiteSpace(x));
+
+        return parts.Any() ? string.Join(" | ", parts) : "Disponible en tienda";
+    }
+
+    private static List<TrackingStageRow> BuildStages(string currentStatus)
+    {
+        var stages = new[]
+        {
+            new TrackingStageRow(1, "Orden enviada", "La orden fue registrada y enviada al laboratorio."),
+            new TrackingStageRow(2, "Listo para entrega", "El producto ya esta listo para retiro o despacho."),
+            new TrackingStageRow(3, "Entregado", "El pedido fue entregado al paciente o receptor autorizado.")
+        };
+
+        var activeOrder = currentStatus switch
+        {
+            "Entregado" => 3,
+            "Listo para entrega" => 2,
+            _ => 1
+        };
+
+        return stages
+            .Select(stage => stage with
+            {
+                IsCompleted = stage.Order < activeOrder || currentStatus == "Entregado" && stage.Order == 3,
+                IsCurrent = stage.Order == activeOrder
+            })
+            .ToList();
+    }
+
+    private sealed class TrackingPortalResult
+    {
+        public string OrderNumber { get; set; } = string.Empty;
+        public string PatientName { get; set; } = string.Empty;
+        public string LaboratoryName { get; set; } = string.Empty;
+        public string CurrentStatus { get; set; } = string.Empty;
+        public string LastUpdatedLabel { get; set; } = string.Empty;
+        public string RxType { get; set; } = string.Empty;
+        public string DeliveryMethod { get; set; } = string.Empty;
+        public string GuideNumber { get; set; } = string.Empty;
+        public string CourierLabel { get; set; } = string.Empty;
+        public string LaboratoryContactLabel { get; set; } = string.Empty;
+        public string? DeliveryAddress { get; set; }
+        public string? TrackingMapUrl { get; set; }
+        public string? Observations { get; set; }
+        public List<TrackingStageRow> Stages { get; set; } = [];
+    }
+
+    private sealed record TrackingStageRow(int Order, string Title, string Description)
+    {
+        public bool IsCompleted { get; init; }
+        public bool IsCurrent { get; init; }
+    }
+}

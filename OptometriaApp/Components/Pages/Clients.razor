@@ -148,6 +148,9 @@ else
                                     </td>
                                     <td style="text-align: right; padding-right: 1.2rem;">
                                         <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => OpenClinicalHistoryAsync(item)">
+                                                <i class="bi bi-journal-medical" style="margin-right: 4px;"></i> Historia
+                                            </button>
                                             <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditClient(item)">
                                                 <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
                                             </button>
@@ -671,11 +674,12 @@ else
         clientEntity.id_usuario_actualizacion = isCreatingNewClient ? null : currentUserId;
 
         await dbContext.SaveChangesAsync();
+        var linkedPatient = await EnsureLinkedPatientAndHistoryAsync(dbContext, clientEntity);
 
         WriteAudit(
             dbContext,
             isCreatingNewClient ? "Crear cliente" : "Editar cliente",
-            $"ClienteId={clientEntity.cliente_id}; Identificacion={clientEntity.tipo_identificacion}-{clientEntity.numero_identificacion}; RazonSocial={clientEntity.razon_social}");
+            $"ClienteId={clientEntity.cliente_id}; Identificacion={clientEntity.tipo_identificacion}-{clientEntity.numero_identificacion}; RazonSocial={clientEntity.razon_social}; PacienteId={linkedPatient.id_paciente}");
 
         await dbContext.SaveChangesAsync();
 
@@ -831,6 +835,14 @@ else
             string.IsNullOrWhiteSpace(editor.NumeroIdentificacion))
         {
             errorMessage = "Completa los campos obligatorios del cliente.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(editor.CorreoElectronico) ||
+            string.IsNullOrWhiteSpace(editor.Direccion) ||
+            string.IsNullOrWhiteSpace(editor.Telefono))
+        {
+            errorMessage = "Correo electronico, direccion y telefono son obligatorios.";
             return false;
         }
 
@@ -1027,6 +1039,87 @@ else
         }
 
         return ex.Message;
+    }
+
+    private async Task<tbl_paciente> EnsureLinkedPatientAndHistoryAsync(OpticaDbContext dbContext, ClientEntity clientEntity)
+    {
+        var patient = await dbContext.tbl_pacientes
+            .FirstOrDefaultAsync(x => x.cedula == clientEntity.numero_identificacion);
+
+        var patientNames = !string.IsNullOrWhiteSpace(clientEntity.nombres)
+            ? clientEntity.nombres!.Trim()
+            : clientEntity.razon_social.Trim();
+        var patientLastNames = !string.IsNullOrWhiteSpace(clientEntity.apellidos)
+            ? clientEntity.apellidos!.Trim()
+            : (string.IsNullOrWhiteSpace(clientEntity.nombre_comercial) ? "Cliente" : clientEntity.nombre_comercial!.Trim());
+
+        if (patient is null)
+        {
+            patient = new tbl_paciente
+            {
+                codigo_paciente = $"PAC-{clientEntity.numero_identificacion}",
+                cedula = clientEntity.numero_identificacion,
+                nombres = patientNames,
+                apellidos = patientLastNames,
+                direccion = clientEntity.direccion,
+                telefono = clientEntity.telefono,
+                email = clientEntity.correo_electronico,
+                observaciones = $"Ficha creada automaticamente desde clientes #{clientEntity.cliente_id}.",
+                activo = clientEntity.estado,
+                fecha_registro = DateTime.Now,
+                id_usuario_registro = currentUserId
+            };
+            dbContext.tbl_pacientes.Add(patient);
+            await dbContext.SaveChangesAsync();
+        }
+        else
+        {
+            patient.nombres = patientNames;
+            patient.apellidos = patientLastNames;
+            patient.direccion = clientEntity.direccion;
+            patient.telefono = clientEntity.telefono;
+            patient.email = clientEntity.correo_electronico;
+            patient.activo = clientEntity.estado;
+            patient.id_usuario_registro ??= currentUserId;
+        }
+
+        var history = await dbContext.tbl_historia_clinica_optometrias
+            .FirstOrDefaultAsync(x => x.id_paciente == patient.id_paciente && x.activo == true);
+
+        if (history is null)
+        {
+            dbContext.tbl_historia_clinica_optometrias.Add(new tbl_historia_clinica_optometria
+            {
+                id_paciente = patient.id_paciente,
+                id_optometra_apertura = currentUserId,
+                fecha_apertura = DateTime.Now,
+                fecha_ultima_actualizacion = DateTime.Now,
+                numero_historia = string.IsNullOrWhiteSpace(patient.codigo_paciente) ? $"HC-{patient.id_paciente:D5}" : patient.codigo_paciente,
+                datos_apertura_json = "{}",
+                activo = true
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
+        return patient;
+    }
+
+    private async Task OpenClinicalHistoryAsync(ClientEntity item)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var patientId = await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .Where(x => x.cedula == item.numero_identificacion)
+            .Select(x => (int?)x.id_paciente)
+            .FirstOrDefaultAsync();
+
+        if (!patientId.HasValue)
+        {
+            ShowAlert("Este cliente aun no tiene ficha vinculada. Guarda el registro para crearla.", true);
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/doctor/historia-clinica?patientId={patientId.Value}");
     }
 
     private void WriteAudit(OpticaDbContext dbContext, string action, string detail)

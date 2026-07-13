@@ -139,7 +139,23 @@ else
                     </div>
                     <div><label class="form-label">Guia remision</label><input class="form-control" @bind="editor.NumeroGuiaRemision" /></div>
                     <div><label class="form-label">Estado</label><select class="form-select" @bind="editor.EstadoRecepcion">@foreach (var option in stateOptions){<option value="@option">@option</option>}</select></div>
+                    <div><label class="form-label">Clasificacion</label><select class="form-select" @bind="editor.ClasificacionRecepcion">@foreach (var option in classificationOptions){<option value="@option">@option</option>}</select></div>
                     <div class="patient-form-span"><label class="form-label">Observaciones</label><textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea></div>
+                </div>
+                <div class="management-card" style="margin-top:1rem; padding:1rem;">
+                    <div class="management-card-header"><h2>Tabla de verificacion</h2><span>Debe aprobarse antes de inventariar</span></div>
+                    <div class="management-form-grid" style="margin-top:1rem;">
+                        <div>
+                            <label class="form-label">Checklist aprobado</label>
+                            <div class="form-check form-switch" style="margin-top:0.45rem;">
+                                <input class="form-check-input" type="checkbox" @bind="editor.ChecklistAprobado" />
+                            </div>
+                        </div>
+                        <div class="patient-form-span">
+                            <label class="form-label">Notas de verificacion</label>
+                            <textarea class="form-control" rows="3" @bind="editor.ObservacionesChecklist"></textarea>
+                        </div>
+                    </div>
                 </div>
             </div>
             <footer class="custom-modal-footer"><button class="btn btn-primary" @onclick="SaveAsync">Guardar</button><button class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button></footer>
@@ -156,6 +172,7 @@ else
     private readonly List<tbl_recepcion_compra> recepciones = [];
     private readonly List<tbl_orden_compra> availableOrders = [];
     private readonly string[] stateOptions = ["Completa", "Parcial", "Observada"];
+    private readonly string[] classificationOptions = ["Perfecto estado", "Con fallas", "Obsoleto"];
     private Permissions permissions = new();
     private ReceptionEditor? editor;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError;
@@ -195,7 +212,7 @@ else
     {
         isCreating = true;
         orderSearchTerm = string.Empty;
-        editor = new ReceptionEditor { EstadoRecepcion = "Completa" };
+        editor = new ReceptionEditor { EstadoRecepcion = "Completa", ClasificacionRecepcion = "Perfecto estado" };
         showForm = true;
     }
 
@@ -203,7 +220,7 @@ else
     {
         isCreating = false;
         orderSearchTerm = item.id_orden_compraNavigation?.numero_orden ?? string.Empty;
-        editor = new ReceptionEditor { Id = item.id_recepcion, IdOrdenCompra = item.id_orden_compra, NumeroRecepcion = item.numero_recepcion, NumeroGuiaRemision = item.numero_guia_remision ?? string.Empty, EstadoRecepcion = item.estado_recepcion ?? "Completa", Observaciones = item.observaciones_recepcion ?? string.Empty };
+        editor = new ReceptionEditor { Id = item.id_recepcion, IdOrdenCompra = item.id_orden_compra, NumeroRecepcion = item.numero_recepcion, NumeroGuiaRemision = item.numero_guia_remision ?? string.Empty, EstadoRecepcion = item.estado_recepcion ?? "Completa", ClasificacionRecepcion = "Perfecto estado", Observaciones = item.observaciones_recepcion ?? string.Empty };
         showForm = true;
     }
 
@@ -212,6 +229,12 @@ else
         if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroRecepcion) || editor.IdOrdenCompra <= 0)
         {
             ShowAlert("Completa los datos obligatorios.", true);
+            return;
+        }
+
+        if (isCreating && !editor.ChecklistAprobado)
+        {
+            ShowAlert("Debes aprobar la tabla de verificacion antes de actualizar inventario.", true);
             return;
         }
 
@@ -235,7 +258,7 @@ else
         entity.numero_recepcion = editor.NumeroRecepcion.Trim();
         entity.numero_guia_remision = NullIfBlank(editor.NumeroGuiaRemision);
         entity.estado_recepcion = editor.EstadoRecepcion;
-        entity.observaciones_recepcion = NullIfBlank(editor.Observaciones);
+        entity.observaciones_recepcion = NullIfBlank($"{editor.Observaciones}\nChecklist: {(editor.ChecklistAprobado ? "Aprobado" : "Pendiente")}. Clasificacion: {editor.ClasificacionRecepcion}. {editor.ObservacionesChecklist}".Trim());
 
         if (isCreating)
         {
@@ -245,6 +268,15 @@ else
             foreach (var line in order.tbl_detalle_orden_compra.Where(x => (x.cantidad_pendiente ?? 0) > 0))
             {
                 var received = line.cantidad_pendiente ?? 0;
+                var approvedForInventory = string.Equals(editor.ClasificacionRecepcion, "Perfecto estado", StringComparison.OrdinalIgnoreCase);
+                if (!approvedForInventory)
+                {
+                    line.cantidad_rechazada = (line.cantidad_rechazada ?? 0) + received;
+                    line.estado_linea = editor.ClasificacionRecepcion;
+                    order.estado_orden = "Recibida Parcial";
+                    continue;
+                }
+
                 totalReceived += received;
                 line.cantidad_recibida = (line.cantidad_recibida ?? 0) + received;
                 line.cantidad_pendiente = 0;
@@ -321,7 +353,7 @@ else
 
             entity.cantidad_total_recibida = totalReceived;
             order.fecha_recepcion_real = DateTime.Now;
-            order.estado_orden = totalReceived > 0 ? "Recibida" : order.estado_orden;
+            order.estado_orden = totalReceived > 0 ? "Recibida" : "Recibida Parcial";
             WriteAudit(db, "Crear recepcion compra", $"RecepcionCompraId={entity.id_recepcion}; Numero={entity.numero_recepcion}; OrdenCompraId={order.id_orden_compra}");
         }
         else
@@ -438,5 +470,5 @@ else
     private void CloseForm() { showForm = false; editor = null; orderSearchTerm = string.Empty; }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }
-    private sealed class ReceptionEditor { public int Id { get; set; } public int IdOrdenCompra { get; set; } public string NumeroRecepcion { get; set; } = string.Empty; public string NumeroGuiaRemision { get; set; } = string.Empty; public string EstadoRecepcion { get; set; } = "Completa"; public string Observaciones { get; set; } = string.Empty; }
+    private sealed class ReceptionEditor { public int Id { get; set; } public int IdOrdenCompra { get; set; } public string NumeroRecepcion { get; set; } = string.Empty; public string NumeroGuiaRemision { get; set; } = string.Empty; public string EstadoRecepcion { get; set; } = "Completa"; public string ClasificacionRecepcion { get; set; } = "Perfecto estado"; public bool ChecklistAprobado { get; set; } public string ObservacionesChecklist { get; set; } = string.Empty; public string Observaciones { get; set; } = string.Empty; }
 }

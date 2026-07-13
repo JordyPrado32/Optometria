@@ -34,6 +34,9 @@ else
                 <button type="button" class="btn btn-excel" @onclick="ExportOrders">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
                 </button>
+                <button type="button" class="btn btn-outline-primary" @onclick="ExportOrdersPdf">
+                    <i class="bi bi-file-earmark-pdf-fill" style="margin-right: 6px;"></i> Exportar PDF
+                </button>
             </div>
         </div>
 
@@ -68,6 +71,16 @@ else
                             }
                         </select>
                     </div>
+                </div>
+            </div>
+            <div class="filters-row-2" style="margin-top: 0.75rem;">
+                <div>
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" value="@dateFromFilter" @onchange="OnDateFromChanged" />
+                </div>
+                <div>
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" value="@dateToFilter" @onchange="OnDateToChanged" />
                 </div>
             </div>
             <div class="management-actions" style="margin-top: 0.3rem;">
@@ -119,6 +132,9 @@ else
                                             <button class="btn btn-outline-primary" @onclick="() => ShowAudit(order)">
                                                 <i class="bi bi-clock-history"></i> Auditoria
                                             </button>
+                                            <a class="btn btn-outline-primary" href="@GetOrderXmlUrl(order.id_orden_compra)" target="_blank" rel="noopener noreferrer">
+                                                <i class="bi bi-filetype-xml"></i> XML
+                                            </a>
                                             @if (permissions.CanDelete)
                                             {
                                                 <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(order)">
@@ -318,7 +334,7 @@ else
     private tbl_orden_compra? selectedOrder;
     private bool isLoading = true, canView, isCreating, showForm, showAudit, showAlert, alertIsError;
     private int currentUserId, currentRoleId;
-    private string searchTerm = string.Empty, stateFilter = string.Empty, supplierFilter = string.Empty, alertMessage = string.Empty;
+    private string searchTerm = string.Empty, stateFilter = string.Empty, supplierFilter = string.Empty, alertMessage = string.Empty, dateFromFilter = string.Empty, dateToFilter = string.Empty;
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private List<tbl_orden_compra> FilteredOrders => orders.Where(MatchesFilters).ToList();
@@ -546,6 +562,8 @@ else
         searchTerm = string.Empty;
         stateFilter = string.Empty;
         supplierFilter = string.Empty;
+        dateFromFilter = string.Empty;
+        dateToFilter = string.Empty;
     }
 
     private void ExportOrders()
@@ -563,6 +581,14 @@ else
         {
             query.Add($"supplierId={Uri.EscapeDataString(supplierFilter)}");
         }
+        if (!string.IsNullOrWhiteSpace(dateFromFilter))
+        {
+            query.Add($"dateFrom={Uri.EscapeDataString(dateFromFilter)}");
+        }
+        if (!string.IsNullOrWhiteSpace(dateToFilter))
+        {
+            query.Add($"dateTo={Uri.EscapeDataString(dateToFilter)}");
+        }
 
         var exportUrl = query.Count == 0
             ? "/exports/purchase-orders.csv"
@@ -571,9 +597,24 @@ else
         NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
 
+    private void ExportOrdersPdf()
+    {
+        NavigationManager.NavigateTo("/exports/purchase-orders.pdf", forceLoad: true);
+    }
+
     private bool MatchesFilters(tbl_orden_compra order)
     {
         if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(order.estado_orden, stateFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (DateOnly.TryParse(dateFromFilter, out var fromDate) && (!order.fecha_orden.HasValue || order.fecha_orden.Value.Date < fromDate.ToDateTime(TimeOnly.MinValue)))
+        {
+            return false;
+        }
+
+        if (DateOnly.TryParse(dateToFilter, out var toDate) && (!order.fecha_orden.HasValue || order.fecha_orden.Value.Date > toDate.ToDateTime(TimeOnly.MaxValue)))
         {
             return false;
         }
@@ -607,6 +648,9 @@ else
     private void CloseForm() { showForm = false; editor = null; }
     private void ShowAlert(string message, bool isError) { alertMessage = message; alertIsError = isError; showAlert = true; }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private void OnDateFromChanged(ChangeEventArgs args) => dateFromFilter = args.Value?.ToString() ?? string.Empty;
+    private void OnDateToChanged(ChangeEventArgs args) => dateToFilter = args.Value?.ToString() ?? string.Empty;
+    private static string GetOrderXmlUrl(int orderId) => $"/exports/purchase-orders/{orderId}.xml";
 
     private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }
     private sealed class PurchaseOrderEditor

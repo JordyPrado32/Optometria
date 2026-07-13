@@ -1,0 +1,242 @@
+@page "/tienda-online"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Tienda online</PageTitle>
+
+<style>
+    .store-grid { display:grid; gap:1.25rem; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); }
+    .store-card { border:1px solid rgba(127,105,81,0.12); border-radius:1.2rem; padding:1rem; background:linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,240,228,0.56)); box-shadow:0 12px 28px rgba(127,105,81,0.06); }
+    .store-card h3 { margin:0; font-size:1.1rem; color:var(--color-ink); }
+    .store-card p { margin:0.5rem 0 0; color:var(--color-taupe); font-size:0.85rem; min-height:2.8rem; }
+    .store-meta { display:grid; gap:0.5rem; margin-top:1rem; }
+    .store-pill { display:inline-flex; align-items:center; padding:0.28rem 0.65rem; border-radius:999px; font-size:0.75rem; font-weight:700; }
+    .store-pill.stock-ok { background:rgba(93,161,129,0.14); color:#2e7d32; }
+    .store-pill.stock-low { background:rgba(254,188,100,0.18); color:#c77800; }
+    .store-pill.stock-out { background:rgba(198,40,40,0.12); color:#c62828; }
+    .store-price { font-size:1.45rem; color:var(--color-ink); font-weight:800; }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando tienda online...</h1>
+        </div>
+    </section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <span class="eyebrow">Restringido</span>
+            <h1>Tienda online</h1>
+            <p>Tu rol no tiene permiso para ver este modulo.</p>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">E-commerce</span>
+                <h1>Tienda online</h1>
+                <p>Catalogo de marcos, lentes y accesorios listos para vitrina digital, con filtros rapidos y estado de stock para operacion comercial.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>@FilteredProducts.Count productos visibles</span>
+            </div>
+
+            <div class="management-form-grid" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">Buscar</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, nombre o categoria" />
+                </div>
+                <div>
+                    <label class="form-label">Categoria</label>
+                    <select class="form-select" @bind="categoryFilter">
+                        <option value="">Todas</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Stock</label>
+                    <select class="form-select" @bind="stockFilter">
+                        <option value="Todos">Todos</option>
+                        <option value="Disponible">Disponible</option>
+                        <option value="Bajo">Stock bajo</option>
+                        <option value="Agotado">Agotado</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section class="store-grid" style="margin-top: 1.5rem;">
+            @if (FilteredProducts.Count == 0)
+            {
+                <div class="management-card">
+                    <p style="margin:0; color:var(--color-taupe);">No hay productos que coincidan con los filtros actuales.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var item in FilteredProducts)
+                {
+                    <article class="store-card">
+                        <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+                            <div>
+                                <h3>@item.Name</h3>
+                                <div style="font-size:0.78rem; color:var(--color-taupe);">@item.Code</div>
+                            </div>
+                            <span class="store-pill @item.StockClass">@item.StockLabel</span>
+                        </div>
+                        <p>@item.Description</p>
+                        <div class="store-meta">
+                            <div><strong>Categoria:</strong> @item.Category</div>
+                            <div><strong>Stock:</strong> @item.Stock</div>
+                            <div><strong>IVA:</strong> @item.TaxLabel</div>
+                            <div class="store-price">@item.Price.ToString("0.00")</div>
+                        </div>
+                    </article>
+                }
+            }
+        </section>
+    </section>
+}
+
+@code {
+    private readonly List<StoreProductRow> products = [];
+    private readonly List<string> categories = [];
+    private bool isLoading = true;
+    private bool canViewModule;
+    private string? errorMessage;
+    private int currentRoleId;
+    private int currentUserId;
+    private string searchTerm = string.Empty;
+    private string categoryFilter = string.Empty;
+    private string stockFilter = "Todos";
+
+    private List<StoreProductRow> FilteredProducts => products
+        .Where(x => string.IsNullOrWhiteSpace(searchTerm)
+            || x.SearchBlob.Contains(searchTerm.Trim(), StringComparison.OrdinalIgnoreCase))
+        .Where(x => string.IsNullOrWhiteSpace(categoryFilter)
+            || string.Equals(x.Category, categoryFilter, StringComparison.OrdinalIgnoreCase))
+        .Where(x => stockFilter switch
+        {
+            "Disponible" => x.Stock > 5,
+            "Bajo" => x.Stock > 0 && x.Stock <= 5,
+            "Agotado" => x.Stock <= 0,
+            _ => true
+        })
+        .OrderBy(x => x.Name)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId) ? parsedUserId : 0;
+            currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var parsedRoleId) ? parsedRoleId : 0;
+
+            canViewModule = currentRoleId == 1 || await dbContext.tbl_rol_menu_permisos
+                .AsNoTracking()
+                .Where(x => x.id_rol == currentRoleId && x.puede_ver)
+                .Join(
+                    dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/tienda-online"),
+                    permission => permission.id_menu,
+                    menu => menu.id_menu,
+                    (_, _) => true)
+                .AnyAsync();
+
+            if (!canViewModule)
+            {
+                return;
+            }
+
+            var rows = await (
+                from product in dbContext.tbl_productos.AsNoTracking()
+                join category in dbContext.tbl_categoria_productos.AsNoTracking() on product.id_categoria equals category.id_categoria into categoryJoin
+                from category in categoryJoin.DefaultIfEmpty()
+                where product.activo != false
+                select new
+                {
+                    product.codigo_producto,
+                    product.nombre_producto,
+                    product.descripcion,
+                    product.precio_venta,
+                    product.stock_actual,
+                    product.tiene_iva,
+                    product.porcentaje_iva,
+                    CategoryName = category != null ? category.nombre : null
+                })
+                .ToListAsync();
+
+            products.Clear();
+            products.AddRange(rows.Select(x => new StoreProductRow
+            {
+                Code = x.codigo_producto ?? "SIN-CODIGO",
+                Name = x.nombre_producto ?? "Producto",
+                Description = string.IsNullOrWhiteSpace(x.descripcion) ? "Sin descripcion comercial cargada." : x.descripcion!,
+                Category = string.IsNullOrWhiteSpace(x.CategoryName) ? "Sin categoria" : x.CategoryName!,
+                Price = x.precio_venta,
+                Stock = x.stock_actual ?? 0,
+                TaxLabel = (x.tiene_iva ?? false) ? $"Si, {(x.porcentaje_iva ?? 0m):0.##}%" : "No",
+                SearchBlob = $"{x.codigo_producto} {x.nombre_producto} {x.descripcion} {x.CategoryName}"
+            }));
+
+            categories.Clear();
+            categories.AddRange(products.Select(x => x.Category).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"No se pudo cargar la tienda online: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private sealed class StoreProductRow
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public int Stock { get; set; }
+        public string TaxLabel { get; set; } = "No";
+        public string SearchBlob { get; set; } = string.Empty;
+        public string StockLabel => Stock <= 0 ? "Agotado" : Stock <= 5 ? "Stock bajo" : "Disponible";
+        public string StockClass => Stock <= 0 ? "stock-out" : Stock <= 5 ? "stock-low" : "stock-ok";
+    }
+}

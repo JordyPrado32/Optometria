@@ -1,0 +1,205 @@
+@page "/configuracion-optica"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Configuracion de la optica</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando configuracion...</h1></div></section>
+}
+else if (!isAdmin)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Solo el administrador puede personalizar esta configuracion central.</p></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Personalizacion</span>
+                <h1>Configuracion central de la optica</h1>
+                <p>Administra imagenes, datos institucionales, carpeta RX y plantillas operativas sin tocar codigo.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Identidad y operacion</h2>
+                <span>Datos globales</span>
+            </div>
+
+            <div class="management-form-grid" style="margin-top: 1rem;">
+                <div><label class="form-label">Nombre comercial</label><input class="form-control" @bind="editor.NombreComercial" /></div>
+                <div><label class="form-label">RUC</label><input class="form-control" @bind="editor.Ruc" /></div>
+                <div><label class="form-label">Telefono</label><input class="form-control" @bind="editor.Telefono" /></div>
+                <div><label class="form-label">Prefijo WhatsApp</label><input class="form-control" @bind="editor.PrefijoPais" placeholder="593" /></div>
+                <div class="clinical-span-2"><label class="form-label">Direccion</label><input class="form-control" @bind="editor.Direccion" /></div>
+                <div><label class="form-label">Ruta logo</label><input class="form-control" @bind="editor.RutaLogo" placeholder="/images/logo.png" /></div>
+                <div><label class="form-label">Ruta fondo</label><input class="form-control" @bind="editor.RutaFondo" placeholder="/images/fondo.jpg" /></div>
+                <div class="clinical-span-2"><label class="form-label">Carpeta RX</label><input class="form-control" @bind="editor.CarpetaRx" placeholder="C:\\RX\\Pendientes" /></div>
+            </div>
+
+            <div class="workspace-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick="OpenRxFolderAsync">Abrir carpeta RX</button>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Plantillas de mensajes</h2>
+                <span>WhatsApp y email</span>
+            </div>
+
+            <div class="management-form-grid" style="margin-top: 1rem;">
+                <div class="clinical-span-2">
+                    <label class="form-label">WhatsApp laboratorio</label>
+                    <textarea class="form-control" rows="5" @bind="editor.WhatsappLaboratorioTemplate"></textarea>
+                    <small class="text-muted">Variables: `{{order_number}}`, `{{patient_name}}`, `{{rx_type}}`, `{{laboratory_name}}`, `{{observations}}`.</small>
+                </div>
+                <div class="clinical-span-2">
+                    <label class="form-label">Email recordatorio paciente</label>
+                    <textarea class="form-control" rows="8" @bind="editor.EmailPacienteTemplate"></textarea>
+                    <small class="text-muted">Variables: `{{patient_name}}`, `{{doctor_name}}`, `{{appointment_date}}`, `{{appointment_time}}`, `{{appointment_type}}`, `{{status_label}}`, `{{reminder_window}}`.</small>
+                </div>
+            </div>
+        </section>
+
+        <div class="workspace-actions" style="margin-top: 1.5rem;">
+            <button type="button" class="btn btn-primary" @onclick="SaveAsync">Guardar configuracion</button>
+        </div>
+    </section>
+}
+
+@code {
+    private bool isLoading = true;
+    private bool isAdmin;
+    private string? statusMessage;
+    private string? errorMessage;
+    private SettingsEditor editor = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isAdmin = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var roleId) && roleId == 1;
+        if (!isAdmin)
+        {
+            isLoading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var settings = await OpticaCustomizationService.GetOrCreateSettingsAsync(dbContext);
+        var whatsappTemplate = await OpticaCustomizationService.GetOrCreateTemplateAsync(
+            dbContext,
+            "WhatsApp",
+            OpticaCustomizationService.LabWhatsappTemplateType,
+            OpticaCustomizationService.DefaultLabWhatsappTemplate);
+        var emailTemplate = await OpticaCustomizationService.GetOrCreateTemplateAsync(
+            dbContext,
+            "Email",
+            OpticaCustomizationService.PatientReminderEmailTemplateType,
+            OpticaCustomizationService.DefaultPatientReminderEmailTemplate);
+
+        editor = new SettingsEditor
+        {
+            Id = settings.id_configuracion,
+            NombreComercial = settings.nombre_comercial ?? string.Empty,
+            Ruc = settings.ruc ?? string.Empty,
+            Direccion = settings.direccion ?? string.Empty,
+            Telefono = settings.telefono ?? string.Empty,
+            PrefijoPais = settings.prefijo_pais ?? "593",
+            CarpetaRx = settings.carpeta_rx ?? string.Empty,
+            RutaLogo = settings.ruta_logo ?? string.Empty,
+            RutaFondo = settings.ruta_fondo ?? string.Empty,
+            WhatsappLaboratorioTemplate = whatsappTemplate.contenido ?? OpticaCustomizationService.DefaultLabWhatsappTemplate,
+            EmailPacienteTemplate = emailTemplate.contenido ?? OpticaCustomizationService.DefaultPatientReminderEmailTemplate
+        };
+
+        isLoading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var settings = await OpticaCustomizationService.GetOrCreateSettingsAsync(dbContext);
+        settings.nombre_comercial = NormalizeOptional(editor.NombreComercial);
+        settings.ruc = NormalizeOptional(editor.Ruc);
+        settings.direccion = NormalizeOptional(editor.Direccion);
+        settings.telefono = NormalizeOptional(editor.Telefono);
+        settings.prefijo_pais = NormalizeOptional(editor.PrefijoPais);
+        settings.carpeta_rx = NormalizeOptional(editor.CarpetaRx);
+        settings.ruta_logo = NormalizeOptional(editor.RutaLogo);
+        settings.ruta_fondo = NormalizeOptional(editor.RutaFondo);
+
+        var whatsappTemplate = await OpticaCustomizationService.GetOrCreateTemplateAsync(
+            dbContext,
+            "WhatsApp",
+            OpticaCustomizationService.LabWhatsappTemplateType,
+            OpticaCustomizationService.DefaultLabWhatsappTemplate);
+        whatsappTemplate.contenido = string.IsNullOrWhiteSpace(editor.WhatsappLaboratorioTemplate)
+            ? OpticaCustomizationService.DefaultLabWhatsappTemplate
+            : editor.WhatsappLaboratorioTemplate.Trim();
+
+        var emailTemplate = await OpticaCustomizationService.GetOrCreateTemplateAsync(
+            dbContext,
+            "Email",
+            OpticaCustomizationService.PatientReminderEmailTemplateType,
+            OpticaCustomizationService.DefaultPatientReminderEmailTemplate);
+        emailTemplate.contenido = string.IsNullOrWhiteSpace(editor.EmailPacienteTemplate)
+            ? OpticaCustomizationService.DefaultPatientReminderEmailTemplate
+            : editor.EmailPacienteTemplate.Trim();
+
+        await dbContext.SaveChangesAsync();
+        statusMessage = "La configuracion central se guardo correctamente.";
+    }
+
+    private async Task OpenRxFolderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editor.CarpetaRx))
+        {
+            errorMessage = "Configura primero la carpeta RX.";
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("optometriaSession.openRxFolder", editor.CarpetaRx);
+    }
+
+    private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class SettingsEditor
+    {
+        public int Id { get; set; }
+        public string NombreComercial { get; set; } = string.Empty;
+        public string Ruc { get; set; } = string.Empty;
+        public string Direccion { get; set; } = string.Empty;
+        public string Telefono { get; set; } = string.Empty;
+        public string PrefijoPais { get; set; } = "593";
+        public string CarpetaRx { get; set; } = string.Empty;
+        public string RutaLogo { get; set; } = string.Empty;
+        public string RutaFondo { get; set; } = string.Empty;
+        public string WhatsappLaboratorioTemplate { get; set; } = string.Empty;
+        public string EmailPacienteTemplate { get; set; } = string.Empty;
+    }
+}

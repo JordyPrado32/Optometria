@@ -10,7 +10,9 @@
 @using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject BillingDraftService BillingDraftService
+@inject ElectronicBillingDocumentService ElectronicBillingDocumentService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
 <PageTitle>Mis notas de credito</PageTitle>
@@ -264,12 +266,12 @@ else
                         <div class="credit-card credit-kpi">
                             <div class="credit-label">Tipo</div>
                             <strong>@selectedCreditNoteDetail.NoteType</strong>
-                            <span>@selectedCreditNoteDetail.State</span>
+                            <span>@selectedCreditNoteDetail.State | vence @selectedCreditNoteDetail.ExpirationDateLabel</span>
                         </div>
                         <div class="credit-card credit-kpi">
                             <div class="credit-label">Total</div>
                             <strong>@selectedCreditNoteDetail.TotalAmount.ToString("0.00")</strong>
-                            <span>Subtotal @selectedCreditNoteDetail.SubtotalAmount.ToString("0.00") | Impuesto @selectedCreditNoteDetail.TaxAmount.ToString("0.00")</span>
+                            <span>Disponible @selectedCreditNoteDetail.AvailableBalance.ToString("0.00") | Subtotal @selectedCreditNoteDetail.SubtotalAmount.ToString("0.00") | Impuesto @selectedCreditNoteDetail.TaxAmount.ToString("0.00")</span>
                         </div>
                     </div>
 
@@ -339,6 +341,7 @@ else
                                 <th>Fecha</th>
                                 <th>Tipo</th>
                                 <th>Total</th>
+                                <th>Saldo</th>
                                 <th>Estado</th>
                                 <th style="text-align:right;">Accion</th>
                             </tr>
@@ -353,6 +356,7 @@ else
                                     <td>@item.IssueDateLabel</td>
                                     <td>@item.NoteType</td>
                                     <td>@item.Amount.ToString("0.00")</td>
+                                    <td>@item.AvailableBalance.ToString("0.00")</td>
                                     <td>@item.State</td>
                                     <td style="text-align:right;">
                                         <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@BuildCreditNoteDetailUrl(item.CreditNoteId, item.ComprobanteId)">Detalle</a>
@@ -620,14 +624,15 @@ else
                             <div class="table-responsive">
                                 <table class="table table-hover" style="margin-bottom: 0;">
                                     <thead>
-                                        <tr>
-                                            <th>Nota</th>
-                                            <th>Fecha</th>
-                                            <th>Tipo</th>
-                                            <th>Monto</th>
-                                            <th>Estado</th>
-                                            <th>Motivo</th>
-                                            <th style="text-align:right;">Accion</th>
+                                    <tr>
+                                        <th>Nota</th>
+                                        <th>Fecha</th>
+                                        <th>Tipo</th>
+                                        <th>Monto</th>
+                                        <th>Saldo</th>
+                                        <th>Estado</th>
+                                        <th>Motivo</th>
+                                        <th style="text-align:right;">Accion</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -638,6 +643,7 @@ else
                                                 <td>@note.IssueDateLabel</td>
                                                 <td>@note.NoteType</td>
                                                 <td>@note.Amount.ToString("0.00")</td>
+                                                <td>@note.AvailableBalance.ToString("0.00")</td>
                                                 <td>@note.State</td>
                                                 <td>@note.Reason</td>
                                                 <td style="text-align:right;">
@@ -783,7 +789,9 @@ else
                 IssueDate = note.fecha_emision,
                 NoteType = string.IsNullOrWhiteSpace(note.tipo_nota) ? "Total" : note.tipo_nota,
                 Amount = note.monto_total,
-                State = note.estado
+                AvailableBalance = note.saldo_disponible ?? note.monto_total,
+                ExpirationDate = note.fecha_vencimiento,
+                State = ResolveCreditNoteStatus(note.estado, note.saldo_disponible, note.fecha_vencimiento)
             })
             .Take(20)
             .ToListAsync();
@@ -864,7 +872,7 @@ else
 
         var noteSums = await dbContext.tbl_nota_credito
             .AsNoTracking()
-            .Where(x => x.id_comprobante_relacionado != null && x.estado == "Emitida")
+            .Where(x => x.id_comprobante_relacionado != null && x.estado != "Anulada")
             .GroupBy(x => x.id_comprobante_relacionado!.Value)
             .Select(x => new { ComprobanteId = x.Key, Total = x.Sum(y => y.monto_total) })
             .ToDictionaryAsync(x => x.ComprobanteId, x => x.Total);
@@ -937,7 +945,7 @@ else
         var lineCredits = await (
             from detail in dbContext.tbl_detalle_nota_credito.AsNoTracking()
             join note in dbContext.tbl_nota_credito.AsNoTracking() on detail.id_nota_credito equals note.id_nota_credito
-            where note.id_comprobante_relacionado == comprobanteId && note.estado == "Emitida"
+            where note.id_comprobante_relacionado == comprobanteId && note.estado != "Anulada"
             group detail by detail.id_detalle_venta into creditGroup
             select new
             {
@@ -1003,7 +1011,9 @@ else
                 IssueDate = x.fecha_emision,
                 NoteType = string.IsNullOrWhiteSpace(x.tipo_nota) ? "Total" : x.tipo_nota,
                 Amount = x.monto_total,
-                State = x.estado,
+                AvailableBalance = x.saldo_disponible ?? x.monto_total,
+                ExpirationDate = x.fecha_vencimiento,
+                State = ResolveCreditNoteStatus(x.estado, x.saldo_disponible, x.fecha_vencimiento),
                 Reason = string.IsNullOrWhiteSpace(x.motivo) ? "Sin motivo" : x.motivo!,
                 UserLabel = string.IsNullOrWhiteSpace(x.usuario_creacion) ? "Sistema" : x.usuario_creacion!
             })
@@ -1034,6 +1044,8 @@ else
                 note.tipo_nota,
                 note.estado,
                 note.monto_total,
+                note.saldo_disponible,
+                note.fecha_vencimiento,
                 note.motivo,
                 ClientName = string.IsNullOrWhiteSpace(client.razon_social) ? $"{client.nombres} {client.apellidos}".Trim() : client.razon_social,
                 PatientName = patient != null ? $"{patient.nombres} {patient.apellidos}".Trim() : "Sin dato",
@@ -1069,7 +1081,7 @@ else
 
         var totalCredited = await dbContext.tbl_nota_credito
             .AsNoTracking()
-            .Where(x => x.id_comprobante_relacionado == header.id_comprobante && x.estado == "Emitida")
+            .Where(x => x.id_comprobante_relacionado == header.id_comprobante && x.estado != "Anulada")
             .SumAsync(x => (decimal?)x.monto_total) ?? 0m;
 
         var subtotalAmount = detailRows.Sum(x => x.Subtotal);
@@ -1085,9 +1097,11 @@ else
             PatientName = string.IsNullOrWhiteSpace(header.PatientName) ? "Sin dato" : header.PatientName,
             IssueDate = header.fecha_emision,
             NoteType = string.IsNullOrWhiteSpace(header.tipo_nota) ? "Total" : header.tipo_nota!,
-            State = header.estado,
+            State = ResolveCreditNoteStatus(header.estado, header.saldo_disponible, header.fecha_vencimiento),
             Reason = string.IsNullOrWhiteSpace(header.motivo) ? "Sin motivo" : header.motivo!,
             TotalAmount = header.monto_total,
+            AvailableBalance = header.saldo_disponible ?? header.monto_total,
+            ExpirationDate = header.fecha_vencimiento,
             SubtotalAmount = subtotalAmount,
             TaxAmount = taxAmount,
             InvoiceState = ResolveInvoiceCreditState(header.CurrentInvoiceTotal, totalCredited),
@@ -1218,6 +1232,12 @@ else
             return;
         }
 
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Se emitira una nota de credito por {draftSummary.Total:0.00}. Esta accion ajustara la factura y devolvera stock cuando corresponda. Deseas continuar?");
+        if (!confirmed)
+        {
+            return;
+        }
+
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var invoice = await (
             from comprobante in dbContext.tbl_comprobantes
@@ -1319,7 +1339,7 @@ else
         invoice.sale.porcentaje_impuesto = updatedSubtotal > 0m
             ? Math.Round((updatedTax * 100m) / updatedSubtotal, 2, MidpointRounding.AwayFromZero)
             : 0m;
-        invoice.sale.estado = fullyCredited ? "Anulada" : "Pendiente";
+        invoice.sale.estado = ResolveSaleCollectionStatus(updatedBalance);
         invoice.comprobante.estado_comprobante = fullyCredited ? "Anulado" : (string.IsNullOrWhiteSpace(invoice.comprobante.estado_comprobante) ? "Emitido" : invoice.comprobante.estado_comprobante);
 
         if (invoice.account is not null)
@@ -1336,9 +1356,11 @@ else
             numero_nota = noteNumber,
             fecha_emision = DateTime.Now,
             monto_total = totalToCredit,
+            saldo_disponible = totalToCredit,
+            fecha_vencimiento = DateTime.Now.AddDays(365),
             tipo_nota = creditNoteType,
             motivo = NormalizeOptional(creditNoteReason),
-            estado = "Emitida",
+            estado = "Disponible",
             usuario_creacion = GetCurrentActorLabel(),
             fecha_creacion = DateTime.Now
         };
@@ -1379,11 +1401,22 @@ else
             });
         }
 
+        await ReintegrateInventoryForCreditNoteAsync(dbContext, note, invoice.comprobante.numero_comprobante, allocations);
+        await dbContext.SaveChangesAsync();
+
+        var electronicDocumentResult = await ElectronicBillingDocumentService.GenerateCreditNoteDocumentAsync(dbContext, note);
+        if (electronicDocumentResult.StatusCode == "ERROR_XML")
+        {
+            errorMessage = electronicDocumentResult.Message;
+            await transaction.RollbackAsync();
+            return;
+        }
+
         WriteAudit(
             dbContext,
             "NotasCredito",
             "Emitir nota de credito",
-            $"ComprobanteId={invoice.comprobante.id_comprobante}; VentaId={invoice.sale.id_venta}; CuentaId={invoice.account?.id_cta_cobrar}; Factura={invoice.comprobante.numero_comprobante}; Nota={note.numero_nota}; Tipo={note.tipo_nota}; Monto={note.monto_total:0.00}");
+            $"ComprobanteId={invoice.comprobante.id_comprobante}; VentaId={invoice.sale.id_venta}; CuentaId={invoice.account?.id_cta_cobrar}; Factura={invoice.comprobante.numero_comprobante}; Nota={note.numero_nota}; Tipo={note.tipo_nota}; Monto={note.monto_total:0.00}; SaldoDisponible={note.saldo_disponible:0.00}");
 
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
@@ -1393,6 +1426,11 @@ else
         statusMessage = fullyCredited
             ? $"Nota de credito {note.numero_nota} emitida correctamente. La factura quedo acreditada en su totalidad y ya no admite nuevas notas."
             : $"Nota de credito {note.numero_nota} emitida correctamente.";
+
+        if (!string.IsNullOrWhiteSpace(electronicDocumentResult.Message))
+        {
+            statusMessage = $"{statusMessage} {electronicDocumentResult.Message}";
+        }
         NavigationManager.NavigateTo(BuildCreditNoteDetailUrl(note.id_nota_credito, invoice.comprobante.id_comprobante), forceLoad: false);
     }
 
@@ -1606,6 +1644,101 @@ else
         return totalCredited > 0m ? "Parcialmente acreditada" : "Vigente";
     }
 
+    private static string ResolveCreditNoteStatus(string? state, decimal? availableBalance, DateTime? expirationDate)
+    {
+        if (expirationDate.HasValue && expirationDate.Value.Date < DateTime.Today && (availableBalance ?? 0m) > 0m)
+        {
+            return "Vencida";
+        }
+
+        if ((availableBalance ?? 0m) <= 0.009m)
+        {
+            return "Aplicada";
+        }
+
+        return string.IsNullOrWhiteSpace(state) || string.Equals(state, "Emitida", StringComparison.OrdinalIgnoreCase)
+            ? "Disponible"
+            : state!;
+    }
+
+    private async Task ReintegrateInventoryForCreditNoteAsync(OpticaDbContext dbContext, tbl_nota_credito note, string? invoiceNumber, List<CreditAllocation> allocations)
+    {
+        var detailIds = allocations.Select(x => x.DetailSaleId).Distinct().ToList();
+        if (detailIds.Count == 0)
+        {
+            return;
+        }
+
+        var saleDetails = await dbContext.tbl_detalle_venta
+            .Where(x => detailIds.Contains(x.id_detalle_venta))
+            .ToDictionaryAsync(x => x.id_detalle_venta);
+
+        foreach (var allocation in allocations)
+        {
+            if (!saleDetails.TryGetValue(allocation.DetailSaleId, out var saleDetail))
+            {
+                continue;
+            }
+
+            var quantityToRestore = allocation.QuantityToCredit ?? 0;
+            if (quantityToRestore <= 0)
+            {
+                continue;
+            }
+
+            var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == saleDetail.id_producto);
+            if (product is null)
+            {
+                continue;
+            }
+
+            var previousStock = product.stock_actual ?? 0;
+            var newStock = previousStock + quantityToRestore;
+            product.stock_actual = newStock;
+            product.fecha_ultima_venta = DateTime.Now;
+
+            dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+            {
+                id_producto = product.id_producto,
+                id_usuario = currentUserId > 0 ? currentUserId : 1,
+                tipo_movimiento = "Devolucion venta",
+                cantidad = quantityToRestore,
+                stock_anterior = previousStock,
+                stock_resultante = newStock,
+                fecha_movimiento = DateTime.Now,
+                observaciones = $"Nota de credito {note.numero_nota} por devolucion sobre factura {invoiceNumber ?? note.id_comprobante_relacionado?.ToString() ?? "N/D"}",
+                id_referencia_documento = note.id_nota_credito,
+                tipo_documento_referencia = "NotaCredito",
+                costo_unitario = saleDetail.cantidad > 0 ? Math.Round(allocation.Subtotal / saleDetail.cantidad, 2, MidpointRounding.AwayFromZero) : 0m,
+                costo_total_movimiento = allocation.Subtotal,
+                metodo_valuacion = "Promedio",
+                id_usuario_autoriza = currentUserId > 0 ? currentUserId : null,
+                comprobante_numero = note.numero_nota
+            });
+
+            dbContext.tbl_kardex.Add(new tbl_kardex
+            {
+                id_producto = product.id_producto,
+                fecha_movimiento = DateTime.Now,
+                tipo_movimiento = "Entrada por devolucion",
+                id_referencia = note.id_nota_credito,
+                tipo_referencia = "NotaCredito",
+                comprobante_numero = note.numero_nota,
+                cantidad_movimiento = quantityToRestore,
+                costo_unitario = saleDetail.cantidad > 0 ? Math.Round(allocation.Subtotal / saleDetail.cantidad, 2, MidpointRounding.AwayFromZero) : 0m,
+                costo_total = allocation.Subtotal,
+                stock_anterior = previousStock,
+                stock_nuevo = newStock,
+                metodo_valuacion = "Promedio",
+                id_usuario_movimiento = currentUserId > 0 ? currentUserId : null,
+                descripcion_movimiento = $"Reintegro por nota de credito {note.numero_nota}",
+                estado_kardex = "Registrado",
+                observaciones = NormalizeOptional(note.motivo),
+                fecha_creacion = DateTime.Now
+            });
+        }
+    }
+
     private static string GetDisplayClientName(string? businessName, string? firstName, string? lastName)
     {
         if (!string.IsNullOrWhiteSpace(businessName))
@@ -1626,6 +1759,8 @@ else
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
+    private static string ResolveSaleCollectionStatus(decimal balance) => balance <= 0m ? "Completada" : "Pendiente";
 
     private sealed class ModulePermissions
     {
@@ -1698,10 +1833,13 @@ else
         public DateTime IssueDate { get; set; }
         public string NoteType { get; set; } = "Total";
         public decimal Amount { get; set; }
+        public decimal AvailableBalance { get; set; }
+        public DateTime? ExpirationDate { get; set; }
         public string State { get; set; } = "Emitida";
         public string Reason { get; set; } = "Sin motivo";
         public string UserLabel { get; set; } = "Sistema";
         public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+        public string ExpirationDateLabel => ExpirationDate?.ToString("yyyy-MM-dd") ?? "Sin vencimiento";
     }
 
     private sealed class RecentCreditNoteRow
@@ -1714,8 +1852,11 @@ else
         public DateTime IssueDate { get; set; }
         public string NoteType { get; set; } = "Total";
         public decimal Amount { get; set; }
+        public decimal AvailableBalance { get; set; }
+        public DateTime? ExpirationDate { get; set; }
         public string State { get; set; } = "Emitida";
         public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+        public string ExpirationDateLabel => ExpirationDate?.ToString("yyyy-MM-dd") ?? "Sin vencimiento";
     }
 
     private sealed class CreditNoteDetailView
@@ -1730,12 +1871,15 @@ else
         public string NoteType { get; set; } = "Total";
         public string State { get; set; } = "Emitida";
         public string Reason { get; set; } = "Sin motivo";
+        public decimal AvailableBalance { get; set; }
+        public DateTime? ExpirationDate { get; set; }
         public decimal SubtotalAmount { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
         public string InvoiceState { get; set; } = "Vigente";
         public List<CreditNoteDetailLineView> Details { get; set; } = [];
         public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
+        public string ExpirationDateLabel => ExpirationDate?.ToString("yyyy-MM-dd") ?? "Sin vencimiento";
     }
 
     private sealed class CreditNoteDetailLineView

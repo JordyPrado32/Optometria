@@ -1,0 +1,418 @@
+@page "/doctor/examenes"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ClinicalHistoryService ClinicalHistoryService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Modulo de examenes</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell">
+        <div class="management-card">
+            <h1>Cargando modulo de examenes...</h1>
+        </div>
+    </section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Seguimiento clinico</span>
+                <h1>Modulo de examenes</h1>
+                <p>Registra examenes o estudios en fechas distintas y consolida todo dentro de la historia clinica del paciente.</p>
+            </div>
+            <div class="workspace-actions">
+                @if (patient is not null)
+                {
+                    <a class="btn btn-outline-primary" href="@GetHistoryUrl()">Ver historia clinica</a>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Paciente</h2>
+                <span>@patients.Count registrados</span>
+            </div>
+            <div class="clinical-grid-2" style="margin-top: 1rem;">
+                <div>
+                    <label class="form-label">Buscar paciente</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, cedula o codigo" />
+                </div>
+                <div>
+                    <label class="form-label">Selecciona el paciente</label>
+                    <select class="form-select" value="@GetSelectedPatientValue()" @onchange="OnPatientChangedAsync">
+                        <option value="">Selecciona un paciente</option>
+                        @foreach (var option in FilteredPatients)
+                        {
+                            <option value="@option.id_paciente">@GetPatientLabel(option)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        @if (patient is not null)
+        {
+            <section class="management-card" style="margin-top: 1.25rem;">
+                <div class="management-card-header">
+                    <h2>Registrar examen</h2>
+                    <span>@(historyLoad?.ExamTimeline.Count ?? 0) acumulados</span>
+                </div>
+                <div class="clinical-grid-4" style="margin-top: 1rem;">
+                    <div>
+                        <label class="form-label">Tipo de examen</label>
+                        <select class="form-select" @bind="examRecord.TipoExamen">
+                            <option value="">Selecciona</option>
+                            @foreach (var option in ExamTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Fecha</label>
+                        <input type="date" class="form-control" value="@ExamDateInput" @onchange="OnExamDateChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label">Origen</label>
+                        <select class="form-select" @bind="examRecord.ModuloOrigen">
+                            <option value="Modulo de examenes">Modulo de examenes</option>
+                            <option value="Historia clinica">Historia clinica</option>
+                            <option value="Externo">Externo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Profesional</label>
+                        <input class="form-control" @bind="examRecord.ProfesionalResponsable" maxlength="120" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Motivo / solicitud</label>
+                        <input class="form-control" @bind="examRecord.MotivoRegistro" maxlength="180" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Resultado resumido</label>
+                        <input class="form-control" @bind="examRecord.ResultadoResumen" maxlength="220" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Detalle del resultado</label>
+                        <textarea class="form-control" rows="4" @bind="examRecord.DetalleResultados"></textarea>
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Interpretacion clinica</label>
+                        <textarea class="form-control" rows="4" @bind="examRecord.InterpretacionClinica"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label">Resultado alarmante</label>
+                        <div class="form-check form-switch" style="margin-top: 0.45rem;">
+                            <input class="form-check-input" type="checkbox" @bind="examRecord.EsResultadoAlarmante" />
+                        </div>
+                    </div>
+                    <div class="clinical-span-3">
+                        <label class="form-label">Notas de alarma</label>
+                        <input class="form-control" @bind="examRecord.NotasAlarma" maxlength="220" />
+                    </div>
+                    <div>
+                        <label class="form-label">Requiere control</label>
+                        <div class="form-check form-switch" style="margin-top: 0.45rem;">
+                            <input class="form-check-input" type="checkbox" @bind="followUp.RequiereNuevaCita" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">Prioridad</label>
+                        <select class="form-select" @bind="followUp.Prioridad">
+                            @foreach (var option in FollowUpPriorityOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Dias sugeridos</label>
+                        <input type="number" min="1" max="365" class="form-control" @bind="followUp.DiasSugeridos" />
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Motivo del control</label>
+                        <input class="form-control" @bind="followUp.Motivo" maxlength="220" />
+                    </div>
+                    <div class="clinical-span-4">
+                        <label class="form-label">Observaciones de seguimiento</label>
+                        <textarea class="form-control" rows="3" @bind="followUp.Observaciones"></textarea>
+                    </div>
+                </div>
+                <div class="workspace-actions" style="margin-top: 1rem;">
+                    <button type="button" class="btn btn-primary" @onclick="SaveExamAsync">Guardar examen</button>
+                    <a class="btn btn-outline-primary" href="@GetAppointmentUrl()">Agendar nueva cita</a>
+                </div>
+            </section>
+
+            <section class="management-card" style="margin-top: 1.25rem;">
+                <div class="management-card-header">
+                    <h2>Linea de tiempo del paciente</h2>
+                    <span>@(historyLoad?.AlertSummaries.Count ?? 0) alertas</span>
+                </div>
+                @if (historyLoad is null || historyLoad.ExamTimeline.Count == 0)
+                {
+                    <p style="margin-top: 1rem;">No hay examenes previos registrados.</p>
+                }
+                else
+                {
+                    <div class="management-list" style="margin-top: 1rem;">
+                        @foreach (var exam in historyLoad.ExamTimeline)
+                        {
+                            <article class="management-list-item">
+                                <strong>@exam.ExamType</strong>
+                                <span>@exam.EventDate.ToString("yyyy-MM-dd")</span>
+                                <span>@exam.SourceModule</span>
+                                <span>@exam.ResultSummary</span>
+                                @if (exam.IsAlarm)
+                                {
+                                    <span class="clinical-badge clinical-badge--danger">Alarma</span>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </section>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "patientId")]
+    public int? PatientId { get; set; }
+
+    private readonly List<tbl_paciente> patients = [];
+    private static readonly string[] ExamTypeOptions = ["Tonometria", "Campimetria", "Topografia corneal", "Retinografia", "OCT", "Paquimetria", "Biometria", "Prueba de color", "Test lagrimal", "Otro"];
+    private static readonly string[] FollowUpPriorityOptions = ["Control", "Preferente", "Urgente"];
+
+    private tbl_paciente? patient;
+    private ClinicalHistoryLoadResult? historyLoad;
+    private ClinicalExamRecord examRecord = new()
+    {
+        FechaExamen = DateTime.Today,
+        ModuloOrigen = "Modulo de examenes"
+    };
+    private FollowUpSection followUp = new()
+    {
+        Prioridad = "Control",
+        DiasSugeridos = 30
+    };
+    private bool isLoading = true;
+    private int currentUserId;
+    private string currentUserDisplayName = string.Empty;
+    private string searchTerm = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private IEnumerable<tbl_paciente> FilteredPatients => string.IsNullOrWhiteSpace(searchTerm)
+        ? patients.Take(200)
+        : patients.Where(x => GetPatientLabel(x).Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).Take(200);
+
+    private string ExamDateInput => examRecord.FechaExamen?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentUserDisplayName = authState.User.Identity?.Name ?? authState.User.FindFirst(ClaimTypes.Name)?.Value ?? "Profesional";
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        patients.Clear();
+        patients.AddRange(await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.apellidos)
+            .ThenBy(x => x.nombres)
+            .ToListAsync());
+
+        if (PatientId.HasValue && PatientId.Value > 0)
+        {
+            patient = patients.FirstOrDefault(x => x.id_paciente == PatientId.Value);
+            if (patient is not null)
+            {
+                historyLoad = await ClinicalHistoryService.LoadPatientHistoryAsync(dbContext, patient, null);
+                searchTerm = GetPatientLabel(patient);
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task OnPatientChangedAsync(ChangeEventArgs args)
+    {
+        PatientId = int.TryParse(args.Value?.ToString(), out var parsedPatientId) && parsedPatientId > 0
+            ? parsedPatientId
+            : null;
+
+        NavigationManager.NavigateTo(
+            NavigationManager.GetUriWithQueryParameters("/doctor/examenes", new Dictionary<string, object?>
+            {
+                ["patientId"] = PatientId
+            }),
+            forceLoad: false);
+
+        await LoadAsync();
+    }
+
+    private void OnExamDateChanged(ChangeEventArgs args)
+    {
+        examRecord.FechaExamen = DateTime.TryParse(args.Value?.ToString(), out var parsedDate)
+            ? parsedDate
+            : DateTime.Today;
+    }
+
+    private async Task SaveExamAsync()
+    {
+        statusMessage = null;
+        errorMessage = null;
+
+        if (patient is null)
+        {
+            errorMessage = "Selecciona un paciente antes de registrar el examen.";
+            return;
+        }
+
+        examRecord.RequiereSeguimiento = followUp.RequiereNuevaCita;
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var result = await ClinicalHistoryService.SaveStandaloneExamAsync(
+            dbContext,
+            new ClinicalStandaloneExamRequest
+            {
+                Patient = patient,
+                ActorUserId = currentUserId,
+                ActorDisplayName = currentUserDisplayName,
+                Exam = examRecord,
+                FollowUp = followUp.RequiereNuevaCita ? followUp : null
+            });
+
+        if (result.ValidationErrors.Count > 0)
+        {
+            errorMessage = string.Join(" ", result.ValidationErrors);
+            return;
+        }
+
+        statusMessage = result.StatusMessage;
+        examRecord = new ClinicalExamRecord
+        {
+            FechaExamen = DateTime.Today,
+            ModuloOrigen = "Modulo de examenes",
+            ProfesionalResponsable = currentUserDisplayName
+        };
+        followUp = new FollowUpSection
+        {
+            Prioridad = "Control",
+            DiasSugeridos = 30
+        };
+
+        await LoadAsync();
+    }
+
+    private string GetSelectedPatientValue()
+        => PatientId?.ToString() ?? string.Empty;
+
+    private static string GetPatientLabel(tbl_paciente patient)
+        => $"{patient.apellidos} {patient.nombres} - {patient.cedula}";
+
+    private string GetHistoryUrl()
+        => NavigationManager.GetUriWithQueryParameters("/doctor/historia-clinica", new Dictionary<string, object?>
+        {
+            ["patientId"] = PatientId
+        });
+
+    private string GetAppointmentUrl()
+        => NavigationManager.GetUriWithQueryParameters("/citas", new Dictionary<string, object?>
+        {
+            ["patientId"] = PatientId,
+            ["reason"] = string.IsNullOrWhiteSpace(followUp.Motivo) ? examRecord.TipoExamen : followUp.Motivo,
+            ["date"] = DateOnly.FromDateTime(DateTime.Today.AddDays(Math.Max(followUp.DiasSugeridos, 1))).ToString("yyyy-MM-dd")
+        });
+}
+
+<style>
+    .clinical-grid-2,
+    .clinical-grid-4 {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .clinical-grid-2 {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+
+    .clinical-grid-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .clinical-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    .clinical-badge--danger {
+        background: rgba(220, 53, 69, 0.14);
+        color: #b42333;
+    }
+
+    .clinical-span-2 {
+        grid-column: span 2;
+    }
+
+    .clinical-span-3 {
+        grid-column: span 3;
+    }
+
+    .clinical-span-4 {
+        grid-column: span 4;
+    }
+
+    @@media (max-width: 900px) {
+        .clinical-grid-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .clinical-grid-4 {
+            grid-template-columns: 1fr;
+        }
+
+        .clinical-span-2,
+        .clinical-span-3,
+        .clinical-span-4 {
+            grid-column: auto;
+        }
+    }
+</style>

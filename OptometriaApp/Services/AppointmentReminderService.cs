@@ -51,6 +51,7 @@ public sealed class AppointmentReminderService : BackgroundService
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
         var sender = scope.ServiceProvider.GetRequiredService<EmailSender>();
+        var customizationService = scope.ServiceProvider.GetRequiredService<OpticaCustomizationService>();
 
         if (!sender.IsConfigured())
         {
@@ -70,6 +71,11 @@ public sealed class AppointmentReminderService : BackgroundService
             .ToListAsync(cancellationToken);
 
         var hasChanges = false;
+        var emailTemplate = await customizationService.GetTemplateContentAsync(
+            "Email",
+            OpticaCustomizationService.PatientReminderEmailTemplateType,
+            OpticaCustomizationService.DefaultPatientReminderEmailTemplate,
+            cancellationToken);
 
         foreach (var appointment in upcomingAppointments)
         {
@@ -103,6 +109,18 @@ public sealed class AppointmentReminderService : BackgroundService
             var reminderWindow = needs24HourReminder ? "24 horas antes" : "1 hora antes";
             var appointmentType = string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita!;
             var statusLabel = appointment.id_estadoNavigation?.nombre_estado ?? "Programada";
+            var reminderBody = OpticaCustomizationService.RenderTemplate(
+                emailTemplate,
+                new Dictionary<string, string>
+                {
+                    ["patient_name"] = string.IsNullOrWhiteSpace(patientName) ? "Paciente" : patientName,
+                    ["doctor_name"] = string.IsNullOrWhiteSpace(doctorName) ? "Profesional asignado" : doctorName,
+                    ["appointment_date"] = appointment.fecha_cita.ToString("yyyy-MM-dd"),
+                    ["appointment_time"] = appointment.hora_inicio.ToString("HH:mm"),
+                    ["appointment_type"] = appointmentType,
+                    ["status_label"] = statusLabel,
+                    ["reminder_window"] = reminderWindow
+                });
 
             await sender.SendAppointmentReminderAsync(
                 patientEmail,
@@ -113,6 +131,8 @@ public sealed class AppointmentReminderService : BackgroundService
                 appointmentType,
                 statusLabel,
                 reminderWindow,
+                reminderBody,
+                $"Recordatorio de cita optometrica ({reminderWindow})",
                 cancellationToken);
 
             appointment.notificacion_enviada = true;

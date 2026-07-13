@@ -22,7 +22,13 @@ else
             <button type="button" class="@(isActive ? "clinical-encounter-card clinical-encounter-card--active" : "clinical-encounter-card")" @onclick="() => OnSelect.InvokeAsync(encounter.EncounterId)">
                 <div class="clinical-encounter-card-head">
                     <strong>@encounter.EventDate.ToString("yyyy-MM-dd HH:mm")</strong>
-                    <span class="@ClinicalHistoryService.GetEncounterStatusClass(encounter.Status)">@encounter.Status</span>
+                    <div style="display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end;">
+                        @if (encounter.WasSentToLab)
+                        {
+                            <span class="clinical-badge clinical-badge--success">Enviada a laboratorio</span>
+                        }
+                        <span class="@ClinicalHistoryService.GetEncounterStatusClass(encounter.Status)">@encounter.Status</span>
+                    </div>
                 </div>
                 <p>@encounter.Motive</p>
                 <small>@encounter.Diagnosis</small>

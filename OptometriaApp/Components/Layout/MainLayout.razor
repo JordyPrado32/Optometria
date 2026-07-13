@@ -2,9 +2,10 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
+@inject OpticaCustomizationService CustomizationService
 @implements IDisposable
 
-<div class="app-shell">
+<div class="app-shell" style="@AppShellStyle">
     <div class="app-frame app-dashboard-frame">
         <aside class="app-sidebar">
             <a class="app-brand" href="/dashboard">
@@ -361,12 +362,18 @@
     private string UserFullName { get; set; } = "Cargando...";
     private string UserRoleName { get; set; } = "Cargando...";
     private string UserAvatarUrl { get; set; } = "/images/avatars/l_sin_lentes.png";
+    private string BrandName { get; set; } = "Optica Lux";
+    private string AppShellStyle { get; set; } = string.Empty;
+    private string BrandLogoUrl { get; set; } = string.Empty;
+    private string BrandNamePrimary => BrandName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "Optica";
+    private string BrandNameSecondary => BrandName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).Skip(1).FirstOrDefault() ?? string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
         UpdatePageTitle();
         await LoadUserProfileAsync();
+        await LoadBrandingAsync();
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -401,6 +408,7 @@
             "appointment-availability" or "disponibilidad-medica" => "Disponibilidad Médica",
             "doctors" or "doctores" => "Doctores",
             "laboratories" or "laboratorios" => "Laboratorios",
+            "lab-orders" or "pedidos-laboratorio" => "Pedidos a Laboratorio",
             "suppliers" or "proveedores" => "Proveedores",
             "clients" or "clientes" => "Clientes",
             "products" or "productos" => "Productos",
@@ -414,6 +422,10 @@
             "my-invoices" or "mis-facturas" => "Mis Facturas",
             "my-credit-notes" or "mis-notas-de-credito" => "Mis Notas de Crédito",
             "accounts-receivable" or "cuentas-por-cobrar" => "Cuentas por Cobrar",
+            "lab-shipments" or "envios-laboratorio" => "Envíos de Laboratorio",
+            "optica-settings" or "configuracion-optica" => "Configuracion de la Optica",
+            "income" or "ingresos" => "Ingresos",
+            "online-store" or "tienda-online" => "Tienda Online",
             "users" or "usuarios" => "Usuarios",
             "roles" => "Roles",
             "menus" => "Menús",
@@ -484,6 +496,43 @@
             UserFullName = "Usuario";
             UserRoleName = "Usuario";
         }
+    }
+
+    private async Task LoadBrandingAsync()
+    {
+        try
+        {
+            var settings = await CustomizationService.GetSettingsAsync();
+            BrandName = string.IsNullOrWhiteSpace(settings.nombre_comercial) ? "Optica Lux" : settings.nombre_comercial!;
+            BrandLogoUrl = NormalizeAssetPath(settings.ruta_logo);
+
+            var backgroundUrl = NormalizeAssetPath(settings.ruta_fondo);
+            AppShellStyle = string.IsNullOrWhiteSpace(backgroundUrl)
+                ? string.Empty
+                : $"background-image: linear-gradient(rgba(255,250,244,0.93), rgba(255,250,244,0.93)), url('{backgroundUrl}'); background-size: cover; background-position: center;";
+        }
+        catch
+        {
+            BrandName = "Optica Lux";
+            BrandLogoUrl = string.Empty;
+            AppShellStyle = string.Empty;
+        }
+    }
+
+    private static string NormalizeAssetPath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("/", StringComparison.Ordinal))
+        {
+            return trimmed;
+        }
+
+        return $"/{trimmed.TrimStart('~', '/', '\\').Replace("\\", "/", StringComparison.Ordinal)}";
     }
 
     public void Dispose()

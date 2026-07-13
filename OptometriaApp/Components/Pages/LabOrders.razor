@@ -1,0 +1,860 @@
+@page "/pedidos-laboratorio"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject LabMessagingService LabMessagingService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Pedidos a laboratorio</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando pedidos...</h1></div></section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para este modulo.</p></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Clinica</span>
+                <h1>Pedidos a laboratorio</h1>
+                <p>Registra la orden RX, asigna laboratorio y deja lista la trazabilidad para el flujo de envio y entrega.</p>
+            </div>
+            <div class="workspace-actions" style="align-items: center;">
+                @if (permissions.CanCreate)
+                {
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
+                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo pedido
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="alert alert-success" role="alert">@statusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card compact-filter-card">
+            <div class="management-card-header">
+                <h2>Filtros y busqueda</h2>
+                <span>@FilteredOrders.Count resultados</span>
+            </div>
+            <div class="filters-row-2">
+                <div>
+                    <label class="form-label">Buscar</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" @bind:after="PersistFiltersAsync" placeholder="Paciente, cedula, laboratorio u orden" />
+                </div>
+                <div class="filter-selects-col-2">
+                    <div>
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="stateFilter" @bind:after="PersistFiltersAsync">
+                            <option value="">Todos</option>
+                            @foreach (var option in stateOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Laboratorio</label>
+                        <select class="form-select" @bind="laboratoryFilter" @bind:after="PersistFiltersAsync">
+                            <option value="">Todos</option>
+                            @foreach (var laboratory in laboratories.OrderBy(x => x.nombre))
+                            {
+                                <option value="@laboratory.id_laboratorio.ToString()">@laboratory.nombre</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="management-actions" style="margin-top: 0.3rem;">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters">Limpiar filtros</button>
+                @if (!string.IsNullOrWhiteSpace(rxFolderPath))
+                {
+                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="OpenRxFolderAsync">Abrir carpeta RX</button>
+                }
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Pedidos registrados</h2>
+                <span>@FilteredOrders.Count registrados</span>
+            </div>
+            <div class="table-responsive" style="margin-top: 1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Orden</th>
+                            <th>Paciente</th>
+                            <th>Laboratorio</th>
+                            <th>Tipo RX</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th>Logistica</th>
+                            <th style="text-align:right;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (PagedOrders.Count == 0)
+                        {
+                            <tr><td colspan="8" style="text-align:center; padding:2rem;">No hay pedidos con los filtros aplicados.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in PagedOrders)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@item.OrderNumber</strong>
+                                        <div style="font-size:0.78rem; color:var(--color-taupe);">Consulta #@item.ConsultationId</div>
+                                    </td>
+                                    <td>
+                                        @item.PatientName
+                                        <div style="font-size:0.78rem; color:var(--color-taupe);">@item.PatientIdentifier</div>
+                                    </td>
+                                    <td>@item.LaboratoryName</td>
+                                    <td>@item.RxTypeLabel</td>
+                                    <td>@item.State</td>
+                                    <td>@item.CreatedAtLabel</td>
+                                    <td>@item.LogisticsLabel</td>
+                                    <td style="text-align:right;">
+                                        <div style="display:inline-flex; gap:0.4rem;">
+                                            @if (permissions.CanEdit)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => PrepareEdit(item.Id)">
+                                                    <i class="bi bi-pencil-fill"></i> Editar
+                                                </button>
+                                                <button type="button" class="btn btn-outline-primary" @onclick="() => PrepareResend(item)">
+                                                    <i class="bi bi-arrow-repeat"></i> Reenviar
+                                                </button>
+                                            }
+                                            <a class="btn btn-outline-primary" href="/envios-laboratorio">
+                                                <i class="bi bi-truck"></i> Envios
+                                            </a>
+                                            <a class="btn btn-outline-primary" href="@item.PatientTrackingUrl" target="_blank" rel="noopener noreferrer">
+                                                <i class="bi bi-box-arrow-up-right"></i> Portal paciente
+                                            </a>
+                                            @if (!string.IsNullOrWhiteSpace(item.WhatsappUrl))
+                                            {
+                                                <a class="btn btn-outline-primary" href="@item.WhatsappUrl" target="_blank" rel="noopener noreferrer">
+                                                    <i class="bi bi-whatsapp"></i> WhatsApp
+                                                </a>
+                                            }
+                                            <a class="btn btn-outline-primary" href="@item.RxDownloadUrl" target="_blank" rel="noopener noreferrer">
+                                                <i class="bi bi-file-earmark-text"></i> RX
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <TablePager TotalItems="@FilteredOrders.Count" CurrentPage="@currentPage" CurrentPageChanged="SetPage" />
+        </section>
+    </section>
+}
+
+@if (showForm && editor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>@(editor.Id == 0 ? "Nuevo pedido a laboratorio" : $"Editar pedido {editor.NumeroOrden}")</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseForm">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label">Numero de orden</label>
+                        <input class="form-control" @bind="editor.NumeroOrden" maxlength="50" readonly />
+                    </div>
+                    <div>
+                        <label class="form-label">Laboratorio *</label>
+                        <select class="form-select" @bind="editor.IdLaboratorio">
+                            <option value="0">Selecciona</option>
+                            @foreach (var laboratory in laboratories.OrderBy(x => x.nombre))
+                            {
+                                <option value="@laboratory.id_laboratorio">@laboratory.nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Consulta *</label>
+                        <select class="form-select" value="@editor.IdConsulta" @onchange="OnConsultationChanged">
+                            <option value="0">Selecciona</option>
+                            @foreach (var consultation in availableConsultations)
+                            {
+                                <option value="@consultation.Id">@consultation.DisplayName</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Tipo RX *</label>
+                        <select class="form-select" value="@editor.TipoRx" @onchange="OnRxTypeChanged">
+                            @foreach (var option in rxTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Estado *</label>
+                        <select class="form-select" @bind="editor.Estado">
+                            @foreach (var option in stateOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">RX asociada *</label>
+                        <select class="form-select" @bind="editor.SelectedRxId">
+                            <option value="0">Selecciona</option>
+                            @foreach (var option in CurrentRxOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="clinical-span-2">
+                        <label class="form-label">Observaciones</label>
+                        <textarea class="form-control" rows="4" @bind="editor.Observaciones"></textarea>
+                    </div>
+                    @if (editor.IsResend)
+                    {
+                        <div class="clinical-span-2">
+                            <label class="form-label">Motivo de reenvio *</label>
+                            <textarea class="form-control" rows="3" @bind="editor.MotivoReenvio"></textarea>
+                        </div>
+                    }
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<OrderRow> orders = [];
+    private readonly List<ConsultationOption> availableConsultations = [];
+    private readonly string[] stateOptions = ["Enviado a laboratorio", "Listo para entrega", "Entregado"];
+    private readonly string[] rxTypeOptions = ["Lente", "Contactologia"];
+    private List<tbl_laboratorio> laboratories = [];
+    private bool isLoading = true;
+    private bool canViewModule;
+    private bool showForm;
+    private int currentPage = 1;
+    private int currentRoleId;
+    private int currentUserId;
+    private string searchTerm = string.Empty;
+    private string stateFilter = string.Empty;
+    private string laboratoryFilter = string.Empty;
+    private string? statusMessage;
+    private string? errorMessage;
+    private Permissions permissions = new();
+    private LabOrderEditor? editor;
+    private string whatsappPrefix = "593";
+    private string whatsappTemplate = OpticaCustomizationService.DefaultLabWhatsappTemplate;
+    private string rxFolderPath = string.Empty;
+    private bool filtersRestored;
+    private const string FilterStorageKey = "lab-orders.filters";
+
+    private const int PageSize = 10;
+
+    private List<OrderRow> FilteredOrders => orders
+        .Where(MatchesFilters)
+        .OrderByDescending(x => x.CreatedAt)
+        .ToList();
+
+    private IReadOnlyList<OrderRow> PagedOrders => FilteredOrders
+        .Skip((EffectivePage - 1) * PageSize)
+        .Take(PageSize)
+        .ToList();
+
+    private IReadOnlyList<RxOption> CurrentRxOptions =>
+        editor is null
+            ? []
+            : availableConsultations.FirstOrDefault(x => x.Id == editor.IdConsulta)?.GetOptions(editor.TipoRx) ?? [];
+
+    private int EffectivePage => Math.Min(currentPage, Math.Max(1, (int)Math.Ceiling(FilteredOrders.Count / (double)PageSize)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || filtersRestored)
+        {
+            return;
+        }
+
+        var rawFilters = await JSRuntime.InvokeAsync<string?>("optometriaSession.get", FilterStorageKey);
+        if (!string.IsNullOrWhiteSpace(rawFilters))
+        {
+            var restored = System.Text.Json.JsonSerializer.Deserialize<LabOrderFilters>(rawFilters);
+            if (restored is not null)
+            {
+                searchTerm = restored.SearchTerm ?? string.Empty;
+                stateFilter = restored.StateFilter ?? string.Empty;
+                laboratoryFilter = restored.LaboratoryFilter ?? string.Empty;
+                currentPage = restored.Page <= 0 ? 1 : restored.Page;
+                StateHasChanged();
+            }
+        }
+
+        filtersRestored = true;
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        errorMessage = null;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetPermissionsAsync(db);
+        canViewModule = permissions.CanView;
+
+        laboratories = await db.tbl_laboratorios
+            .AsNoTracking()
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.nombre)
+            .ToListAsync();
+
+        var settings = await OpticaCustomizationService.GetOrCreateSettingsAsync(db);
+        whatsappPrefix = settings.prefijo_pais ?? "593";
+        rxFolderPath = settings.carpeta_rx ?? string.Empty;
+
+        var template = await OpticaCustomizationService.GetOrCreateTemplateAsync(
+            db,
+            "WhatsApp",
+            OpticaCustomizationService.LabWhatsappTemplateType,
+            OpticaCustomizationService.DefaultLabWhatsappTemplate);
+        whatsappTemplate = template.contenido ?? OpticaCustomizationService.DefaultLabWhatsappTemplate;
+
+        var consultationData = await db.tbl_consulta
+            .AsNoTracking()
+            .Include(x => x.id_pacienteNavigation)
+            .Include(x => x.tbl_rx_lentes)
+            .Include(x => x.tbl_rx_contactologia)
+            .OrderByDescending(x => x.fecha_consulta)
+            .Take(200)
+            .ToListAsync();
+
+        availableConsultations.Clear();
+        availableConsultations.AddRange(consultationData.Select(x => new ConsultationOption
+        {
+            Id = x.id_consulta,
+            PatientName = $"{x.id_pacienteNavigation.nombres} {x.id_pacienteNavigation.apellidos}",
+            PatientIdentifier = x.id_pacienteNavigation.cedula,
+            Date = x.fecha_consulta,
+            LensOptions = x.tbl_rx_lentes.Select(rx => new RxOption
+            {
+                Id = rx.id_rx_lente,
+                Label = $"RX lente #{rx.id_rx_lente} - {rx.diseno_lente ?? "Sin diseno"}"
+            }).ToList(),
+            ContactOptions = x.tbl_rx_contactologia.Select(rx => new RxOption
+            {
+                Id = rx.id_rx_contactologia,
+                Label = $"RX contacto #{rx.id_rx_contactologia} - {rx.tipo_lente ?? "Sin tipo"}"
+            }).ToList()
+        }));
+
+        orders.Clear();
+        if (canViewModule)
+        {
+            var data = await db.tbl_orden_rxes
+                .AsNoTracking()
+                .Include(x => x.id_laboratorioNavigation)
+                .Include(x => x.id_consultaNavigation)
+                .ThenInclude(x => x.id_pacienteNavigation)
+                .Include(x => x.tbl_envio_laboratorios)
+                .ToListAsync();
+
+            orders.AddRange(data.Select(x =>
+            {
+                var shipment = x.tbl_envio_laboratorios.OrderByDescending(y => y.fecha_envio).FirstOrDefault();
+                var patient = x.id_consultaNavigation.id_pacienteNavigation;
+                return new OrderRow
+                {
+                    Id = x.id_orden_rx,
+                    ConsultationId = x.id_consulta,
+                    OrderNumber = string.IsNullOrWhiteSpace(x.numero_orden) ? $"RX-{x.id_orden_rx}" : x.numero_orden!,
+                    PatientName = $"{patient.nombres} {patient.apellidos}",
+                    PatientIdentifier = patient.cedula,
+                    LaboratoryName = x.id_laboratorioNavigation.nombre,
+                    LaboratoryId = x.id_laboratorio,
+                    RxTypeLabel = string.IsNullOrWhiteSpace(x.tipo_rx) ? "Lente" : x.tipo_rx!,
+                    State = string.IsNullOrWhiteSpace(x.estado) ? "Enviado a laboratorio" : x.estado!,
+                    CreatedAt = x.fecha_creacion,
+                    CreatedAtLabel = x.fecha_creacion?.ToString("yyyy-MM-dd HH:mm") ?? "-",
+                    RxDownloadUrl = $"/exports/lab-orders/{x.id_orden_rx}.html",
+                    WhatsappUrl = BuildWhatsappUrl(
+                        x.id_laboratorioNavigation.whatsapp,
+                        x.numero_orden ?? $"RX-{x.id_orden_rx:000000}",
+                        $"{patient.nombres} {patient.apellidos}",
+                        string.IsNullOrWhiteSpace(x.tipo_rx) ? "Lente" : x.tipo_rx!,
+                        x.id_laboratorioNavigation.nombre,
+                        x.observaciones),
+                    LogisticsLabel = shipment is null ? "Pendiente de gestion" : $"{shipment.estado ?? "Enviado a laboratorio"} · {shipment.canal ?? "Manual"}",
+                    PatientTrackingUrl = BuildPatientTrackingUrl(x.numero_orden ?? $"RX-{x.id_orden_rx:000000}")
+                };
+            }));
+        }
+
+        isLoading = false;
+    }
+
+    private async Task PrepareNew()
+    {
+        editor = new LabOrderEditor
+        {
+            NumeroOrden = "Se asigna al guardar",
+            TipoRx = rxTypeOptions[0],
+            Estado = stateOptions[0]
+        };
+        showForm = true;
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private Task PrepareResend(OrderRow row)
+    {
+        editor = new LabOrderEditor
+        {
+            IdConsulta = row.ConsultationId,
+            IdLaboratorio = row.LaboratoryId,
+            NumeroOrden = "Se asigna al guardar",
+            TipoRx = row.RxTypeLabel,
+            Estado = stateOptions[0],
+            IsResend = true,
+            OriginalOrderNumber = row.OrderNumber,
+            MotivoReenvio = string.Empty,
+            Observaciones = $"Reenvio de la orden {row.OrderNumber}. "
+        };
+
+        EnsureSelectedRx();
+        showForm = true;
+        statusMessage = null;
+        errorMessage = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task PrepareEdit(int id)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var entity = await db.tbl_orden_rxes.AsNoTracking().FirstOrDefaultAsync(x => x.id_orden_rx == id);
+        if (entity is null)
+        {
+            errorMessage = "No se encontro el pedido solicitado.";
+            return;
+        }
+
+        editor = new LabOrderEditor
+        {
+            Id = entity.id_orden_rx,
+            IdConsulta = entity.id_consulta,
+            IdLaboratorio = entity.id_laboratorio,
+            NumeroOrden = entity.numero_orden ?? string.Empty,
+            TipoRx = string.Equals(entity.tipo_rx, "Contactologia", StringComparison.OrdinalIgnoreCase) ? "Contactologia" : "Lente",
+            Estado = string.IsNullOrWhiteSpace(entity.estado) ? stateOptions[0] : entity.estado!,
+            SelectedRxId = entity.id_rx_contactologia ?? entity.id_rx_lente ?? 0,
+            Observaciones = entity.observaciones ?? string.Empty
+        };
+
+        EnsureSelectedRx();
+        showForm = true;
+        statusMessage = null;
+        errorMessage = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        errorMessage = ValidateEditor(editor);
+        if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return;
+        }
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var entity = editor.Id == 0
+            ? new tbl_orden_rx { fecha_creacion = DateTime.Now }
+            : await db.tbl_orden_rxes.FirstOrDefaultAsync(x => x.id_orden_rx == editor.Id);
+
+        if (entity is null)
+        {
+            errorMessage = "No se pudo cargar el pedido para actualizarlo.";
+            return;
+        }
+
+        entity.id_consulta = editor.IdConsulta;
+        entity.id_laboratorio = editor.IdLaboratorio;
+        entity.tipo_rx = editor.TipoRx;
+        entity.estado = editor.Estado;
+        entity.observaciones = BuildObservations(editor);
+        entity.id_rx_lente = editor.TipoRx == "Lente" ? editor.SelectedRxId : null;
+        entity.id_rx_contactologia = editor.TipoRx == "Contactologia" ? editor.SelectedRxId : null;
+
+        if (editor.Id == 0)
+        {
+            db.tbl_orden_rxes.Add(entity);
+        }
+
+        await db.SaveChangesAsync();
+
+        if (editor.Id == 0)
+        {
+            entity.numero_orden = BuildOrderNumber(entity.id_orden_rx);
+            editor.NumeroOrden = entity.numero_orden;
+            await db.SaveChangesAsync();
+        }
+
+        await EnsureShipmentAsync(db, entity);
+        await db.SaveChangesAsync();
+
+        showForm = false;
+        editor = null;
+        statusMessage = "Pedido a laboratorio guardado correctamente.";
+        await LoadAsync();
+    }
+
+    private async Task EnsureShipmentAsync(OpticaDbContext db, tbl_orden_rx order)
+    {
+        var shipment = await db.tbl_envio_laboratorios.FirstOrDefaultAsync(x => x.id_orden_rx == order.id_orden_rx);
+        if (shipment is null)
+        {
+            shipment = new tbl_envio_laboratorio
+            {
+                id_orden_rx = order.id_orden_rx,
+                id_usuario = currentUserId,
+                canal = "Manual",
+                fecha_envio = order.fecha_creacion ?? DateTime.Now
+            };
+            db.tbl_envio_laboratorios.Add(shipment);
+        }
+
+        shipment.estado = order.estado;
+        if (string.Equals(order.estado, "Listo para entrega", StringComparison.OrdinalIgnoreCase))
+        {
+            shipment.fecha_listo_entrega ??= DateTime.Now;
+            shipment.fecha_cambio_estado = DateTime.Now;
+        }
+        else if (string.Equals(order.estado, "Entregado", StringComparison.OrdinalIgnoreCase))
+        {
+            shipment.fecha_entregado ??= DateTime.Now;
+            shipment.fecha_cambio_estado = DateTime.Now;
+            shipment.id_usuario_entrega ??= currentUserId;
+        }
+    }
+
+    private void OnConsultationChanged(ChangeEventArgs args)
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.IdConsulta = int.TryParse(args.Value?.ToString(), out var parsedId) ? parsedId : 0;
+        EnsureSelectedRx();
+    }
+
+    private void OnRxTypeChanged(ChangeEventArgs args)
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.TipoRx = string.Equals(args.Value?.ToString(), "Contactologia", StringComparison.OrdinalIgnoreCase)
+            ? "Contactologia"
+            : "Lente";
+        EnsureSelectedRx();
+    }
+
+    private void EnsureSelectedRx()
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        var options = CurrentRxOptions;
+        if (options.Count == 0)
+        {
+            editor.SelectedRxId = 0;
+            return;
+        }
+
+        if (options.All(x => x.Id != editor.SelectedRxId))
+        {
+            editor.SelectedRxId = options[0].Id;
+        }
+    }
+
+    private string? ValidateEditor(LabOrderEditor currentEditor)
+    {
+        if (currentEditor.IdLaboratorio <= 0)
+        {
+            return "Selecciona un laboratorio.";
+        }
+
+        if (currentEditor.IdConsulta <= 0)
+        {
+            return "Selecciona una consulta.";
+        }
+
+        if (currentEditor.SelectedRxId <= 0)
+        {
+            return $"La consulta seleccionada no tiene una RX de tipo {currentEditor.TipoRx.ToLowerInvariant()} disponible.";
+        }
+
+        if (currentEditor.IsResend && string.IsNullOrWhiteSpace(currentEditor.MotivoReenvio))
+        {
+            return "Ingresa el motivo del reenvio.";
+        }
+
+        return null;
+    }
+
+    private static string BuildOrderNumber(int orderId) => $"RX-{orderId:000000}";
+
+    private static string BuildPatientTrackingUrl(string orderNumber)
+        => $"/seguimiento-pedido?orden={Uri.EscapeDataString(orderNumber)}";
+
+    private string BuildWhatsappUrl(
+        string? laboratoryWhatsapp,
+        string orderNumber,
+        string patientName,
+        string rxType,
+        string laboratoryName,
+        string? observations)
+    {
+        var phone = OpticaCustomizationService.NormalizePhone(laboratoryWhatsapp, whatsappPrefix);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return string.Empty;
+        }
+
+        var message = OpticaCustomizationService.RenderTemplate(
+            whatsappTemplate,
+            new Dictionary<string, string>
+            {
+                ["order_number"] = orderNumber,
+                ["patient_name"] = patientName.Trim(),
+                ["rx_type"] = rxType,
+                ["laboratory_name"] = laboratoryName,
+                ["observations"] = string.IsNullOrWhiteSpace(observations) ? string.Empty : $"Observaciones: {observations.Trim()}."
+            });
+        return LabMessagingService.BuildWhatsAppLink(phone, message);
+    }
+
+    private static string? BuildObservations(LabOrderEditor currentEditor)
+    {
+        var observations = string.IsNullOrWhiteSpace(currentEditor.Observaciones)
+            ? string.Empty
+            : currentEditor.Observaciones.Trim();
+
+        if (!currentEditor.IsResend)
+        {
+            return string.IsNullOrWhiteSpace(observations) ? null : observations;
+        }
+
+        var prefix = $"Reenvio de orden {currentEditor.OriginalOrderNumber}. Motivo: {currentEditor.MotivoReenvio.Trim()}.";
+        var combined = string.IsNullOrWhiteSpace(observations)
+            ? prefix
+            : $"{prefix} {observations}";
+
+        return combined;
+    }
+
+    private bool MatchesFilters(OrderRow row)
+    {
+        if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(row.State, stateFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(laboratoryFilter) && row.LaboratoryId.ToString() != laboratoryFilter)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return true;
+        }
+
+        var term = searchTerm.Trim().ToLowerInvariant();
+        return row.OrderNumber.ToLowerInvariant().Contains(term)
+            || row.PatientName.ToLowerInvariant().Contains(term)
+            || row.PatientIdentifier.ToLowerInvariant().Contains(term)
+            || row.LaboratoryName.ToLowerInvariant().Contains(term);
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        stateFilter = string.Empty;
+        laboratoryFilter = string.Empty;
+        currentPage = 1;
+        _ = PersistFiltersAsync();
+    }
+
+    private void SetPage(int page)
+    {
+        currentPage = page;
+        _ = PersistFiltersAsync();
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        editor = null;
+        errorMessage = null;
+    }
+
+    private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
+    {
+        if (currentRoleId == 1)
+        {
+            return new Permissions { CanView = true, CanCreate = true, CanEdit = true, CanDelete = true };
+        }
+
+        var permission = await db.tbl_rol_menu_permisos.AsNoTracking()
+            .Include(x => x.id_menuNavigation)
+            .Where(x => x.id_rol == currentRoleId && x.id_menuNavigation.ruta == "/pedidos-laboratorio")
+            .Select(x => new Permissions
+            {
+                CanView = x.puede_ver,
+                CanCreate = x.puede_crear,
+                CanEdit = x.puede_editar,
+                CanDelete = x.puede_eliminar
+            })
+            .FirstOrDefaultAsync();
+
+        return permission ?? new Permissions();
+    }
+
+    private async Task PersistFiltersAsync()
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new LabOrderFilters
+        {
+            SearchTerm = searchTerm,
+            StateFilter = stateFilter,
+            LaboratoryFilter = laboratoryFilter,
+            Page = currentPage
+        });
+
+        await JSRuntime.InvokeVoidAsync("optometriaSession.set", FilterStorageKey, payload);
+    }
+
+    private async Task OpenRxFolderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(rxFolderPath))
+        {
+            errorMessage = "No hay carpeta RX configurada.";
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("optometriaSession.openRxFolder", rxFolderPath);
+    }
+
+    private sealed class Permissions
+    {
+        public bool CanView { get; set; }
+        public bool CanCreate { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+    }
+
+    private sealed class LabOrderEditor
+    {
+        public int Id { get; set; }
+        public int IdConsulta { get; set; }
+        public int IdLaboratorio { get; set; }
+        public int SelectedRxId { get; set; }
+        public string NumeroOrden { get; set; } = string.Empty;
+        public string TipoRx { get; set; } = "Lente";
+        public string Estado { get; set; } = "Enviado a laboratorio";
+        public string Observaciones { get; set; } = string.Empty;
+        public bool IsResend { get; set; }
+        public string OriginalOrderNumber { get; set; } = string.Empty;
+        public string MotivoReenvio { get; set; } = string.Empty;
+    }
+
+    private sealed class OrderRow
+    {
+        public int Id { get; set; }
+        public int ConsultationId { get; set; }
+        public int LaboratoryId { get; set; }
+        public string OrderNumber { get; set; } = string.Empty;
+        public string PatientName { get; set; } = string.Empty;
+        public string PatientIdentifier { get; set; } = string.Empty;
+        public string LaboratoryName { get; set; } = string.Empty;
+        public string RxTypeLabel { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public DateTime? CreatedAt { get; set; }
+        public string CreatedAtLabel { get; set; } = string.Empty;
+        public string LogisticsLabel { get; set; } = string.Empty;
+        public string WhatsappUrl { get; set; } = string.Empty;
+        public string RxDownloadUrl { get; set; } = string.Empty;
+        public string PatientTrackingUrl { get; set; } = string.Empty;
+    }
+
+    private sealed class LabOrderFilters
+    {
+        public string? SearchTerm { get; set; }
+        public string? StateFilter { get; set; }
+        public string? LaboratoryFilter { get; set; }
+        public int Page { get; set; }
+    }
+
+    private sealed class ConsultationOption
+    {
+        public int Id { get; set; }
+        public string PatientName { get; set; } = string.Empty;
+        public string PatientIdentifier { get; set; } = string.Empty;
+        public DateTime? Date { get; set; }
+        public List<RxOption> LensOptions { get; set; } = [];
+        public List<RxOption> ContactOptions { get; set; } = [];
+        public string DisplayName => $"{PatientName} · {PatientIdentifier} · {(Date?.ToString("yyyy-MM-dd") ?? "Sin fecha")}";
+        public IReadOnlyList<RxOption> GetOptions(string tipoRx) =>
+            string.Equals(tipoRx, "Contactologia", StringComparison.OrdinalIgnoreCase) ? ContactOptions : LensOptions;
+    }
+
+    private sealed class RxOption
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = string.Empty;
+    }
+}

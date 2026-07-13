@@ -202,11 +202,24 @@ public partial class OpticaDbContext
             entity.Property(e => e.ciudad)
                 .HasMaxLength(100)
                 .IsUnicode(false);
+            entity.Property(e => e.ambiente_codigo)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("1");
+            entity.Property(e => e.certificado_digital_clave)
+                .HasMaxLength(255)
+                .IsUnicode(false);
+            entity.Property(e => e.certificado_digital_ruta)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.codigo_postal)
                 .HasMaxLength(10)
                 .IsUnicode(false);
             entity.Property(e => e.correo)
                 .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.direccion_establecimiento)
+                .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.direccion)
                 .HasMaxLength(500)
@@ -236,12 +249,19 @@ public partial class OpticaDbContext
             entity.Property(e => e.razon_social)
                 .HasMaxLength(300)
                 .IsUnicode(false);
+            entity.Property(e => e.regimen_rimpe)
+                .HasMaxLength(50)
+                .IsUnicode(false);
             entity.Property(e => e.ruc)
                 .HasMaxLength(13)
                 .IsUnicode(false);
             entity.Property(e => e.telefono)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.tipo_emision_codigo)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("1");
             entity.Property(e => e.tipo_identificacion)
                 .HasMaxLength(2)
                 .IsUnicode(false);

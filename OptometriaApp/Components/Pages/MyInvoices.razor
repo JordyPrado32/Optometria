@@ -141,7 +141,7 @@ else
                                             <td>@item.TotalAmount.ToString("0.00")</td>
                                             <td>@item.CollectedAmount.ToString("0.00")</td>
                                             <td>@item.Balance.ToString("0.00")</td>
-                                            <td>@item.State</td>
+                                            <td>@((MarkupString)RenderSaleStatusBadge(item.DisplayState))</td>
                                             <td style="text-align:right;">
                                                 <div style="display:inline-flex; gap:0.5rem;">
                                                     <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => SelectInvoiceAsync(item.ComprobanteId)">
@@ -194,7 +194,7 @@ else
                             <div class="documents-card documents-kpi">
                                 <div class="documents-label">Notas</div>
                                 <strong>@selectedInvoice.TotalCredited.ToString("0.00")</strong>
-                                <span>@GetInvoiceCreditState(selectedInvoice)</span>
+                                <span>@GetInvoiceCreditState(selectedInvoice) | @selectedInvoice.DisplayState</span>
                             </div>
                         </div>
 
@@ -450,6 +450,12 @@ else
         return invoice.TotalCredited > 0m ? "Parcialmente acreditada" : invoice.State;
     }
 
+    private static string RenderSaleStatusBadge(string status) => status switch
+    {
+        "Completada" => "<span class=\"badge\" style=\"background: rgba(93, 161, 129, 0.15) !important; color: #2e7d32 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;\">Completada</span>",
+        _ => "<span class=\"badge\" style=\"background: rgba(198, 40, 40, 0.12) !important; color: #c62828 !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;\">Pendiente</span>"
+    };
+
     private bool MatchesInvoiceSearch(IssuedInvoiceRow item)
     {
         var search = invoiceSearchTerm.Trim();
@@ -490,6 +496,7 @@ else
         public decimal CollectedAmount { get; set; }
         public decimal Balance { get; set; }
         public decimal TotalCredited { get; set; }
+        public string DisplayState => Balance <= 0m ? "Completada" : "Pendiente";
         public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
     }
 

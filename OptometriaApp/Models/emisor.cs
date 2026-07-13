@@ -36,9 +36,23 @@ public partial class EmisorEntity
 
     public string? cedula_representante { get; set; }
 
+    public string? direccion_establecimiento { get; set; }
+
+    public bool obligado_contabilidad { get; set; }
+
     public bool es_contribuyente_especial { get; set; }
 
     public string? numero_contribuyente_especial { get; set; }
+
+    public string ambiente_codigo { get; set; } = "1";
+
+    public string tipo_emision_codigo { get; set; } = "1";
+
+    public string? certificado_digital_ruta { get; set; }
+
+    public string? certificado_digital_clave { get; set; }
+
+    public string? regimen_rimpe { get; set; }
 
     public bool estado { get; set; }
 

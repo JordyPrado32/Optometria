@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using System.Security.Claims
 @using System.Globalization
+@using System.Text.Json
 @using Microsoft.EntityFrameworkCore
 @using OptometriaApp.Data
 @using OptometriaApp.Models
@@ -196,6 +197,114 @@ else
             }
         </section>
 
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Control administrativo</h2>
+                <span>Resumen rapido</span>
+            </div>
+            <div class="clinical-header-grid" style="margin-top: 1rem;">
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Pendientes</span>
+                    <strong>@PendingAppointmentsCount</strong>
+                    <p>Programadas o reprogramadas</p>
+                </div>
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Confirmadas</span>
+                    <strong>@ConfirmedAppointmentsCount</strong>
+                    <p>Listas para atencion</p>
+                </div>
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Atendidas</span>
+                    <strong>@CompletedAppointmentsCount</strong>
+                    <p>Cerradas como realizadas</p>
+                </div>
+                <div class="clinical-highlight">
+                    <span class="eyebrow">Canceladas</span>
+                    <strong>@CancelledAppointmentsCount</strong>
+                    <p>Con motivo registrado</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top: 1.5rem;">
+            <div class="management-card-header">
+                <h2>Calendario</h2>
+                <span>Vista @GetCalendarViewLabel()</span>
+            </div>
+            <div class="workspace-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline-primary" @onclick='() => SetCalendarView("day")'>Dia</button>
+                <button type="button" class="btn btn-outline-primary" @onclick='() => SetCalendarView("week")'>Semana</button>
+                <button type="button" class="btn btn-outline-primary" @onclick='() => SetCalendarView("month")'>Mes</button>
+                <input type="date" class="form-control" style="max-width: 220px;" value="@calendarFocusDate" @onchange="OnCalendarFocusDateChanged" />
+            </div>
+
+            @if (selectedCalendarView == "day")
+            {
+                <div class="management-list" style="margin-top: 1rem;">
+                    @if (!CalendarDayAppointments.Any())
+                    {
+                        <p style="color: var(--color-taupe); margin: 0;">No hay citas para la fecha seleccionada.</p>
+                    }
+                    else
+                    {
+                        @foreach (var appointment in CalendarDayAppointments)
+                        {
+                            <article class="management-list-item">
+                                <strong>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</strong>
+                                <span>@GetPatientDisplayName(appointment.id_pacienteNavigation)</span>
+                                <span>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
+                                <span>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                            </article>
+                        }
+                    }
+                </div>
+            }
+            else if (selectedCalendarView == "week")
+            {
+                <div class="management-list" style="margin-top: 1rem;">
+                    @foreach (var day in WeeklyCalendarSummaries)
+                    {
+                        <article class="management-list-item">
+                            <strong>@day.Label</strong>
+                            <span>@day.Total citas</span>
+                            <span>@day.Pending pendientes</span>
+                            <span>@day.Confirmed confirmadas</span>
+                        </article>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive" style="margin-top: 1rem;">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Total</th>
+                                <th>Pendientes</th>
+                                <th>Confirmadas</th>
+                                <th>Atendidas</th>
+                                <th>Canceladas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var day in MonthlyCalendarSummaries)
+                            {
+                                <tr>
+                                    <td>@day.Label</td>
+                                    <td>@day.Total</td>
+                                    <td>@day.Pending</td>
+                                    <td>@day.Confirmed</td>
+                                    <td>@day.Completed</td>
+                                    <td>@day.Cancelled</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
         <!-- Appointments Table -->
         <section class="management-card" style="margin-top: 1.5rem;">
             <div class="management-card-header">
@@ -273,6 +382,32 @@ else
                                                     style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
                                                     @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
                                                 <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Ver/Editar
+                                            </button>
+                                            @if (CanViewPatientHistory)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary"
+                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;"
+                                                        @onclick="() => OpenPatientHistoryModalAsync(appointment.id_paciente)">
+                                                    <i class="bi bi-person-lines-fill" style="margin-right: 4px;"></i> Historial
+                                                </button>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(BuildAppointmentWhatsappUrl(appointment)))
+                                            {
+                                                <a class="btn btn-outline-primary"
+                                                   style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(37, 211, 102, 0.35) !important; color: #1f9d57 !important;"
+                                                   href="@BuildAppointmentWhatsappUrl(appointment)" target="_blank" rel="noopener noreferrer">
+                                                    <i class="bi bi-whatsapp" style="margin-right: 4px;"></i> WhatsApp
+                                                </a>
+                                            }
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important; color: var(--color-taupe) !important;"
+                                                    @onclick='() => OpenApiDraftModal(appointment, "confirm")'>
+                                                <i class="bi bi-plug" style="margin-right: 4px;"></i> API confirmar
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important; color: var(--color-taupe) !important;"
+                                                    @onclick='() => OpenApiDraftModal(appointment, "reschedule")'>
+                                                <i class="bi bi-arrow-repeat" style="margin-right: 4px;"></i> API reprogramar
                                             </button>
                                             @if (CanConfirmAppointments && IsPendingState(stateName))
                                             {
@@ -635,15 +770,61 @@ else
     </div>
 }
 
+@if (showApiDraftModal && apiDraft is not null)
+{
+    <div class="custom-modal-overlay" @onclick="CloseApiDraftModal">
+        <div class="custom-modal-card" style="max-width: 760px;" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>@apiDraft.Title</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseApiDraftModal">Ã—</button>
+            </header>
+            <div class="custom-modal-body">
+                <p style="color: var(--color-taupe);">
+                    Este boton ya deja listo el contrato de integracion. Cuando definan el proveedor o webhook, solo hay que enviar este payload al endpoint configurado.
+                </p>
+
+                <div class="management-form-grid">
+                    <div>
+                        <label class="form-label">Endpoint sugerido</label>
+                        <input class="form-control" value="@apiDraft.Endpoint" readonly />
+                    </div>
+                    <div>
+                        <label class="form-label">Evento</label>
+                        <input class="form-control" value="@apiDraft.EventName" readonly />
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <label class="form-label">Payload JSON</label>
+                    <textarea class="form-control" rows="14" readonly>@apiDraft.PayloadJson</textarea>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseApiDraftModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
 
 
 @code {
+    [SupplyParameterFromQuery(Name = "patientId")]
+    public int? PrefillPatientId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reason")]
+    public string? PrefillReason { get; set; }
+
+    [SupplyParameterFromQuery(Name = "date")]
+    public string? PrefillDate { get; set; }
+
     private readonly List<tbl_citas> appointments = [];
     private readonly List<tbl_medico> doctors = [];
     private readonly List<tbl_paciente> patients = [];
     private readonly List<tbl_paciente> clientFamilyPatients = [];
     private readonly List<tbl_estado_cita> appointmentStates = [];
     private readonly List<tbl_log_auditoria> appointmentAuditEntries = [];
+    private readonly List<tbl_citas> selectedPatientHistory = [];
     private readonly List<SlotOption> availableSlots = [];
     private readonly List<SlotOption> occupiedSlots = [];
     private readonly List<CalendarDayOption> appointmentCalendarDays = [];
@@ -666,7 +847,9 @@ else
     private bool isCreatingAppointment;
     private bool showFormModal;
     private bool showAuditModal;
+    private bool showPatientHistoryModal;
     private bool showCancellationChoiceModal;
+    private bool showApiDraftModal;
     private bool showFormCancellationReason;
     private int selectedAppointmentId;
     private int currentUserId;
@@ -683,6 +866,11 @@ else
     private string dateToFilter = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private ApiActionDraft? apiDraft;
+    private bool hasConsumedPrefill;
+    private string selectedCalendarView = "month";
+    private string calendarFocusDate = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+    private string selectedPatientHistoryLabel = string.Empty;
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private static readonly string[] appointmentTypeOptions = ["Presencial", "Telefonica", "Virtual"];
@@ -707,6 +895,7 @@ else
     private bool CanConfirmAppointments => appointmentEditor is not null && !isCreatingAppointment && (isAdmin || isDoctor || isClient);
     private bool CanCancelAppointments => appointmentEditor is not null && !isCreatingAppointment && permissions.CanDelete;
     private bool CanCloseAppointments => appointmentEditor is not null && !isCreatingAppointment && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_historia_clinica != false));
+    private bool CanViewPatientHistory => isAdmin || (!isClient && permissions.CanView);
     private bool CanManageAvailability => permissions.CanEdit && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_disponibilidad != false));
     private bool CanWriteMedicalNotes => appointmentEditor is not null && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_historia_clinica != false)) && permissions.CanEdit;
     private bool CanChangeDoctor => CanEditAppointments && (isAdmin || (isDoctor && currentDoctorId == appointmentEditor!.IdMedico));
@@ -756,6 +945,13 @@ else
     private int EffectiveAppointmentPage => Math.Min(appointmentPage, Math.Max(1, (int)Math.Ceiling(FilteredAppointments.Count / (double)TablePageSize)));
     private IEnumerable<tbl_citas> PagedAppointments => FilteredAppointments.Skip((EffectiveAppointmentPage - 1) * TablePageSize).Take(TablePageSize);
     private void SetAppointmentPage(int page) => appointmentPage = page;
+    private int PendingAppointmentsCount => FilteredAppointments.Count(x => IsPendingState(x.id_estadoNavigation?.nombre_estado ?? string.Empty));
+    private int ConfirmedAppointmentsCount => FilteredAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Confirmada", StringComparison.OrdinalIgnoreCase));
+    private int CompletedAppointmentsCount => FilteredAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Realizada", StringComparison.OrdinalIgnoreCase));
+    private int CancelledAppointmentsCount => FilteredAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Cancelada", StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<tbl_citas> CalendarDayAppointments => FilteredAppointments.Where(x => x.fecha_cita == GetCalendarFocusDate()).OrderBy(x => x.hora_inicio);
+    private IEnumerable<CalendarSummaryRow> WeeklyCalendarSummaries => BuildWeeklyCalendarSummaries();
+    private IEnumerable<CalendarSummaryRow> MonthlyCalendarSummaries => BuildMonthlyCalendarSummaries();
 
     protected override async Task OnInitializedAsync()
     {
@@ -890,6 +1086,14 @@ else
             }
         }
 
+        if (!hasConsumedPrefill && CanCreateAppointments && (PrefillPatientId.HasValue || !string.IsNullOrWhiteSpace(PrefillReason) || !string.IsNullOrWhiteSpace(PrefillDate)))
+        {
+            hasConsumedPrefill = true;
+            await PrepareNewAppointmentAsync();
+            ApplyPrefillToAppointmentEditor();
+            showFormModal = true;
+        }
+
         isLoading = false;
     }
 
@@ -973,6 +1177,36 @@ else
         await BuildAppointmentCalendarAsync();
     }
 
+    private void ApplyPrefillToAppointmentEditor()
+    {
+        if (appointmentEditor is null)
+        {
+            return;
+        }
+
+        if (PrefillPatientId.HasValue && PrefillPatientId.Value > 0 && patients.Any(x => x.id_paciente == PrefillPatientId.Value))
+        {
+            appointmentEditor.IdPaciente = PrefillPatientId.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(PrefillReason))
+        {
+            appointmentEditor.Motivo = PrefillReason.Trim();
+        }
+
+        if (DateOnly.TryParse(PrefillDate, out var parsedDate) && parsedDate >= DateOnly.FromDateTime(DateTime.Today))
+        {
+            appointmentEditor.FechaCita = parsedDate.ToString("yyyy-MM-dd");
+            appointmentCalendarMonth = new DateOnly(parsedDate.Year, parsedDate.Month, 1);
+        }
+    }
+
+    private void SetCalendarView(string view)
+        => selectedCalendarView = view;
+
+    private void OnCalendarFocusDateChanged(ChangeEventArgs args)
+        => calendarFocusDate = args.Value?.ToString() ?? DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+
     private async Task CancelAppointmentCreationAsync()
     {
         statusMessage = null;
@@ -1012,6 +1246,35 @@ else
     {
         await LoadAppointmentAuditAsync(appointmentId);
         showAuditModal = true;
+    }
+
+    private async Task OpenPatientHistoryModalAsync(int patientId)
+    {
+        selectedPatientHistory.Clear();
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var history = await dbContext.tbl_citas
+            .AsNoTracking()
+            .Include(c => c.id_medicoNavigation).ThenInclude(m => m.id_usuarioNavigation)
+            .Include(c => c.id_pacienteNavigation)
+            .Include(c => c.id_estadoNavigation)
+            .Where(c => c.id_paciente == patientId)
+            .OrderByDescending(c => c.fecha_cita)
+            .ThenByDescending(c => c.hora_inicio)
+            .ToListAsync();
+
+        selectedPatientHistory.AddRange(history);
+        selectedPatientHistoryLabel = history.FirstOrDefault() is { } first
+            ? GetPatientDisplayName(first.id_pacienteNavigation)
+            : "Paciente";
+        showPatientHistoryModal = true;
+    }
+
+    private void ClosePatientHistoryModal()
+    {
+        showPatientHistoryModal = false;
+        selectedPatientHistory.Clear();
+        selectedPatientHistoryLabel = string.Empty;
     }
 
     private async Task OpenCancellationChoiceAsync(int appointmentId)
@@ -1076,6 +1339,60 @@ else
     {
         showAuditModal = false;
         appointmentAuditEntries.Clear();
+    }
+
+    private void OpenApiDraftModal(tbl_citas appointment, string actionType)
+    {
+        var actionLabel = string.Equals(actionType, "reschedule", StringComparison.OrdinalIgnoreCase)
+            ? "Solicitud de reprogramacion"
+            : "Confirmacion de cita";
+
+        var endpointAction = string.Equals(actionType, "reschedule", StringComparison.OrdinalIgnoreCase)
+            ? "reschedule-request"
+            : "confirm";
+
+        apiDraft = new ApiActionDraft
+        {
+            Title = $"{actionLabel} por API",
+            EventName = $"appointment.{endpointAction}",
+            Endpoint = $"https://api.tu-dominio.com/appointments/{endpointAction}",
+            PayloadJson = JsonSerializer.Serialize(
+                new
+                {
+                    event_name = $"appointment.{endpointAction}",
+                    appointment = new
+                    {
+                        id = appointment.id_cita,
+                        date = appointment.fecha_cita.ToString("yyyy-MM-dd"),
+                        start_time = appointment.hora_inicio.ToString("HH\\:mm"),
+                        end_time = appointment.hora_fin.ToString("HH\\:mm"),
+                        type = appointment.tipo_cita ?? "Presencial",
+                        status = appointment.id_estadoNavigation?.nombre_estado ?? "Programada"
+                    },
+                    patient = new
+                    {
+                        id = appointment.id_paciente,
+                        name = GetPatientDisplayName(appointment.id_pacienteNavigation),
+                        phone = appointment.id_pacienteNavigation.telefono,
+                        email = appointment.id_pacienteNavigation.email
+                    },
+                    doctor = new
+                    {
+                        id = appointment.id_medico,
+                        name = GetDoctorDisplayName(appointment.id_medicoNavigation)
+                    },
+                    next_step = "Conectar este payload a WhatsApp API, CRM o webhook transaccional."
+                },
+                new JsonSerializerOptions { WriteIndented = true })
+        };
+
+        showApiDraftModal = true;
+    }
+
+    private void CloseApiDraftModal()
+    {
+        showApiDraftModal = false;
+        apiDraft = null;
     }
 
     private async Task SaveAndCloseAppointmentAsync()
@@ -2282,6 +2599,20 @@ else
         NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
 
+    private string BuildAppointmentWhatsappUrl(tbl_citas appointment)
+    {
+        var phone = NormalizeWhatsapp(appointment.id_pacienteNavigation.telefono);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return string.Empty;
+        }
+
+        var patientName = GetPatientDisplayName(appointment.id_pacienteNavigation);
+        var doctorName = GetDoctorDisplayName(appointment.id_medicoNavigation);
+        var message = $"Hola {patientName}, te recordamos tu cita de optometria el {appointment.fecha_cita:yyyy-MM-dd} a las {appointment.hora_inicio:HH\\:mm} con {doctorName}. Estado actual: {appointment.id_estadoNavigation?.nombre_estado ?? "Programada"}.";
+        return $"https://wa.me/{phone}?text={Uri.EscapeDataString(message)}";
+    }
+
     private bool MatchesFilters(tbl_citas appointment)
     {
         if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -2740,6 +3071,14 @@ else
         public string Observaciones { get; set; } = string.Empty;
     }
 
+    private sealed record CalendarSummaryRow(
+        string Label,
+        int Total,
+        int Pending,
+        int Confirmed,
+        int Completed,
+        int Cancelled);
+
     private sealed class AvailabilityEditor
     {
         public int IdDisponibilidad { get; set; }
@@ -2768,6 +3107,62 @@ else
         public static CalendarDayOption Placeholder() => new(null, "placeholder", string.Empty, false, false, true);
         public static CalendarDayOption Unavailable(DateOnly date, string label) => new(date, "unavailable", label, false, false);
     }
+
+    private static string NormalizeWhatsapp(string? phone)
+        => string.IsNullOrWhiteSpace(phone)
+            ? string.Empty
+            : new string(phone.Where(char.IsDigit).ToArray());
+
+    private DateOnly GetCalendarFocusDate()
+        => DateOnly.TryParse(calendarFocusDate, out var parsedDate) ? parsedDate : DateOnly.FromDateTime(DateTime.Today);
+
+    private string GetCalendarViewLabel()
+        => selectedCalendarView switch
+        {
+            "day" => $"dia {GetCalendarFocusDate():yyyy-MM-dd}",
+            "week" => $"semana de {GetStartOfWeek(GetCalendarFocusDate().ToDateTime(TimeOnly.MinValue)):yyyy-MM-dd}",
+            _ => $"{GetCalendarFocusDate():yyyy-MM}"
+        };
+
+    private IEnumerable<CalendarSummaryRow> BuildWeeklyCalendarSummaries()
+    {
+        var start = DateOnly.FromDateTime(GetStartOfWeek(GetCalendarFocusDate().ToDateTime(TimeOnly.MinValue)));
+        return Enumerable.Range(0, 7)
+            .Select(offset => start.AddDays(offset))
+            .Select(date =>
+            {
+                var dayAppointments = FilteredAppointments.Where(x => x.fecha_cita == date).ToList();
+                return new CalendarSummaryRow(
+                    date.ToString("yyyy-MM-dd"),
+                    dayAppointments.Count,
+                    dayAppointments.Count(x => IsPendingState(x.id_estadoNavigation?.nombre_estado ?? string.Empty)),
+                    dayAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Confirmada", StringComparison.OrdinalIgnoreCase)),
+                    dayAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Realizada", StringComparison.OrdinalIgnoreCase)),
+                    dayAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Cancelada", StringComparison.OrdinalIgnoreCase)));
+            });
+    }
+
+    private IEnumerable<CalendarSummaryRow> BuildMonthlyCalendarSummaries()
+    {
+        var focus = GetCalendarFocusDate();
+        return FilteredAppointments
+            .Where(x => x.fecha_cita.Year == focus.Year && x.fecha_cita.Month == focus.Month)
+            .GroupBy(x => x.fecha_cita)
+            .OrderBy(x => x.Key)
+            .Select(group => new CalendarSummaryRow(
+                group.Key.ToString("yyyy-MM-dd"),
+                group.Count(),
+                group.Count(x => IsPendingState(x.id_estadoNavigation?.nombre_estado ?? string.Empty)),
+                group.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Confirmada", StringComparison.OrdinalIgnoreCase)),
+                group.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Realizada", StringComparison.OrdinalIgnoreCase)),
+                group.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Cancelada", StringComparison.OrdinalIgnoreCase))));
+    }
+
+    private static DateTime GetStartOfWeek(DateTime date)
+    {
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff).Date;
+    }
     private static bool DoesBlockAffectAppointment(tbl_bloqueo_horarios block, DateOnly date, TimeOnly start, TimeOnly end)
     {
         if (date < block.fecha_inicio || date > block.fecha_fin)
@@ -2787,4 +3182,41 @@ else
 
     private static bool SlotOverlapsAnyBlock(IEnumerable<tbl_bloqueo_horarios> blocks, DateOnly date, TimeOnly start, TimeOnly end)
         => blocks.Any(block => DoesBlockAffectAppointment(block, date, start, end));
+
+    private sealed class ApiActionDraft
+    {
+        public string Title { get; set; } = string.Empty;
+        public string EventName { get; set; } = string.Empty;
+        public string Endpoint { get; set; } = string.Empty;
+        public string PayloadJson { get; set; } = string.Empty;
+    }
+}
+
+@if (showPatientHistoryModal && selectedPatientHistory.Any())
+{
+    <div class="custom-modal-overlay" @onclick="ClosePatientHistoryModal">
+        <div class="custom-modal-card" style="max-width: 760px;" @onclick:stopPropagation="true">
+            <header class="custom-modal-header rose-header">
+                <h2>Historial de citas - @selectedPatientHistoryLabel</h2>
+                <button type="button" class="btn-close-modal" @onclick="ClosePatientHistoryModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="management-list">
+                    @foreach (var appointment in selectedPatientHistory)
+                    {
+                        <article class="management-list-item">
+                            <strong>@appointment.fecha_cita.ToString("yyyy-MM-dd")</strong>
+                            <span>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</span>
+                            <span>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
+                            <span>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                            <span>@(string.IsNullOrWhiteSpace(appointment.motivo_cita) ? "-" : appointment.motivo_cita)</span>
+                        </article>
+                    }
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClosePatientHistoryModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
 }

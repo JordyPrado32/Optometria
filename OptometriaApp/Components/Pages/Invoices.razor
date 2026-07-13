@@ -8,6 +8,7 @@
 @using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject BillingDraftService BillingDraftService
+@inject ElectronicBillingDocumentService ElectronicBillingDocumentService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
 
@@ -1763,227 +1764,252 @@ else
             return;
         }
 
-        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-        var issuer = await dbContext.emisor.FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
-        if (issuer is null)
+        try
         {
-            errorMessage = "Configura un emisor activo antes de emitir la factura.";
-            return;
-        }
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
-        var lastSequence = await BillingDraftService.GetLastInvoiceSequenceAsync(dbContext, issuer);
-        var requiresInitialSequence = !lastSequence.HasValue;
-        long resolvedInitialSequence = 0;
-        if (requiresInitialSequence && !TryResolveInitialSequence(issuer, out resolvedInitialSequence, out var initialSequenceError))
-        {
-            errorMessage = initialSequenceError;
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(paymentForm))
-        {
-            errorMessage = "Selecciona una forma de pago.";
-            return;
-        }
-
-        if (creditDays < 0)
-        {
-            errorMessage = "Los dias de credito no pueden ser negativos.";
-            return;
-        }
-
-        if (paidAmount < 0)
-        {
-            errorMessage = "El valor cobrado no puede ser negativo.";
-            return;
-        }
-        var sale = await dbContext.tbl_venta
-            .Include(x => x.tbl_detalle_venta)
-            .FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
-
-        if (sale is null)
-        {
-            errorMessage = "No se encontro el borrador de factura.";
-            return;
-        }
-
-        if (!sale.tbl_detalle_venta.Any())
-        {
-            errorMessage = "Agrega al menos una linea antes de emitir la factura.";
-            return;
-        }
-
-        var linesByProduct = sale.tbl_detalle_venta
-            .GroupBy(x => x.id_producto)
-            .Select(x => new { ProductId = x.Key, Quantity = x.Sum(line => line.cantidad) })
-            .ToList();
-        var involvedProductIds = linesByProduct.Select(x => x.ProductId).Distinct().ToList();
-        var invoiceProducts = await dbContext.tbl_productos
-            .Where(x => involvedProductIds.Contains(x.id_producto))
-            .ToDictionaryAsync(x => x.id_producto);
-
-        foreach (var groupedLine in linesByProduct)
-        {
-            if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct))
+            var issuer = await dbContext.emisor.FirstOrDefaultAsync(x => x.id_usuario_creacion == currentUserId && x.estado);
+            if (issuer is null)
             {
-                errorMessage = "Una de las lineas referencia un producto inexistente.";
+                errorMessage = "Configura un emisor activo antes de emitir la factura.";
                 return;
             }
 
-            if (!CanInvoiceProduct(invoiceProduct))
+            var lastSequence = await BillingDraftService.GetLastInvoiceSequenceAsync(dbContext, issuer);
+            var requiresInitialSequence = !lastSequence.HasValue;
+            long resolvedInitialSequence = 0;
+            if (requiresInitialSequence && !TryResolveInitialSequence(issuer, out resolvedInitialSequence, out var initialSequenceError))
             {
-                errorMessage = $"El producto '{invoiceProduct.nombre_producto}' ya no esta disponible para facturacion.";
+                errorMessage = initialSequenceError;
                 return;
             }
 
-            if (IsStockManagedProduct(invoiceProduct) && groupedLine.Quantity > (invoiceProduct.stock_actual ?? 0))
+            if (string.IsNullOrWhiteSpace(paymentForm))
             {
-                errorMessage = $"No hay stock suficiente para '{invoiceProduct.nombre_producto}'. Disponible: {invoiceProduct.stock_actual ?? 0}.";
-                return;
-            }
-        }
-
-        var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == billingClient.cliente_id);
-        if (client is null)
-        {
-            errorMessage = "No se encontro el cliente de facturacion.";
-            return;
-        }
-
-        sale.id_cliente_facturacion = client.cliente_id;
-        sale.id_usuario = currentUserId;
-        sale.id_paciente = sale.id_paciente > 0
-            ? sale.id_paciente
-            : await ResolveAnchorPatientIdAsync(dbContext) ?? sale.id_paciente;
-        sale.forma_pago = paymentForm;
-        sale.dias_credito = creditDays;
-        sale.observaciones_factura = NormalizeOptional(invoiceNotes);
-        sale.valor_cobrado = paidAmount;
-        sale.fecha_venta = DateTime.Now;
-
-        await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
-
-        var invoiceSequence = requiresInitialSequence
-            ? resolvedInitialSequence
-            : await BillingDraftService.GenerateNextInvoiceSequenceAsync(dbContext, issuer);
-        var invoiceNumber = BillingDraftService.BuildInvoiceNumber(issuer, invoiceSequence);
-        sale.estado = "Pendiente";
-
-        var comprobante = new tbl_comprobante
-        {
-            id_venta = sale.id_venta,
-            tipo_comprobante = "Factura",
-            numero_comprobante = invoiceNumber,
-            secuencial = invoiceSequence,
-            estado_comprobante = "PendienteSRI",
-            id_emisor = issuer.emisor_id,
-            numero_autorizacion = null,
-            fecha_autorizacion = null,
-            fecha_emision = DateTime.Now
-        };
-        dbContext.tbl_comprobantes.Add(comprobante);
-        await dbContext.SaveChangesAsync();
-
-        var inventoryProductIds = new List<int>();
-        foreach (var groupedLine in linesByProduct)
-        {
-            if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct) || !IsStockManagedProduct(invoiceProduct))
-            {
-                continue;
-            }
-
-            var previousStock = invoiceProduct.stock_actual ?? 0;
-            var newStock = previousStock - groupedLine.Quantity;
-            if (newStock < 0)
-            {
-                errorMessage = $"No hay stock suficiente para '{invoiceProduct.nombre_producto}'.";
+                errorMessage = "Selecciona una forma de pago.";
                 return;
             }
 
-            invoiceProduct.stock_actual = newStock;
-            invoiceProduct.estado_producto = newStock == 0
-                ? "Agotado"
-                : (string.Equals(invoiceProduct.estado_producto, "Agotado", StringComparison.OrdinalIgnoreCase) ? "Disponible" : invoiceProduct.estado_producto);
-            inventoryProductIds.Add(invoiceProduct.id_producto);
-
-            dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+            if (creditDays < 0)
             {
-                id_producto = invoiceProduct.id_producto,
-                id_usuario = currentUserId,
-                fecha_movimiento = DateTime.Now,
-                tipo_movimiento = "Salida",
-                cantidad = groupedLine.Quantity,
-                stock_anterior = previousStock,
-                stock_resultante = newStock,
-                comprobante_numero = comprobante.numero_comprobante,
-                id_referencia_documento = comprobante.id_comprobante,
-                tipo_documento_referencia = "Factura",
-                observaciones = $"Salida automatica por factura {comprobante.numero_comprobante}",
-                metodo_valuacion = "Promedio"
-            });
-        }
+                errorMessage = "Los dias de credito no pueden ser negativos.";
+                return;
+            }
 
-        var currentBalance = sale.saldo_pendiente ?? 0m;
-        var accountReceivable = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_venta == sale.id_venta);
-        if (currentBalance > 0)
-        {
-            var dueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(Math.Max(0, creditDays)));
-            if (accountReceivable is null)
+            if (paidAmount < 0)
             {
-                dbContext.tbl_cta_cobrar.Add(new tbl_cta_cobrar
+                errorMessage = "El valor cobrado no puede ser negativo.";
+                return;
+            }
+
+            var sale = await dbContext.tbl_venta
+                .Include(x => x.tbl_detalle_venta)
+                .FirstOrDefaultAsync(x => x.id_venta == draftSale.id_venta);
+
+            if (sale is null)
+            {
+                errorMessage = "No se encontro el borrador de factura.";
+                return;
+            }
+
+            if (!sale.tbl_detalle_venta.Any())
+            {
+                errorMessage = "Agrega al menos una linea antes de emitir la factura.";
+                return;
+            }
+
+            var linesByProduct = sale.tbl_detalle_venta
+                .GroupBy(x => x.id_producto)
+                .Select(x => new { ProductId = x.Key, Quantity = x.Sum(line => line.cantidad) })
+                .ToList();
+            var involvedProductIds = linesByProduct.Select(x => x.ProductId).Distinct().ToList();
+            var invoiceProducts = await dbContext.tbl_productos
+                .Where(x => involvedProductIds.Contains(x.id_producto))
+                .ToDictionaryAsync(x => x.id_producto);
+
+            foreach (var groupedLine in linesByProduct)
+            {
+                if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct))
                 {
-                    id_cliente = client.cliente_id,
-                    id_venta = sale.id_venta,
-                    id_comprobante = comprobante.id_comprobante,
-                    monto_total = sale.total ?? 0,
-                    saldo = currentBalance,
-                    fecha_emision = DateTime.Now,
-                    fecha_vencimiento = dueDate,
-                    estado = "Pendiente",
-                    fecha_creacion = DateTime.Now,
-                    usuario_creacion = GetCurrentActorLabel()
+                    errorMessage = "Una de las lineas referencia un producto inexistente.";
+                    return;
+                }
+
+                if (!CanInvoiceProduct(invoiceProduct))
+                {
+                    errorMessage = $"El producto '{invoiceProduct.nombre_producto}' ya no esta disponible para facturacion.";
+                    return;
+                }
+
+                if (IsStockManagedProduct(invoiceProduct) && groupedLine.Quantity > (invoiceProduct.stock_actual ?? 0))
+                {
+                    errorMessage = $"No hay stock suficiente para '{invoiceProduct.nombre_producto}'. Disponible: {invoiceProduct.stock_actual ?? 0}.";
+                    return;
+                }
+            }
+
+            var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == billingClient.cliente_id);
+            if (client is null)
+            {
+                errorMessage = "No se encontro el cliente de facturacion.";
+                return;
+            }
+
+            sale.id_cliente_facturacion = client.cliente_id;
+            sale.id_usuario = currentUserId;
+            sale.id_paciente = sale.id_paciente > 0
+                ? sale.id_paciente
+                : await ResolveAnchorPatientIdAsync(dbContext) ?? sale.id_paciente;
+            sale.forma_pago = paymentForm;
+            sale.dias_credito = creditDays;
+            sale.observaciones_factura = NormalizeOptional(invoiceNotes);
+            sale.valor_cobrado = paidAmount;
+            sale.fecha_venta = DateTime.Now;
+
+            await BillingDraftService.RecalculateSaleAsync(dbContext, sale);
+            sale.estado = ResolveSaleCollectionStatus(sale.saldo_pendiente ?? 0m);
+
+            var invoiceSequence = requiresInitialSequence
+                ? resolvedInitialSequence
+                : await BillingDraftService.GenerateNextInvoiceSequenceAsync(dbContext, issuer);
+            var invoiceNumber = BillingDraftService.BuildInvoiceNumber(issuer, invoiceSequence);
+
+            var comprobante = new tbl_comprobante
+            {
+                id_venta = sale.id_venta,
+                tipo_comprobante = "Factura",
+                numero_comprobante = invoiceNumber,
+                secuencial = invoiceSequence,
+                estado_comprobante = "PendienteSRI",
+                id_emisor = issuer.emisor_id,
+                numero_autorizacion = null,
+                fecha_autorizacion = null,
+                fecha_emision = DateTime.Now
+            };
+            dbContext.tbl_comprobantes.Add(comprobante);
+            await dbContext.SaveChangesAsync();
+
+            var electronicDocumentResult = await ElectronicBillingDocumentService.GenerateInvoiceDocumentAsync(dbContext, comprobante);
+            if (electronicDocumentResult.StatusCode == "ERROR_XML")
+            {
+                errorMessage = electronicDocumentResult.Message;
+                return;
+            }
+
+            var inventoryProductIds = new List<int>();
+            foreach (var groupedLine in linesByProduct)
+            {
+                if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct) || !IsStockManagedProduct(invoiceProduct))
+                {
+                    continue;
+                }
+
+                var previousStock = invoiceProduct.stock_actual ?? 0;
+                var newStock = previousStock - groupedLine.Quantity;
+                if (newStock < 0)
+                {
+                    errorMessage = $"No hay stock suficiente para '{invoiceProduct.nombre_producto}'.";
+                    return;
+                }
+
+                invoiceProduct.stock_actual = newStock;
+                invoiceProduct.estado_producto = newStock == 0
+                    ? "Agotado"
+                    : (string.Equals(invoiceProduct.estado_producto, "Agotado", StringComparison.OrdinalIgnoreCase) ? "Disponible" : invoiceProduct.estado_producto);
+                inventoryProductIds.Add(invoiceProduct.id_producto);
+
+                dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+                {
+                    id_producto = invoiceProduct.id_producto,
+                    id_usuario = currentUserId,
+                    fecha_movimiento = DateTime.Now,
+                    tipo_movimiento = "Salida",
+                    cantidad = groupedLine.Quantity,
+                    stock_anterior = previousStock,
+                    stock_resultante = newStock,
+                    comprobante_numero = comprobante.numero_comprobante,
+                    id_referencia_documento = comprobante.id_comprobante,
+                    tipo_documento_referencia = "Factura",
+                    observaciones = $"Salida automatica por factura {comprobante.numero_comprobante}",
+                    metodo_valuacion = "Promedio"
                 });
             }
-            else
+
+            var currentBalance = sale.saldo_pendiente ?? 0m;
+            sale.estado = ResolveSaleCollectionStatus(currentBalance);
+            var accountReceivable = await dbContext.tbl_cta_cobrar.FirstOrDefaultAsync(x => x.id_venta == sale.id_venta);
+            if (currentBalance > 0)
             {
-                accountReceivable.id_cliente = client.cliente_id;
+                var dueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(Math.Max(0, creditDays)));
+                if (accountReceivable is null)
+                {
+                    dbContext.tbl_cta_cobrar.Add(new tbl_cta_cobrar
+                    {
+                        id_cliente = client.cliente_id,
+                        id_venta = sale.id_venta,
+                        id_comprobante = comprobante.id_comprobante,
+                        monto_total = sale.total ?? 0,
+                        saldo = currentBalance,
+                        fecha_emision = DateTime.Now,
+                        fecha_vencimiento = dueDate,
+                        estado = "Pendiente",
+                        fecha_creacion = DateTime.Now,
+                        usuario_creacion = GetCurrentActorLabel()
+                    });
+                }
+                else
+                {
+                    accountReceivable.id_cliente = client.cliente_id;
+                    accountReceivable.id_comprobante = comprobante.id_comprobante;
+                    accountReceivable.monto_total = sale.total ?? 0;
+                    accountReceivable.saldo = currentBalance;
+                    accountReceivable.fecha_vencimiento = dueDate;
+                    accountReceivable.estado = "Pendiente";
+                    accountReceivable.usuario_creacion ??= GetCurrentActorLabel();
+                }
+            }
+            else if (accountReceivable is not null)
+            {
                 accountReceivable.id_comprobante = comprobante.id_comprobante;
                 accountReceivable.monto_total = sale.total ?? 0;
-                accountReceivable.saldo = currentBalance;
-                accountReceivable.fecha_vencimiento = dueDate;
-                accountReceivable.estado = "Pendiente";
-                accountReceivable.usuario_creacion ??= GetCurrentActorLabel();
+                accountReceivable.saldo = 0;
+                accountReceivable.estado = "Pagada";
             }
+
+            client.condicion_pago = currentBalance > 0 ? "Credito" : paymentForm;
+            client.dias_plazo = currentBalance > 0 ? creditDays : 0;
+            var otherOutstandingBalance = await dbContext.tbl_cta_cobrar
+                .Where(x => x.id_cliente == client.cliente_id && x.estado == "Pendiente" && x.id_venta != sale.id_venta)
+                .SumAsync(x => x.saldo);
+            client.saldo_deudor = otherOutstandingBalance + currentBalance;
+            client.fecha_actualizacion = DateTime.Now;
+            client.id_usuario_actualizacion = currentUserId;
+
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            if (inventoryProductIds.Count > 0)
+            {
+                await KardexService.RebuildForProductsAsync(inventoryProductIds, currentUserId, $"Salida por factura {invoiceNumber}");
+            }
+
+            var successMessage = currentBalance > 0
+                ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. Quedo pendiente para autorizacion SRI."
+                : $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y pendiente para autorizacion SRI.";
+
+            if (!string.IsNullOrWhiteSpace(electronicDocumentResult.Message))
+            {
+                successMessage = $"{successMessage} {electronicDocumentResult.Message}";
+            }
+
+            await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
+            statusMessage = successMessage;
         }
-        else if (accountReceivable is not null)
+        catch (Exception ex)
         {
-            accountReceivable.id_comprobante = comprobante.id_comprobante;
-            accountReceivable.monto_total = sale.total ?? 0;
-            accountReceivable.saldo = 0;
-            accountReceivable.estado = "Pagada";
+            errorMessage = $"No se pudo emitir la factura: {ex.Message}";
         }
-
-        client.condicion_pago = currentBalance > 0 ? "Credito" : paymentForm;
-        client.dias_plazo = currentBalance > 0 ? creditDays : 0;
-        var otherOutstandingBalance = await dbContext.tbl_cta_cobrar
-            .Where(x => x.id_cliente == client.cliente_id && x.estado == "Pendiente" && x.id_venta != sale.id_venta)
-            .SumAsync(x => x.saldo);
-        client.saldo_deudor = otherOutstandingBalance + currentBalance;
-        client.fecha_actualizacion = DateTime.Now;
-        client.id_usuario_actualizacion = currentUserId;
-
-        await dbContext.SaveChangesAsync();
-        if (inventoryProductIds.Count > 0)
-        {
-            await KardexService.RebuildForProductsAsync(inventoryProductIds, currentUserId, $"Salida por factura {invoiceNumber}");
-        }
-
-        var successMessage = currentBalance > 0
-            ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. Quedo pendiente para autorizacion SRI."
-            : $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y pendiente para autorizacion SRI.";
-
-        await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
-        statusMessage = successMessage;
     }
 
     private string GetInitialSequencePreview()
@@ -2505,6 +2531,8 @@ else
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
+    private static string ResolveSaleCollectionStatus(decimal balance) => balance <= 0m ? "Completada" : "Pendiente";
 
     private void WriteAudit(OpticaDbContext dbContext, string module, string action, string detail)
     {

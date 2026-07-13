@@ -1,0 +1,327 @@
+@page "/reportes-sistema"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+@inject SystemReportsService SystemReportsService
+@inject InventoryInsightsService InventoryInsightsService
+
+<PageTitle>Reportes del sistema</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando reportes...</h1></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Inteligencia operativa</span>
+                <h1>Reportes del sistema</h1>
+                <p>Consolida ventas, ingresos, egresos, citas, consultas, inventario, compras, facturacion y cartera en un solo tablero filtrable.</p>
+            </div>
+            <div class="workspace-actions">
+                <a class="btn btn-outline-primary" href="@BuildCsvUrl()">Excel (CSV)</a>
+                <a class="btn btn-primary" href="@BuildPdfUrl()">PDF</a>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Filtros</h2>
+                <span>Corte global</span>
+            </div>
+            <div class="clinical-grid-4" style="margin-top: 1rem;">
+                <div><label class="form-label">Desde</label><input type="date" class="form-control" value="@startDateText" @onchange="OnStartDateChanged" /></div>
+                <div><label class="form-label">Hasta</label><input type="date" class="form-control" value="@endDateText" @onchange="OnEndDateChanged" /></div>
+                <div>
+                    <label class="form-label">Usuario</label>
+                    <select class="form-select" @bind="selectedUserId">
+                        <option value="0">Todos</option>
+                        @foreach (var item in users)
+                        {
+                            <option value="@item.id_usuario">@($"{item.nombres} {item.apellidos}")</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" @bind="selectedState">
+                        <option value="">Todos</option>
+                        @foreach (var state in states)
+                        {
+                            <option value="@state">@state</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Producto</label>
+                    <select class="form-select" @bind="selectedProductId">
+                        <option value="0">Todos</option>
+                        @foreach (var item in products)
+                        {
+                            <option value="@item.id_producto">@item.nombre_producto</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Proveedor</label>
+                    <select class="form-select" @bind="selectedSupplierId">
+                        <option value="0">Todos</option>
+                        @foreach (var item in suppliers)
+                        {
+                            <option value="@item.id_proveedor">@item.nombre</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Categoria</label>
+                    <select class="form-select" @bind="selectedCategoryId">
+                        <option value="0">Todas</option>
+                        @foreach (var item in categories)
+                        {
+                            <option value="@item.id_categoria">@item.nombre</option>
+                        }
+                    </select>
+                </div>
+                <div class="workspace-actions" style="align-items:end;">
+                    <button type="button" class="btn btn-primary" @onclick="LoadAsync">Aplicar</button>
+                </div>
+            </div>
+        </section>
+
+        @if (report is not null)
+        {
+            <section class="management-card" style="margin-top:1.25rem;">
+                <div class="management-card-header"><h2>Resumen ejecutivo</h2><span>@report.GeneratedAt.ToString("yyyy-MM-dd HH:mm")</span></div>
+                <div class="clinical-header-grid" style="margin-top:1rem;">
+                    <div class="clinical-highlight"><span class="eyebrow">Ventas</span><strong>@report.SalesSummary.TotalSales.ToString("0.00")</strong><p>@report.SalesSummary.MonthlyBuckets meses con ventas</p></div>
+                    <div class="clinical-highlight"><span class="eyebrow">Ingresos netos</span><strong>@report.FinancialSummary.NetBalance.ToString("0.00")</strong><p>Ingresos menos egresos</p></div>
+                    <div class="clinical-highlight"><span class="eyebrow">Citas atendidas</span><strong>@report.AppointmentSummary.Completed</strong><p>@report.AppointmentSummary.Cancelled canceladas</p></div>
+                    <div class="clinical-highlight"><span class="eyebrow">Cartera pendiente</span><strong>@report.FinancialSummary.PendingReceivablesAmount.ToString("0.00")</strong><p>@report.FinancialSummary.PendingReceivablesCount cuentas</p></div>
+                </div>
+            </section>
+
+            <section class="management-card" style="margin-top:1.25rem;">
+                <div class="management-card-header"><h2>Indicadores</h2><span>RF-15 consolidado</span></div>
+                <div class="table-responsive" style="margin-top:1rem;">
+                    <table class="table table-hover">
+                        <thead><tr><th>Bloque</th><th>Dato clave</th><th>Valor</th></tr></thead>
+                        <tbody>
+                            <tr><td>Ventas</td><td>Consultas / lentes / productos / servicios</td><td>@string.Join(" | ", report.SalesSummary.Breakdown.Select(x => $"{x.Label}: {x.Amount:0.00}"))</td></tr>
+                            <tr><td>Citas</td><td>Agendadas / pendientes / atendidas / canceladas</td><td>@($"{report.AppointmentSummary.Scheduled} / {report.AppointmentSummary.Pending} / {report.AppointmentSummary.Completed} / {report.AppointmentSummary.Cancelled}")</td></tr>
+                            <tr><td>Inventario</td><td>Agotados / bajo minimo / movimientos</td><td>@($"{report.StockSummary.OutOfStock} / {report.StockSummary.BelowMinimum} / {report.InventorySummary.TotalMovements}")</td></tr>
+                            <tr><td>Compras</td><td>Ordenes / monto</td><td>@($"{report.PurchaseSummary.TotalOrders} / {report.PurchaseSummary.TotalAmount:0.00}")</td></tr>
+                            <tr><td>Facturacion</td><td>Autorizadas / anuladas / rechazadas</td><td>@($"{report.BillingSummary.Authorized} / {report.BillingSummary.Cancelled} / {report.BillingSummary.Rejected}")</td></tr>
+                            <tr><td>Caja diaria</td><td>Cierres almacenados</td><td>@report.DailyCashClosures.Count</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="management-card" style="margin-top:1.25rem;">
+                <div class="management-card-header"><h2>Productos</h2><span>Rotacion y stock</span></div>
+                <div class="clinical-grid-2" style="margin-top:1rem;">
+                    <div>
+                        <h3 style="font-size:1rem;">Mas vendidos</h3>
+                        <div class="management-list">
+                            @foreach (var item in report.ProductRotation.TopProducts)
+                            {
+                                <article class="management-list-item"><strong>@item.Label</strong><span>@item.Quantity uds</span><span>@item.Amount.ToString("0.00")</span></article>
+                            }
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="font-size:1rem;">Menor rotacion</h3>
+                        <div class="management-list">
+                            @foreach (var item in report.ProductRotation.LowRotationProducts)
+                            {
+                                <article class="management-list-item"><strong>@item.Label</strong><span>@item.Quantity uds</span><span>@item.Amount.ToString("0.00")</span></article>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            @if (inventoryInsights is not null)
+            {
+                <section class="management-card" style="margin-top:1.25rem;">
+                    <div class="management-card-header"><h2>Alertas inteligentes de inventario</h2><span>Accion sugerida</span></div>
+                    <div class="clinical-header-grid" style="margin-top:1rem;">
+                        <div class="clinical-highlight"><span class="eyebrow">Reposicion critica</span><strong>@inventoryInsights.CriticalRestockCount</strong><p>Productos por debajo del punto de reorden</p></div>
+                        <div class="clinical-highlight"><span class="eyebrow">Baja rotacion</span><strong>@inventoryInsights.StagnantCount</strong><p>Items sin salida reciente</p></div>
+                        <div class="clinical-highlight"><span class="eyebrow">Alta salida con riesgo</span><strong>@inventoryInsights.HotRiskCount</strong><p>Ventas activas con cobertura corta</p></div>
+                    </div>
+
+                    <div class="clinical-grid-2" style="margin-top:1rem;">
+                        <div>
+                            <h3 style="font-size:1rem;">Reposicion sugerida</h3>
+                            <div class="management-list">
+                                @foreach (var item in inventoryInsights.RestockSuggestions)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@item.ProductName</strong>
+                                        <span>@item.Priority · stock @item.CurrentStock · sugerido @item.SuggestedOrderQty</span>
+                                        <span>@(item.CoverageDays is null ? "Sin cobertura estimada" : $"{item.CoverageDays:0.#} dias de cobertura")</span>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                        <div>
+                            <h3 style="font-size:1rem;">Productos para promocionar o pausar compra</h3>
+                            <div class="management-list">
+                                @foreach (var item in inventoryInsights.StagnantProducts)
+                                {
+                                    <article class="management-list-item">
+                                        <strong>@item.ProductName</strong>
+                                        <span>@item.DaysWithoutSalesLabel · stock @item.CurrentStock</span>
+                                        <span>@item.Recommendation</span>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            }
+
+            <section class="management-card" style="margin-top:1.25rem;">
+                <div class="management-card-header"><h2>Consultas, compras y auditoria</h2><span>Ultimos registros</span></div>
+                <div class="clinical-grid-2" style="margin-top:1rem;">
+                    <div>
+                        <h3 style="font-size:1rem;">Consultas optometricas</h3>
+                        <div class="management-list">
+                            @foreach (var item in report.ClinicalSummary.RecentConsultations.Take(8))
+                            {
+                                <article class="management-list-item"><strong>@item.Date</strong><span>@item.Diagnosis</span><span>@item.Treatment</span></article>
+                            }
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="font-size:1rem;">Historial de reportes</h3>
+                        <div class="management-list">
+                            @foreach (var item in reportHistory)
+                            {
+                                <article class="management-list-item"><strong>@item.accion</strong><span>@(item.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span><span>@item.detalle</span></article>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+        }
+    </section>
+}
+
+@code {
+    private readonly List<Models.tbl_usuario> users = [];
+    private readonly List<Models.tbl_producto> products = [];
+    private readonly List<Models.tbl_proveedor> suppliers = [];
+    private readonly List<Models.tbl_categoria_producto> categories = [];
+    private readonly List<Models.tbl_log_auditoria> reportHistory = [];
+    private readonly List<string> states = ["Programada", "Reprogramada", "Confirmada", "Realizada", "Cancelada", "Autorizada", "Anulada", "Rechazada"];
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string startDateText = DateTime.Today.AddDays(-30).ToString("yyyy-MM-dd");
+    private string endDateText = DateTime.Today.ToString("yyyy-MM-dd");
+    private int selectedUserId;
+    private int selectedProductId;
+    private int selectedSupplierId;
+    private int selectedCategoryId;
+    private string selectedState = string.Empty;
+    private SystemReportSnapshot? report;
+    private InventoryInsightsSnapshot? inventoryInsights;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        inventoryInsights = null;
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            await LoadLookupsAsync(dbContext);
+            await LoadHistoryAsync(dbContext);
+
+            if (!DateOnly.TryParse(startDateText, out var startDate) || !DateOnly.TryParse(endDateText, out var endDate) || endDate < startDate)
+            {
+                errorMessage = "Rango de fechas invalido.";
+                isLoading = false;
+                return;
+            }
+
+            report = await SystemReportsService.BuildAsync(dbContext, new SystemReportFilters(startDate, endDate, selectedUserId, selectedProductId, selectedSupplierId, selectedCategoryId, selectedState));
+            inventoryInsights = await InventoryInsightsService.BuildAsync(
+                dbContext,
+                new InventoryInsightsFilters(endDate, selectedProductId, selectedSupplierId, selectedCategoryId));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task LoadLookupsAsync(OpticaDbContext dbContext)
+    {
+        if (users.Count == 0)
+        {
+            users.AddRange(await dbContext.tbl_usuarios.AsNoTracking().Where(x => x.activo == true).OrderBy(x => x.nombres).ToListAsync());
+            products.AddRange(await dbContext.tbl_productos.AsNoTracking().Where(x => x.activo ?? true).OrderBy(x => x.nombre_producto).ToListAsync());
+            suppliers.AddRange(await dbContext.tbl_proveedors.AsNoTracking().Where(x => x.es_activo ?? true).OrderBy(x => x.nombre).ToListAsync());
+            categories.AddRange(await dbContext.tbl_categoria_productos.AsNoTracking().OrderBy(x => x.nombre).ToListAsync());
+        }
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs args)
+        => startDateText = args.Value?.ToString() ?? startDateText;
+
+    private void OnEndDateChanged(ChangeEventArgs args)
+        => endDateText = args.Value?.ToString() ?? endDateText;
+
+    private async Task LoadHistoryAsync(OpticaDbContext dbContext)
+    {
+        reportHistory.Clear();
+        reportHistory.AddRange(await dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Where(x => x.modulo == "Reportes")
+            .OrderByDescending(x => x.fecha)
+            .Take(15)
+            .ToListAsync());
+    }
+
+    private string BuildCsvUrl()
+        => BuildExportUrl("/exports/system-reports.csv");
+
+    private string BuildPdfUrl()
+        => BuildExportUrl("/exports/system-reports.pdf");
+
+    private string BuildExportUrl(string basePath)
+    {
+        return NavigationManager.GetUriWithQueryParameters(basePath, new Dictionary<string, object?>
+        {
+            ["start"] = startDateText,
+            ["end"] = endDateText,
+            ["userId"] = selectedUserId > 0 ? selectedUserId : null,
+            ["productId"] = selectedProductId > 0 ? selectedProductId : null,
+            ["supplierId"] = selectedSupplierId > 0 ? selectedSupplierId : null,
+            ["categoryId"] = selectedCategoryId > 0 ? selectedCategoryId : null,
+            ["state"] = string.IsNullOrWhiteSpace(selectedState) ? null : selectedState
+        });
+    }
+}

@@ -158,6 +158,9 @@ else
                                     </td>
                                     <td style="text-align: right; padding-right: 1.2rem;">
                                         <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <a class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.22) !important;" href="@GetClinicalHistoryUrl(patient.id_paciente)">
+                                                <i class="bi bi-journal-medical" style="margin-right: 4px;"></i> Historia
+                                            </a>
                                             <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditPatient(patient)">
                                                 <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
                                             </button>
@@ -603,6 +606,8 @@ else
         showAlertModal = false;
         alertMessage = string.Empty;
     }
+
+    private static string GetClinicalHistoryUrl(int patientId) => $"/doctor/historia-clinica?patientId={patientId}";
 
     private async Task SelectPatientAsync(int patientId)
     {
