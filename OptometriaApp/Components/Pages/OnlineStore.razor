@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
 @using OptometriaApp.Data
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 
@@ -183,10 +184,9 @@ else
             }
 
             var rows = await (
-                from product in dbContext.tbl_productos.AsNoTracking()
+                from product in ProductInventoryRules.FilterStoreVisible(dbContext.tbl_productos.AsNoTracking())
                 join category in dbContext.tbl_categoria_productos.AsNoTracking() on product.id_categoria equals category.id_categoria into categoryJoin
                 from category in categoryJoin.DefaultIfEmpty()
-                where product.activo != false
                 select new
                 {
                     product.codigo_producto,

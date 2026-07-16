@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Net.Mail
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
@@ -64,10 +65,10 @@ else
                 </div>
 
                 <div>
-                    <label class="form-label" for="productType">Tipo</label>
+                    <label class="form-label" for="productType">Naturaleza</label>
                     <select id="productType" class="form-select" @bind="selectedTypeFilter">
                         <option value="">Todos</option>
-                        @foreach (var option in productTypeOptions)
+                        @foreach (var option in natureOptions)
                         {
                             <option value="@option">@option</option>
                         }
@@ -167,22 +168,32 @@ else
                                         <strong style="color: var(--color-ink);">@product.nombre_producto</strong>
                                         <div style="font-size: 0.78rem; color: var(--color-taupe);">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
                                     </td>
-                                    <td>@(product.tipo_item ?? "Producto")</td>
+                                    <td>@(product.naturaleza_item ?? "Bien")</td>
                                     <td>@(product.id_categoriaNavigation?.nombre ?? "-")</td>
                                     <td>@(product.id_proveedorNavigation?.nombre ?? "-")</td>
                                     <td>@product.precio_venta.ToString("0.00")</td>
                                     <td>
-                                        <div>@($"{product.stock_actual ?? 0} / min {(product.stock_minimo ?? 0)}")</div>
-                                        @if ((product.stock_actual ?? 0) <= 0)
+                                        @if (ProductInventoryRules.IsGoodProduct(product))
                                         {
-                                            <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
-                                                <i class="bi bi-exclamation-triangle-fill"></i> Sin stock
-                                            </div>
+                                            <div>@($"{product.stock_actual ?? 0} / min {(product.stock_minimo ?? 0)}")</div>
+                                            @if ((product.stock_actual ?? 0) <= 0)
+                                            {
+                                                <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i> Sin stock
+                                                </div>
+                                            }
+                                            else if ((product.stock_minimo ?? 0) > 0 && (product.stock_actual ?? 0) <= (product.stock_minimo ?? 0))
+                                            {
+                                                <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i> Bajo minimo
+                                                </div>
+                                            }
                                         }
-                                        else if ((product.stock_minimo ?? 0) > 0 && (product.stock_actual ?? 0) <= (product.stock_minimo ?? 0))
+                                        else
                                         {
-                                            <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
-                                                <i class="bi bi-exclamation-triangle-fill"></i> Bajo minimo
+                                            <div>No aplica</div>
+                                            <div style="font-size: 0.75rem; color: var(--color-taupe); font-weight: 700;">
+                                                <i class="bi bi-stars"></i> Servicio
                                             </div>
                                         }
                                     </td>
@@ -275,6 +286,8 @@ else
                             }
                         </select>
                     </div>
+                    @if (EditorManagesInventory)
+                    {
                     <details class="additional-details">
                         <summary><span><i class="bi bi-cash-coin"></i> Costos e impuestos</span></summary>
                         <div class="additional-details-body">
@@ -350,6 +363,13 @@ else
                     </div>
                         </div>
                     </details>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info" role="alert" style="margin:0;">
+                            Los servicios no manejan stock, lotes, vencimiento ni ubicaciones de inventario.
+                        </div>
+                    }
 
                     <details class="additional-details">
                         <summary><span><i class="bi bi-rulers"></i> Medidas y vencimiento</span></summary>
@@ -536,6 +556,8 @@ else
                     </details>
                 </div>
 
+                @if (EditorManagesInventory)
+                {
                 <div class="management-form-grid" style="margin-top: 1rem;">
                     <label class="form-check" style="display: flex; gap: 0.55rem; align-items: center;">
                         <input type="checkbox" class="form-check-input" @bind="editor.RequiereLote" disabled="@(!CanModifyEditor)" />
@@ -550,6 +572,7 @@ else
                         <span class="form-check-label">Es promocion</span>
                     </label>
                 </div>
+                }
             </div>
             <footer class="custom-modal-footer">
                 @if (CanModifyEditor)
@@ -626,7 +649,7 @@ else
     private readonly string[] productStateOptions = ["Disponible", "Descontinuado", "Agotado", "Especial Orden"];
     private readonly string[] productTypeOptions = ["Producto"];
     private readonly string[] movementFrequencyOptions = ["Alta", "Media", "Baja"];
-    private readonly string[] natureOptions = ["Bien"];
+    private readonly string[] natureOptions = [ProductInventoryRules.GoodNature, ProductInventoryRules.ServiceNature];
     private readonly decimal[] ivaPercentageOptions = [5m, 8m, 13m, 15m];
     private List<tbl_log_auditoria> auditEntries = [];
     private ProductEditorModel? editor;
@@ -664,6 +687,8 @@ else
 
     private string EditorTitle => isCreatingNewProduct ? "Nuevo producto" : "Detalle del producto";
     private bool CanModifyEditor => isCreatingNewProduct ? permissions.CanCreate : permissions.CanEdit;
+    private bool EditorIsService => string.Equals(editor?.NaturalezaItem, ProductInventoryRules.ServiceNature, StringComparison.OrdinalIgnoreCase);
+    private bool EditorManagesInventory => !EditorIsService;
 
     protected override async Task OnInitializedAsync()
     {
@@ -691,9 +716,6 @@ else
             .AsNoTracking()
             .Include(p => p.id_categoriaNavigation)
             .Include(p => p.id_proveedorNavigation)
-            .Where(p =>
-                (p.tipo_item ?? "Producto") == "Producto" &&
-                (p.naturaleza_item == null || p.naturaleza_item == "" || p.naturaleza_item == "Bien"))
             .ToListAsync();
 
         var loadedCategories = await dbContext.tbl_categoria_productos
@@ -867,7 +889,8 @@ else
                 ?? throw new InvalidOperationException("No se encontro el producto seleccionado.");
         }
 
-        var initialStock = editor.StockActual;
+        NormalizeEditorForCurrentNature();
+        var initialStock = EditorManagesInventory ? editor.StockActual : 0;
         ApplyEditorToEntity(productEntity, preserveExistingStock: !isCreatingNewProduct);
         productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
 
@@ -980,7 +1003,8 @@ else
                 }
             }
 
-            var initialStock = editor.StockActual;
+            NormalizeEditorForCurrentNature();
+            var initialStock = EditorManagesInventory ? editor.StockActual : 0;
             ApplyEditorToEntity(productEntity, preserveExistingStock: !isCreatingNewProduct);
             productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
 
@@ -1074,7 +1098,7 @@ else
         entity.id_categoria = editor.IdCategoria;
         entity.codigo_producto = editor.CodigoProducto.Trim();
         entity.nombre_producto = editor.NombreProducto.Trim();
-        entity.tipo_item = "Producto";
+        entity.tipo_item = ProductInventoryRules.ProductType;
         entity.descripcion = NormalizeOptional(editor.Descripcion);
         entity.precio_costo = editor.PrecioCosto;
         entity.precio_venta = editor.PrecioVenta;
@@ -1103,7 +1127,7 @@ else
         entity.dias_vencimiento = editor.DiasVencimiento;
         entity.cuenta_contable = NormalizeOptional(editor.CuentaContable);
         entity.centro_costo = NormalizeOptional(editor.CentroCosto);
-        entity.naturaleza_item = "Bien";
+        entity.naturaleza_item = ProductInventoryRules.NormalizeNature(editor.NaturalezaItem);
         entity.porcentaje_margen = editor.PorcentajeMargen;
         entity.descuento_mayorista = editor.DescuentoMayorista;
         entity.descuento_cliente_fijo = editor.DescuentoClienteFijo;
@@ -1131,6 +1155,7 @@ else
         entity.tiempo_entrega_dias = editor.TiempoEntregaDias;
         entity.cantidad_pedido_optima = editor.CantidadPedidoOptima;
         entity.notas_internas = NormalizeOptional(editor.NotasInternas);
+        ProductInventoryRules.NormalizeInventoryFields(entity);
     }
 
     private async Task LoadAuditEntriesAsync(int productId)
@@ -1173,7 +1198,7 @@ else
 
         if (!string.IsNullOrWhiteSpace(selectedTypeFilter))
         {
-            query.Add($"type={Uri.EscapeDataString(selectedTypeFilter)}");
+            query.Add($"nature={Uri.EscapeDataString(selectedTypeFilter)}");
         }
 
         if (!string.IsNullOrWhiteSpace(selectedSupplierFilter))
@@ -1216,7 +1241,7 @@ else
         }
 
         if (!string.IsNullOrWhiteSpace(selectedTypeFilter) &&
-            !string.Equals(product.tipo_item ?? "Producto", selectedTypeFilter, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(ProductInventoryRules.NormalizeNature(product.naturaleza_item), selectedTypeFilter, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -1254,10 +1279,11 @@ else
             return false;
         }
 
+        NormalizeEditorForCurrentNature();
         editor.CodigoProducto = editor.CodigoProducto.Trim();
         editor.NombreProducto = editor.NombreProducto.Trim();
         editor.CodigoBarras = editor.CodigoBarras.Trim();
-        editor.TipoItem = "Producto";
+        editor.TipoItem = ProductInventoryRules.ProductType;
 
         if (string.IsNullOrWhiteSpace(editor.CodigoProducto) || string.IsNullOrWhiteSpace(editor.NombreProducto))
         {
@@ -1351,7 +1377,7 @@ else
             TipoItem = "Producto",
             TieneIva = false,
             PorcentajeIva = 0,
-            NaturalezaItem = "Bien",
+            NaturalezaItem = ProductInventoryRules.GoodNature,
             MovimientoFrecuencia = "Media",
             UsuarioCreacion = currentUserName
         };
@@ -1397,7 +1423,7 @@ else
             DiasVencimiento = product.dias_vencimiento ?? 0,
             CuentaContable = product.cuenta_contable ?? string.Empty,
             CentroCosto = product.centro_costo ?? string.Empty,
-            NaturalezaItem = product.naturaleza_item ?? "Bien",
+            NaturalezaItem = ProductInventoryRules.NormalizeNature(product.naturaleza_item),
             PorcentajeMargen = product.porcentaje_margen ?? 0,
             DescuentoMayorista = product.descuento_mayorista ?? 0,
             DescuentoClienteFijo = product.descuento_cliente_fijo ?? 0,
@@ -1432,6 +1458,47 @@ else
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private void NormalizeEditorForCurrentNature()
+    {
+        if (editor is null)
+        {
+            return;
+        }
+
+        editor.NaturalezaItem = ProductInventoryRules.NormalizeNature(editor.NaturalezaItem);
+        editor.TipoItem = ProductInventoryRules.ProductType;
+
+        if (!EditorIsService)
+        {
+            if (editor.CantidadEmpaque <= 0)
+            {
+                editor.CantidadEmpaque = 1;
+            }
+
+            return;
+        }
+
+        editor.StockActual = 0;
+        editor.StockMinimo = 0;
+        editor.StockMaximo = 0;
+        editor.PuntoReorden = 0;
+        editor.CantidadEmpaque = 0;
+        editor.Almacen = string.Empty;
+        editor.Pasillo = string.Empty;
+        editor.Estante = string.Empty;
+        editor.Nivel = string.Empty;
+        editor.PesoUnitario = 0;
+        editor.DimensionesLargo = 0;
+        editor.DimensionesAncho = 0;
+        editor.DimensionesAlto = 0;
+        editor.VolumenM3 = 0;
+        editor.RequiereLote = false;
+        editor.RequiereFechaVencimiento = false;
+        editor.DiasVencimiento = 0;
+        editor.FechaUltimaCompra = null;
+        editor.CantidadMovimientosMes = 0;
     }
 
     private static string GetAuditActorLabel(tbl_log_auditoria auditEntry)

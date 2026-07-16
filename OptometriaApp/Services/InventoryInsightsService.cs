@@ -15,7 +15,7 @@ public sealed class InventoryInsightsService
         var sold60Start = endDateTime.AddDays(-60);
         var sold90Start = endDateTime.AddDays(-90);
 
-        var productsQuery = dbContext.tbl_productos
+        var productsQuery = ProductInventoryRules.FilterGoods(dbContext.tbl_productos)
             .AsNoTracking()
             .Include(x => x.id_categoriaNavigation)
             .Include(x => x.id_proveedorNavigation)

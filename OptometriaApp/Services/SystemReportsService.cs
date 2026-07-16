@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using OptometriaApp.Data;
+using OptometriaApp.Models;
 
 namespace OptometriaApp.Services;
 
@@ -61,7 +62,7 @@ public sealed class SystemReportsService
             .Take(100)
             .ToListAsync(cancellationToken);
 
-        var productsQuery = dbContext.tbl_productos
+        var productsQuery = ProductInventoryRules.FilterGoods(dbContext.tbl_productos)
             .AsNoTracking()
             .Include(x => x.id_categoriaNavigation)
             .Include(x => x.id_proveedorNavigation)
@@ -88,7 +89,11 @@ public sealed class SystemReportsService
         var kardexQuery = dbContext.tbl_kardex
             .AsNoTracking()
             .Include(x => x.id_productoNavigation)
-            .Where(x => x.fecha_movimiento.HasValue && x.fecha_movimiento.Value >= startDate && x.fecha_movimiento.Value <= endDate)
+            .Where(x =>
+                x.fecha_movimiento.HasValue &&
+                x.fecha_movimiento.Value >= startDate &&
+                x.fecha_movimiento.Value <= endDate &&
+                (x.id_productoNavigation.naturaleza_item == null || x.id_productoNavigation.naturaleza_item == "" || x.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
             .AsQueryable();
 
         if (filters.ProductId > 0)
@@ -104,6 +109,10 @@ public sealed class SystemReportsService
             .Include(x => x.tbl_detalle_orden_compra)
                 .ThenInclude(x => x.id_productoNavigation)
             .Where(x => x.fecha_orden.HasValue && x.fecha_orden.Value >= startDate && x.fecha_orden.Value <= endDate)
+            .Where(x => x.tbl_detalle_orden_compra.Any(line =>
+                line.id_productoNavigation.naturaleza_item == null ||
+                line.id_productoNavigation.naturaleza_item == "" ||
+                line.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
             .AsQueryable();
 
         if (filters.SupplierId > 0)
@@ -125,6 +134,7 @@ public sealed class SystemReportsService
 
         var salesDetails = sales.SelectMany(x => x.tbl_detalle_venta).ToList();
         var filteredSalesDetails = salesDetails.Where(detail =>
+            ProductInventoryRules.IsGoodProduct(detail.id_productoNavigation) &&
             (filters.ProductId <= 0 || detail.id_producto == filters.ProductId) &&
             (filters.CategoryId <= 0 || detail.id_productoNavigation.id_categoria == filters.CategoryId) &&
             (filters.SupplierId <= 0 || detail.id_productoNavigation.id_proveedor == filters.SupplierId))
