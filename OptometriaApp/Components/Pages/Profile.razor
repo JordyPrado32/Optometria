@@ -31,7 +31,7 @@ else
                 <h1>@FullName</h1>
                 <p>
                     Actualiza tus datos personales, conserva tu correo como identificador del sistema
-                    y cambia tu contrasena con validacion reforzada.
+                    y cambia tu contraseña con validación reforzada.
                 </p>
             </div>
 
@@ -47,7 +47,7 @@ else
         <div class="profile-layout">
             <div class="management-card profile-side-card">
                 <div class="management-card-header">
-                    <h2>Acceso rapido</h2>
+                    <h2>Acceso rápido</h2>
                     <span>Cuenta</span>
                 </div>
 
@@ -57,20 +57,50 @@ else
                     <span>@(profile.email ?? "Sin correo")</span>
                 </div>
 
-                <button type="button" class="btn btn-outline-primary" @onclick="OpenAvatarPicker">
-                    Cambiar avatar
+                <button type="button" class="btn btn-outline-primary" @onclick="OpenAvatarPicker" style="width: 100%; margin-bottom: 1.5rem;">
+                    <i class="bi bi-image" style="margin-right: 6px;"></i> Cambiar avatar
                 </button>
 
-                <div class="password-policy profile-password-policy">
-                    <strong>Politica ISO 27001</strong>
-                    <p>Minimo 12 caracteres, mayuscula, minuscula, numero, simbolo, sin espacios y sin datos personales.</p>
+                <!-- Verificación en dos pasos -->
+                <div style="border-top: 1px solid rgba(127,105,81,0.12); padding-top: 1.25rem; margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: var(--color-taupe-deep); font-size: 0.95rem;">Verificación en dos pasos</strong>
+                        <span style="font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: @(TwoFactorEnabled ? "rgba(40,167,69,0.1)" : "rgba(108,117,125,0.1)"); color: @(TwoFactorEnabled ? "#28a745" : "#6c757d"); font-weight: 600;">
+                            @(TwoFactorEnabled ? "Activa" : "Desactivada")
+                        </span>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--color-taupe); margin: 0; line-height: 1.4;">
+                        @(TwoFactorEnabled
+                            ? "La cuenta solicita código de autenticador al iniciar sesión."
+                            : "La cuenta iniciará con 2FA desactivado hasta que decidas activarlo.")
+                    </p>
+                    <div style="margin-top: 0.25rem;">
+                        @if (TwoFactorEnabled)
+                        {
+                            <button type="submit" form="profileForm" class="btn btn-outline-primary btn-sm" name="twoFactorAction" value="disable" style="width: 100%;">
+                                <i class="bi bi-shield-x" style="margin-right: 6px;"></i> Desactivar 2FA
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="submit" form="profileForm" class="btn btn-outline-primary btn-sm" name="twoFactorAction" value="enable" style="width: 100%;">
+                                <i class="bi bi-shield-check" style="margin-right: 6px;"></i> Activar 2FA
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Política de contraseña -->
+                <div class="password-policy profile-password-policy" style="border-top: 1px solid rgba(127,105,81,0.12); padding-top: 1.25rem; margin-top: 0;">
+                    <strong>Política de contraseña</strong>
+                    <p>Mínimo 12 caracteres, mayúscula, minúscula, número, símbolo, sin espacios y sin datos personales.</p>
                 </div>
             </div>
 
             <div class="management-card">
                 <div class="management-card-header">
                     <h2>Datos personales</h2>
-                    <span>Edicion segura</span>
+                    <span>Edición segura</span>
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(Error))
@@ -83,7 +113,7 @@ else
                     <div class="alert alert-success" role="alert">@Message</div>
                 }
 
-                <form method="post" action="/auth/profile" class="auth-form" autocomplete="off">
+                <form id="profileForm" method="post" action="/auth/profile" class="auth-form" autocomplete="off">
                     <AntiforgeryToken />
                     <input type="hidden" name="avatar_url" value="@AvatarFormValue" />
 
@@ -107,7 +137,7 @@ else
                         </div>
 
                         <div>
-                            <label class="form-label" for="telefono">Telefono</label>
+                            <label class="form-label" for="telefono">Teléfono</label>
                             <input id="telefono" name="telefono" class="form-control" value="@profile.telefono" />
                         </div>
                     </div>
@@ -126,73 +156,47 @@ else
 
                     <div class="profile-password-section">
                         <div class="management-card-header">
-                            <h2>Verificacion en dos pasos</h2>
-                            <span>@(TwoFactorEnabled ? "Activa" : "Desactivada")</span>
-                        </div>
-
-                        <div class="password-policy profile-password-policy">
-                            <strong>Estado actual</strong>
-                            <p>
-                                @(TwoFactorEnabled
-                                    ? "La cuenta solicita codigo de autenticador al iniciar sesion."
-                                    : "La cuenta iniciara con 2FA desactivado hasta que el usuario decida activarlo.")
-                            </p>
-                        </div>
-
-                        <div class="workspace-actions">
-                            @if (TwoFactorEnabled)
-                            {
-                                <button type="submit" class="btn btn-outline-primary" name="twoFactorAction" value="disable">Desactivar 2FA</button>
-                            }
-                            else
-                            {
-                                <button type="submit" class="btn btn-outline-primary" name="twoFactorAction" value="enable">Activar 2FA</button>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="profile-password-section">
-                        <div class="management-card-header">
-                            <h2>Actualizar contrasena</h2>
+                            <h2>Actualizar contraseña</h2>
                             <span>Opcional</span>
                         </div>
 
                         <div class="auth-grid">
                             <div>
-                                <label class="form-label" for="currentPassword">Contrasena actual</label>
+                                <label class="form-label" for="currentPassword">Contraseña actual</label>
                                 <div class="password-field">
                                     <input id="currentPassword" name="currentPassword" type="@(showCurrentPassword ? "text" : "password")" class="form-control" autocomplete="new-password" />
-                                    <button type="button" class="password-toggle" @onclick="ToggleCurrentPasswordVisibility">
-                                        @(showCurrentPassword ? "Ocultar" : "Mostrar")
+                                    <button type="button" class="password-toggle" @onclick="ToggleCurrentPasswordVisibility" aria-label="@(showCurrentPassword ? "Ocultar contraseña" : "Mostrar contraseña")">
+                                        <i class="bi @(showCurrentPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                     </button>
                                 </div>
                             </div>
 
                             <div>
-                                <label class="form-label" for="newPassword">Nueva contrasena</label>
+                                <label class="form-label" for="newPassword">Nueva contraseña</label>
                                 <div class="password-field">
                                     <input id="newPassword" name="newPassword" type="@(showNewPassword ? "text" : "password")" class="form-control" autocomplete="new-password" />
-                                    <button type="button" class="password-toggle" @onclick="ToggleNewPasswordVisibility">
-                                        @(showNewPassword ? "Ocultar" : "Mostrar")
+                                    <button type="button" class="password-toggle" @onclick="ToggleNewPasswordVisibility" aria-label="@(showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña")">
+                                        <i class="bi @(showNewPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
 
                         <div>
-                            <label class="form-label" for="confirmNewPassword">Confirmar nueva contrasena</label>
+                            <label class="form-label" for="confirmNewPassword">Confirmar nueva contraseña</label>
                             <div class="password-field">
                                 <input id="confirmNewPassword" name="confirmNewPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" autocomplete="new-password" />
-                                <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
-                                    @(showConfirmPassword ? "Ocultar" : "Mostrar")
+                                <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility" aria-label="@(showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña")">
+                                    <i class="bi @(showConfirmPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div class="workspace-actions">
-                        <button type="submit" class="btn btn-primary">Guardar cambios</button>
-                        <a class="btn btn-outline-primary" href="/dashboard">Volver al dashboard</a>
+                    <div class="workspace-actions" style="justify-content: flex-end;">
+                        <button type="submit" class="btn btn-excel">
+                            <i class="bi bi-save-fill" style="margin-right: 6px;"></i> Guardar cambios
+                        </button>
                     </div>
                 </form>
             </div>
@@ -247,8 +251,12 @@ else
             </div>
 
             <div class="profile-avatar-modal-actions">
-                <button type="button" class="btn btn-outline-primary" @onclick="CloseAvatarPicker">Cancelar</button>
-                <button type="button" class="btn btn-primary" @onclick="ConfirmAvatarSelection">Confirmar avatar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseAvatarPicker">
+                    <i class="bi bi-x-circle" style="margin-right: 6px;"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-coffee" @onclick="ConfirmAvatarSelection">
+                    <i class="bi bi-check-circle" style="margin-right: 6px;"></i> Confirmar avatar
+                </button>
             </div>
         </div>
     </div>
