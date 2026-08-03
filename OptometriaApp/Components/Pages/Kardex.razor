@@ -229,16 +229,11 @@ else
     </section>
 }
 
-@if (showAlert)
-{
-    <div class="custom-modal-overlay">
-        <div class="custom-modal-card alert-modal-card">
-            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")"><h2>@(alertIsError ? "Error" : "Ok")</h2></header>
-            <div class="custom-modal-body"><p>@alertMessage</p></div>
-            <footer class="custom-modal-footer" style="justify-content:center;"><button class="btn btn-primary" @onclick="() => showAlert = false">Aceptar</button></footer>
-        </div>
-    </div>
-}
+<StatusModal Visible="@showAlert"
+             IsError="@alertIsError"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             OnClose="CloseAlert" />
 
 @code {
     private readonly List<tbl_kardex> entries = [];
@@ -256,6 +251,7 @@ else
     private string typeFilter = string.Empty;
     private string statusFilter = string.Empty;
     private string alertMessage = string.Empty;
+    private string alertTitle = string.Empty;
     private string activeSheet = "resumen";
     private DateOnly? fromDate;
     private DateOnly? toDate;
@@ -410,7 +406,7 @@ else
     {
         var result = await KardexService.RebuildForUserScopeAsync(currentUserId, currentUserId, "Recalculo total desde modulo Kardex");
         await LoadAsync();
-        ShowAlert($"Kardex recalculado. Productos: {result.ProductsProcessed}, lineas: {result.LinesGenerated}, observados: {result.ObservedLines}.", false);
+        ShowAlert("Kardex recalculado", $"Se recalculo el kardex completo. Productos: {result.ProductsProcessed}, lineas: {result.LinesGenerated}, observados: {result.ObservedLines}.", false);
     }
 
     private async Task RebuildVisibleAsync()
@@ -421,7 +417,7 @@ else
 
         var result = await KardexService.RebuildForProductsAsync(productIds, currentUserId, "Recalculo visible desde modulo Kardex");
         await LoadAsync();
-        ShowAlert($"Kardex visible recalculado. Productos: {result.ProductsProcessed}, lineas: {result.LinesGenerated}, observados: {result.ObservedLines}.", false);
+        ShowAlert("Kardex visible recalculado", $"Se recalculo el kardex del filtro actual. Productos: {result.ProductsProcessed}, lineas: {result.LinesGenerated}, observados: {result.ObservedLines}.", false);
     }
 
     private void ExportKardex()
@@ -474,11 +470,19 @@ else
             };
     }
 
-    private void ShowAlert(string message, bool isError)
+    private void ShowAlert(string title, string message, bool isError)
     {
+        alertTitle = title;
         alertMessage = message;
         alertIsError = isError;
         showAlert = true;
+    }
+
+    private void CloseAlert()
+    {
+        showAlert = false;
+        alertTitle = string.Empty;
+        alertMessage = string.Empty;
     }
 
     private void SelectSheet(string sheetKey)

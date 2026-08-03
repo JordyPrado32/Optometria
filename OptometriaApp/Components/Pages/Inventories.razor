@@ -181,10 +181,11 @@ else
     </div>
 }
 
-@if (showAlert)
-{
-    <div class="custom-modal-overlay"><div class="custom-modal-card alert-modal-card"><header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")"><h2>@(alertIsError ? "Error" : "Ok")</h2></header><div class="custom-modal-body"><p>@alertMessage</p></div><footer class="custom-modal-footer" style="justify-content:center;"><button class="btn btn-primary" @onclick="() => showAlert = false">Aceptar</button></footer></div></div>
-}
+<StatusModal Visible="@showAlert"
+             IsError="@alertIsError"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             OnClose="CloseAlert" />
 
 @code {
     private readonly List<tbl_movimiento_inventario> movements = [];
@@ -196,7 +197,7 @@ else
     private MovementEditor? editor;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError;
     private int currentUserId, currentRoleId;
-    private string alertMessage = string.Empty, searchTerm = string.Empty, movementTypeFilter = string.Empty, productFilter = string.Empty;
+    private string alertMessage = string.Empty, alertTitle = string.Empty, searchTerm = string.Empty, movementTypeFilter = string.Empty, productFilter = string.Empty;
 
     private List<tbl_movimiento_inventario> FilteredMovements => movements.Where(MatchesFilters).ToList();
     private List<tbl_lote_producto> FilteredLots => lots.Where(MatchesLotFilters).ToList();
@@ -262,7 +263,7 @@ else
             string.IsNullOrWhiteSpace(editor.MetodoValuacion) ||
             !valuationMethods.Contains(editor.MetodoValuacion))
         {
-            ShowAlert("Completa producto, tipo, cantidad y método de valuación.", true);
+            ShowAlert("No se pudo guardar el movimiento.", "Completa producto, tipo, cantidad y metodo de valuacion.", true);
             return;
         }
         await using var db = await DbContextFactory.CreateDbContextAsync();
@@ -274,7 +275,7 @@ else
 
         if (product is null)
         {
-            ShowAlert("Selecciona un producto inventariable valido.", true);
+            ShowAlert("No se pudo guardar el movimiento.", "Selecciona un producto inventariable valido.", true);
             return;
         }
 
@@ -285,7 +286,7 @@ else
         entity = new tbl_movimiento_inventario { id_usuario = currentUserId, fecha_movimiento = DateTime.Now };
         db.tbl_movimiento_inventarios.Add(entity);
 
-        if (resultingStock < 0) { ShowAlert("El stock no puede quedar negativo.", true); return; }
+        if (resultingStock < 0) { ShowAlert("No se pudo guardar el movimiento.", "El stock no puede quedar negativo.", true); return; }
 
         entity.id_producto = editor.IdProducto;
         entity.tipo_movimiento = editor.TipoMovimiento;
@@ -320,13 +321,13 @@ else
         await db.SaveChangesAsync();
         await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Movimiento manual");
         CloseForm();
-        ShowAlert("Movimiento guardado.", false);
+        ShowAlert("Movimiento registrado", "El movimiento de inventario se guardo correctamente.", false);
         await LoadAsync();
     }
 
     private async Task DeleteAsync(tbl_movimiento_inventario item)
     {
-        ShowAlert("Los movimientos historicos no se eliminan. Registra un movimiento compensatorio para corregir el stock.", true);
+        ShowAlert("No se puede eliminar el movimiento.", "Los movimientos historicos no se eliminan. Registra un movimiento compensatorio para corregir el stock.", true);
     }
 
     private void ClearFilters()
@@ -409,7 +410,20 @@ else
         return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
     }
     private void WriteAudit(OpticaDbContext db, string action, string detail) => db.tbl_log_auditoria.Add(new tbl_log_auditoria { id_usuario = currentUserId > 0 ? currentUserId : null, accion = action, modulo = "Inventarios", fecha = DateTime.Now, detalle = detail });
-    private void ShowAlert(string message, bool isError) { alertMessage = message; alertIsError = isError; showAlert = true; }
+    private void ShowAlert(string title, string message, bool isError)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertIsError = isError;
+        showAlert = true;
+    }
+
+    private void CloseAlert()
+    {
+        showAlert = false;
+        alertTitle = string.Empty;
+        alertMessage = string.Empty;
+    }
     private void CloseForm() { showForm = false; editor = null; }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static int ResolveResultingStock(string? movementType, int previousStock, int quantity)

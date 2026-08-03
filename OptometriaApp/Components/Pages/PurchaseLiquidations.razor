@@ -184,32 +184,14 @@ else
     </div>
 }
 
-@if (showAlert)
-{
-    <div class="custom-modal-overlay">
-        <div class="custom-modal-card alert-modal-card">
-            <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error" : "Documento generado")</h2>
-            </header>
-            <div class="custom-modal-body liquidation-document-alert">
-                @if (!alertIsError)
-                {
-                    <div class="liquidation-document-ok"><i class="bi bi-check2-circle"></i></div>
-                }
-                <p>@alertMessage</p>
-            </div>
-            <footer class="custom-modal-footer" style="justify-content:center;">
-                @if (showRetentionAction && generatedDocumentLiquidationId > 0)
-                {
-                    <button class="btn btn-primary" @onclick="() => GoToRetention(generatedDocumentLiquidationId)">
-                        <i class="bi bi-receipt" style="margin-right:6px;"></i> Ir a retencion
-                    </button>
-                }
-                <button class="btn btn-outline-primary" @onclick="CloseAlert">Aceptar</button>
-            </footer>
-        </div>
-    </div>
-}
+<StatusModal Visible="@showAlert"
+             IsError="@alertIsError"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             ActionText="@(showRetentionAction && generatedDocumentLiquidationId > 0 ? "Ir a retencion" : null)"
+             ActionIconClass="bi bi-receipt"
+             OnAction="OpenRetentionFromAlert"
+             OnClose="CloseAlert" />
 
 @code {
     private readonly List<tbl_liquidacion_compra> items = [];
@@ -219,7 +201,7 @@ else
     private LiquidationEditor? editor;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError, showRetentionAction;
     private int currentUserId, currentRoleId, generatedDocumentLiquidationId;
-    private string alertMessage = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
+    private string alertMessage = string.Empty, alertTitle = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
 
     private List<tbl_liquidacion_compra> FilteredItems => items.Where(MatchesFilters).ToList();
     private const int TablePageSize = 5;
@@ -268,10 +250,10 @@ else
 
     private async Task SaveAsync()
     {
-        if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroLiquidacion) || editor.IdOrdenCompra <= 0) { ShowAlert("Completa los datos obligatorios.", true); return; }
+        if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroLiquidacion) || editor.IdOrdenCompra <= 0) { ShowAlert("No se pudo guardar la liquidacion.", "Completa numero de liquidacion y orden de compra.", true); return; }
         await using var db = await DbContextFactory.CreateDbContextAsync();
         var duplicate = await db.tbl_liquidacion_compra.AnyAsync(x => x.id_liquidacion_compra != editor.Id && x.numero_liquidacion == editor.NumeroLiquidacion);
-        if (duplicate) { ShowAlert("El numero de liquidacion ya existe.", true); return; }
+        if (duplicate) { ShowAlert("No se pudo guardar la liquidacion.", "Ya existe una liquidacion con ese numero.", true); return; }
 
         tbl_liquidacion_compra entity;
         if (isCreating)
@@ -301,7 +283,12 @@ else
         WriteAudit(db, isCreating ? "Crear liquidacion compra" : "Editar liquidacion compra", $"LiquidacionCompraId={entity.id_liquidacion_compra}; Numero={entity.numero_liquidacion}; OrdenCompraId={entity.id_orden_compra}");
         await db.SaveChangesAsync();
         CloseForm();
-        ShowAlert("Liquidacion guardada.", false);
+        ShowAlert(
+            isCreating ? "Liquidacion creada" : "Liquidacion actualizada",
+            isCreating
+                ? $"La liquidacion {entity.numero_liquidacion} se registro correctamente."
+                : $"La liquidacion {entity.numero_liquidacion} se actualizo correctamente.",
+            false);
         await LoadAsync();
     }
 
@@ -312,7 +299,7 @@ else
         WriteAudit(db, "Eliminar liquidacion compra", $"LiquidacionCompraId={entity.id_liquidacion_compra}; Numero={entity.numero_liquidacion}; OrdenCompraId={entity.id_orden_compra}");
         db.tbl_liquidacion_compra.Remove(entity);
         await db.SaveChangesAsync();
-        ShowAlert("Liquidacion eliminada.", false);
+        ShowAlert("Liquidacion eliminada", $"La liquidacion {entity.numero_liquidacion} se elimino correctamente.", false);
         await LoadAsync();
     }
 
@@ -325,14 +312,14 @@ else
 
         if (entity is null)
         {
-            ShowAlert("No se encontro la liquidacion seleccionada.", true);
+            ShowAlert("No se pudo generar el documento.", "No se encontro la liquidacion seleccionada.", true);
             return;
         }
 
         WriteAudit(db, "Generar documento liquidacion compra", $"LiquidacionCompraId={entity.id_liquidacion_compra}; Numero={entity.numero_liquidacion}; OrdenCompraId={entity.id_orden_compra}");
         await db.SaveChangesAsync();
 
-        ShowAlert($"El documento de la liquidacion {entity.numero_liquidacion} ya se genero correctamente.", false, true, entity.id_liquidacion_compra);
+        ShowAlert("Documento generado", $"El documento de la liquidacion {entity.numero_liquidacion} se genero correctamente.", false, true, entity.id_liquidacion_compra);
     }
 
     private void GoToRetention(int liquidationId)
@@ -415,8 +402,32 @@ else
         return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
     }
     private void WriteAudit(OpticaDbContext db, string action, string detail) => db.tbl_log_auditoria.Add(new tbl_log_auditoria { id_usuario = currentUserId > 0 ? currentUserId : null, accion = action, modulo = "LiquidacionesCompra", fecha = DateTime.Now, detalle = detail });
-    private void ShowAlert(string message, bool isError, bool canGoToRetention = false, int liquidationId = 0) { alertMessage = message; alertIsError = isError; showRetentionAction = canGoToRetention && !isError; generatedDocumentLiquidationId = showRetentionAction ? liquidationId : 0; showAlert = true; }
-    private void CloseAlert() { showAlert = false; showRetentionAction = false; generatedDocumentLiquidationId = 0; }
+    private void ShowAlert(string title, string message, bool isError, bool canGoToRetention = false, int liquidationId = 0)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertIsError = isError;
+        showRetentionAction = canGoToRetention && !isError;
+        generatedDocumentLiquidationId = showRetentionAction ? liquidationId : 0;
+        showAlert = true;
+    }
+
+    private void CloseAlert()
+    {
+        showAlert = false;
+        alertTitle = string.Empty;
+        alertMessage = string.Empty;
+        showRetentionAction = false;
+        generatedDocumentLiquidationId = 0;
+    }
+
+    private void OpenRetentionFromAlert()
+    {
+        if (generatedDocumentLiquidationId > 0)
+        {
+            GoToRetention(generatedDocumentLiquidationId);
+        }
+    }
     private void CloseForm() { showForm = false; editor = null; orderSearchTerm = string.Empty; }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }
