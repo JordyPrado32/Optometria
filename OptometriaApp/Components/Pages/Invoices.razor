@@ -1285,7 +1285,10 @@ else
         products.Clear();
         products.AddRange(await dbContext.tbl_productos
             .AsNoTracking()
-            .Where(x => x.activo == true)
+            .Where(x =>
+                x.activo == true &&
+                (x.tipo_item ?? "Producto") == "Producto" &&
+                (x.naturaleza_item == null || x.naturaleza_item == "" || x.naturaleza_item == "Bien"))
             .OrderBy(x => x.tipo_item)
             .ThenBy(x => x.nombre_producto)
             .ToListAsync());

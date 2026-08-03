@@ -1,6 +1,7 @@
 @page "/recepciones-de-compra"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
@@ -204,7 +205,16 @@ else
         canView = permissions.CanView;
         if (!canView) { isLoading = false; return; }
         availableOrders.Clear();
-        availableOrders.AddRange(await db.tbl_orden_compra.AsNoTracking().Where(x => x.id_usuario_solicita == currentUserId).OrderByDescending(x => x.fecha_orden).ToListAsync());
+        availableOrders.AddRange(await db.tbl_orden_compra.AsNoTracking()
+            .Include(x => x.tbl_detalle_orden_compra)
+                .ThenInclude(x => x.id_productoNavigation)
+            .Where(x => x.id_usuario_solicita == currentUserId)
+            .Where(x => x.tbl_detalle_orden_compra.Any(line =>
+                line.id_productoNavigation.naturaleza_item == null ||
+                line.id_productoNavigation.naturaleza_item == "" ||
+                line.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
+            .OrderByDescending(x => x.fecha_orden)
+            .ToListAsync());
         recepciones.Clear();
         recepciones.AddRange(await db.tbl_recepcion_compra.AsNoTracking().Include(x => x.id_orden_compraNavigation).Where(x => x.id_usuario_recibe == currentUserId).OrderByDescending(x => x.fecha_recepcion).ToListAsync());
         isLoading = false;
@@ -264,7 +274,20 @@ else
 
         if (isCreating)
         {
-            var order = await db.tbl_orden_compra.Include(x => x.tbl_detalle_orden_compra).FirstAsync(x => x.id_orden_compra == editor.IdOrdenCompra && x.id_usuario_solicita == currentUserId);
+            var order = await db.tbl_orden_compra
+                .Include(x => x.tbl_detalle_orden_compra)
+                    .ThenInclude(x => x.id_productoNavigation)
+                .FirstAsync(x => x.id_orden_compra == editor.IdOrdenCompra && x.id_usuario_solicita == currentUserId);
+            var invalidLines = order.tbl_detalle_orden_compra
+                .Where(x => !ProductInventoryRules.IsGoodProduct(x.id_productoNavigation))
+                .Select(x => x.id_producto)
+                .Distinct()
+                .ToList();
+            if (invalidLines.Count > 0)
+            {
+                ShowAlert("La recepcion contiene servicios y no puede afectar inventario. Corrige la orden de compra primero.", true);
+                return;
+            }
             affectedProductIds = order.tbl_detalle_orden_compra.Select(x => x.id_producto).Distinct().ToList();
             var totalReceived = 0;
             foreach (var line in order.tbl_detalle_orden_compra.Where(x => (x.cantidad_pendiente ?? 0) > 0))
@@ -284,7 +307,13 @@ else
                 line.cantidad_pendiente = 0;
                 line.estado_linea = "Recibida";
 
-                var product = await db.tbl_productos.FirstAsync(x => x.id_producto == line.id_producto);
+                var product = await ProductInventoryRules.FilterGoods(db.tbl_productos)
+                    .FirstOrDefaultAsync(x => x.id_producto == line.id_producto);
+                if (product is null)
+                {
+                    ShowAlert("Se encontro un item no inventariable en la recepcion. El proceso fue cancelado para proteger el stock.", true);
+                    return;
+                }
                 var previousStock = product.stock_actual ?? 0;
                 product.stock_actual = previousStock + received;
                 product.fecha_ultima_compra = DateTime.Now;

@@ -1,6 +1,7 @@
 @page "/ordenes-de-compra"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
@@ -357,7 +358,10 @@ else
         suppliers.Clear();
         suppliers.AddRange(await db.tbl_proveedors.AsNoTracking().OrderBy(x => x.nombre).ToListAsync());
         products.Clear();
-        products.AddRange(await db.tbl_productos.AsNoTracking().OrderBy(x => x.nombre_producto).ToListAsync());
+        products.AddRange(await ProductInventoryRules.FilterGoods(db.tbl_productos.AsNoTracking())
+            .Where(x => x.activo == true)
+            .OrderBy(x => x.nombre_producto)
+            .ToListAsync());
         orders.Clear();
         orders.AddRange(await db.tbl_orden_compra.AsNoTracking()
             .Include(x => x.id_proveedorNavigation)
@@ -455,6 +459,19 @@ else
         }
 
         await using var db = await DbContextFactory.CreateDbContextAsync();
+        var selectedProductIds = editor.Lines.Select(x => x.IdProducto).Where(x => x > 0).Distinct().ToList();
+        var allowedProducts = await ProductInventoryRules.FilterGoods(db.tbl_productos.AsNoTracking())
+            .Where(x => selectedProductIds.Contains(x.id_producto))
+            .Select(x => x.id_producto)
+            .ToListAsync();
+
+        var invalidProductIds = selectedProductIds.Except(allowedProducts).ToList();
+        if (invalidProductIds.Count > 0)
+        {
+            ShowAlert("La orden de compra solo admite bienes inventariables. Quita los servicios seleccionados.", true);
+            return;
+        }
+
         var duplicate = await db.tbl_orden_compra.AnyAsync(x => x.id_orden_compra != editor.Id && x.numero_orden == editor.NumeroOrden);
         if (duplicate)
         {

@@ -1931,7 +1931,7 @@ app.MapGet("/exports/products.csv", async (
     var search = httpContext.Request.Query["search"].ToString().Trim();
     var status = httpContext.Request.Query["status"].ToString().Trim().ToLowerInvariant();
     var state = httpContext.Request.Query["state"].ToString().Trim();
-    var type = httpContext.Request.Query["type"].ToString().Trim();
+    var nature = httpContext.Request.Query["nature"].ToString().Trim();
     var categoryIdRaw = httpContext.Request.Query["categoryId"].ToString().Trim();
     var supplierIdRaw = httpContext.Request.Query["supplierId"].ToString().Trim();
 
@@ -1965,9 +1965,9 @@ app.MapGet("/exports/products.csv", async (
         productsQuery = productsQuery.Where(p => p.estado_producto == state);
     }
 
-    if (!string.IsNullOrWhiteSpace(type))
+    if (!string.IsNullOrWhiteSpace(nature))
     {
-        productsQuery = productsQuery.Where(p => (p.tipo_item ?? "Producto") == type);
+        productsQuery = productsQuery.Where(p => (p.naturaleza_item ?? ProductInventoryRules.GoodNature) == nature);
     }
 
     if (int.TryParse(categoryIdRaw, out var categoryId) && categoryId > 0)
@@ -2015,7 +2015,7 @@ app.MapGet("/exports/products.csv", async (
         accion = "Exportar CSV",
         modulo = "Productos",
         fecha = DateTime.Now,
-        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|state:{state}|type:{type}|categoryId:{categoryIdRaw}|supplierId:{supplierIdRaw}"
+        detalle = $"Tipo=Exportacion; Filtros=search:{search}|status:{status}|state:{state}|nature:{nature}|categoryId:{categoryIdRaw}|supplierId:{supplierIdRaw}"
     });
 
     await dbContext.SaveChangesAsync();
@@ -2062,7 +2062,12 @@ app.MapGet("/exports/purchase-orders.csv", async (
         .AsNoTracking()
         .Include(x => x.id_proveedorNavigation)
         .Include(x => x.tbl_detalle_orden_compra)
+            .ThenInclude(x => x.id_productoNavigation)
         .Where(x => x.id_usuario_solicita == userId)
+        .Where(x => x.tbl_detalle_orden_compra.Any(line =>
+            line.id_productoNavigation.naturaleza_item == null ||
+            line.id_productoNavigation.naturaleza_item == "" ||
+            line.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
         .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(search))
@@ -2163,7 +2168,12 @@ app.MapGet("/exports/purchase-orders.pdf", async (
         .AsNoTracking()
         .Include(x => x.id_proveedorNavigation)
         .Include(x => x.tbl_detalle_orden_compra)
+            .ThenInclude(x => x.id_productoNavigation)
         .Where(x => x.id_usuario_solicita == userId)
+        .Where(x => x.tbl_detalle_orden_compra.Any(line =>
+            line.id_productoNavigation.naturaleza_item == null ||
+            line.id_productoNavigation.naturaleza_item == "" ||
+            line.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
         .OrderByDescending(x => x.fecha_orden)
         .Take(50)
         .ToListAsync();
@@ -2263,7 +2273,13 @@ app.MapGet("/exports/purchase-receptions.csv", async (
     var receptionsQuery = dbContext.tbl_recepcion_compra
         .AsNoTracking()
         .Include(x => x.id_orden_compraNavigation)
+            .ThenInclude(x => x.tbl_detalle_orden_compra)
+                .ThenInclude(x => x.id_productoNavigation)
         .Where(x => x.id_usuario_recibe == userId)
+        .Where(x => x.id_orden_compraNavigation.tbl_detalle_orden_compra.Any(line =>
+            line.id_productoNavigation.naturaleza_item == null ||
+            line.id_productoNavigation.naturaleza_item == "" ||
+            line.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
         .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(search))
@@ -2448,7 +2464,9 @@ app.MapGet("/exports/inventories.csv", async (
     var movementsQuery = dbContext.tbl_movimiento_inventarios
         .AsNoTracking()
         .Include(x => x.id_productoNavigation)
-        .Where(x => x.id_usuario == userId)
+        .Where(x =>
+            x.id_usuario == userId &&
+            (x.id_productoNavigation.naturaleza_item == null || x.id_productoNavigation.naturaleza_item == "" || x.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
         .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(search))
@@ -2544,7 +2562,10 @@ app.MapGet("/exports/kardex.csv", async (
 
     var userProductIds = await dbContext.tbl_movimiento_inventarios
         .AsNoTracking()
-        .Where(x => x.id_usuario == userId)
+        .Include(x => x.id_productoNavigation)
+        .Where(x =>
+            x.id_usuario == userId &&
+            (x.id_productoNavigation.naturaleza_item == null || x.id_productoNavigation.naturaleza_item == "" || x.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
         .Select(x => x.id_producto)
         .Distinct()
         .ToListAsync();
@@ -2552,7 +2573,9 @@ app.MapGet("/exports/kardex.csv", async (
     var kardexQuery = dbContext.tbl_kardex
         .AsNoTracking()
         .Include(x => x.id_productoNavigation)
-        .Where(x => userProductIds.Contains(x.id_producto))
+        .Where(x =>
+            userProductIds.Contains(x.id_producto) &&
+            (x.id_productoNavigation.naturaleza_item == null || x.id_productoNavigation.naturaleza_item == "" || x.id_productoNavigation.naturaleza_item == ProductInventoryRules.GoodNature))
         .AsQueryable();
 
     if (!string.IsNullOrWhiteSpace(search))
@@ -4251,6 +4274,91 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
             ALTER TABLE dbo.tbl_producto
             ADD CONSTRAINT DF_tbl_producto_tipo_item DEFAULT ('Producto') FOR tipo_item;
         END;
+
+        UPDATE dbo.tbl_producto
+        SET naturaleza_item = 'Bien'
+        WHERE naturaleza_item IS NULL
+           OR LTRIM(RTRIM(naturaleza_item)) = '';
+
+        UPDATE dbo.tbl_producto
+        SET stock_actual = 0,
+            stock_minimo = 0,
+            stock_maximo = 0,
+            punto_reorden = 0,
+            cantidad_empaque = 0,
+            almacen = NULL,
+            pasillo = NULL,
+            estante = NULL,
+            nivel = NULL,
+            peso_unitario = 0,
+            dimensiones_largo = 0,
+            dimensiones_ancho = 0,
+            dimensiones_alto = 0,
+            volumen_m3 = 0,
+            requiere_lote = 0,
+            requiere_fecha_vencimiento = 0,
+            dias_vencimiento = 0
+        WHERE naturaleza_item = 'Servicio';
+
+        DECLARE @naturalezaDefaultName sysname;
+        SELECT @naturalezaDefaultName = dc.name
+        FROM sys.default_constraints dc
+        INNER JOIN sys.columns c
+            ON c.default_object_id = dc.object_id
+        WHERE dc.parent_object_id = OBJECT_ID('dbo.tbl_producto')
+            AND c.name = 'naturaleza_item';
+
+        IF @naturalezaDefaultName IS NULL
+        BEGIN
+            ALTER TABLE dbo.tbl_producto
+            ADD CONSTRAINT DF_tbl_producto_naturaleza_item DEFAULT ('Bien') FOR naturaleza_item;
+        END;
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM sys.check_constraints
+            WHERE name = 'CK_tbl_producto_naturaleza_item'
+                AND parent_object_id = OBJECT_ID('dbo.tbl_producto')
+        )
+        BEGIN
+            ALTER TABLE dbo.tbl_producto DROP CONSTRAINT CK_tbl_producto_naturaleza_item;
+        END;
+
+        ALTER TABLE dbo.tbl_producto
+        ADD CONSTRAINT CK_tbl_producto_naturaleza_item CHECK (naturaleza_item IN ('Bien', 'Servicio'));
+
+        IF EXISTS
+        (
+            SELECT 1
+            FROM sys.check_constraints
+            WHERE name = 'CK_tbl_producto_servicio_sin_inventario'
+                AND parent_object_id = OBJECT_ID('dbo.tbl_producto')
+        )
+        BEGIN
+            ALTER TABLE dbo.tbl_producto DROP CONSTRAINT CK_tbl_producto_servicio_sin_inventario;
+        END;
+
+        ALTER TABLE dbo.tbl_producto
+        ADD CONSTRAINT CK_tbl_producto_servicio_sin_inventario CHECK
+        (
+            naturaleza_item <> 'Servicio'
+            OR
+            (
+                ISNULL(stock_actual, 0) = 0
+                AND ISNULL(stock_minimo, 0) = 0
+                AND ISNULL(stock_maximo, 0) = 0
+                AND ISNULL(punto_reorden, 0) = 0
+                AND ISNULL(cantidad_empaque, 0) = 0
+                AND ISNULL(requiere_lote, 0) = 0
+                AND ISNULL(requiere_fecha_vencimiento, 0) = 0
+                AND ISNULL(dias_vencimiento, 0) = 0
+                AND NULLIF(LTRIM(RTRIM(ISNULL(almacen, ''))), '') IS NULL
+                AND NULLIF(LTRIM(RTRIM(ISNULL(pasillo, ''))), '') IS NULL
+                AND NULLIF(LTRIM(RTRIM(ISNULL(estante, ''))), '') IS NULL
+                AND NULLIF(LTRIM(RTRIM(ISNULL(nivel, ''))), '') IS NULL
+            )
+        );
         """);
 }
 
@@ -4510,6 +4618,90 @@ static async Task EnsureProcurementSchemaAsync(WebApplication app)
             ALTER TABLE dbo.tbl_kardex ADD CONSTRAINT FK_kardex_lote FOREIGN KEY (id_lote) REFERENCES dbo.tbl_lote_producto(id_lote);
         IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_kardex_usuario')
             ALTER TABLE dbo.tbl_kardex ADD CONSTRAINT FK_kardex_usuario FOREIGN KEY (id_usuario_movimiento) REFERENCES dbo.tbl_usuario(id_usuario);
+
+        EXEC('
+        CREATE OR ALTER TRIGGER dbo.TR_tbl_movimiento_inventario_only_goods
+        ON dbo.tbl_movimiento_inventario
+        AFTER INSERT, UPDATE
+        AS
+        BEGIN
+            SET NOCOUNT ON;
+            IF EXISTS
+            (
+                SELECT 1
+                FROM inserted i
+                INNER JOIN dbo.tbl_producto p ON p.id_producto = i.id_producto
+                WHERE p.naturaleza_item = ''Servicio''
+            )
+            BEGIN
+                RAISERROR(''Los servicios no pueden generar movimientos de inventario.'', 16, 1);
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+        END');
+
+        EXEC('
+        CREATE OR ALTER TRIGGER dbo.TR_tbl_lote_producto_only_goods
+        ON dbo.tbl_lote_producto
+        AFTER INSERT, UPDATE
+        AS
+        BEGIN
+            SET NOCOUNT ON;
+            IF EXISTS
+            (
+                SELECT 1
+                FROM inserted i
+                INNER JOIN dbo.tbl_producto p ON p.id_producto = i.id_producto
+                WHERE p.naturaleza_item = ''Servicio''
+            )
+            BEGIN
+                RAISERROR(''Los servicios no pueden generar lotes.'', 16, 1);
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+        END');
+
+        EXEC('
+        CREATE OR ALTER TRIGGER dbo.TR_tbl_detalle_orden_compra_only_goods
+        ON dbo.tbl_detalle_orden_compra
+        AFTER INSERT, UPDATE
+        AS
+        BEGIN
+            SET NOCOUNT ON;
+            IF EXISTS
+            (
+                SELECT 1
+                FROM inserted i
+                INNER JOIN dbo.tbl_producto p ON p.id_producto = i.id_producto
+                WHERE p.naturaleza_item = ''Servicio''
+            )
+            BEGIN
+                RAISERROR(''Las ordenes de compra solo admiten bienes inventariables.'', 16, 1);
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+        END');
+
+        EXEC('
+        CREATE OR ALTER TRIGGER dbo.TR_tbl_kardex_only_goods
+        ON dbo.tbl_kardex
+        AFTER INSERT, UPDATE
+        AS
+        BEGIN
+            SET NOCOUNT ON;
+            IF EXISTS
+            (
+                SELECT 1
+                FROM inserted i
+                INNER JOIN dbo.tbl_producto p ON p.id_producto = i.id_producto
+                WHERE p.naturaleza_item = ''Servicio''
+            )
+            BEGIN
+                RAISERROR(''Los servicios no pueden generar lineas de kardex.'', 16, 1);
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+        END');
         """);
 }
 

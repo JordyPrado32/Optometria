@@ -282,7 +282,10 @@ else
         if (users.Count == 0)
         {
             users.AddRange(await dbContext.tbl_usuarios.AsNoTracking().Where(x => x.activo == true).OrderBy(x => x.nombres).ToListAsync());
-            products.AddRange(await dbContext.tbl_productos.AsNoTracking().Where(x => x.activo ?? true).OrderBy(x => x.nombre_producto).ToListAsync());
+            products.AddRange(await ProductInventoryRules.FilterGoods(dbContext.tbl_productos.AsNoTracking())
+                .Where(x => x.activo ?? true)
+                .OrderBy(x => x.nombre_producto)
+                .ToListAsync());
             suppliers.AddRange(await dbContext.tbl_proveedors.AsNoTracking().Where(x => x.es_activo ?? true).OrderBy(x => x.nombre).ToListAsync());
             categories.AddRange(await dbContext.tbl_categoria_productos.AsNoTracking().OrderBy(x => x.nombre).ToListAsync());
         }
