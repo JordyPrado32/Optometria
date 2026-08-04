@@ -468,7 +468,7 @@ else
         var invalidProductIds = selectedProductIds.Except(allowedProducts).ToList();
         if (invalidProductIds.Count > 0)
         {
-            ShowAlert("La orden de compra solo admite bienes inventariables. Quita los servicios seleccionados.", true);
+            ShowAlert("No se pudo guardar la orden de compra.", "La orden de compra solo admite bienes inventariables. Quita los servicios seleccionados.", true);
             return;
         }
 

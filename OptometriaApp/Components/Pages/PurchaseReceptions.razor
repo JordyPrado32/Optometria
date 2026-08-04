@@ -285,7 +285,7 @@ else
                 .ToList();
             if (invalidLines.Count > 0)
             {
-                ShowAlert("La recepcion contiene servicios y no puede afectar inventario. Corrige la orden de compra primero.", true);
+                ShowAlert("No se pudo guardar la recepcion.", "La recepcion contiene servicios y no puede afectar inventario. Corrige la orden de compra primero.", true);
                 return;
             }
             affectedProductIds = order.tbl_detalle_orden_compra.Select(x => x.id_producto).Distinct().ToList();
@@ -311,7 +311,7 @@ else
                     .FirstOrDefaultAsync(x => x.id_producto == line.id_producto);
                 if (product is null)
                 {
-                    ShowAlert("Se encontro un item no inventariable en la recepcion. El proceso fue cancelado para proteger el stock.", true);
+                    ShowAlert("No se pudo guardar la recepcion.", "Se encontro un item no inventariable en la recepcion. El proceso fue cancelado para proteger el stock.", true);
                     return;
                 }
                 var previousStock = product.stock_actual ?? 0;
