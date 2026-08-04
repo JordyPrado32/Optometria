@@ -19,6 +19,8 @@ public partial class tbl_producto
 
     public string? descripcion { get; set; }
 
+    public string? imagen_url { get; set; }
+
     public decimal? precio_costo { get; set; }
 
     public decimal precio_venta { get; set; }

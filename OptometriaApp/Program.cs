@@ -1,4 +1,4 @@
-using System.Net.Mail;
+﻿using System.Net.Mail;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -844,10 +844,7 @@ app.MapGet("/exports/users.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"usuarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"usuarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/patients.csv", async (
@@ -954,10 +951,7 @@ app.MapGet("/exports/patients.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/doctor-patient-entry.csv", async (
@@ -1067,10 +1061,7 @@ app.MapGet("/exports/doctor-patient-entry.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"ingresar-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"ingresar-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/doctor-my-patients.csv", async (
@@ -1180,10 +1171,7 @@ app.MapGet("/exports/doctor-my-patients.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"mis-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"mis-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/appointments.csv", async (
@@ -1329,10 +1317,7 @@ app.MapGet("/exports/appointments.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/appointment-availability.csv", async (
@@ -1383,10 +1368,7 @@ app.MapGet("/exports/appointment-availability.csv", async (
 
     if (doctorId <= 0)
     {
-        return Results.File(
-            Encoding.UTF8.GetBytes("Tipo,Detalle\n"),
-            "text/csv; charset=utf-8",
-            $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+        return ExportStyledExcelCsv("Tipo,Detalle\n", $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
     }
 
     var availabilityQuery = dbContext.tbl_disponibilidad_medico
@@ -1474,10 +1456,7 @@ app.MapGet("/exports/appointment-availability.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/laboratories.csv", async (
@@ -1560,10 +1539,7 @@ app.MapGet("/exports/laboratories.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"laboratorios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"laboratorios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/suppliers.csv", async (
@@ -1652,10 +1628,7 @@ app.MapGet("/exports/suppliers.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/supplier-purchase-history/{supplierId:int}.csv", async (
@@ -1728,10 +1701,7 @@ app.MapGet("/exports/supplier-purchase-history/{supplierId:int}.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"proveedor-compras-{supplierId}-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"proveedor-compras-{supplierId}-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/clients.csv", async (
@@ -1829,10 +1799,7 @@ app.MapGet("/exports/clients.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"clientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"clientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/emisor.csv", async (
@@ -1897,10 +1864,7 @@ app.MapGet("/exports/emisor.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"emisor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"emisor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/products.csv", async (
@@ -2020,10 +1984,7 @@ app.MapGet("/exports/products.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"productos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"productos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-orders.csv", async (
@@ -2132,10 +2093,7 @@ app.MapGet("/exports/purchase-orders.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-orders.pdf", async (
@@ -2330,10 +2288,7 @@ app.MapGet("/exports/purchase-receptions.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"recepciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"recepciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-liquidations.csv", async (
@@ -2425,10 +2380,7 @@ app.MapGet("/exports/purchase-liquidations.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"liquidaciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"liquidaciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/inventories.csv", async (
@@ -2521,10 +2473,7 @@ app.MapGet("/exports/inventories.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"inventarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"inventarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/kardex.csv", async (
@@ -2653,10 +2602,7 @@ app.MapGet("/exports/kardex.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/income-report.csv", async (
@@ -2772,10 +2718,7 @@ app.MapGet("/exports/income-report.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"ingresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"ingresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/system-reports.csv", async (
@@ -2811,7 +2754,7 @@ app.MapGet("/exports/system-reports.csv", async (
     });
     await dbContext.SaveChangesAsync();
 
-    return Results.File(Encoding.UTF8.GetBytes(csv), "text/csv; charset=utf-8", $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcelCsv(csv, $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/system-reports.pdf", async (
@@ -3190,7 +3133,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error al actualizar las rutas del menú y permisos: {ex.Message}");
+        Console.WriteLine($"Error al actualizar las rutas del menÃº y permisos: {ex.Message}");
     }
 }
 
@@ -4136,6 +4079,7 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_producto', 'centro_costo') IS NULL ALTER TABLE dbo.tbl_producto ADD centro_costo VARCHAR(20) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'naturaleza_item') IS NULL ALTER TABLE dbo.tbl_producto ADD naturaleza_item VARCHAR(50) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'tipo_item') IS NULL ALTER TABLE dbo.tbl_producto ADD tipo_item VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'imagen_url') IS NULL ALTER TABLE dbo.tbl_producto ADD imagen_url VARCHAR(500) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'porcentaje_margen') IS NULL ALTER TABLE dbo.tbl_producto ADD porcentaje_margen DECIMAL(5,2) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'descuento_mayorista') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_mayorista DECIMAL(5,2) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'descuento_cliente_fijo') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_cliente_fijo DECIMAL(5,2) NULL;
@@ -4986,6 +4930,137 @@ static string EscapeCsv(string? value)
     return $"\"{escapedValue}\"";
 }
 
+static IResult ExportStyledExcel(StringBuilder csvBuilder, string fileName, string? title = null)
+    => ExportStyledExcelCsv(csvBuilder.ToString(), fileName, title);
+
+static IResult ExportStyledExcelCsv(string csv, string fileName, string? title = null)
+{
+    var rows = ParseCsvRows(csv).ToList();
+    var columnCount = rows.Count == 0 ? 1 : rows.Max(row => row.Count);
+    var reportTitle = string.IsNullOrWhiteSpace(title)
+        ? Path.GetFileNameWithoutExtension(fileName)
+        : title.Trim();
+
+    var htmlBuilder = new StringBuilder();
+    htmlBuilder.AppendLine("<!doctype html>");
+    htmlBuilder.AppendLine("<html>");
+    htmlBuilder.AppendLine("<head>");
+    htmlBuilder.AppendLine("<meta charset=\"utf-8\">");
+    htmlBuilder.AppendLine("<style>");
+    htmlBuilder.AppendLine("body{font-family:Arial,sans-serif;color:#3c342e;background:#fff;}");
+    htmlBuilder.AppendLine("table{border-collapse:collapse;width:100%;}");
+    htmlBuilder.AppendLine("th{background:#5DA181;color:#fff;font-weight:700;border:1px solid #4b8d70;padding:10px;text-align:left;}");
+    htmlBuilder.AppendLine("td{border:1px solid #d9cec0;padding:8px;mso-number-format:'\\@';}");
+    htmlBuilder.AppendLine("tr:nth-child(even) td{background:#F4F0E4;}");
+    htmlBuilder.AppendLine("tr:nth-child(odd) td{background:#fff;}");
+    htmlBuilder.AppendLine(".title{background:#7F6951;color:#fff;font-size:18px;font-weight:700;text-align:center;border:1px solid #7F6951;padding:12px;}");
+    htmlBuilder.AppendLine(".subtitle{background:#FEBC64;color:#3c342e;font-weight:700;text-align:center;border:1px solid #e3a84e;padding:8px;}");
+    htmlBuilder.AppendLine("</style>");
+    htmlBuilder.AppendLine("</head>");
+    htmlBuilder.AppendLine("<body>");
+    htmlBuilder.AppendLine("<table>");
+    htmlBuilder.Append("<tr><td class=\"title\" colspan=\"").Append(columnCount).Append("\">")
+        .Append(WebUtility.HtmlEncode(reportTitle)).AppendLine("</td></tr>");
+    htmlBuilder.Append("<tr><td class=\"subtitle\" colspan=\"").Append(columnCount).Append("\">Generado el ")
+        .Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm")).AppendLine("</td></tr>");
+
+    if (rows.Count > 0)
+    {
+        htmlBuilder.AppendLine("<tr>");
+        foreach (var header in rows[0])
+        {
+            htmlBuilder.Append("<th>").Append(WebUtility.HtmlEncode(header)).AppendLine("</th>");
+        }
+        for (var index = rows[0].Count; index < columnCount; index++)
+        {
+            htmlBuilder.AppendLine("<th></th>");
+        }
+        htmlBuilder.AppendLine("</tr>");
+
+        foreach (var row in rows.Skip(1))
+        {
+            htmlBuilder.AppendLine("<tr>");
+            foreach (var cell in row)
+            {
+                htmlBuilder.Append("<td>").Append(WebUtility.HtmlEncode(cell)).AppendLine("</td>");
+            }
+            for (var index = row.Count; index < columnCount; index++)
+            {
+                htmlBuilder.AppendLine("<td></td>");
+            }
+            htmlBuilder.AppendLine("</tr>");
+        }
+    }
+
+    htmlBuilder.AppendLine("</table>");
+    htmlBuilder.AppendLine("</body>");
+    htmlBuilder.AppendLine("</html>");
+
+    var excelFileName = Path.ChangeExtension(fileName, ".xls");
+    return Results.File(
+        Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(htmlBuilder.ToString())).ToArray(),
+        "application/vnd.ms-excel; charset=utf-8",
+        excelFileName);
+}
+
+static IEnumerable<List<string>> ParseCsvRows(string csv)
+{
+    var row = new List<string>();
+    var cell = new StringBuilder();
+    var inQuotes = false;
+
+    for (var index = 0; index < csv.Length; index++)
+    {
+        var current = csv[index];
+
+        if (current == '"')
+        {
+            if (inQuotes && index + 1 < csv.Length && csv[index + 1] == '"')
+            {
+                cell.Append('"');
+                index++;
+            }
+            else
+            {
+                inQuotes = !inQuotes;
+            }
+            continue;
+        }
+
+        if (current == ',' && !inQuotes)
+        {
+            row.Add(cell.ToString());
+            cell.Clear();
+            continue;
+        }
+
+        if ((current == '\r' || current == '\n') && !inQuotes)
+        {
+            if (current == '\r' && index + 1 < csv.Length && csv[index + 1] == '\n')
+            {
+                index++;
+            }
+
+            row.Add(cell.ToString());
+            cell.Clear();
+            if (row.Count > 1 || !string.IsNullOrWhiteSpace(row[0]))
+            {
+                yield return row;
+            }
+            row = [];
+            continue;
+        }
+
+        cell.Append(current);
+    }
+
+    if (cell.Length > 0 || row.Count > 0)
+    {
+        row.Add(cell.ToString());
+        yield return row;
+    }
+}
+
 const int PasswordMaxAgeDays = 90;
 
 static bool HasPasswordExpired(DateOnly? ultimoCambioPassword, DateTime now)
@@ -5120,3 +5195,4 @@ static class AuthClaimTypes
     public const string RememberMe = "RememberMe";
     public const string RoleId = "RoleId";
 }
+

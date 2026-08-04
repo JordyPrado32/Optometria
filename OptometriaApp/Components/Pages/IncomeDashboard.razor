@@ -21,9 +21,6 @@
     .income-bar-row { display:grid; gap:0.4rem; }
     .income-bar-track { height:0.75rem; border-radius:999px; background:rgba(127,105,81,0.12); overflow:hidden; }
     .income-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg, #5DA181, #FEBC64); }
-    .income-chip-group { display:flex; gap:0.6rem; flex-wrap:wrap; }
-    .income-chip { border:1px solid rgba(127,105,81,0.14); border-radius:999px; padding:0.45rem 0.8rem; background:#fff; color:var(--color-ink); }
-    .income-chip.is-active { background:rgba(93,161,129,0.12); border-color:rgba(93,161,129,0.28); color:var(--color-sage); }
     @@media (max-width: 992px) { .income-grid { grid-template-columns:1fr; } }
 </style>
 
@@ -61,48 +58,45 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <section class="management-card">
+        <section class="management-card commercial-filter-card">
             <div class="management-card-header">
                 <h2>Filtros</h2>
-                <span>Periodo y metodos</span>
-            </div>
-
-            <div class="management-actions" style="margin-top: 1rem;">
-                @foreach (var preset in Presets)
-                {
-                    <button type="button" class="btn @(selectedPreset == preset.Key ? "btn-primary" : "btn-outline-primary")" @onclick="() => ApplyPresetAsync(preset.Key)">
-                        @preset.Label
-                    </button>
-                }
-            </div>
-
-            <div class="management-form-grid" style="margin-top: 1rem;">
-                <div>
-                    <label class="form-label">Desde</label>
-                    <input type="date" class="form-control" value="@startDateText" @onchange="OnStartDateChanged" />
-                </div>
-                <div>
-                    <label class="form-label">Hasta</label>
-                    <input type="date" class="form-control" value="@endDateText" @onchange="OnEndDateChanged" />
-                </div>
-                <div class="management-actions" style="align-items:end;">
-                    <button type="button" class="btn btn-primary" @onclick="ReloadAsync">Aplicar</button>
-                    <button type="button" class="btn btn-outline-primary" @onclick="ClearMethodFilters">Todos los metodos</button>
-                    <a class="btn btn-outline-primary" href="@BuildExportUrl()">Exportar CSV</a>
-                </div>
-            </div>
-
-            <div style="margin-top: 1rem;">
-                <label class="form-label">Metodos de pago</label>
-                <div class="income-chip-group">
-                    @foreach (var method in paymentMethodOptions)
+                <div class="commercial-preset-group">
+                    @foreach (var preset in Presets)
                     {
-                        <button type="button" class="income-chip @(selectedMethods.Contains(method) ? "is-active" : string.Empty)" @onclick="() => ToggleMethodAsync(method)">
-                            @method
+                        <button type="button" class="btn @(selectedPreset == preset.Key ? "btn-primary" : "btn-outline-primary")" @onclick="() => ApplyPresetAsync(preset.Key)">
+                            @preset.Label
                         </button>
                     }
                 </div>
             </div>
+
+            <div class="commercial-filter-line">
+                <div class="commercial-date-field">
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" value="@startDateText" @onchange="OnStartDateChanged" />
+                </div>
+                <div class="commercial-date-field">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" value="@endDateText" @onchange="OnEndDateChanged" />
+                </div>
+                <div class="commercial-method-select">
+                    <label class="form-label">Metodo de pago</label>
+                    <select class="form-select" value="@SelectedMethodValue" @onchange="OnMethodChangedAsync">
+                        <option value="">Todos los metodos</option>
+                        @foreach (var method in paymentMethodOptions)
+                        {
+                            <option value="@method">@method</option>
+                        }
+                    </select>
+                </div>
+                <div class="commercial-filter-actions">
+                    <button type="button" class="btn btn-primary" @onclick="ReloadAsync">Aplicar</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="ClearMethodFilters"><i class="bi bi-eraser-fill"></i> Limpiar</button>
+                    <a class="btn btn-outline-primary" href="@BuildExportUrl()"><i class="bi bi-file-earmark-excel-fill"></i> CSV</a>
+                </div>
+            </div>
+
         </section>
 
         <section class="income-shell">
@@ -216,13 +210,13 @@ else
     private int pendingAccountsCount;
     private string topMethodLabel = "Sin datos";
     private string seriesCaption = "Semanal";
+    private string SelectedMethodValue => selectedMethods.FirstOrDefault() ?? string.Empty;
 
     private static readonly IReadOnlyList<(string Key, string Label)> Presets =
     [
         ("today", "Hoy"),
         ("week", "Esta semana"),
-        ("month", "Este mes"),
-        ("custom", "Personalizado")
+        ("month", "Este mes")
     ];
 
     protected override async Task OnInitializedAsync()
@@ -254,19 +248,23 @@ else
         await ReloadAsync();
     }
 
-    private async Task ToggleMethodAsync(string method)
+    private async Task OnMethodChangedAsync(ChangeEventArgs args)
     {
-        if (!selectedMethods.Add(method))
+        selectedMethods.Clear();
+        var method = args.Value?.ToString();
+        if (!string.IsNullOrWhiteSpace(method))
         {
-            selectedMethods.Remove(method);
+            selectedMethods.Add(method);
         }
 
+        selectedPreset = "custom";
         await ReloadAsync();
     }
 
     private async Task ClearMethodFilters()
     {
         selectedMethods.Clear();
+        selectedPreset = "custom";
         await ReloadAsync();
     }
 
@@ -469,11 +467,13 @@ else
     private void OnStartDateChanged(ChangeEventArgs args)
     {
         startDateText = args.Value?.ToString() ?? string.Empty;
+        selectedPreset = "custom";
     }
 
     private void OnEndDateChanged(ChangeEventArgs args)
     {
         endDateText = args.Value?.ToString() ?? string.Empty;
+        selectedPreset = "custom";
     }
 
     private static DateTime StartOfWeek(DateTime date)

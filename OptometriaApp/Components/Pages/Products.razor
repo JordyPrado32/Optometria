@@ -1,12 +1,14 @@
 @page "/productos"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
 @using System.Net.Mail
 @using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
 @inject NavigationManager NavigationManager
+@inject IWebHostEnvironment WebHostEnvironment
 
 <PageTitle>Productos</PageTitle>
 
@@ -165,8 +167,22 @@ else
                                         <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(product.codigo_barras) ? "Sin barras" : product.codigo_barras)</div>
                                     </td>
                                     <td>
-                                        <strong style="color: var(--color-ink);">@product.nombre_producto</strong>
-                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
+                                        <div class="product-table-identity">
+                                            <div class="product-table-thumb">
+                                                @if (!string.IsNullOrWhiteSpace(product.imagen_url))
+                                                {
+                                                    <img src="@product.imagen_url" alt="@product.nombre_producto" />
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-image"></i>
+                                                }
+                                            </div>
+                                            <div>
+                                                <strong style="color: var(--color-ink);">@product.nombre_producto</strong>
+                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>@(product.naturaleza_item ?? "Bien")</td>
                                     <td>@(product.id_categoriaNavigation?.nombre ?? "-")</td>
@@ -256,6 +272,30 @@ else
                     <div class="patient-form-span">
                         <label class="form-label">Descripcion</label>
                         <textarea class="form-control" rows="3" @bind="editor.Descripcion" readonly="@(!CanModifyEditor)"></textarea>
+                    </div>
+                    <div class="patient-form-span product-image-editor">
+                        <div class="product-image-preview">
+                            @if (!string.IsNullOrWhiteSpace(ProductImagePreviewUrl))
+                            {
+                                <img src="@ProductImagePreviewUrl" alt="Imagen del producto" />
+                            }
+                            else
+                            {
+                                <i class="bi bi-card-image"></i>
+                            }
+                        </div>
+                        <div class="product-image-controls">
+                            <label class="form-label">Imagen para tienda online</label>
+                            <input class="form-control" @bind="editor.ImagenUrl" readonly="@(!CanModifyEditor)" maxlength="500" placeholder="/images/products/lente.jpg o https://..." />
+                            @if (CanModifyEditor)
+                            {
+                                <InputFile OnChange="OnProductImageSelected" class="form-control" accept="image/png,image/jpeg,image/webp" />
+                                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearProductImage" style="width: fit-content;">
+                                    <i class="bi bi-x-circle"></i> Quitar imagen
+                                </button>
+                            }
+                            <small style="color: var(--color-taupe);">Puedes pegar una URL o cargar una imagen JPG, PNG o WebP.</small>
+                        </div>
                     </div>
                     <div>
                         <label class="form-label">Tipo item</label>
@@ -673,6 +713,10 @@ else
     private string alertMessage = string.Empty;
     private bool alertIsError;
     private tbl_producto? selectedProduct;
+    private byte[]? pendingProductImageBytes;
+    private string? pendingProductImageExtension;
+    private string? pendingProductImagePreview;
+    private const long MaxProductImageSize = 3 * 1024 * 1024;
 
     private List<tbl_producto> FilteredProducts => products
         .Where(MatchesFilters)
@@ -689,6 +733,7 @@ else
     private bool CanModifyEditor => isCreatingNewProduct ? permissions.CanCreate : permissions.CanEdit;
     private bool EditorIsService => string.Equals(editor?.NaturalezaItem, ProductInventoryRules.ServiceNature, StringComparison.OrdinalIgnoreCase);
     private bool EditorManagesInventory => !EditorIsService;
+    private string? ProductImagePreviewUrl => pendingProductImagePreview ?? editor?.ImagenUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -751,6 +796,7 @@ else
         editor = BuildNewEditor();
         auditEntries = [];
         errorMessage = null;
+        ClearPendingProductImage();
         showFormModal = true;
     }
 
@@ -760,6 +806,7 @@ else
         selectedProduct = product;
         editor = BuildEditor(product);
         errorMessage = null;
+        ClearPendingProductImage();
         showFormModal = true;
     }
 
@@ -787,6 +834,7 @@ else
     {
         errorMessage = null;
         showFormModal = false;
+        ClearPendingProductImage();
     }
 
     private string EditorActivoValue
@@ -890,6 +938,11 @@ else
         }
 
         NormalizeEditorForCurrentNature();
+        if (pendingProductImageBytes is not null)
+        {
+            editor.ImagenUrl = await SaveProductImageAsync(editor.CodigoProducto);
+        }
+
         var initialStock = EditorManagesInventory ? editor.StockActual : 0;
         ApplyEditorToEntity(productEntity, preserveExistingStock: !isCreatingNewProduct);
         productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
@@ -932,6 +985,7 @@ else
 
         showFormModal = false;
         isCreatingNewProduct = false;
+        ClearPendingProductImage();
         await LoadAsync(productEntity.id_producto);
     }
 
@@ -1100,6 +1154,7 @@ else
         entity.nombre_producto = editor.NombreProducto.Trim();
         entity.tipo_item = ProductInventoryRules.ProductType;
         entity.descripcion = NormalizeOptional(editor.Descripcion);
+        entity.imagen_url = NormalizeOptional(editor.ImagenUrl);
         entity.precio_costo = editor.PrecioCosto;
         entity.precio_venta = editor.PrecioVenta;
         entity.tiene_iva = editor.TieneIva;
@@ -1379,6 +1434,7 @@ else
             PorcentajeIva = 0,
             NaturalezaItem = ProductInventoryRules.GoodNature,
             MovimientoFrecuencia = "Media",
+            ImagenUrl = string.Empty,
             UsuarioCreacion = currentUserName
         };
     }
@@ -1399,6 +1455,7 @@ else
             NombreProducto = product.nombre_producto,
             TipoItem = product.tipo_item ?? "Producto",
             Descripcion = product.descripcion ?? string.Empty,
+            ImagenUrl = product.imagen_url ?? string.Empty,
             PrecioCosto = product.precio_costo ?? 0,
             PrecioVenta = product.precio_venta,
             TieneIva = product.tiene_iva ?? false,
@@ -1458,6 +1515,84 @@ else
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private async Task OnProductImageSelected(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowAlert("Selecciona una imagen valida en formato JPG, PNG o WebP.", true);
+            return;
+        }
+
+        if (file.Size > MaxProductImageSize)
+        {
+            ShowAlert("La imagen no debe superar 3 MB.", true);
+            return;
+        }
+
+        await using var stream = file.OpenReadStream(MaxProductImageSize);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+
+        pendingProductImageBytes = memory.ToArray();
+        pendingProductImageExtension = GetSafeImageExtension(file.Name, file.ContentType);
+        pendingProductImagePreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(pendingProductImageBytes)}";
+    }
+
+    private void ClearProductImage()
+    {
+        if (editor is not null)
+        {
+            editor.ImagenUrl = string.Empty;
+        }
+
+        ClearPendingProductImage();
+    }
+
+    private void ClearPendingProductImage()
+    {
+        pendingProductImageBytes = null;
+        pendingProductImageExtension = null;
+        pendingProductImagePreview = null;
+    }
+
+    private async Task<string> SaveProductImageAsync(string productCode)
+    {
+        var extension = pendingProductImageExtension ?? ".jpg";
+        var safeCode = new string(productCode.Trim().ToLowerInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+            .ToArray())
+            .Trim('-');
+
+        if (string.IsNullOrWhiteSpace(safeCode))
+        {
+            safeCode = Guid.NewGuid().ToString("N");
+        }
+
+        var fileName = $"{safeCode}-{DateTime.Now:yyyyMMddHHmmss}{extension}";
+        var folder = Path.Combine(WebHostEnvironment.WebRootPath, "images", "products");
+        Directory.CreateDirectory(folder);
+        var fullPath = Path.Combine(folder, fileName);
+        await File.WriteAllBytesAsync(fullPath, pendingProductImageBytes!);
+        return $"/images/products/{fileName}";
+    }
+
+    private static string GetSafeImageExtension(string fileName, string contentType)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (extension is ".jpg" or ".jpeg" or ".png" or ".webp")
+        {
+            return extension;
+        }
+
+        return contentType.ToLowerInvariant() switch
+        {
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            _ => ".jpg"
+        };
     }
 
     private void NormalizeEditorForCurrentNature()
@@ -1547,6 +1682,7 @@ else
         public string NombreProducto { get; set; } = string.Empty;
         public string TipoItem { get; set; } = "Producto";
         public string Descripcion { get; set; } = string.Empty;
+        public string ImagenUrl { get; set; } = string.Empty;
         public decimal PrecioCosto { get; set; }
         public decimal PrecioVenta { get; set; }
         public bool TieneIva { get; set; }

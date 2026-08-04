@@ -202,58 +202,87 @@ else
                 <h2>Control administrativo</h2>
                 <span>Resumen rapido</span>
             </div>
-            <div class="clinical-header-grid" style="margin-top: 1rem;">
-                <div class="clinical-highlight">
-                    <span class="eyebrow">Pendientes</span>
-                    <strong>@PendingAppointmentsCount</strong>
-                    <p>Programadas o reprogramadas</p>
-                </div>
-                <div class="clinical-highlight">
-                    <span class="eyebrow">Confirmadas</span>
-                    <strong>@ConfirmedAppointmentsCount</strong>
-                    <p>Listas para atencion</p>
-                </div>
-                <div class="clinical-highlight">
-                    <span class="eyebrow">Atendidas</span>
-                    <strong>@CompletedAppointmentsCount</strong>
-                    <p>Cerradas como realizadas</p>
-                </div>
-                <div class="clinical-highlight">
-                    <span class="eyebrow">Canceladas</span>
-                    <strong>@CancelledAppointmentsCount</strong>
-                    <p>Con motivo registrado</p>
-                </div>
+            <div class="appointment-admin-grid" style="margin-top: 1rem;">
+                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
+                    <span class="dashboard-action-badge appointment-admin-icon is-pending"><i class="bi bi-hourglass-split"></i></span>
+                    <strong>Pendientes</strong>
+                    <p>Programadas o reprogramadas.</p>
+                    <b>@PendingAppointmentsCount</b>
+                </article>
+                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
+                    <span class="dashboard-action-badge appointment-admin-icon is-confirmed"><i class="bi bi-calendar-check-fill"></i></span>
+                    <strong>Confirmadas</strong>
+                    <p>Listas para atencion.</p>
+                    <b>@ConfirmedAppointmentsCount</b>
+                </article>
+                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
+                    <span class="dashboard-action-badge appointment-admin-icon is-completed"><i class="bi bi-check2-circle"></i></span>
+                    <strong>Atendidas</strong>
+                    <p>Cerradas como realizadas.</p>
+                    <b>@CompletedAppointmentsCount</b>
+                </article>
+                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
+                    <span class="dashboard-action-badge appointment-admin-icon is-cancelled"><i class="bi bi-x-circle-fill"></i></span>
+                    <strong>Canceladas</strong>
+                    <p>Con motivo registrado.</p>
+                    <b>@CancelledAppointmentsCount</b>
+                </article>
             </div>
         </section>
 
-        <section class="management-card" style="margin-top: 1.5rem;">
+        @if (showCalendarModal)
+        {
+        <div class="custom-modal-overlay" @onclick="CloseCalendarModal">
+        <div class="custom-modal-card appointment-calendar-modal" @onclick:stopPropagation="true">
+        <section class="management-card appointment-calendar-card">
             <div class="management-card-header">
                 <h2>Calendario</h2>
-                <span>Vista @GetCalendarViewLabel()</span>
+                <div class="workspace-actions" style="align-items:center;">
+                    <span>Vista @GetCalendarViewLabel()</span>
+                    <button type="button" class="btn-close-modal" @onclick="CloseCalendarModal">×</button>
+                </div>
             </div>
-            <div class="workspace-actions" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-outline-primary" @onclick='() => SetCalendarView("day")'>Dia</button>
-                <button type="button" class="btn btn-outline-primary" @onclick='() => SetCalendarView("week")'>Semana</button>
-                <button type="button" class="btn btn-outline-primary" @onclick='() => SetCalendarView("month")'>Mes</button>
-                <input type="date" class="form-control" style="max-width: 220px;" value="@calendarFocusDate" @onchange="OnCalendarFocusDateChanged" />
-            </div>
+            <div class="custom-modal-body appointment-calendar-body">
+                <div class="appointment-calendar-toolbar">
+                    <div class="appointment-calendar-view-buttons">
+                        <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "day" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("day")'>
+                            <i class="bi bi-calendar-day"></i> Dia
+                        </button>
+                        <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "week" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("week")'>
+                            <i class="bi bi-calendar-week"></i> Semana
+                        </button>
+                        <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "month" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("month")'>
+                            <i class="bi bi-calendar3"></i> Mes
+                        </button>
+                    </div>
+                    <label class="appointment-calendar-date-picker">
+                        <span>Fecha</span>
+                        <input type="date" class="form-control" value="@calendarFocusDate" @onchange="OnCalendarFocusDateChanged" />
+                    </label>
+                </div>
 
             @if (selectedCalendarView == "day")
             {
-                <div class="management-list" style="margin-top: 1rem;">
+                <div class="appointment-calendar-day-grid">
                     @if (!CalendarDayAppointments.Any())
                     {
-                        <p style="color: var(--color-taupe); margin: 0;">No hay citas para la fecha seleccionada.</p>
+                        <div class="appointment-calendar-empty">
+                            <i class="bi bi-calendar-x"></i>
+                            <span>No hay citas para la fecha seleccionada.</span>
+                        </div>
                     }
                     else
                     {
                         @foreach (var appointment in CalendarDayAppointments)
                         {
-                            <article class="management-list-item">
-                                <strong>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</strong>
-                                <span>@GetPatientDisplayName(appointment.id_pacienteNavigation)</span>
-                                <span>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
-                                <span>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                            <article class="appointment-calendar-slot-card">
+                                <span class="appointment-calendar-slot-icon"><i class="bi bi-clock"></i></span>
+                                <div class="appointment-calendar-slot-copy">
+                                    <strong>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</strong>
+                                    <span><i class="bi bi-person"></i>@GetPatientDisplayName(appointment.id_pacienteNavigation)</span>
+                                    <span><i class="bi bi-person-badge"></i>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
+                                    <span><i class="bi bi-circle-fill"></i>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                                </div>
                             </article>
                         }
                     }
@@ -261,55 +290,54 @@ else
             }
             else if (selectedCalendarView == "week")
             {
-                <div class="management-list" style="margin-top: 1rem;">
+                <div class="appointment-calendar-summary-grid">
                     @foreach (var day in WeeklyCalendarSummaries)
                     {
-                        <article class="management-list-item">
-                            <strong>@day.Label</strong>
-                            <span>@day.Total citas</span>
-                            <span>@day.Pending pendientes</span>
-                            <span>@day.Confirmed confirmadas</span>
+                        <article class="appointment-calendar-summary-card">
+                            <span class="appointment-calendar-date-chip"><i class="bi bi-calendar2-week"></i>@day.Label</span>
+                            <div class="appointment-calendar-metrics">
+                                <span><i class="bi bi-calendar-check"></i><strong>@day.Total</strong><small>citas</small></span>
+                                <span><i class="bi bi-hourglass-split"></i><strong>@day.Pending</strong><small>pendientes</small></span>
+                                <span><i class="bi bi-check2-circle"></i><strong>@day.Confirmed</strong><small>confirmadas</small></span>
+                            </div>
                         </article>
                     }
                 </div>
             }
             else
             {
-                <div class="table-responsive" style="margin-top: 1rem;">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Total</th>
-                                <th>Pendientes</th>
-                                <th>Confirmadas</th>
-                                <th>Atendidas</th>
-                                <th>Canceladas</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var day in MonthlyCalendarSummaries)
-                            {
-                                <tr>
-                                    <td>@day.Label</td>
-                                    <td>@day.Total</td>
-                                    <td>@day.Pending</td>
-                                    <td>@day.Confirmed</td>
-                                    <td>@day.Completed</td>
-                                    <td>@day.Cancelled</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                <div class="appointment-calendar-summary-grid is-month">
+                    @foreach (var day in MonthlyCalendarSummaries)
+                    {
+                        <article class="appointment-calendar-summary-card">
+                            <span class="appointment-calendar-date-chip"><i class="bi bi-calendar3"></i>@day.Label</span>
+                            <div class="appointment-calendar-metrics">
+                                <span><i class="bi bi-calendar-check"></i><strong>@day.Total</strong><small>total</small></span>
+                                <span><i class="bi bi-hourglass-split"></i><strong>@day.Pending</strong><small>pendientes</small></span>
+                                <span><i class="bi bi-check2-circle"></i><strong>@day.Confirmed</strong><small>confirmadas</small></span>
+                                <span><i class="bi bi-person-check"></i><strong>@day.Completed</strong><small>atendidas</small></span>
+                                <span><i class="bi bi-x-circle"></i><strong>@day.Cancelled</strong><small>canceladas</small></span>
+                            </div>
+                        </article>
+                    }
                 </div>
             }
+            </div>
         </section>
+        </div>
+        </div>
+        }
 
         <!-- Appointments Table -->
         <section class="management-card" style="margin-top: 1.5rem;">
             <div class="management-card-header">
-                <h2>Agenda de citas</h2>
-                <span>@FilteredAppointments.Count registros</span>
+                <div>
+                    <h2>Agenda de citas</h2>
+                    <span>@FilteredAppointments.Count registros</span>
+                </div>
+                <button type="button" class="btn btn-outline-primary" @onclick="OpenCalendarModal">
+                    <i class="bi bi-calendar3"></i> Calendario
+                </button>
             </div>
 
             <div class="table-responsive" style="margin-top: 1rem;">
@@ -378,6 +406,11 @@ else
                                     </td>
                                     <td style="text-align: right; padding-right: 1.2rem;">
                                         <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
+                                                    @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
+                                                <i class="bi bi-calendar-event-fill" style="margin-right: 4px;"></i> Calendario
+                                            </button>
                                             <button type="button" class="btn btn-outline-primary"
                                                     style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
                                                     @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
@@ -848,6 +881,7 @@ else
     private bool showFormModal;
     private bool showAuditModal;
     private bool showPatientHistoryModal;
+    private bool showCalendarModal;
     private bool showCancellationChoiceModal;
     private bool showApiDraftModal;
     private bool showFormCancellationReason;
@@ -1206,6 +1240,16 @@ else
 
     private void OnCalendarFocusDateChanged(ChangeEventArgs args)
         => calendarFocusDate = args.Value?.ToString() ?? DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+
+    private void OpenCalendarModal()
+    {
+        showCalendarModal = true;
+    }
+
+    private void CloseCalendarModal()
+    {
+        showCalendarModal = false;
+    }
 
     private async Task CancelAppointmentCreationAsync()
     {

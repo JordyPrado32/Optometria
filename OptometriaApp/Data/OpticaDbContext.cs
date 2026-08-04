@@ -946,6 +946,9 @@ public partial class OpticaDbContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.descripcion).IsUnicode(false);
+            entity.Property(e => e.imagen_url)
+                .HasMaxLength(500)
+                .IsUnicode(false);
             entity.Property(e => e.cuenta_contable)
                 .HasMaxLength(20)
                 .IsUnicode(false);

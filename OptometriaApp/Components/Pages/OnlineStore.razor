@@ -11,16 +11,41 @@
 <PageTitle>Tienda online</PageTitle>
 
 <style>
-    .store-grid { display:grid; gap:1.25rem; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); }
-    .store-card { border:1px solid rgba(127,105,81,0.12); border-radius:1.2rem; padding:1rem; background:linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,240,228,0.56)); box-shadow:0 12px 28px rgba(127,105,81,0.06); }
-    .store-card h3 { margin:0; font-size:1.1rem; color:var(--color-ink); }
-    .store-card p { margin:0.5rem 0 0; color:var(--color-taupe); font-size:0.85rem; min-height:2.8rem; }
-    .store-meta { display:grid; gap:0.5rem; margin-top:1rem; }
-    .store-pill { display:inline-flex; align-items:center; padding:0.28rem 0.65rem; border-radius:999px; font-size:0.75rem; font-weight:700; }
+    .store-dashboard { display:grid; grid-template-columns:minmax(0, 1fr) 18rem; gap:1rem; align-items:start; }
+    .store-summary-strip { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:0.7rem; margin-top:1rem; }
+    .store-stat { border:1px solid rgba(127,105,81,0.1); border-radius:1rem; padding:0.85rem; background:rgba(255,250,244,0.78); display:grid; gap:0.25rem; min-width:0; }
+    .store-stat i { color:var(--color-sage); font-size:1.1rem; }
+    .store-stat strong { color:var(--color-ink); font-size:1.35rem; line-height:1; }
+    .store-stat span { color:var(--color-taupe); font-size:0.78rem; font-weight:700; }
+    .store-grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); }
+    .store-card { border:1px solid rgba(127,105,81,0.12); border-radius:1.1rem; overflow:hidden; background:linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,240,228,0.58)); box-shadow:0 12px 28px rgba(127,105,81,0.06); display:grid; grid-template-rows:auto 1fr; min-width:0; }
+    .store-card-image { aspect-ratio:4 / 3; background:linear-gradient(135deg, rgba(93,161,129,0.16), rgba(254,188,100,0.18)); display:grid; place-items:center; position:relative; overflow:hidden; }
+    .store-card-image img { width:100%; height:100%; object-fit:cover; display:block; }
+    .store-card-image i { font-size:2.4rem; color:rgba(127,105,81,0.55); }
+    .store-card-body { padding:0.95rem; display:grid; gap:0.75rem; align-content:start; min-width:0; }
+    .store-card h3 { margin:0; font-size:1rem; color:var(--color-ink); overflow-wrap:anywhere; }
+    .store-card p { margin:0; color:var(--color-taupe); font-size:0.82rem; line-height:1.35; min-height:2.2rem; overflow-wrap:anywhere; }
+    .store-card-head { display:flex; justify-content:space-between; gap:0.65rem; align-items:flex-start; min-width:0; }
+    .store-code { font-size:0.72rem; color:var(--color-taupe); font-weight:700; overflow-wrap:anywhere; }
+    .store-meta { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:0.45rem; }
+    .store-meta-box { border:1px solid rgba(93,161,129,0.14); border-radius:0.8rem; padding:0.5rem; background:rgba(255,255,255,0.62); min-width:0; }
+    .store-meta-box span { display:block; font-size:0.68rem; color:var(--color-taupe); font-weight:800; text-transform:uppercase; letter-spacing:0.05em; }
+    .store-meta-box strong { display:block; color:var(--color-ink); font-size:0.86rem; overflow-wrap:anywhere; }
+    .store-pill { display:inline-flex; align-items:center; gap:0.35rem; padding:0.28rem 0.65rem; border-radius:999px; font-size:0.72rem; font-weight:800; white-space:nowrap; }
     .store-pill.stock-ok { background:rgba(93,161,129,0.14); color:#2e7d32; }
     .store-pill.stock-low { background:rgba(254,188,100,0.18); color:#c77800; }
     .store-pill.stock-out { background:rgba(198,40,40,0.12); color:#c62828; }
-    .store-price { font-size:1.45rem; color:var(--color-ink); font-weight:800; }
+    .store-price-row { display:flex; align-items:center; justify-content:space-between; gap:0.7rem; border-top:1px solid rgba(127,105,81,0.08); padding-top:0.75rem; }
+    .store-price { font-size:1.35rem; color:var(--color-ink); font-weight:900; line-height:1; }
+    .store-category-panel { position:sticky; top:1rem; display:grid; gap:1rem; }
+    .store-side-card { border:1px solid rgba(127,105,81,0.1); border-radius:1.1rem; background:rgba(255,250,244,0.86); padding:1rem; box-shadow:0 12px 28px rgba(127,105,81,0.05); }
+    .store-side-card h3 { margin:0 0 0.75rem; font-size:1rem; color:var(--color-ink); }
+    .store-category-list { display:grid; gap:0.45rem; }
+    .store-category-chip { display:flex; justify-content:space-between; gap:0.6rem; align-items:center; border:1px solid rgba(93,161,129,0.16); border-radius:0.85rem; padding:0.55rem 0.65rem; background:#fff; color:var(--color-taupe); font-weight:700; }
+    .store-category-chip b { color:var(--color-sage); }
+    .store-empty { min-height:12rem; display:grid; place-items:center; text-align:center; color:var(--color-taupe); }
+    @@media (max-width: 1100px) { .store-dashboard { grid-template-columns:1fr; } .store-category-panel { position:static; grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+    @@media (max-width: 760px) { .store-summary-strip { grid-template-columns:repeat(2, minmax(0, 1fr)); } .store-category-panel { grid-template-columns:1fr; } .store-grid { grid-template-columns:1fr; } }
 </style>
 
 @if (isLoading)
@@ -52,19 +77,42 @@ else
             </div>
         </div>
 
+        <div class="store-summary-strip">
+            <div class="store-stat">
+                <i class="bi bi-bag-heart-fill"></i>
+                <strong>@products.Count</strong>
+                <span>productos en vitrina</span>
+            </div>
+            <div class="store-stat">
+                <i class="bi bi-image-fill"></i>
+                <strong>@ProductsWithImageCount</strong>
+                <span>con imagen</span>
+            </div>
+            <div class="store-stat">
+                <i class="bi bi-box-seam-fill"></i>
+                <strong>@AvailableProductsCount</strong>
+                <span>disponibles</span>
+            </div>
+            <div class="store-stat">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>@LowOrOutProductsCount</strong>
+                <span>bajo o agotado</span>
+            </div>
+        </div>
+
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <section class="management-card">
+        <section class="management-card commercial-filter-card">
             <div class="management-card-header">
                 <h2>Filtros</h2>
                 <span>@FilteredProducts.Count productos visibles</span>
             </div>
 
-            <div class="management-form-grid" style="margin-top: 1rem;">
-                <div>
+            <div class="commercial-filter-line store-filter-line">
+                <div class="store-search-field">
                     <label class="form-label">Buscar</label>
                     <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, nombre o categoria" />
                 </div>
@@ -87,39 +135,98 @@ else
                         <option value="Agotado">Agotado</option>
                     </select>
                 </div>
+                <div class="commercial-filter-actions">
+                    <button type="button" class="btn btn-outline-primary" @onclick="ClearFilters"><i class="bi bi-eraser-fill"></i> Limpiar</button>
+                </div>
             </div>
         </section>
 
-        <section class="store-grid" style="margin-top: 1.5rem;">
-            @if (FilteredProducts.Count == 0)
-            {
-                <div class="management-card">
-                    <p style="margin:0; color:var(--color-taupe);">No hay productos que coincidan con los filtros actuales.</p>
-                </div>
-            }
-            else
-            {
-                @foreach (var item in FilteredProducts)
+        <div class="store-dashboard" style="margin-top: 1.5rem;">
+            <section class="store-grid">
+                @if (FilteredProducts.Count == 0)
                 {
-                    <article class="store-card">
-                        <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
-                            <div>
-                                <h3>@item.Name</h3>
-                                <div style="font-size:0.78rem; color:var(--color-taupe);">@item.Code</div>
-                            </div>
-                            <span class="store-pill @item.StockClass">@item.StockLabel</span>
+                    <div class="management-card store-empty">
+                        <div>
+                            <i class="bi bi-search" style="font-size:2rem; color:var(--color-sage);"></i>
+                            <p style="margin:0.6rem 0 0;">No hay productos que coincidan con los filtros actuales.</p>
                         </div>
-                        <p>@item.Description</p>
-                        <div class="store-meta">
-                            <div><strong>Categoria:</strong> @item.Category</div>
-                            <div><strong>Stock:</strong> @item.Stock</div>
-                            <div><strong>IVA:</strong> @item.TaxLabel</div>
-                            <div class="store-price">@item.Price.ToString("0.00")</div>
-                        </div>
-                    </article>
+                    </div>
                 }
-            }
-        </section>
+                else
+                {
+                    @foreach (var item in FilteredProducts)
+                    {
+                        <article class="store-card">
+                            <div class="store-card-image">
+                                @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                {
+                                    <img src="@item.ImageUrl" alt="@item.Name" />
+                                }
+                                else
+                                {
+                                    <i class="bi bi-eyeglasses"></i>
+                                }
+                            </div>
+                            <div class="store-card-body">
+                                <div class="store-card-head">
+                                    <div>
+                                        <h3>@item.Name</h3>
+                                        <div class="store-code">@item.Code</div>
+                                    </div>
+                                    <span class="store-pill @item.StockClass"><i class="@item.StockIcon"></i>@item.StockLabel</span>
+                                </div>
+                                <p>@item.Description</p>
+                                <div class="store-meta">
+                                    <div class="store-meta-box">
+                                        <span>Categoria</span>
+                                        <strong>@item.Category</strong>
+                                    </div>
+                                    <div class="store-meta-box">
+                                        <span>Stock</span>
+                                        <strong>@item.Stock</strong>
+                                    </div>
+                                    <div class="store-meta-box">
+                                        <span>IVA</span>
+                                        <strong>@item.TaxLabel</strong>
+                                    </div>
+                                    <div class="store-meta-box">
+                                        <span>Estado</span>
+                                        <strong>@item.StockLabel</strong>
+                                    </div>
+                                </div>
+                                <div class="store-price-row">
+                                    <span class="store-price">$@item.Price.ToString("0.00")</span>
+                                    <span style="color:var(--color-taupe); font-weight:700; font-size:0.78rem;">Vitrina digital</span>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                }
+            </section>
+
+            <aside class="store-category-panel">
+                <div class="store-side-card">
+                    <h3><i class="bi bi-tags-fill" style="color:var(--color-sage); margin-right:0.35rem;"></i>Categorias</h3>
+                    <div class="store-category-list">
+                        @foreach (var category in CategorySummaries)
+                        {
+                            <div class="store-category-chip">
+                                <span>@category.Name</span>
+                                <b>@category.Count</b>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="store-side-card">
+                    <h3><i class="bi bi-speedometer2" style="color:var(--color-sage); margin-right:0.35rem;"></i>Estado de vitrina</h3>
+                    <div class="store-category-list">
+                        <div class="store-category-chip"><span>Visibles filtrados</span><b>@FilteredProducts.Count</b></div>
+                        <div class="store-category-chip"><span>Con stock</span><b>@FilteredProducts.Count(x => x.Stock > 0)</b></div>
+                        <div class="store-category-chip"><span>Sin imagen</span><b>@FilteredProducts.Count(x => string.IsNullOrWhiteSpace(x.ImageUrl))</b></div>
+                    </div>
+                </div>
+            </aside>
+        </div>
     </section>
 }
 
@@ -134,6 +241,14 @@ else
     private string searchTerm = string.Empty;
     private string categoryFilter = string.Empty;
     private string stockFilter = "Todos";
+    private int ProductsWithImageCount => products.Count(x => !string.IsNullOrWhiteSpace(x.ImageUrl));
+    private int AvailableProductsCount => products.Count(x => x.Stock > 5);
+    private int LowOrOutProductsCount => products.Count(x => x.Stock <= 5);
+    private IEnumerable<CategorySummary> CategorySummaries => products
+        .GroupBy(x => x.Category)
+        .Select(group => new CategorySummary(group.Key, group.Count()))
+        .OrderByDescending(x => x.Count)
+        .ThenBy(x => x.Name);
 
     private List<StoreProductRow> FilteredProducts => products
         .Where(x => string.IsNullOrWhiteSpace(searchTerm)
@@ -149,6 +264,13 @@ else
         })
         .OrderBy(x => x.Name)
         .ToList();
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        categoryFilter = string.Empty;
+        stockFilter = "Todos";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -192,6 +314,7 @@ else
                     product.codigo_producto,
                     product.nombre_producto,
                     product.descripcion,
+                    product.imagen_url,
                     product.precio_venta,
                     product.stock_actual,
                     product.tiene_iva,
@@ -206,11 +329,12 @@ else
                 Code = x.codigo_producto ?? "SIN-CODIGO",
                 Name = x.nombre_producto ?? "Producto",
                 Description = string.IsNullOrWhiteSpace(x.descripcion) ? "Sin descripcion comercial cargada." : x.descripcion!,
+                ImageUrl = x.imagen_url ?? string.Empty,
                 Category = string.IsNullOrWhiteSpace(x.CategoryName) ? "Sin categoria" : x.CategoryName!,
                 Price = x.precio_venta,
                 Stock = x.stock_actual ?? 0,
                 TaxLabel = (x.tiene_iva ?? false) ? $"Si, {(x.porcentaje_iva ?? 0m):0.##}%" : "No",
-                SearchBlob = $"{x.codigo_producto} {x.nombre_producto} {x.descripcion} {x.CategoryName}"
+                SearchBlob = $"{x.codigo_producto} {x.nombre_producto} {x.descripcion} {x.imagen_url} {x.CategoryName}"
             }));
 
             categories.Clear();
@@ -231,6 +355,7 @@ else
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int Stock { get; set; }
@@ -238,5 +363,8 @@ else
         public string SearchBlob { get; set; } = string.Empty;
         public string StockLabel => Stock <= 0 ? "Agotado" : Stock <= 5 ? "Stock bajo" : "Disponible";
         public string StockClass => Stock <= 0 ? "stock-out" : Stock <= 5 ? "stock-low" : "stock-ok";
+        public string StockIcon => Stock <= 0 ? "bi bi-x-circle-fill" : Stock <= 5 ? "bi bi-exclamation-triangle-fill" : "bi bi-check-circle-fill";
     }
+
+    private sealed record CategorySummary(string Name, int Count);
 }
