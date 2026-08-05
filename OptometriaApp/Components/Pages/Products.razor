@@ -1058,6 +1058,11 @@ else
             }
 
             NormalizeEditorForCurrentNature();
+            if (pendingProductImageBytes is not null)
+            {
+                editor.ImagenUrl = await SaveProductImageAsync(editor.CodigoProducto);
+            }
+
             var initialStock = EditorManagesInventory ? editor.StockActual : 0;
             ApplyEditorToEntity(productEntity, preserveExistingStock: !isCreatingNewProduct);
             productEntity.id_usuario_actualizacion = currentUserId > 0 ? currentUserId : null;
@@ -1100,7 +1105,12 @@ else
 
             showFormModal = false;
             isCreatingNewProduct = false;
+            ClearPendingProductImage();
             await LoadAsync(productEntity.id_producto);
+        }
+        catch (DbUpdateException)
+        {
+            errorMessage = "No se pudo guardar el producto por una restriccion de la base de datos. La configuracion ya fue ajustada; recarga la pagina e intenta de nuevo.";
         }
         catch (Exception ex)
         {

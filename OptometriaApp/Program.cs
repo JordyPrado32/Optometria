@@ -4117,6 +4117,13 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
                 ruta_fondo VARCHAR(255) NULL
             );
         END;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_titulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_titulo VARCHAR(180) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_subtitulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_subtitulo VARCHAR(300) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_boton') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_boton VARCHAR(80) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_imagen') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_imagen VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_banner_texto') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_banner_texto VARCHAR(180) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_basicos_titulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_basicos_titulo VARCHAR(120) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_basicos_subtitulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_basicos_subtitulo VARCHAR(240) NULL;
         IF OBJECT_ID('dbo.tbl_plantilla_mensaje', 'U') IS NULL
         BEGIN
             CREATE TABLE dbo.tbl_plantilla_mensaje

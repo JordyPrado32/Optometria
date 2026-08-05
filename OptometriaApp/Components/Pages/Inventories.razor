@@ -266,63 +266,79 @@ else
             ShowAlert("No se pudo guardar el movimiento.", "Completa producto, tipo, cantidad y metodo de valuacion.", true);
             return;
         }
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        var product = await db.tbl_productos.FirstOrDefaultAsync(x =>
-            x.id_producto == editor.IdProducto &&
-            x.activo == true &&
-            (x.tipo_item ?? "Producto") == "Producto" &&
-            (x.naturaleza_item == null || x.naturaleza_item == "" || x.naturaleza_item == "Bien"));
 
-        if (product is null)
+        try
         {
-            ShowAlert("No se pudo guardar el movimiento.", "Selecciona un producto inventariable valido.", true);
-            return;
+            await using var db = await DbContextFactory.CreateDbContextAsync();
+            var product = await db.tbl_productos.FirstOrDefaultAsync(x =>
+                x.id_producto == editor.IdProducto &&
+                x.activo == true &&
+                (x.tipo_item ?? "Producto") == "Producto" &&
+                (x.naturaleza_item == null || x.naturaleza_item == "" || x.naturaleza_item == "Bien"));
+
+            if (product is null)
+            {
+                ShowAlert("No se pudo guardar el movimiento.", "Selecciona un producto inventariable valido.", true);
+                return;
+            }
+
+            tbl_movimiento_inventario entity;
+            var affectedProductIds = new HashSet<int> { product.id_producto };
+            var previousStock = product.stock_actual ?? 0;
+            var resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
+            entity = new tbl_movimiento_inventario { id_usuario = currentUserId, fecha_movimiento = DateTime.Now };
+            db.tbl_movimiento_inventarios.Add(entity);
+
+            if (resultingStock < 0)
+            {
+                ShowAlert("No se pudo guardar el movimiento.", "El stock no puede quedar negativo.", true);
+                return;
+            }
+
+            entity.id_producto = editor.IdProducto;
+            entity.tipo_movimiento = editor.TipoMovimiento;
+            entity.cantidad = editor.Cantidad;
+            entity.stock_anterior = previousStock;
+            entity.stock_resultante = resultingStock;
+            entity.observaciones = NullIfBlank(editor.Observaciones);
+            entity.comprobante_numero = NullIfBlank(editor.ComprobanteNumero);
+            entity.metodo_valuacion = NullIfBlank(editor.MetodoValuacion);
+            entity.tipo_documento_referencia = "InventarioManual";
+            entity.saldo_en_dinero = 0;
+
+            product.stock_actual = resultingStock;
+
+            db.tbl_kardex.Add(new tbl_kardex
+            {
+                id_producto = product.id_producto,
+                fecha_movimiento = DateTime.Now,
+                tipo_movimiento = editor.TipoMovimiento,
+                tipo_referencia = "InventarioManual",
+                comprobante_numero = entity.comprobante_numero,
+                cantidad_movimiento = editor.Cantidad,
+                stock_anterior = previousStock,
+                stock_nuevo = resultingStock,
+                metodo_valuacion = entity.metodo_valuacion,
+                id_usuario_movimiento = currentUserId,
+                descripcion_movimiento = $"Movimiento manual {editor.TipoMovimiento}",
+                estado_kardex = "Registrado"
+            });
+
+            WriteAudit(db, "Crear movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
+            await db.SaveChangesAsync();
+            await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Movimiento manual");
+            CloseForm();
+            ShowAlert("Movimiento registrado", "El movimiento de inventario se guardo correctamente.", false);
+            await LoadAsync();
         }
-
-        tbl_movimiento_inventario entity;
-        var affectedProductIds = new HashSet<int> { product.id_producto };
-        var previousStock = product.stock_actual ?? 0;
-        var resultingStock = ResolveResultingStock(editor.TipoMovimiento, previousStock, editor.Cantidad);
-        entity = new tbl_movimiento_inventario { id_usuario = currentUserId, fecha_movimiento = DateTime.Now };
-        db.tbl_movimiento_inventarios.Add(entity);
-
-        if (resultingStock < 0) { ShowAlert("No se pudo guardar el movimiento.", "El stock no puede quedar negativo.", true); return; }
-
-        entity.id_producto = editor.IdProducto;
-        entity.tipo_movimiento = editor.TipoMovimiento;
-        entity.cantidad = editor.Cantidad;
-        entity.stock_anterior = previousStock;
-        entity.stock_resultante = resultingStock;
-        entity.observaciones = NullIfBlank(editor.Observaciones);
-        entity.comprobante_numero = NullIfBlank(editor.ComprobanteNumero);
-        entity.metodo_valuacion = NullIfBlank(editor.MetodoValuacion);
-        entity.tipo_documento_referencia = "InventarioManual";
-        entity.saldo_en_dinero = 0;
-
-        product.stock_actual = resultingStock;
-
-        db.tbl_kardex.Add(new tbl_kardex
+        catch (DbUpdateException)
         {
-            id_producto = product.id_producto,
-            fecha_movimiento = DateTime.Now,
-            tipo_movimiento = editor.TipoMovimiento,
-            tipo_referencia = "InventarioManual",
-            comprobante_numero = entity.comprobante_numero,
-            cantidad_movimiento = editor.Cantidad,
-            stock_anterior = previousStock,
-            stock_nuevo = resultingStock,
-            metodo_valuacion = entity.metodo_valuacion,
-            id_usuario_movimiento = currentUserId,
-            descripcion_movimiento = $"Movimiento manual {editor.TipoMovimiento}",
-            estado_kardex = "Registrado"
-        });
-
-        WriteAudit(db, "Crear movimiento inventario", $"MovimientoInventarioId={entity.id_movimiento_inventario}; ProductoId={entity.id_producto}; Tipo={entity.tipo_movimiento}; Cantidad={entity.cantidad}");
-        await db.SaveChangesAsync();
-        await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Movimiento manual");
-        CloseForm();
-        ShowAlert("Movimiento registrado", "El movimiento de inventario se guardo correctamente.", false);
-        await LoadAsync();
+            ShowAlert("No se pudo guardar el movimiento.", "La base de datos rechazo el guardado del kardex. La configuracion ya fue ajustada; recarga la pagina e intenta de nuevo.", true);
+        }
+        catch (Exception ex)
+        {
+            ShowAlert("No se pudo guardar el movimiento.", $"Ocurrio un error inesperado al guardar el inventario: {ex.Message}", true);
+        }
     }
 
     private async Task DeleteAsync(tbl_movimiento_inventario item)

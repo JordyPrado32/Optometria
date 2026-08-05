@@ -269,6 +269,27 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.telefono)
                 .HasMaxLength(30)
                 .IsUnicode(false);
+            entity.Property(e => e.tienda_banner_texto)
+                .HasMaxLength(180)
+                .IsUnicode(false);
+            entity.Property(e => e.tienda_basicos_subtitulo)
+                .HasMaxLength(240)
+                .IsUnicode(false);
+            entity.Property(e => e.tienda_basicos_titulo)
+                .HasMaxLength(120)
+                .IsUnicode(false);
+            entity.Property(e => e.tienda_hero_boton)
+                .HasMaxLength(80)
+                .IsUnicode(false);
+            entity.Property(e => e.tienda_hero_imagen)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.tienda_hero_subtitulo)
+                .HasMaxLength(300)
+                .IsUnicode(false);
+            entity.Property(e => e.tienda_hero_titulo)
+                .HasMaxLength(180)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<tbl_consulta>(entity =>
@@ -587,7 +608,11 @@ public partial class OpticaDbContext : DbContext
         {
             entity.HasKey(e => e.id_movimiento_inventario).HasName("PK__tbl_movi__95610EAE94740B84");
 
-            entity.ToTable("tbl_movimiento_inventario");
+            entity.ToTable("tbl_movimiento_inventario", tableBuilder =>
+            {
+                tableBuilder.HasTrigger("TR_tbl_movimiento_inventario");
+                tableBuilder.UseSqlOutputClause(false);
+            });
 
             entity.Property(e => e.comprobante_numero)
                 .HasMaxLength(50)
