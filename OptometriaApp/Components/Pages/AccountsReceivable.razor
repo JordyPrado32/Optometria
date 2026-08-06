@@ -17,7 +17,7 @@
     .receivable-grid {
         display: grid;
         gap: 1.5rem;
-        grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
+        grid-template-columns: 1fr;
         align-items: start;
     }
 
@@ -52,6 +52,18 @@
     .receivable-detail-card {
         position: sticky;
         top: 1rem;
+    }
+
+    .receivable-alert-row {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(180px, 240px) repeat(2, minmax(180px, 1fr));
+        align-items: end;
+    }
+
+    .receivable-detail-modal {
+        width: min(1120px, calc(100vw - 2rem));
+        max-width: 1120px;
     }
 
     .receivable-detail-block {
@@ -89,6 +101,10 @@
 
         .receivable-detail-card {
             position: static;
+        }
+
+        .receivable-alert-row {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -240,7 +256,7 @@ else
                 <span>Configuracion operativa</span>
             </div>
 
-            <div class="management-form-grid" style="margin-top: 1rem;">
+            <div class="receivable-alert-row" style="margin-top: 1rem;">
                 <div>
                     <label class="form-label" for="overdueAlertDays">Dias de alerta</label>
                     <input id="overdueAlertDays" type="number" min="1" class="form-control" @bind="overdueAlertDays" />
@@ -408,139 +424,303 @@ else
                 </div>
                 <TablePager TotalItems="@FilteredAccounts.Count" CurrentPage="@accountPage" CurrentPageChanged="SetAccountPage" />
             </section>
+        </div>
+    </section>
+}
 
-            <section class="management-card receivable-detail-card">
-                <div class="management-card-header">
-                    <h2>Detalle</h2>
-                    <span>@(selectedAccount is null ? "Sin seleccion" : selectedAccount.DisplayStatus)</span>
-                </div>
-
-                @if (selectedAccount is null)
-                {
-                    <p style="margin-top: 1rem; color: var(--color-taupe);">Selecciona una cuenta del listado para ver su saldo, vencimiento y abonos registrados.</p>
-                }
-                else
-                {
-                    <div class="receivable-detail-block" style="margin-top: 1rem;">
-                        <div class="receivable-meta-grid">
-                            <div>
-                                <label>Factura</label>
-                                <strong>@(string.IsNullOrWhiteSpace(selectedAccount.InvoiceNumber) ? $"Venta #{selectedAccount.SaleId}" : selectedAccount.InvoiceNumber)</strong>
-                            </div>
-                            <div>
-                                <label>Cliente</label>
-                                <span>@selectedAccount.ClientName</span>
-                            </div>
-                            <div>
-                                <label>Paciente</label>
-                                <span>@selectedAccount.PatientName</span>
-                            </div>
-                            <div>
-                                <label>Dias de credito</label>
-                                <span>@selectedAccount.CreditDays</span>
-                            </div>
-                            <div>
-                                <label>Emision</label>
-                                <span>@selectedAccount.IssueDate.ToString("yyyy-MM-dd HH:mm")</span>
-                            </div>
-                            <div>
-                                <label>Vencimiento</label>
-                                <span>@(selectedAccount.DueDate?.ToString("yyyy-MM-dd") ?? "-")</span>
-                            </div>
-                            <div>
-                                <label>Prioridad</label>
-                                <strong>@GetCollectionPriority(selectedAccount)</strong>
-                            </div>
+@if (showAccountDetailModal && selectedAccount is not null)
+{
+    <div class="custom-modal-overlay" @onclick="CloseAccountDetailModal">
+        <div class="custom-modal-card receivable-detail-modal" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2>Detalle de cartera</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseAccountDetailModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="receivable-detail-block">
+                    <div class="receivable-meta-grid">
+                        <div>
+                            <label>Factura</label>
+                            <strong>@(string.IsNullOrWhiteSpace(selectedAccount.InvoiceNumber) ? $"Venta #{selectedAccount.SaleId}" : selectedAccount.InvoiceNumber)</strong>
+                        </div>
+                        <div>
+                            <label>Cliente</label>
+                            <span>@selectedAccount.ClientName</span>
+                        </div>
+                        <div>
+                            <label>Paciente</label>
+                            <span>@selectedAccount.PatientName</span>
+                        </div>
+                        <div>
+                            <label>Dias de credito</label>
+                            <span>@selectedAccount.CreditDays</span>
+                        </div>
+                        <div>
+                            <label>Emision</label>
+                            <span>@selectedAccount.IssueDate.ToString("yyyy-MM-dd HH:mm")</span>
+                        </div>
+                        <div>
+                            <label>Vencimiento</label>
+                            <span>@(selectedAccount.DueDate?.ToString("yyyy-MM-dd") ?? "-")</span>
+                        </div>
+                        <div>
+                            <label>Prioridad</label>
+                            <strong>@GetCollectionPriority(selectedAccount)</strong>
                         </div>
                     </div>
+                </div>
 
+                <div class="receivable-detail-block">
+                    <div class="receivable-meta-grid">
+                        <div>
+                            <label>Total factura</label>
+                            <strong>@selectedAccount.TotalAmount.ToString("0.00")</strong>
+                        </div>
+                        <div>
+                            <label>Total abonado</label>
+                            <strong>@selectedAccount.PaidAmount.ToString("0.00")</strong>
+                        </div>
+                        <div>
+                            <label>Saldo actual</label>
+                            <strong>@selectedAccount.Balance.ToString("0.00")</strong>
+                        </div>
+                        <div>
+                            <label>Tramo aging</label>
+                            <strong>@GetAgingBucket(selectedAccount)</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="receivable-detail-block">
+                    <div class="management-card-header" style="margin-bottom: 1rem;">
+                        <h2 style="font-size: 1rem;">Consolidado del cliente</h2>
+                        <span>@SelectedClientOpenInvoices cuentas abiertas</span>
+                    </div>
+                    <div class="receivable-meta-grid">
+                        <div>
+                            <label>Saldo total cliente</label>
+                            <strong>@SelectedClientOpenBalance.ToString("0.00")</strong>
+                        </div>
+                        <div>
+                            <label>Saldo vencido</label>
+                            <strong>@SelectedClientOverdueBalance.ToString("0.00")</strong>
+                        </div>
+                        <div>
+                            <label>Facturas abiertas</label>
+                            <strong>@SelectedClientOpenInvoices</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="receivable-detail-block">
+                    <div class="management-card-header" style="margin-bottom: 1rem;">
+                        <h2 style="font-size: 1rem;">Notas de credito disponibles</h2>
+                        <span>@availableCreditNotes.Count vigentes</span>
+                    </div>
+
+                    @if (availableCreditNotes.Count == 0)
+                    {
+                        <p style="margin: 0; color: var(--color-taupe);">Este cliente no tiene notas de credito disponibles para aplicar.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Nota</th>
+                                        <th>Vence</th>
+                                        <th>Disponible</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var note in availableCreditNotes)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@note.NoteNumber</strong>
+                                                <div style="font-size: 0.75rem; color: var(--color-taupe);">@note.InvoiceNumber</div>
+                                            </td>
+                                            <td>@note.ExpirationDateLabel</td>
+                                            <td>@note.AvailableBalance.ToString("0.00")</td>
+                                            <td>@note.State</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+                <div class="receivable-detail-block">
+                    <div class="management-card-header" style="margin-bottom: 1rem;">
+                        <h2 style="font-size: 1rem;">Abonos</h2>
+                        <span>@abonos.Count registrados</span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Monto</th>
+                                    <th>Metodo</th>
+                                    <th style="text-align: right;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (abonos.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin movimientos de pago registrados.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var abono in PagedPayments)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@abono.DateLabel</strong>
+                                                <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.Reference</div>
+                                            </td>
+                                            <td>@abono.TypeLabel</td>
+                                            <td style="color:@(abono.Amount < 0 ? "#c62828" : "var(--color-ink)")">@abono.Amount.ToString("0.00")</td>
+                                            <td>
+                                                @abono.MethodName
+                                                <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.UserLabel</div>
+                                            </td>
+                                            <td style="text-align: right;">
+                                                @if (canEditModule && abono.CanReverse)
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => OpenReversePaymentModal(abono.Id)">
+                                                        Revertir
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <span style="font-size: 0.75rem; color: var(--color-taupe);">@abono.StatusLabel</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <TablePager TotalItems="@abonos.Count" CurrentPage="@paymentPage" CurrentPageChanged="SetPaymentPage" />
+                </div>
+
+                @if (canEditModule && selectedAccount.Balance > 0)
+                {
                     <div class="receivable-detail-block">
-                        <div class="receivable-meta-grid">
+                        <div class="management-card-header" style="margin-bottom: 1rem;">
+                            <h2 style="font-size: 1rem;">Registrar abono</h2>
+                            <span>Actualiza saldo en linea</span>
+                        </div>
+
+                        <div class="management-form-grid">
                             <div>
-                                <label>Total factura</label>
-                                <strong>@selectedAccount.TotalAmount.ToString("0.00")</strong>
+                                <label class="form-label" for="abonoMonto">Monto</label>
+                                <input id="abonoMonto" type="number" step="0.01" min="0.01" max="@selectedAccount.Balance" class="form-control" @bind="abonoEditor.Monto" />
                             </div>
                             <div>
-                                <label>Total abonado</label>
-                                <strong>@selectedAccount.PaidAmount.ToString("0.00")</strong>
+                                <label class="form-label" for="abonoMetodo">Metodo de pago</label>
+                                <select id="abonoMetodo" class="form-select" @bind="abonoEditor.MetodoPagoId">
+                                    @if (availableCreditNotes.Count > 0)
+                                    {
+                                        <option value="-1">Nota de credito</option>
+                                    }
+                                    @foreach (var method in paymentMethods)
+                                    {
+                                        <option value="@method.Id">@method.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            @if (abonoEditor.MetodoPagoId == -1)
+                            {
+                                <div style="grid-column: 1 / -1;">
+                                    <label class="form-label" for="abonoNotaCredito">Nota de credito disponible</label>
+                                    <select id="abonoNotaCredito" class="form-select" @bind="abonoEditor.CreditNoteId">
+                                        <option value="0">Selecciona una nota</option>
+                                        @foreach (var note in availableCreditNotes)
+                                        {
+                                            <option value="@note.CreditNoteId">@note.NoteNumber | saldo @note.AvailableBalance.ToString("0.00") | vence @note.ExpirationDateLabel</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                            <div style="grid-column: 1 / -1;">
+                                <label class="form-label" for="abonoReferencia">Referencia</label>
+                                <input id="abonoReferencia" class="form-control" maxlength="100" @bind="abonoEditor.Referencia" placeholder="Transferencia, recibo o nota interna" />
+                            </div>
+                        </div>
+
+                        <div class="management-actions" style="margin-top: 1rem;">
+                            <button type="button" class="btn btn-primary" @onclick="SaveAbonoAsync">Guardar abono</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="receivable-detail-block">
+                    <div class="management-card-header" style="margin-bottom: 1rem;">
+                        <h2 style="font-size: 1rem;">Estado de cuenta</h2>
+                        <span>@statementMovements.Count movimientos</span>
+                    </div>
+
+                    @if (statementDocument is null)
+                    {
+                        <p style="margin: 0; color: var(--color-taupe);">No se pudo generar el estado de cuenta para esta cuenta.</p>
+                    }
+                    else
+                    {
+                        <div class="receivable-meta-grid" style="margin-bottom: 1rem;">
+                            <div>
+                                <label>Factura original</label>
+                                <strong>@statementDocument.OriginalInvoiceAmount.ToString("0.00")</strong>
                             </div>
                             <div>
-                                <label>Saldo actual</label>
-                                <strong>@selectedAccount.Balance.ToString("0.00")</strong>
+                                <label>Notas de credito</label>
+                                <strong>@statementDocument.TotalCredited.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Abonos aplicados</label>
+                                <strong>@statementDocument.TotalPaid.ToString("0.00")</strong>
+                            </div>
+                            <div>
+                                <label>Correo destino</label>
+                                <span>@(string.IsNullOrWhiteSpace(statementDocument.ClientEmail) ? "Sin correo" : statementDocument.ClientEmail)</span>
+                            </div>
+                            <div>
+                                <label>Estado cartera</label>
+                                <strong>@statementDocument.StatusCaption</strong>
+                            </div>
+                            <div>
+                                <label>Dias vencido</label>
+                                <strong>@statementDocument.DaysPastDue</strong>
                             </div>
                             <div>
                                 <label>Tramo aging</label>
-                                <strong>@GetAgingBucket(selectedAccount)</strong>
+                                <strong>@statementDocument.AgingBucket</strong>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="receivable-detail-block">
-                        <div class="management-card-header" style="margin-bottom: 1rem;">
-                            <h2 style="font-size: 1rem;">Consolidado del cliente</h2>
-                            <span>@SelectedClientOpenInvoices cuentas abiertas</span>
-                        </div>
-                        <div class="receivable-meta-grid">
-                            <div>
-                                <label>Saldo total cliente</label>
-                                <strong>@SelectedClientOpenBalance.ToString("0.00")</strong>
-                            </div>
-                            <div>
-                                <label>Saldo vencido</label>
-                                <strong>@SelectedClientOverdueBalance.ToString("0.00")</strong>
-                            </div>
-                            <div>
-                                <label>Facturas abiertas</label>
-                                <strong>@SelectedClientOpenInvoices</strong>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="receivable-detail-block">
-                        <div class="management-card-header" style="margin-bottom: 1rem;">
-                            <h2 style="font-size: 1rem;">Notas de credito disponibles</h2>
-                            <span>@availableCreditNotes.Count vigentes</span>
+                        <div class="management-actions" style="margin-bottom: 1rem;">
+                            <a class="btn btn-outline-primary" href="@($"/exports/account-statements/{selectedAccount.Id}.pdf")">Descargar PDF</a>
+                            <a class="btn btn-outline-primary" href="@($"/account-statements/{selectedAccount.Id}/print")" target="_blank">Imprimir</a>
                         </div>
 
-                        @if (availableCreditNotes.Count == 0)
-                        {
-                            <p style="margin: 0; color: var(--color-taupe);">Este cliente no tiene notas de credito disponibles para aplicar.</p>
-                        }
-                        else
-                        {
-                            <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Nota</th>
-                                            <th>Vence</th>
-                                            <th>Disponible</th>
-                                            <th>Estado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var note in availableCreditNotes)
-                                        {
-                                            <tr>
-                                                <td>
-                                                    <strong>@note.NoteNumber</strong>
-                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@note.InvoiceNumber</div>
-                                                </td>
-                                                <td>@note.ExpirationDateLabel</td>
-                                                <td>@note.AvailableBalance.ToString("0.00")</td>
-                                                <td>@note.State</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
+                        <div class="management-form-grid" style="margin-bottom: 1rem;">
+                            <div style="grid-column: 1 / -1;">
+                                <label class="form-label" for="statementEmail">Enviar PDF al correo</label>
+                                <input id="statementEmail" class="form-control" maxlength="150" @bind="statementEmail" placeholder="cliente@correo.com" />
                             </div>
-                        }
-                    </div>
+                        </div>
 
-                    <div class="receivable-detail-block">
-                        <div class="management-card-header" style="margin-bottom: 1rem;">
-                            <h2 style="font-size: 1rem;">Abonos</h2>
-                            <span>@abonos.Count registrados</span>
+                        <div class="management-actions" style="margin-bottom: 1rem;">
+                            <button type="button" class="btn btn-primary" @onclick="SendStatementByEmailAsync" disabled="@statementEmailSending">@(statementEmailSending ? "Enviando..." : "Enviar estado de cuenta")</button>
                         </div>
 
                         <div class="table-responsive">
@@ -549,210 +729,48 @@ else
                                     <tr>
                                         <th>Fecha</th>
                                         <th>Tipo</th>
-                                        <th>Monto</th>
-                                        <th>Metodo</th>
-                                        <th style="text-align: right;">Acciones</th>
+                                        <th>Detalle</th>
+                                        <th>Debito</th>
+                                        <th>Credito</th>
+                                        <th>Saldo</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @if (abonos.Count == 0)
+                                    @if (statementMovements.Count == 0)
                                     {
                                         <tr>
-                                            <td colspan="5" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin movimientos de pago registrados.</td>
+                                            <td colspan="6" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin movimientos para este estado de cuenta.</td>
                                         </tr>
                                     }
                                     else
                                     {
-                                        @foreach (var abono in PagedPayments)
+                                        @foreach (var movement in PagedStatementMovements)
                                         {
                                             <tr>
+                                                <td>@movement.DateLabel</td>
+                                                <td>@movement.TypeLabel</td>
                                                 <td>
-                                                    <strong>@abono.DateLabel</strong>
-                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.Reference</div>
+                                                    <strong>@movement.Description</strong>
+                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@movement.Reference</div>
                                                 </td>
-                                                <td>@abono.TypeLabel</td>
-                                                <td style="color:@(abono.Amount < 0 ? "#c62828" : "var(--color-ink)")">@abono.Amount.ToString("0.00")</td>
-                                                <td>
-                                                    @abono.MethodName
-                                                    <div style="font-size: 0.75rem; color: var(--color-taupe);">@abono.UserLabel</div>
-                                                </td>
-                                                <td style="text-align: right;">
-                                                    @if (canEditModule && abono.CanReverse)
-                                                    {
-                                                        <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => OpenReversePaymentModal(abono.Id)">
-                                                            Revertir
-                                                        </button>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span style="font-size: 0.75rem; color: var(--color-taupe);">@abono.StatusLabel</span>
-                                                    }
-                                                </td>
+                                                <td>@movement.Debit.ToString("0.00")</td>
+                                                <td>@movement.Credit.ToString("0.00")</td>
+                                                <td><strong>@movement.Balance.ToString("0.00")</strong></td>
                                             </tr>
                                         }
                                     }
                                 </tbody>
                             </table>
                         </div>
-                        <TablePager TotalItems="@abonos.Count" CurrentPage="@paymentPage" CurrentPageChanged="SetPaymentPage" />
-                    </div>
-
-                    @if (canEditModule && selectedAccount.Balance > 0)
-                    {
-                        <div class="receivable-detail-block">
-                            <div class="management-card-header" style="margin-bottom: 1rem;">
-                                <h2 style="font-size: 1rem;">Registrar abono</h2>
-                                <span>Actualiza saldo en linea</span>
-                            </div>
-
-                            <div class="management-form-grid">
-                                <div>
-                                    <label class="form-label" for="abonoMonto">Monto</label>
-                                    <input id="abonoMonto" type="number" step="0.01" min="0.01" max="@selectedAccount.Balance" class="form-control" @bind="abonoEditor.Monto" />
-                                </div>
-                                <div>
-                                    <label class="form-label" for="abonoMetodo">Metodo de pago</label>
-                                    <select id="abonoMetodo" class="form-select" @bind="abonoEditor.MetodoPagoId">
-                                        @if (availableCreditNotes.Count > 0)
-                                        {
-                                            <option value="-1">Nota de credito</option>
-                                        }
-                                        @foreach (var method in paymentMethods)
-                                        {
-                                            <option value="@method.Id">@method.Name</option>
-                                        }
-                                    </select>
-                                </div>
-                                @if (abonoEditor.MetodoPagoId == -1)
-                                {
-                                    <div style="grid-column: 1 / -1;">
-                                        <label class="form-label" for="abonoNotaCredito">Nota de credito disponible</label>
-                                        <select id="abonoNotaCredito" class="form-select" @bind="abonoEditor.CreditNoteId">
-                                            <option value="0">Selecciona una nota</option>
-                                            @foreach (var note in availableCreditNotes)
-                                            {
-                                                <option value="@note.CreditNoteId">@note.NoteNumber | saldo @note.AvailableBalance.ToString("0.00") | vence @note.ExpirationDateLabel</option>
-                                            }
-                                        </select>
-                                    </div>
-                                }
-                                <div style="grid-column: 1 / -1;">
-                                    <label class="form-label" for="abonoReferencia">Referencia</label>
-                                    <input id="abonoReferencia" class="form-control" maxlength="100" @bind="abonoEditor.Referencia" placeholder="Transferencia, recibo o nota interna" />
-                                </div>
-                            </div>
-
-                            <div class="management-actions" style="margin-top: 1rem;">
-                                <button type="button" class="btn btn-primary" @onclick="SaveAbonoAsync">Guardar abono</button>
-                            </div>
-                        </div>
+                        <TablePager TotalItems="@statementMovements.Count" CurrentPage="@statementPage" CurrentPageChanged="SetStatementPage" />
                     }
-
-                    <div class="receivable-detail-block">
-                        <div class="management-card-header" style="margin-bottom: 1rem;">
-                            <h2 style="font-size: 1rem;">Estado de cuenta</h2>
-                            <span>@statementMovements.Count movimientos</span>
-                        </div>
-
-                        @if (statementDocument is null)
-                        {
-                            <p style="margin: 0; color: var(--color-taupe);">No se pudo generar el estado de cuenta para esta cuenta.</p>
-                        }
-                        else
-                        {
-                            <div class="receivable-meta-grid" style="margin-bottom: 1rem;">
-                                <div>
-                                    <label>Factura original</label>
-                                    <strong>@statementDocument.OriginalInvoiceAmount.ToString("0.00")</strong>
-                                </div>
-                                <div>
-                                    <label>Notas de credito</label>
-                                    <strong>@statementDocument.TotalCredited.ToString("0.00")</strong>
-                                </div>
-                                <div>
-                                    <label>Abonos aplicados</label>
-                                    <strong>@statementDocument.TotalPaid.ToString("0.00")</strong>
-                                </div>
-                                <div>
-                                    <label>Correo destino</label>
-                                    <span>@(string.IsNullOrWhiteSpace(statementDocument.ClientEmail) ? "Sin correo" : statementDocument.ClientEmail)</span>
-                                </div>
-                                <div>
-                                    <label>Estado cartera</label>
-                                    <strong>@statementDocument.StatusCaption</strong>
-                                </div>
-                                <div>
-                                    <label>Dias vencido</label>
-                                    <strong>@statementDocument.DaysPastDue</strong>
-                                </div>
-                                <div>
-                                    <label>Tramo aging</label>
-                                    <strong>@statementDocument.AgingBucket</strong>
-                                </div>
-                            </div>
-
-                            <div class="management-actions" style="margin-bottom: 1rem;">
-                                <a class="btn btn-outline-primary" href="@($"/exports/account-statements/{selectedAccount.Id}.pdf")">Descargar PDF</a>
-                                <a class="btn btn-outline-primary" href="@($"/account-statements/{selectedAccount.Id}/print")" target="_blank">Imprimir</a>
-                            </div>
-
-                            <div class="management-form-grid" style="margin-bottom: 1rem;">
-                                <div style="grid-column: 1 / -1;">
-                                    <label class="form-label" for="statementEmail">Enviar PDF al correo</label>
-                                    <input id="statementEmail" class="form-control" maxlength="150" @bind="statementEmail" placeholder="cliente@correo.com" />
-                                </div>
-                            </div>
-
-                            <div class="management-actions" style="margin-bottom: 1rem;">
-                                <button type="button" class="btn btn-primary" @onclick="SendStatementByEmailAsync" disabled="@statementEmailSending">@(statementEmailSending ? "Enviando..." : "Enviar estado de cuenta")</button>
-                            </div>
-
-                            <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Fecha</th>
-                                            <th>Tipo</th>
-                                            <th>Detalle</th>
-                                            <th>Debito</th>
-                                            <th>Credito</th>
-                                            <th>Saldo</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @if (statementMovements.Count == 0)
-                                        {
-                                            <tr>
-                                                <td colspan="6" style="text-align: center; padding: 1rem; color: var(--color-taupe);">Sin movimientos para este estado de cuenta.</td>
-                                            </tr>
-                                        }
-                                        else
-                                        {
-                                            @foreach (var movement in PagedStatementMovements)
-                                            {
-                                                <tr>
-                                                    <td>@movement.DateLabel</td>
-                                                    <td>@movement.TypeLabel</td>
-                                                    <td>
-                                                        <strong>@movement.Description</strong>
-                                                        <div style="font-size: 0.75rem; color: var(--color-taupe);">@movement.Reference</div>
-                                                    </td>
-                                                    <td>@movement.Debit.ToString("0.00")</td>
-                                                    <td>@movement.Credit.ToString("0.00")</td>
-                                                    <td><strong>@movement.Balance.ToString("0.00")</strong></td>
-                                                </tr>
-                                            }
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                            <TablePager TotalItems="@statementMovements.Count" CurrentPage="@statementPage" CurrentPageChanged="SetStatementPage" />
-                        }
-                    </div>
-                }
-            </section>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseAccountDetailModal">Cerrar</button>
+            </footer>
         </div>
-    </section>
+    </div>
 }
 
 @if (showReversePaymentModal && paymentToReverse is not null)
@@ -794,6 +812,7 @@ else
     private bool canViewModule;
     private bool canEditModule;
     private bool showReversePaymentModal;
+    private bool showAccountDetailModal;
     private bool statementEmailSending;
     private int currentUserId;
     private int currentRoleId;
@@ -921,7 +940,7 @@ else
         await LoadPaymentMethodsAsync(dbContext);
         await LoadAccountsAsync(dbContext);
 
-        var desiredId = selectedAccountId ?? selectedAccount?.Id ?? FilteredAccounts.FirstOrDefault()?.Id;
+        var desiredId = selectedAccountId ?? selectedAccount?.Id;
         selectedAccount = desiredId is null ? null : accounts.FirstOrDefault(x => x.Id == desiredId.Value);
 
         if (selectedAccount is not null)
@@ -1108,6 +1127,12 @@ else
         statusMessage = null;
         errorMessage = null;
         await LoadAsync(accountId);
+        showAccountDetailModal = selectedAccount is not null;
+    }
+
+    private void CloseAccountDetailModal()
+    {
+        showAccountDetailModal = false;
     }
 
     private async Task SaveAbonoAsync()

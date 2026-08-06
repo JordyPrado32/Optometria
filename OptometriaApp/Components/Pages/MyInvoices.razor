@@ -18,7 +18,7 @@
     }
 
     .documents-grid {
-        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+        grid-template-columns: 1fr;
     }
 
     .documents-summary-grid {
@@ -44,6 +44,11 @@
         display: block;
         font-size: 1.45rem;
         color: var(--color-ink);
+    }
+
+    .documents-detail-modal {
+        width: min(1040px, calc(100vw - 2rem));
+        max-width: 1040px;
     }
 
     @@media (max-width: 992px) {
@@ -145,8 +150,8 @@ else
                                             <td style="text-align:right;">
                                                 <div style="display:inline-flex; gap:0.5rem;">
                                                     <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => SelectInvoiceAsync(item.ComprobanteId)">
-                                                        <i class="bi @(selectedInvoice?.ComprobanteId == item.ComprobanteId ? "bi-check2-circle" : "bi-eye-fill")"></i>
-                                                        @(selectedInvoice?.ComprobanteId == item.ComprobanteId ? "Activa" : "Ver")
+                                                        <i class="bi bi-eye-fill"></i>
+                                                        Ver detalle
                                                     </button>
                                                     <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@($"/my-credit-notes?invoice={item.ComprobanteId}")">
                                                         <i class="bi bi-receipt"></i> Nueva nota
@@ -162,89 +167,90 @@ else
                     }
                 </section>
 
-                <section class="documents-card">
-                    @if (selectedInvoice is null)
-                    {
-                        <div class="documents-label">Detalle</div>
-                        <p style="margin: 0;">Selecciona una factura para revisar sus lineas, saldos y resumen comercial.</p>
-                    }
-                    else
-                    {
-                        <div class="management-card-header">
-                            <h2>Factura #@selectedInvoice.InvoiceNumber</h2>
-                            <span>@selectedLines.Count lineas</span>
-                        </div>
-
-                        <div class="documents-summary-grid" style="margin-top: 1rem;">
-                            <div class="documents-card documents-kpi">
-                                <div class="documents-label">Cliente</div>
-                                <strong style="font-size: 1rem;">@selectedInvoice.ClientName</strong>
-                                <span>@selectedInvoice.PatientName</span>
-                            </div>
-                            <div class="documents-card documents-kpi">
-                                <div class="documents-label">Total</div>
-                                <strong>@selectedInvoice.TotalAmount.ToString("0.00")</strong>
-                                <span>Emitida @selectedInvoice.IssueDateLabel</span>
-                            </div>
-                            <div class="documents-card documents-kpi">
-                                <div class="documents-label">Cobrado</div>
-                                <strong>@selectedInvoice.CollectedAmount.ToString("0.00")</strong>
-                                <span>Saldo @selectedInvoice.Balance.ToString("0.00")</span>
-                            </div>
-                            <div class="documents-card documents-kpi">
-                                <div class="documents-label">Notas</div>
-                                <strong>@selectedInvoice.TotalCredited.ToString("0.00")</strong>
-                                <span>@GetInvoiceCreditState(selectedInvoice) | @selectedInvoice.DisplayState</span>
-                            </div>
-                        </div>
-
-                        <div class="workspace-actions" style="margin-top: 1rem;">
-                            <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
-                        </div>
-
-
-                        <div class="documents-label" style="margin-top: 1rem;">Lineas de la factura</div>
-                        @if (selectedLines.Count == 0)
-                        {
-                            <p style="margin: 0;">Esta factura no tiene lineas visibles.</p>
-                        }
-                        else
-                        {
-                            <div class="table-responsive">
-                                <table class="table table-hover" style="margin-bottom: 0;">
-                                    <thead>
-                                        <tr>
-                                            <th>Codigo</th>
-                                            <th>Concepto</th>
-                                            <th>IVA</th>
-                                            <th>Cantidad</th>
-                                            <th>Precio</th>
-                                            <th>Descuento</th>
-                                            <th>Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var line in selectedLines)
-                                        {
-                                            <tr>
-                                                <td>@line.ProductCode</td>
-                                                <td>@line.Concept</td>
-                                                <td>@line.TaxLabel</td>
-                                                <td>@line.Quantity</td>
-                                                <td>@line.UnitPrice.ToString("0.00")</td>
-                                                <td>@line.Discount.ToString("0.00")</td>
-                                                <td>@line.Total.ToString("0.00")</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                    }
-                </section>
             </div>
         </section>
     </section>
+}
+
+@if (showInvoiceDetailModal && selectedInvoice is not null)
+{
+    <div class="custom-modal-overlay" @onclick="CloseInvoiceDetailModal">
+        <div class="custom-modal-card documents-detail-modal" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2>Factura #@selectedInvoice.InvoiceNumber</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseInvoiceDetailModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="documents-summary-grid">
+                    <div class="documents-card documents-kpi">
+                        <div class="documents-label">Cliente</div>
+                        <strong style="font-size: 1rem;">@selectedInvoice.ClientName</strong>
+                        <span>@selectedInvoice.PatientName</span>
+                    </div>
+                    <div class="documents-card documents-kpi">
+                        <div class="documents-label">Total</div>
+                        <strong>@selectedInvoice.TotalAmount.ToString("0.00")</strong>
+                        <span>Emitida @selectedInvoice.IssueDateLabel</span>
+                    </div>
+                    <div class="documents-card documents-kpi">
+                        <div class="documents-label">Cobrado</div>
+                        <strong>@selectedInvoice.CollectedAmount.ToString("0.00")</strong>
+                        <span>Saldo @selectedInvoice.Balance.ToString("0.00")</span>
+                    </div>
+                    <div class="documents-card documents-kpi">
+                        <div class="documents-label">Notas</div>
+                        <strong>@selectedInvoice.TotalCredited.ToString("0.00")</strong>
+                        <span>@GetInvoiceCreditState(selectedInvoice) | @selectedInvoice.DisplayState</span>
+                    </div>
+                </div>
+
+                <div class="workspace-actions" style="margin-top: 1rem;">
+                    <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
+                </div>
+
+                <div class="documents-label" style="margin-top: 1rem;">Lineas de la factura</div>
+                @if (selectedLines.Count == 0)
+                {
+                    <p style="margin: 0;">Esta factura no tiene lineas visibles.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover" style="margin-bottom: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Codigo</th>
+                                    <th>Concepto</th>
+                                    <th>IVA</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio</th>
+                                    <th>Descuento</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in selectedLines)
+                                {
+                                    <tr>
+                                        <td>@line.ProductCode</td>
+                                        <td>@line.Concept</td>
+                                        <td>@line.TaxLabel</td>
+                                        <td>@line.Quantity</td>
+                                        <td>@line.UnitPrice.ToString("0.00")</td>
+                                        <td>@line.Discount.ToString("0.00")</td>
+                                        <td>@line.Total.ToString("0.00")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseInvoiceDetailModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
 }
 
 @code {
@@ -252,6 +258,7 @@ else
     private readonly List<InvoiceLineRow> selectedLines = [];
     private ModulePermissions permissions = new();
     private IssuedInvoiceRow? selectedInvoice;
+    private bool showInvoiceDetailModal;
     private bool isLoading = true;
     private bool canViewModule;
     private int currentUserId;
@@ -396,6 +403,12 @@ else
             .ToListAsync();
 
         selectedLines.AddRange(lines);
+        showInvoiceDetailModal = true;
+    }
+
+    private void CloseInvoiceDetailModal()
+    {
+        showInvoiceDetailModal = false;
     }
 
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)

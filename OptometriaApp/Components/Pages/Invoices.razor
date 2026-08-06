@@ -24,13 +24,24 @@
     }
 
     .invoice-sheet-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
         gap: 1.5rem;
         padding: 1.75rem;
         background: linear-gradient(135deg, rgba(93, 161, 129, 0.09), rgba(236, 204, 197, 0.18));
         border-bottom: 1px solid rgba(127, 105, 81, 0.14);
+    }
+
+    .invoice-sheet-header-copy {
+        display: grid;
+        gap: 0.65rem;
+        align-content: start;
+    }
+
+    .invoice-header-supporting {
+        max-width: 48rem;
+        color: var(--color-taupe);
+        margin: 0;
     }
 
     .invoice-sheet-body {
@@ -149,7 +160,9 @@
     }
 
     .invoice-kpi {
-        text-align: right;
+        display: grid;
+        gap: 0.75rem;
+        align-content: start;
     }
 
     .invoice-kpi strong {
@@ -158,9 +171,16 @@
         color: var(--color-ink);
     }
 
+    .invoice-kpi-panel {
+        padding: 1rem 1.1rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(127, 105, 81, 0.1);
+    }
+
     .invoice-top-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+        grid-template-columns: 1fr;
         gap: 1.25rem;
         align-items: start;
     }
@@ -174,10 +194,9 @@
     .invoice-sidebar {
         display: grid;
         gap: 1rem;
-        position: sticky;
-        top: 1rem;
         align-self: start;
         min-width: 0;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 
     .invoice-document-card {
@@ -308,7 +327,23 @@
 
     .invoice-grid-2 {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .invoice-structure-card {
+        display: grid;
+        gap: 1.1rem;
+    }
+
+    .invoice-client-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+
+    .invoice-control-summary {
+        display: grid;
         gap: 1rem;
     }
 
@@ -447,6 +482,11 @@
         gap: 0.6rem;
     }
 
+    .invoice-sidebar-summary {
+        display: grid;
+        gap: 1rem;
+    }
+
     .invoice-preview-sheet {
         border: 1px solid rgba(127, 105, 81, 0.12);
         border-radius: 1rem;
@@ -482,6 +522,37 @@
         border-top: 1px dashed rgba(127, 105, 81, 0.18);
         color: var(--color-taupe);
         white-space: pre-wrap;
+    }
+
+    .invoice-preview-trigger {
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .invoice-preview-trigger-copy {
+        font-size: 0.88rem;
+        color: var(--color-taupe);
+    }
+
+    .invoice-preview-launch {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px dashed rgba(127, 105, 81, 0.18);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .invoice-preview-modal-card {
+        width: min(960px, calc(100vw - 2rem));
+        max-width: 960px;
+    }
+
+    .invoice-preview-modal-layout {
+        display: grid;
+        gap: 1rem;
     }
 
     .invoice-empty {
@@ -556,7 +627,7 @@
 
     @@media (max-width: 768px) {
         .invoice-sheet-header {
-            flex-direction: column;
+            grid-template-columns: 1fr;
         }
 
         .invoice-kpi {
@@ -571,7 +642,8 @@
 
         .invoice-doc-meta,
         .invoice-grid-2,
-        .invoice-preview-mini-grid,
+        .invoice-client-summary-grid,
+                        .invoice-preview-mini-grid,
         .invoice-editor-grid--line {
             grid-template-columns: 1fr;
         }
@@ -640,16 +712,18 @@ else
 
         <section class="management-card invoice-workspace">
             <div class="invoice-sheet-header">
-                <div>
+                <div class="invoice-sheet-header-copy">
                     <span class="eyebrow">Emision comercial</span>
                     <h2 style="margin: 0.35rem 0 0.45rem;">Factura #@DisplayInvoiceNumber</h2>
-                    <p style="margin: 0; color: var(--color-taupe);">Documento de trabajo con estructura fiscal, detalle comercial y vista previa en vivo.</p>
+                    <p class="invoice-header-supporting">Organiza la informacion fiscal, revisa el detalle con mas espacio horizontal y abre la vista previa solo cuando el documento ya tiene la base obligatoria.</p>
                 </div>
 
                 <div class="invoice-kpi">
-                    <span class="eyebrow">Total a emitir</span>
-                    <strong>@totalPreview.ToString("0.00")</strong>
-                    <span style="color: var(--color-taupe);">Saldo pendiente: @balancePreview.ToString("0.00")</span>
+                    <div class="invoice-kpi-panel">
+                        <span class="eyebrow">Total a emitir</span>
+                        <strong>@totalPreview.ToString("0.00")</strong>
+                        <span style="color: var(--color-taupe);">Saldo pendiente: @balancePreview.ToString("0.00")</span>
+                    </div>
                 </div>
             </div>
 
@@ -707,7 +781,7 @@ else
                             <p class="invoice-section-caption">La información principal queda agrupada en bloques claros para emitir más rápido y con menos ruido visual.</p>
 
                             <div class="invoice-grid-2">
-                                <section class="invoice-section">
+                                <section class="invoice-section invoice-structure-card">
                                     <div class="invoice-block-title">Cliente y paciente</div>
                                     <div class="invoice-toolbar-grid">
                                         <div>
@@ -747,7 +821,7 @@ else
                                     }
                                     else
                                     {
-                                        <div class="invoice-party-stack" style="margin-top: 1rem;">
+                                        <div class="invoice-client-summary-grid" style="margin-top: 1rem;">
                                             <div>
                                                 <div class="invoice-party-card-title">Cliente de facturacion</div>
                                                 <div class="invoice-readonly-grid">
@@ -777,7 +851,6 @@ else
                                                     </div>
                                                 </div>
                                             </div>
-
                                             <div>
                                                 <div class="invoice-party-card-title">Paciente origen</div>
                                                 <div class="invoice-readonly-grid">
@@ -807,7 +880,7 @@ else
                                     }
                                 </section>
 
-                                <section class="invoice-section">
+                                <section class="invoice-section invoice-control-summary">
                                     <div class="invoice-block-title">Pago y control</div>
                                     <div class="invoice-toolbar-grid">
                                         <div>
@@ -1048,6 +1121,17 @@ else
                                     </div>
                                 </div>
                             }
+
+                            <div class="invoice-preview-launch">
+                                <div class="invoice-preview-trigger-copy">
+                                    Cuando termines el documento base, abre la vista previa desde aqui para revisarlo sin quitar ancho al detalle.
+                                </div>
+                                <div class="invoice-actions-primary" style="margin-top: 0;">
+                                    <button type="button" class="btn btn-outline-primary" @onclick="OpenPreviewModal" disabled="@(!CanOpenPreviewModal)">
+                                        Vista previa
+                                    </button>
+                                </div>
+                            </div>
                         </section>
                     </div>
 
@@ -1104,61 +1188,71 @@ else
                         }
 
                         <section class="invoice-sidebar-card">
-                            <div class="invoice-block-title">Vista previa</div>
-                            <div class="invoice-preview-sheet">
-                                <div class="invoice-preview-header">
-                                    <div>
-                                        <strong style="display:block; color:var(--color-ink);">@(currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "Emisor")</strong>
-                                        <span style="color:var(--color-taupe);">@(currentIssuer?.direccion ?? "Direccion pendiente")</span>
-                                    </div>
-                                    <div style="text-align:right;">
-                                        <strong style="display:block; color:var(--color-ink);">Factura</strong>
-                                        <span style="color:var(--color-taupe);">@DisplayInvoiceNumber</span>
-                                    </div>
-                                </div>
-
-                                <div class="invoice-preview-mini-grid">
-                                    <div><strong>Cliente</strong><br />@GetClientDisplayName(billingClient)</div>
-                                    <div><strong>Identificacion</strong><br />@GetClientIdentification(billingClient)</div>
-                                    <div><strong>Paciente</strong><br />@(selectedPatient is null ? "Sin paciente fijo" : GetPatientFullName(selectedPatient))</div>
-                                    <div><strong>Cedula paciente</strong><br />@(selectedPatient?.cedula ?? "Sin cedula")</div>
-                                    <div><strong>Fecha</strong><br />@InvoiceDateLabel</div>
-                                    <div><strong>Pago</strong><br />@paymentForm</div>
-                                </div>
-
-                                <table class="table invoice-summary-table" style="margin-bottom: 0;">
-                                    <tbody>
-                                        <tr><td>Items</td><td>@draftLines.Count</td></tr>
-                                        <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
-                                        <tr><td>IVA</td><td>@taxPreview.ToString("0.00")</td></tr>
-                                        <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
-                                    </tbody>
-                                </table>
-
-                                <div class="invoice-preview-notes">
-                                    @(string.IsNullOrWhiteSpace(invoiceNotes) ? "Sin observaciones adicionales." : invoiceNotes)
-                                </div>
-                            </div>
-                        </section>
-
-                        <section class="invoice-sidebar-card">
                             <div class="invoice-block-title">Observaciones</div>
                             <textarea class="form-control" rows="7" @bind="invoiceNotes" readonly="@(!canEditModule)"></textarea>
-                        </section>
-
-                        <section class="invoice-sidebar-card">
-                            <div class="invoice-block-title">Accesos rapidos</div>
-                            <div class="invoice-sidebar-links">
-                                <a class="btn btn-outline-primary" href="/clients">Administrar clientes</a>
-                                <a class="btn btn-outline-primary" href="/my-invoices">Mis facturas</a>
-                                <a class="btn btn-outline-primary" href="/my-credit-notes">Mis notas de credito</a>
-                            </div>
+                            @if (!CanOpenPreviewModal)
+                            {
+                                <div class="invoice-sidebar-hint">Completa los datos obligatorios para habilitar la vista previa.</div>
+                            }
                         </section>
                     </aside>
                 </div>
             </div>
         </section>
     </section>
+}
+
+@if (showPreviewModal)
+{
+    <div class="custom-modal-overlay" @onclick="ClosePreviewModal">
+        <div class="custom-modal-card invoice-preview-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2>Vista previa de factura</h2>
+                <button type="button" class="btn-close-modal" @onclick="ClosePreviewModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="invoice-preview-modal-layout">
+                    <div class="invoice-preview-sheet">
+                        <div class="invoice-preview-header">
+                            <div>
+                                <strong style="display:block; color:var(--color-ink);">@(currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "Emisor")</strong>
+                                <span style="color:var(--color-taupe);">@(currentIssuer?.direccion ?? "Direccion pendiente")</span>
+                            </div>
+                            <div style="text-align:right;">
+                                <strong style="display:block; color:var(--color-ink);">Factura</strong>
+                                <span style="color:var(--color-taupe);">@DisplayInvoiceNumber</span>
+                            </div>
+                        </div>
+
+                        <div class="invoice-preview-mini-grid">
+                            <div><strong>Cliente</strong><br />@GetClientDisplayName(billingClient)</div>
+                            <div><strong>Identificacion</strong><br />@GetClientIdentification(billingClient)</div>
+                            <div><strong>Paciente</strong><br />@(selectedPatient is null ? "Sin paciente fijo" : GetPatientFullName(selectedPatient))</div>
+                            <div><strong>Cedula paciente</strong><br />@(selectedPatient?.cedula ?? "Sin cedula")</div>
+                            <div><strong>Fecha</strong><br />@InvoiceDateLabel</div>
+                            <div><strong>Pago</strong><br />@paymentForm</div>
+                        </div>
+
+                        <table class="table invoice-summary-table" style="margin-bottom: 0;">
+                            <tbody>
+                                <tr><td>Items</td><td>@draftLines.Count</td></tr>
+                                <tr><td>Subtotal</td><td>@subtotalPreview.ToString("0.00")</td></tr>
+                                <tr><td>IVA</td><td>@taxPreview.ToString("0.00")</td></tr>
+                                <tr><td>Total</td><td>@totalPreview.ToString("0.00")</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="invoice-preview-notes">
+                            @(string.IsNullOrWhiteSpace(invoiceNotes) ? "Sin observaciones adicionales." : invoiceNotes)
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClosePreviewModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
 }
 
 @code {
@@ -1198,6 +1292,7 @@ else
     private decimal taxRate;
     private decimal paidAmount;
     private string invoiceNotes = string.Empty;
+    private bool showPreviewModal;
     private decimal subtotalPreview;
     private decimal taxPreview;
     private decimal totalPreview;
@@ -1220,6 +1315,7 @@ else
     private string InitialSequencePreview => GetInitialSequencePreview();
     private string DisplayInvoiceNumber => issuerRequiresInitialSequence ? InitialSequencePreview : invoiceNumberPreview;
     private bool CanFinalizeInvoice => canEditModule && currentIssuer is not null;
+    private bool CanOpenPreviewModal => currentIssuer is not null && billingClient is not null && draftLines.Count > 0;
     private IEnumerable<tbl_paciente> FilteredPatients => patients
         .Where(MatchesPatientSearch)
         .Take(25);
@@ -1330,6 +1426,8 @@ else
 
     private async Task LoadCurrentDraftContextAsync(OpticaDbContext dbContext, int patientId, int clientId)
     {
+        showPreviewModal = false;
+
         selectedPatient = patientId > 0
             ? await dbContext.tbl_pacientes.FirstOrDefaultAsync(x => x.id_paciente == patientId)
             : null;
@@ -1441,6 +1539,21 @@ else
         lineEditor.ProductId = productId;
         ApplySelectedProductDefaults();
         return Task.CompletedTask;
+    }
+
+    private void OpenPreviewModal()
+    {
+        if (!CanOpenPreviewModal)
+        {
+            return;
+        }
+
+        showPreviewModal = true;
+    }
+
+    private void ClosePreviewModal()
+    {
+        showPreviewModal = false;
     }
 
     private string LineEditorTieneIvaValue
