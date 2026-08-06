@@ -80,17 +80,23 @@ public partial class OpticaDbContext : DbContext
         {
             entity.HasKey(e => e.id_abono).HasName("PK__tbl_abon__1E6B958340D1E4B9");
 
-            entity.ToTable("tbl_abono");
+            entity.ToTable("tbl_abono", tableBuilder =>
+            {
+                tableBuilder.UseSqlOutputClause(false);
+            });
 
             entity.HasIndex(e => e.id_cta_cobrar, "IX_abono_cta");
 
             entity.Property(e => e.fecha_abono).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.fecha_registro).HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.id_abono_referencia);
+            entity.Property(e => e.id_usuario);
+            entity.Property(e => e.id_venta);
             entity.Property(e => e.monto_abono).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.motivo_movimiento)
                 .HasMaxLength(255)
                 .IsUnicode(false);
+            entity.Property(e => e.metodo_pago_id).HasColumnName("id_metodo_pago");
             entity.Property(e => e.referencia_pago)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -107,7 +113,7 @@ public partial class OpticaDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_tbl_abono_tbl_cta_cobrar");
 
-            entity.HasOne(d => d.metodo_pagoNavigation).WithMany()
+            entity.HasOne(d => d.metodo_pagoNavigation).WithMany(p => p.tbl_abonos)
                 .HasForeignKey(d => d.metodo_pago_id)
                 .HasConstraintName("FK_tbl_abono_tbl_metodo_pago");
         });
@@ -431,7 +437,10 @@ public partial class OpticaDbContext : DbContext
         {
             entity.HasKey(e => e.id_cta_cobrar);
 
-            entity.ToTable("tbl_cta_cobrar");
+            entity.ToTable("tbl_cta_cobrar", tableBuilder =>
+            {
+                tableBuilder.UseSqlOutputClause(false);
+            });
 
             entity.HasIndex(e => new { e.id_cliente, e.estado }, "IX_cta_cobrar_cliente_estado");
             entity.HasIndex(e => e.fecha_vencimiento, "IX_cta_cobrar_vencimiento")
@@ -1309,6 +1318,8 @@ public partial class OpticaDbContext : DbContext
                 .HasForeignKey(d => d.id_rol)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_usuario_rol");
+
+            entity.Ignore(e => e.tbl_abonos);
         });
 
         modelBuilder.Entity<tbl_venta>(entity =>
@@ -1350,6 +1361,8 @@ public partial class OpticaDbContext : DbContext
                 .HasForeignKey(d => d.id_usuario)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_venta_usuario");
+
+            entity.Ignore(e => e.tbl_abonos);
         });
 
         OnModelCreatingPartial(modelBuilder);

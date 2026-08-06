@@ -29,6 +29,7 @@ public partial class OpticaDbContext
     {
         ConfigureSecurityEntities(modelBuilder);
         ConfigureNavigationEntities(modelBuilder);
+        ConfigureNotificationEntities(modelBuilder);
         ConfigureElectronicBillingEntities(modelBuilder);
         ConfigureProcurementEntities(modelBuilder);
         ConfigureAppointmentEntities(modelBuilder);

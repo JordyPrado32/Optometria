@@ -7,10 +7,12 @@
 @using Microsoft.EntityFrameworkCore
 @using OptometriaApp.Data
 @using OptometriaApp.Models
+@using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject BillingDraftService BillingDraftService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
 
 <PageTitle>Citas y turnos</PageTitle>
 
@@ -1630,6 +1632,15 @@ else
 
             WriteAudit(dbContext, "Crear cita", $"CitaId={entity.id_cita}; PacienteId={entity.id_paciente}; DoctorId={entity.id_medico}; Fecha={entity.fecha_cita:yyyy-MM-dd}; Hora={entity.hora_inicio:HH\\:mm}");
             await dbContext.SaveChangesAsync();
+            await NotificationService.NotifyAppointmentCreatedAsync(
+                entity.id_cita,
+                patient.id_usuario,
+                doctor.id_usuario,
+                currentUserId,
+                GetPatientDisplayName(patient),
+                GetDoctorDisplayName(doctor),
+                entity.fecha_cita,
+                entity.hora_inicio);
 
             statusMessage = "La cita fue agendada correctamente.";
             await LoadAsync(entity.id_cita);
@@ -1676,6 +1687,20 @@ else
             $"CitaId={appointmentEntity.id_cita}; PacienteId={appointmentEntity.id_paciente}; DoctorId={appointmentEntity.id_medico}; Fecha={appointmentEntity.fecha_cita:yyyy-MM-dd}; Hora={appointmentEntity.hora_inicio:HH\\:mm}");
 
         await dbContext.SaveChangesAsync();
+        if (scheduleChanged)
+        {
+            await NotificationService.NotifyAppointmentRescheduledAsync(
+                appointmentEntity.id_cita,
+                patient.id_usuario,
+                doctor.id_usuario,
+                currentUserId,
+                GetPatientDisplayName(patient),
+                GetDoctorDisplayName(doctor),
+                appointmentEntity.fecha_cita,
+                appointmentEntity.hora_inicio,
+                isClient ? "el paciente" : isDoctor ? "el medico" : "administracion");
+        }
+
         statusMessage = scheduleChanged ? "La cita fue reprogramada correctamente." : "La cita fue actualizada correctamente.";
         await LoadAsync(appointmentEntity.id_cita);
     }

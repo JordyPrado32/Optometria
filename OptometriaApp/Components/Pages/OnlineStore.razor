@@ -10,6 +10,7 @@
 @using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NotificationService NotificationService
 @inject IWebHostEnvironment WebHostEnvironment
 @inject IJSRuntime JSRuntime
 
@@ -25,6 +26,8 @@
     .shop-nav-actions { display:flex; align-items:center; gap:0.5rem; }
     .shop-search { min-width:14rem; display:flex; align-items:center; gap:0.45rem; border:1px solid rgba(93,161,129,0.24); border-radius:999px; padding:0.35rem 0.75rem; background:#fff; }
     .shop-search input { border:0; outline:0; width:100%; background:transparent; color:var(--color-ink); }
+    .shop-history-button { height:2.65rem; border:1px solid rgba(93,161,129,0.24); border-radius:999px; display:inline-flex; align-items:center; justify-content:center; gap:0.42rem; padding:0 0.85rem; background:rgba(93,161,129,0.12); color:var(--color-sage); font-weight:900; white-space:nowrap; }
+    .shop-history-button:hover { background:rgba(93,161,129,0.2); color:#3f7d62; transform:translateY(-1px); }
     .shop-cart-button { position:relative; width:2.65rem; height:2.65rem; border:1px solid rgba(127,105,81,0.16); border-radius:999px; display:grid; place-items:center; background:#fff; color:var(--color-ink); }
     .shop-cart-count { position:absolute; right:-0.25rem; top:-0.25rem; min-width:1.15rem; height:1.15rem; border-radius:999px; display:grid; place-items:center; background:var(--color-sage); color:#fff; font-size:0.68rem; font-weight:900; }
     .shop-hero { min-height:470px; border-radius:1.5rem; overflow:hidden; position:relative; display:grid; align-items:end; padding:2rem; background:linear-gradient(135deg, rgba(93,161,129,0.18), rgba(254,188,100,0.16)); border:1px solid rgba(127,105,81,0.12); }
@@ -85,7 +88,7 @@
     .shop-config-preview img { width:100%; height:100%; object-fit:cover; }
     .shop-config-fields { display:grid; gap:0.65rem; min-width:0; }
     @@media (max-width: 1100px) { .shop-side { position:static; grid-template-columns:repeat(2, minmax(0, 1fr)); } .shop-feature-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-    @@media (max-width: 820px) { .shop-nav { grid-template-columns:1fr; } .shop-nav-actions { justify-content:space-between; } .shop-search { min-width:0; flex:1; } .shop-hero { min-height:360px; padding:1.1rem; } .shop-side { grid-template-columns:1fr; } .shop-config-grid { grid-template-columns:1fr; } }
+    @@media (max-width: 820px) { .shop-nav { grid-template-columns:1fr; } .shop-nav-actions { justify-content:space-between; } .shop-search { min-width:0; flex:1; } .shop-history-button span { display:none; } .shop-history-button { width:2.65rem; padding:0; } .shop-hero { min-height:360px; padding:1.1rem; } .shop-side { grid-template-columns:1fr; } .shop-config-grid { grid-template-columns:1fr; } }
     @@media (max-width: 640px) { .shop-feature-grid, .shop-product-grid { grid-template-columns:1fr; } }
 </style>
 
@@ -125,6 +128,10 @@ else
                     <i class="bi bi-search"></i>
                     <input @bind="searchTerm" @bind:event="oninput" placeholder="Buscar" />
                 </label>
+                <a class="shop-history-button" href="/mis-compras-online" title="Mis compras online" aria-label="Mis compras online">
+                    <i class="bi bi-bag-check"></i>
+                    <span>Mis compras</span>
+                </a>
                 <button type="button" class="shop-cart-button" @onclick="ToggleCart">
                     <i class="bi bi-bag"></i>
                     @if (CartCount > 0)
@@ -287,8 +294,42 @@ else
                         <span>Total</span>
                         <span>$@CartTotal.ToString("0.00")</span>
                     </div>
-                    <button type="button" class="btn btn-primary" @onclick="CheckoutCart">
-                        <i class="bi bi-credit-card-2-front-fill"></i> Pagar
+                    <div style="display:grid; gap:0.75rem;">
+                        <div>
+                            <label class="form-label">Metodo de pago</label>
+                            <input class="form-control" value="Transferencia bancaria" readonly />
+                        </div>
+                        <div>
+                            <label class="form-label">N. comprobante de transferencia *</label>
+                            <input class="form-control" maxlength="120" @bind="checkoutTransferVoucherNumber" placeholder="Ingresa el numero del comprobante" />
+                        </div>
+                        <div>
+                            <label class="form-label">Banco *</label>
+                            <input class="form-control" maxlength="120" @bind="checkoutTransferBank" placeholder="Banco desde donde hiciste la transferencia" />
+                        </div>
+                        <div>
+                            <label class="form-label">N. cedula del titular *</label>
+                            <input class="form-control" maxlength="40" @bind="checkoutTransferOwnerDocument" placeholder="Cedula del titular de la cuenta" />
+                        </div>
+                        <div>
+                            <label class="form-label">Nombre del titular *</label>
+                            <input class="form-control" maxlength="180" @bind="checkoutTransferOwnerName" placeholder="Nombre completo del titular de la cuenta" />
+                        </div>
+                        <div>
+                            <label class="form-label">Foto del comprobante de pago *</label>
+                            <InputFile OnChange="OnTransferProofSelected" class="form-control" accept="image/png,image/jpeg,image/webp" />
+                            @if (!string.IsNullOrWhiteSpace(transferProofPreview))
+                            {
+                                <img src="@transferProofPreview" alt="Comprobante de transferencia" style="margin-top:0.65rem; width:100%; max-height:220px; object-fit:cover; border-radius:1rem; border:1px solid rgba(127,105,81,0.14);" />
+                            }
+                        </div>
+                        <div>
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" rows="3" @bind="checkoutTransferNotes" placeholder="Dato adicional para validar el pago"></textarea>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="SubmitTransferCheckoutAsync">
+                        <i class="bi bi-credit-card-2-front-fill"></i> Pagar por transferencia
                     </button>
                     <button type="button" class="btn btn-outline-primary" @onclick="ClearCart">Vaciar carrito</button>
                 }
@@ -300,6 +341,12 @@ else
         </div>
     </div>
 }
+
+<StatusModal Visible="@showCheckoutAlert"
+             IsError="@checkoutAlertIsError"
+             Title="@checkoutAlertTitle"
+             Message="@checkoutAlertMessage"
+             OnClose="CloseCheckoutAlert" />
 
 @if (showStoreEditor && storeEditor is not null)
 {
@@ -377,6 +424,18 @@ else
     private bool showCart;
     private bool cartRestored;
     private string? cartMessage;
+    private string checkoutTransferVoucherNumber = string.Empty;
+    private string checkoutTransferBank = string.Empty;
+    private string checkoutTransferOwnerDocument = string.Empty;
+    private string checkoutTransferOwnerName = string.Empty;
+    private string checkoutTransferNotes = string.Empty;
+    private byte[]? pendingTransferProofBytes;
+    private string? pendingTransferProofExtension;
+    private string? transferProofPreview;
+    private bool showCheckoutAlert;
+    private bool checkoutAlertIsError;
+    private string checkoutAlertTitle = string.Empty;
+    private string checkoutAlertMessage = string.Empty;
     private bool showStoreEditor;
     private StorefrontSettings storeSettings = StorefrontSettings.Default();
     private StorefrontSettings? storeEditor;
@@ -384,6 +443,7 @@ else
     private string? pendingHeroImageExtension;
     private string? pendingHeroImagePreview;
     private const long MaxStoreImageSize = 4 * 1024 * 1024;
+    private const long MaxTransferProofSize = 4 * 1024 * 1024;
 
     private bool CanEditStorefront => currentRoleId == 1;
     private string? StoreHeroPreviewUrl => pendingHeroImagePreview ?? storeEditor?.HeroImage;
@@ -608,7 +668,156 @@ else
     {
         cartMessage = cart.Count == 0
             ? "Agrega productos antes de finalizar."
-            : "Pedido preparado. Confirma los datos del cliente para completar la compra.";
+            : "Pedido preparado. Completa los datos de la transferencia y sube la foto del comprobante para completar la compra.";
+    }
+
+    private async Task SubmitTransferCheckoutAsync()
+    {
+        cartMessage = null;
+
+        if (cart.Count == 0)
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Agrega productos al carrito antes de continuar.", true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(checkoutTransferVoucherNumber))
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Ingresa el numero del comprobante de la transferencia.", true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(checkoutTransferBank) ||
+            string.IsNullOrWhiteSpace(checkoutTransferOwnerDocument) ||
+            string.IsNullOrWhiteSpace(checkoutTransferOwnerName))
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Completa banco, cedula y nombre del titular antes de continuar.", true);
+            return;
+        }
+
+        if (pendingTransferProofBytes is null)
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Debes subir la foto del comprobante de pago.", true);
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+        var currentUser = await dbContext.tbl_usuarios.FirstOrDefaultAsync(x => x.id_usuario == currentUserId && x.activo == true);
+        if (currentUser is null)
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "No se encontro el usuario autenticado.", true);
+            return;
+        }
+
+        var productIds = cart.Select(x => x.ProductId).Distinct().ToList();
+        var dbProducts = await dbContext.tbl_productos
+            .Where(x => productIds.Contains(x.id_producto) && x.activo == true)
+            .ToDictionaryAsync(x => x.id_producto);
+
+        foreach (var item in cart)
+        {
+            if (!dbProducts.TryGetValue(item.ProductId, out var product))
+            {
+                ShowCheckoutAlert("No se pudo completar la compra.", $"El producto '{item.Name}' ya no esta disponible.", true);
+                return;
+            }
+
+            if ((product.stock_actual ?? 0) < item.Quantity)
+            {
+                ShowCheckoutAlert("No se pudo completar la compra.", $"No hay stock suficiente para '{product.nombre_producto}'.", true);
+                return;
+            }
+        }
+
+        var transferTotal = cart.Sum(item => dbProducts[item.ProductId].precio_venta * item.Quantity);
+        var transferProofPath = await SaveTransferProofAsync();
+        var request = new tbl_cobro_transferencia
+        {
+            id_cta_cobrar = null,
+            id_comprobante = null,
+            id_usuario_solicita = currentUserId,
+            monto = transferTotal,
+            referencia = checkoutTransferVoucherNumber.Trim(),
+            banco_origen = checkoutTransferBank.Trim(),
+            cedula_titular = checkoutTransferOwnerDocument.Trim(),
+            nombre_titular = checkoutTransferOwnerName.Trim(),
+            ruta_comprobante = transferProofPath,
+            observaciones = NormalizeOptional($"Compra tienda online. {checkoutTransferNotes}".Trim()),
+            estado = "Pendiente",
+            fecha_solicitud = DateTime.Now
+        };
+        dbContext.tbl_cobro_transferencias.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        foreach (var item in cart)
+        {
+            var product = dbProducts[item.ProductId];
+            dbContext.tbl_cobro_transferencia_detalles.Add(new tbl_cobro_transferencia_detalle
+            {
+                id_cobro_transferencia = request.id_cobro_transferencia,
+                id_producto = product.id_producto,
+                cantidad = item.Quantity,
+                precio_unitario = product.precio_venta,
+                total_item = product.precio_venta * item.Quantity,
+                nombre_producto_snapshot = product.nombre_producto,
+                fecha_creacion = DateTime.Now
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        await NotificationService.NotifyTransferRequestedAsync(request.id_cobro_transferencia);
+
+        cart.Clear();
+        checkoutTransferVoucherNumber = string.Empty;
+        checkoutTransferBank = string.Empty;
+        checkoutTransferOwnerDocument = string.Empty;
+        checkoutTransferOwnerName = string.Empty;
+        checkoutTransferNotes = string.Empty;
+        pendingTransferProofBytes = null;
+        pendingTransferProofExtension = null;
+        transferProofPreview = null;
+        showCart = false;
+        await SaveCartAsync();
+
+        ShowCheckoutAlert("Compra enviada", "Recibimos tu comprobante. Puedes revisar el estado y retiro en Mis compras online.", false);
+    }
+
+    private async Task OnTransferProofSelected(InputFileChangeEventArgs args)
+    {
+        cartMessage = null;
+        var file = args.File;
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowCheckoutAlert("Comprobante no valido", "Sube una foto del comprobante en formato imagen.", true);
+            return;
+        }
+
+        if (file.Size > MaxTransferProofSize)
+        {
+            ShowCheckoutAlert("Comprobante no valido", "La foto del comprobante no debe superar 4 MB.", true);
+            return;
+        }
+
+        await using var stream = file.OpenReadStream(MaxTransferProofSize);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        pendingTransferProofBytes = memory.ToArray();
+        pendingTransferProofExtension = GetSafeImageExtension(file.Name, file.ContentType);
+        transferProofPreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(pendingTransferProofBytes)}";
+    }
+
+    private async Task<string> SaveTransferProofAsync()
+    {
+        var extension = pendingTransferProofExtension ?? ".jpg";
+        var fileName = $"transfer-proof-{currentUserId}-{DateTime.Now:yyyyMMddHHmmss}{extension}";
+        var folder = Path.Combine(WebHostEnvironment.WebRootPath, "images", "transfer-proofs");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllBytesAsync(Path.Combine(folder, fileName), pendingTransferProofBytes!);
+        return $"/images/transfer-proofs/{fileName}";
     }
 
     private async Task SaveCartAsync()
@@ -770,6 +979,26 @@ else
             "image/webp" => ".webp",
             _ => ".jpg"
         };
+    }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void ShowCheckoutAlert(string title, string message, bool isError)
+    {
+        checkoutAlertTitle = title;
+        checkoutAlertMessage = message;
+        checkoutAlertIsError = isError;
+        showCheckoutAlert = true;
+    }
+
+    private Task CloseCheckoutAlert()
+    {
+        showCheckoutAlert = false;
+        checkoutAlertTitle = string.Empty;
+        checkoutAlertMessage = string.Empty;
+        checkoutAlertIsError = false;
+        return Task.CompletedTask;
     }
 
     private sealed class StoreProductRow

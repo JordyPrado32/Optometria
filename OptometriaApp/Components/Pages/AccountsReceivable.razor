@@ -1186,6 +1186,8 @@ else
             dbContext.tbl_abonos.Add(new tbl_abono
             {
                 id_cta_cobrar = account.id_cta_cobrar,
+                id_venta = account.id_venta ?? selectedAccount.SaleId,
+                id_usuario = currentUserId,
                 fecha_abono = DateTime.Now,
                 monto_abono = abonoEditor.Monto,
                 metodo_pago_id = paymentMethodId,
@@ -1289,6 +1291,8 @@ else
             dbContext.tbl_abonos.Add(new tbl_abono
             {
                 id_cta_cobrar = account.id_cta_cobrar,
+                id_venta = account.id_venta ?? selectedAccount.SaleId,
+                id_usuario = currentUserId,
                 fecha_abono = DateTime.Now,
                 monto_abono = reversalAmount,
                 metodo_pago_id = originalPayment.metodo_pago_id,

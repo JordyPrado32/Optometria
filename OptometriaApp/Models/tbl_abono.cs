@@ -9,6 +9,10 @@ public partial class tbl_abono
 
     public int id_cta_cobrar { get; set; }
 
+    public int id_venta { get; set; }
+
+    public int id_usuario { get; set; }
+
     public DateTime? fecha_abono { get; set; }
 
     public decimal monto_abono { get; set; }

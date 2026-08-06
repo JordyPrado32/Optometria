@@ -1,8 +1,11 @@
 @inherits LayoutComponentBase
+@rendermode InteractiveServer
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
 @inject OpticaCustomizationService CustomizationService
+@inject NotificationService NotificationService
+@using OptometriaApp.Models
 @implements IDisposable
 
 <div class="app-shell" style="@AppShellStyle">
@@ -32,10 +35,62 @@
                         <span class="header-page-title">@CurrentPageTitle</span>
                     </div>
                     <div class="app-header-right">
-                        <button type="button" class="header-notification-btn" aria-label="Notificaciones">
-                            <i class="bi bi-bell"></i>
-                            <span class="notification-badge"></span>
-                        </button>
+                        <div class="header-notification-wrap">
+                            <button type="button" class="header-notification-btn" aria-label="Notificaciones" @onclick="ToggleNotificationsPanel">
+                                <i class="bi bi-bell-fill"></i>
+                                @if (UnreadNotificationsCount > 0)
+                                {
+                                    <span class="notification-badge">@UnreadNotificationsCount</span>
+                                }
+                            </button>
+
+                            @if (ShowNotificationsPanel)
+                            {
+                                <div class="header-notification-popover" @onclick:stopPropagation="true">
+                                    <div class="header-notification-popover-header">
+                                        <div>
+                                            <strong>Notificaciones</strong>
+                                            <span>@UnreadNotificationsCount sin leer</span>
+                                        </div>
+                                        <div class="header-notification-popover-actions">
+                                            <button type="button" class="header-notification-link" @onclick="MarkAllHeaderNotificationsAsReadAsync">Marcar leidas</button>
+                                            <button type="button" class="header-notification-close" aria-label="Cerrar notificaciones" title="Cerrar" @onclick="CloseNotificationsPanel">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="header-notification-popover-body">
+                                        @if (HeaderNotifications.Count == 0)
+                                        {
+                                            <div class="header-notification-empty">No tienes notificaciones por ahora.</div>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var item in HeaderNotifications)
+                                            {
+                                                <article class="header-notification-item @(item.leida ? string.Empty : "is-unread")">
+                                                    <button type="button" class="header-notification-open" @onclick="() => OpenHeaderNotificationAsync(item)">
+                                                        <span class="header-notification-item-icon">
+                                                            <i class="bi @(GetNotificationIcon(item.tipo))"></i>
+                                                        </span>
+                                                        <span class="header-notification-item-copy">
+                                                            <small>@(string.IsNullOrWhiteSpace(item.modulo_origen) ? "Sistema" : item.modulo_origen)</small>
+                                                            <strong>@item.titulo</strong>
+                                                            <span>@item.mensaje</span>
+                                                            <time>@FormatNotificationDate(item.fecha_creacion)</time>
+                                                        </span>
+                                                    </button>
+                                                    <button type="button" class="header-notification-delete" title="Eliminar" @onclick="() => DeleteHeaderNotificationAsync(item.id_notificacion)">
+                                                        <i class="bi bi-x-lg"></i>
+                                                    </button>
+                                                </article>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
                         
                         <div class="header-profile-divider"></div>
                         
@@ -281,6 +336,15 @@
         max-height: 100vh !important;
         min-width: 0 !important;
     }
+
+    .app-header,
+    .app-header-frame,
+    .app-header-right,
+    .header-notification-wrap {
+        position: relative !important;
+        overflow: visible !important;
+        z-index: 80 !important;
+    }
     .app-content::-webkit-scrollbar {
         display: block !important;
         width: 5px !important;
@@ -355,6 +419,228 @@
     .table-responsive::-webkit-scrollbar-thumb:hover {
         background: rgba(225, 177, 169, 0.9) !important;
     }
+
+    .header-notification-wrap {
+        position: relative;
+    }
+
+    .header-notification-btn {
+        position: relative;
+        width: 3rem;
+        height: 3rem;
+        border: 0;
+        border-radius: 999px;
+        background: radial-gradient(circle at 30% 30%, #9b856c 0%, #7F6951 58%, #6b5742 100%);
+        color: #fffaf4;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 24px rgba(127, 105, 81, 0.22);
+    }
+
+    .header-notification-btn i {
+        font-size: 1.05rem;
+        line-height: 1;
+    }
+
+    .notification-badge {
+        position: absolute;
+        top: -0.38rem;
+        right: -0.34rem;
+        min-width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #ffcb71 0%, #f0a73f 100%);
+        color: #7F6951;
+        font-size: 0.76rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 0.3rem;
+        line-height: 1;
+        border: 2px solid #fffaf4;
+        box-shadow: 0 8px 16px rgba(240, 167, 63, 0.32);
+    }
+
+    .header-notification-popover {
+        position: fixed;
+        top: 4.9rem;
+        right: 1.2rem;
+        width: min(24rem, calc(100vw - 1.5rem));
+        max-height: 32rem;
+        border-radius: 1.15rem;
+        background: #fff;
+        border: 1px solid rgba(127, 105, 81, 0.14);
+        box-shadow: 0 24px 60px rgba(60, 52, 46, 0.18);
+        overflow: hidden;
+        z-index: 9999;
+    }
+
+    .header-notification-popover-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 1rem 1rem 0.85rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.1);
+        background: linear-gradient(180deg, rgba(244, 240, 228, 0.75), rgba(255, 255, 255, 0.98));
+    }
+
+    .header-notification-popover-header strong,
+    .header-notification-popover-header span {
+        display: block;
+    }
+
+    .header-notification-popover-header strong {
+        color: var(--color-ink);
+        font-size: 0.95rem;
+    }
+
+    .header-notification-popover-header span {
+        color: var(--color-taupe);
+        font-size: 0.75rem;
+        margin-top: 0.15rem;
+    }
+
+    .header-notification-popover-actions {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .header-notification-link {
+        border: 0;
+        background: transparent;
+        color: #7F6951;
+        font-size: 0.76rem;
+        font-weight: 700;
+        padding: 0;
+    }
+
+    .header-notification-close {
+        width: 1.85rem;
+        height: 1.85rem;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(127, 105, 81, 0.08);
+        color: #7F6951;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.78rem;
+        transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .header-notification-close:hover {
+        background: rgba(236, 204, 197, 0.55);
+        color: #5D4B3A;
+        transform: translateY(-1px);
+    }
+
+    .header-notification-popover-body {
+        max-height: 26rem;
+        overflow-y: auto;
+        display: grid;
+    }
+
+    .header-notification-empty {
+        padding: 1.25rem 1rem;
+        color: var(--color-taupe);
+        text-align: center;
+    }
+
+    .header-notification-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.65rem;
+        align-items: flex-start;
+        padding: 0.95rem 1rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.08);
+        background: #fff;
+    }
+
+    .header-notification-item.is-unread {
+        background: rgba(244, 240, 228, 0.5);
+    }
+
+    .header-notification-open {
+        border: 0;
+        background: transparent;
+        padding: 0;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.8rem;
+        text-align: left;
+        align-items: flex-start;
+    }
+
+    .header-notification-item-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.75rem;
+        background: rgba(254, 188, 100, 0.18);
+        color: #7F6951;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+    }
+
+    .header-notification-item-copy {
+        display: grid;
+        gap: 0.18rem;
+        min-width: 0;
+    }
+
+    .header-notification-item-copy small,
+    .header-notification-item-copy span,
+    .header-notification-item-copy time {
+        color: var(--color-taupe);
+    }
+
+    .header-notification-item-copy small {
+        font-size: 0.72rem;
+        font-style: italic;
+    }
+
+    .header-notification-item-copy strong {
+        color: var(--color-ink);
+        font-size: 0.92rem;
+        line-height: 1.25;
+    }
+
+    .header-notification-item-copy span {
+        font-size: 0.83rem;
+        line-height: 1.35;
+    }
+
+    .header-notification-item-copy time {
+        font-size: 0.74rem;
+        margin-top: 0.15rem;
+    }
+
+    .header-notification-delete {
+        width: 1.95rem;
+        height: 1.95rem;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(127, 105, 81, 0.08);
+        color: #7F6951;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.1rem;
+    }
+
+    @@media (max-width: 640px) {
+        .header-notification-popover {
+            top: 4.6rem;
+            right: 0.75rem;
+            width: min(22rem, calc(100vw - 1.5rem));
+        }
+    }
 </style>
 
 @code {
@@ -365,6 +651,10 @@
     private string BrandName { get; set; } = "Optica Lux";
     private string AppShellStyle { get; set; } = string.Empty;
     private string BrandLogoUrl { get; set; } = string.Empty;
+    private int CurrentUserId { get; set; }
+    private int UnreadNotificationsCount { get; set; }
+    private bool ShowNotificationsPanel { get; set; }
+    private List<tbl_notificacion> HeaderNotifications { get; set; } = [];
     private string BrandNamePrimary => BrandName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "Optica";
     private string BrandNameSecondary => BrandName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).Skip(1).FirstOrDefault() ?? string.Empty;
 
@@ -373,12 +663,15 @@
         NavigationManager.LocationChanged += OnLocationChanged;
         UpdatePageTitle();
         await LoadUserProfileAsync();
+        await LoadNotificationsAsync();
         await LoadBrandingAsync();
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         UpdatePageTitle();
+        await LoadNotificationsAsync();
+        ShowNotificationsPanel = false;
         StateHasChanged();
     }
 
@@ -422,6 +715,9 @@
             "my-invoices" or "mis-facturas" => "Mis Facturas",
             "my-credit-notes" or "mis-notas-de-credito" => "Mis Notas de Crédito",
             "accounts-receivable" or "cuentas-por-cobrar" => "Cuentas por Cobrar",
+            "notificaciones" => "Notificaciones",
+            "cobros-transferencia" or "gestion-tienda-online" => "Gestion tienda online",
+            "mis-compras-online" => "Mis compras online",
             "lab-shipments" or "envios-laboratorio" => "Envíos de Laboratorio",
             "optica-settings" or "configuracion-optica" => "Configuracion de la Optica",
             "income" or "ingresos" => "Ingresos",
@@ -456,6 +752,7 @@
                 var userIdValue = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (int.TryParse(userIdValue, out var userId))
                 {
+                    CurrentUserId = userId;
                     await using var dbContext = await DbContextFactory.CreateDbContextAsync();
                     var profile = await dbContext.tbl_usuarios
                         .AsNoTracking()
@@ -533,6 +830,107 @@
         }
 
         return $"/{trimmed.TrimStart('~', '/', '\\').Replace("\\", "/", StringComparison.Ordinal)}";
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        if (CurrentUserId <= 0)
+        {
+            UnreadNotificationsCount = 0;
+            HeaderNotifications = [];
+            return;
+        }
+
+        UnreadNotificationsCount = await NotificationService.GetUnreadCountAsync(CurrentUserId);
+        HeaderNotifications = await NotificationService.GetRecentForUserAsync(CurrentUserId, 8);
+    }
+
+    private void ToggleNotificationsPanel()
+    {
+        ShowNotificationsPanel = !ShowNotificationsPanel;
+
+        if (ShowNotificationsPanel)
+        {
+            _ = RefreshNotificationsPanelAsync();
+        }
+    }
+
+    private void CloseNotificationsPanel()
+    {
+        ShowNotificationsPanel = false;
+    }
+
+    private async Task RefreshNotificationsPanelAsync()
+    {
+        try
+        {
+            await LoadNotificationsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            ShowNotificationsPanel = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OpenHeaderNotificationAsync(tbl_notificacion notification)
+    {
+        await NotificationService.MarkAsReadAsync(CurrentUserId, notification.id_notificacion);
+        await LoadNotificationsAsync();
+        ShowNotificationsPanel = false;
+        if (!string.IsNullOrWhiteSpace(notification.ruta_destino))
+        {
+            NavigationManager.NavigateTo(notification.ruta_destino);
+        }
+    }
+
+    private async Task DeleteHeaderNotificationAsync(int notificationId)
+    {
+        await NotificationService.DeleteAsync(CurrentUserId, notificationId);
+        await LoadNotificationsAsync();
+    }
+
+    private async Task MarkAllHeaderNotificationsAsReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync(CurrentUserId);
+        await LoadNotificationsAsync();
+    }
+
+    private static string GetNotificationIcon(string? type) => type?.ToLowerInvariant() switch
+    {
+        "transferencia" or "gestion tienda online" => "bi-shop-window",
+        "pago" => "bi-cash-stack",
+        "cita" => "bi-calendar-check",
+        "exito" => "bi-check2-circle",
+        "error" => "bi-x-circle",
+        _ => "bi-bell"
+    };
+
+    private static string FormatNotificationDate(DateTime createdAt)
+    {
+        var elapsed = DateTime.Now - createdAt;
+        if (elapsed.TotalMinutes < 1)
+        {
+            return "Hace un momento";
+        }
+
+        if (elapsed.TotalHours < 1)
+        {
+            return $"Hace {Math.Max(1, (int)elapsed.TotalMinutes)} min";
+        }
+
+        if (elapsed.TotalDays < 1)
+        {
+            return $"Hace {Math.Max(1, (int)elapsed.TotalHours)} h";
+        }
+
+        if (elapsed.TotalDays < 7)
+        {
+            return $"Hace {Math.Max(1, (int)elapsed.TotalDays)} dias";
+        }
+
+        return createdAt.ToString("yyyy-MM-dd HH:mm");
     }
 
     public void Dispose()

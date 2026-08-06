@@ -202,6 +202,7 @@ else
                             <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
                         </div>
 
+
                         <div class="documents-label" style="margin-top: 1rem;">Lineas de la factura</div>
                         @if (selectedLines.Count == 0)
                         {
@@ -320,7 +321,8 @@ else
                 ClientLastName = client.apellidos,
                 PatientIdentification = patient != null ? patient.cedula : string.Empty,
                 PatientFirstName = patient != null ? patient.nombres : string.Empty,
-                PatientLastName = patient != null ? patient.apellidos : string.Empty
+                PatientLastName = patient != null ? patient.apellidos : string.Empty,
+                AccountId = account != null ? account.id_cta_cobrar : 0
             })
             .Take(40)
             .ToListAsync();
@@ -341,13 +343,13 @@ else
             ClientIdentification = item.numero_identificacion ?? string.Empty,
             PatientName = GetDisplayPersonName(item.PatientFirstName, item.PatientLastName),
             PatientIdentification = item.PatientIdentification ?? string.Empty,
-            IssueDate = item.IssueDate ?? DateTime.Now,
-            State = item.SaleState ?? "Facturada",
-            TotalAmount = item.total ?? 0m,
-            CollectedAmount = item.valor_cobrado ?? 0m,
-            Balance = item.saldo_pendiente ?? 0m,
-            TotalCredited = noteSums.TryGetValue(item.id_comprobante, out var totalCredited) ? totalCredited : 0m
-        }));
+                IssueDate = item.IssueDate ?? DateTime.Now,
+                State = item.SaleState ?? "Facturada",
+                TotalAmount = item.total ?? 0m,
+                CollectedAmount = item.valor_cobrado ?? 0m,
+                Balance = item.saldo_pendiente ?? 0m,
+                TotalCredited = noteSums.TryGetValue(item.id_comprobante, out var totalCredited) ? totalCredited : 0m
+            }));
 
         var targetId = preserveSelectedComprobanteId ?? selectedInvoice?.ComprobanteId;
         if (targetId.HasValue && issuedInvoices.Any(x => x.ComprobanteId == targetId.Value))

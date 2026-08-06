@@ -1,0 +1,130 @@
+@page "/notificaciones"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NotificationService NotificationService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Notificaciones</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando notificaciones...</h1></div></section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para ver este modulo.</p></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Centro operativo</span>
+                <h1>Notificaciones</h1>
+                <p>Revisa citas, pagos, transferencias y avisos operativos segun tu rol.</p>
+            </div>
+            <div class="workspace-actions">
+                <button type="button" class="btn btn-outline-primary" @onclick="MarkAllAsReadAsync">Marcar todo como leido</button>
+            </div>
+        </div>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Bandeja</h2>
+                <span>@notifications.Count notificaciones</span>
+            </div>
+
+            @if (notifications.Count == 0)
+            {
+                <p style="margin-top:1rem;">No tienes notificaciones por ahora.</p>
+            }
+            else
+            {
+                <div style="display:grid; gap:0.85rem; margin-top:1rem;">
+                    @foreach (var item in notifications)
+                    {
+                        <article style="border:1px solid rgba(127,105,81,0.12); border-radius:1rem; padding:1rem; background:@(item.leida ? "rgba(255,255,255,0.72)" : "rgba(93,161,129,0.08)");">
+                            <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+                                <div>
+                                    <strong style="color:var(--color-ink);">@item.titulo</strong>
+                                    <div style="font-size:0.8rem; color:var(--color-taupe); margin-top:0.2rem;">@(item.fecha_creacion.ToString("yyyy-MM-dd HH:mm")) | @item.tipo</div>
+                                </div>
+                                @if (!item.leida)
+                                {
+                                    <span class="badge" style="background:rgba(93,161,129,0.15); color:#2e7d32;">Nueva</span>
+                                }
+                            </div>
+                            <p style="margin:0.75rem 0 0; color:var(--color-ink);">@item.mensaje</p>
+                            <div class="workspace-actions" style="margin-top:0.75rem;">
+                                @if (!string.IsNullOrWhiteSpace(item.ruta_destino))
+                                {
+                                    <button type="button" class="btn btn-primary" @onclick="() => OpenNotificationAsync(item)">Abrir</button>
+                                }
+                                @if (!item.leida)
+                                {
+                                    <button type="button" class="btn btn-outline-primary" @onclick="() => MarkAsReadAsync(item.id_notificacion)">Marcar como leida</button>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </section>
+}
+
+@code {
+    private readonly List<tbl_notificacion> notifications = [];
+    private bool isLoading = true;
+    private bool canViewModule;
+    private int currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId) ? parsedUserId : 0;
+
+        canViewModule = currentUserId > 0;
+        if (canViewModule)
+        {
+            notifications.Clear();
+            notifications.AddRange(await NotificationService.GetRecentForUserAsync(currentUserId, 60));
+        }
+
+        isLoading = false;
+    }
+
+    private async Task MarkAsReadAsync(int notificationId)
+    {
+        await NotificationService.MarkAsReadAsync(currentUserId, notificationId);
+        await LoadAsync();
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync(currentUserId);
+        await LoadAsync();
+    }
+
+    private async Task OpenNotificationAsync(tbl_notificacion notification)
+    {
+        await NotificationService.MarkAsReadAsync(currentUserId, notification.id_notificacion);
+        NavigationManager.NavigateTo(notification.ruta_destino ?? "/notificaciones");
+    }
+
+}

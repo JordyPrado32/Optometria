@@ -77,7 +77,8 @@
     private static readonly HashSet<string> HiddenRoutes = new(StringComparer.OrdinalIgnoreCase)
     {
         "/registro",
-        "/configurar-2fa"
+        "/configurar-2fa",
+        "/notificaciones"
     };
     private static readonly string[] ConfigurationRoutes =
     [
@@ -284,20 +285,22 @@
         "/cuentas-por-cobrar" => 25,
         "/ingresos" => 26,
         "/tienda-online" => 27,
-        "/configuracion" => 28,
-        "/usuarios" => 29,
-        "/roles" => 30,
-        "/menus" => 31,
-        "/registro" => 32,
-        "/configurar-2fa" => 33,
-        "/perfil" => 34,
+        "/mis-compras-online" => 28,
+        "/gestion-tienda-online" or "/cobros-transferencia" => 29,
+        "/configuracion" => 30,
+        "/usuarios" => 31,
+        "/roles" => 32,
+        "/menus" => 33,
+        "/registro" => 34,
+        "/configurar-2fa" => 35,
+        "/perfil" => 36,
         _ => 100
     };
 
     private static string GetMenuCategory(string route) => route switch
     {
         "/dashboard" or "/pacientes" or "/doctor/ingresar-pacientes" or "/doctor/mis-pacientes" or "/doctor/historia-clinica" or "/citas" or "/disponibilidad-medica" or "/doctores" or "/laboratorios" or "/pedidos-laboratorio" or "/envios-laboratorio" => "Clinica",
-        "/clientes" or "/emisor" or "/invoices" or "/facturas" or "/mis-facturas" or "/mis-notas-de-credito" or "/cuentas-por-cobrar" or "/ingresos" or "/tienda-online" => "Comercial",
+        "/clientes" or "/emisor" or "/invoices" or "/facturas" or "/mis-facturas" or "/mis-notas-de-credito" or "/cuentas-por-cobrar" or "/ingresos" or "/tienda-online" or "/mis-compras-online" or "/gestion-tienda-online" or "/cobros-transferencia" => "Comercial",
         "/productos" or "/categorias-de-productos" or "/proveedores" or "/purchases" or "/compras" or "/ordenes-de-compra" or "/recepciones-de-compra" or "/liquidaciones-de-compra" or "/inventarios" or "/kardex" => "Inventario",
         "/configuracion" or "/usuarios" or "/roles" or "/menus" or "/perfil" => "Configuracion",
         _ => "Configuracion"
@@ -341,6 +344,8 @@
         "receipt" => "bi bi-receipt",
         "arrow-counterclockwise" => "bi bi-arrow-counterclockwise",
         "cash-coin" => "bi bi-cash-coin",
+        "bag-check" => "bi bi-bag-check",
+        "shop-window" => "bi bi-shop-window",
         "users" => "bi bi-people",
         "roles" => "bi bi-shield-lock-fill",
         "menu" => "bi bi-menu-button-wide-fill",
@@ -380,6 +385,8 @@
         "/cuentas-por-cobrar" => "bi bi-cash-coin",
         "/ingresos" => "bi bi-graph-up-arrow",
         "/tienda-online" => "bi bi-shop",
+        "/mis-compras-online" => "bi bi-bag-check",
+        "/gestion-tienda-online" or "/cobros-transferencia" => "bi bi-shop-window",
         "/configuracion" => "bi bi-gear-fill",
         "/usuarios" => "bi bi-people",
         "/roles" => "bi bi-shield-lock-fill",
