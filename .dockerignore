@@ -1,0 +1,16 @@
+**
+
+!Dockerfile
+!OptometriaApp/
+!OptometriaApp/**
+
+OptometriaApp/**/bin/
+OptometriaApp/**/obj/
+OptometriaApp/artifacts/
+OptometriaApp/.agent/
+OptometriaApp/.github/
+OptometriaApp/Agents.md
+OptometriaApp/appsettings.json
+OptometriaApp/appsettings.Development.json
+OptometriaApp/**/*.user
+OptometriaApp/**/*.suo
