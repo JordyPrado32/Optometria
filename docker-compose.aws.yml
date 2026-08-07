@@ -15,6 +15,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://0.0.0.0:8080
       ConnectionStrings__OpticaConnection: ${OPTICA_CONNECTION_STRING:?Configura OPTICA_CONNECTION_STRING en .env.aws}
+      MobileApi__SigningKey: ${MOBILE_API_SIGNING_KEY:?Configura MOBILE_API_SIGNING_KEY en .env.aws}
       Infrastructure__ApplyDatabaseSchemaOnStartup: "false"
       Infrastructure__EnableAppointmentReminders: "false"
       Deployment__UseHttpsRedirection: "false"

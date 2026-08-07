@@ -1,0 +1,31 @@
+name: Validar API movil
+
+on:
+  pull_request:
+    branches:
+      - agent/aws-docker-api-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compilar ASP.NET Core
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restaurar dependencias
+        run: dotnet restore OptometriaApp/OptometriaApp.csproj
+
+      - name: Compilar solucion
+        run: dotnet build OptometriaApp/OptometriaApp.csproj --configuration Release --no-restore
