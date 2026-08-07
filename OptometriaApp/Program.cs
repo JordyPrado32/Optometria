@@ -1,11 +1,13 @@
 ﻿using System.Net.Mail;
 using System.Net;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -20,6 +22,25 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.Configure<SecuritySettings>(builder.Configuration.GetSection("Security"));
+
+var mobileApiSettings = builder.Configuration
+    .GetSection(MobileApiSettings.SectionName)
+    .Get<MobileApiSettings>() ?? new MobileApiSettings();
+
+if (Encoding.UTF8.GetByteCount(mobileApiSettings.SigningKey) < 32)
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "MobileApi:SigningKey debe contener al menos 32 caracteres y configurarse fuera del repositorio.");
+    }
+
+    mobileApiSettings.SigningKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+    builder.Configuration[$"{MobileApiSettings.SectionName}:SigningKey"] = mobileApiSettings.SigningKey;
+}
+
+builder.Services.Configure<MobileApiSettings>(
+    builder.Configuration.GetSection(MobileApiSettings.SectionName));
 
 builder.Services.AddDbContext<OpticaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("OpticaConnection")));
@@ -81,9 +102,30 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 }
             }
         };
+    })
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+    {
+        options.MapInboundClaims = true;
+        options.TokenValidationParameters = MobileTokenService.CreateValidationParameters(mobileApiSettings);
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (!string.Equals(
+                        context.Principal?.FindFirstValue(MobileTokenService.TokenUseClaim),
+                        MobileTokenService.AccessTokenUse,
+                        StringComparison.Ordinal))
+                {
+                    context.Fail("El token no es un token de acceso movil.");
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 builder.Services.AddScoped<IPasswordHasher<tbl_usuario>, PasswordHasher<tbl_usuario>>();
 builder.Services.AddScoped<AuthenticatorService>();
+builder.Services.AddSingleton<MobileTokenService>();
 builder.Services.AddSingleton<EmailSender>();
 builder.Services.AddSingleton<EmailBackgroundQueue>();
 builder.Services.AddSingleton<IEmailBackgroundQueue>(sp => sp.GetRequiredService<EmailBackgroundQueue>());
@@ -2812,6 +2854,8 @@ app.MapGet("/exports/system-reports.pdf", async (
     return Results.File(pdf, "application/pdf", $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
 }).RequireAuthorization("FullAccess");
 
+app.MapMobileAuthApi();
+app.MapMobileOperationsApi();
 app.MapProductApi();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

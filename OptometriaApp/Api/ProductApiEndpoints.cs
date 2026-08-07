@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using OptometriaApp.Data;
 
@@ -26,28 +26,51 @@ public static class ProductApiEndpoints
             .WithName("ApiProductos")
             .WithSummary("Consulta productos y servicios activos para la aplicacion movil")
             .Produces<List<ProductoApiResponse>>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status500InternalServerError)
-            .AllowAnonymous();
+            .RequireAuthorization(policy =>
+            {
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.RequireAuthenticatedUser();
+            });
 
         return endpoints;
     }
 
     private static async Task<IResult> ObtenerProductosAsync(
         int? limite,
+        string? buscar,
         IDbContextFactory<OpticaDbContext> dbContextFactory,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var cantidad = Math.Clamp(limite ?? 50, 1, 200);
+        var termino = buscar?.Trim();
+
+        if (termino?.Length > 80)
+        {
+            return Results.BadRequest(new { message = "La busqueda no puede superar 80 caracteres." });
+        }
 
         try
         {
             await using var dbContext = await dbContextFactory
                 .CreateDbContextAsync(cancellationToken);
 
-            var productos = await dbContext.tbl_productos
+            var query = dbContext.tbl_productos
                 .AsNoTracking()
                 .Where(producto => producto.activo == true)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(termino))
+            {
+                query = query.Where(producto =>
+                    producto.nombre_producto.Contains(termino) ||
+                    producto.codigo_producto.Contains(termino) ||
+                    (producto.tipo_item != null && producto.tipo_item.Contains(termino)));
+            }
+
+            var productos = await query
                 .OrderBy(producto => producto.nombre_producto)
                 .Select(producto => new ProductoApiResponse(
                     producto.id_producto,
@@ -69,7 +92,7 @@ public static class ProductApiEndpoints
 
             return Results.Problem(
                 title: "No se pudo consultar SQL Server",
-                detail: "Comprueba la VPN, el reenvio del puerto, las credenciales y los permisos del usuario SQL.",
+                detail: "El servicio de datos no se encuentra disponible. Revisa la conectividad privada desde AWS.",
                 statusCode: StatusCodes.Status500InternalServerError);
         }
     }
