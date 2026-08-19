@@ -1,4 +1,4 @@
-﻿using System.Net.Mail;
+using System.Net.Mail;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -3181,6 +3181,12 @@ static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
             VALUES ('Bodeguero', 'Gestion operativa de inventario, kardex y reposicion');
         END;
 
+        IF NOT EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE LOWER(nombre) = 'paciente')
+        BEGIN
+            INSERT INTO dbo.tbl_rol (nombre, descripcion)
+            VALUES ('Paciente', 'Acceso al portal de pacientes para consultas, citas e historial familiar');
+        END;
+
         DECLARE @bodegueroId INT = (
             SELECT TOP (1) id_rol
             FROM dbo.tbl_rol
@@ -3195,6 +3201,11 @@ static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
             SELECT TOP (1) id_rol
             FROM dbo.tbl_rol
             WHERE LOWER(nombre) LIKE '%optomet%');
+
+        DECLARE @pacienteId INT = (
+            SELECT TOP (1) id_rol
+            FROM dbo.tbl_rol
+            WHERE LOWER(nombre) = 'paciente');
 
         IF @bodegueroId IS NOT NULL
         BEGIN
@@ -3230,6 +3241,32 @@ static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
             INNER JOIN dbo.tbl_menu_app m ON m.id_menu = p.id_menu
             WHERE p.id_rol = @recepcionId
               AND m.ruta IN ('/productos', '/pedidos-laboratorio', '/envios-laboratorio');
+        END;
+
+        IF @pacienteId IS NOT NULL
+        BEGIN
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING (
+                SELECT
+                    @pacienteId AS id_rol,
+                    m.id_menu,
+                    CAST(1 AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                FROM dbo.tbl_menu_app m
+                WHERE m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/mis-facturas', '/mis-compras-online', '/tienda-online')
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.puede_ver = source.puede_ver,
+                    target.puede_crear = source.puede_crear,
+                    target.puede_editar = source.puede_editar,
+                    target.puede_eliminar = source.puede_eliminar
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
         END;
 
         IF @optometraId IS NOT NULL
@@ -3611,9 +3648,14 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
             ADD CONSTRAINT FK_tbl_paciente_tbl_usuario FOREIGN KEY (id_usuario) REFERENCES dbo.tbl_usuario(id_usuario);
         END;
 
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
         BEGIN
-            CREATE UNIQUE NONCLUSTERED INDEX UQ_tbl_paciente_id_usuario ON dbo.tbl_paciente(id_usuario) WHERE id_usuario IS NOT NULL;
+            DROP INDEX UQ_tbl_paciente_id_usuario ON dbo.tbl_paciente;
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_tbl_paciente_id_usuario ON dbo.tbl_paciente(id_usuario) WHERE id_usuario IS NOT NULL;
         END;
 
         IF OBJECT_ID('dbo.tbl_medico', 'U') IS NULL

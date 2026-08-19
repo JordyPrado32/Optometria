@@ -68,64 +68,7 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        @if (isClient && linkedPatient is null)
-        {
-            <section class="management-card">
-                <div class="management-card-header">
-                    <h2>Tu perfil de paciente aun no esta completo</h2>
-                    <span>Se crea automaticamente</span>
-                </div>
 
-                <p>
-                    Cuando agendes una cita para ti, el sistema puede crear una ficha rapida con tu usuario y luego la completas
-                    con mas detalle. Si prefieres dejarla lista ahora, puedes hacerlo aqui.
-                </p>
-
-                <div class="management-form-grid">
-                    <div>
-                        <label class="form-label" for="selfPatientDocument">Cedula</label>
-                        <input id="selfPatientDocument" class="form-control" @bind="selfPatientEditor.Cedula" maxlength="20" />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="selfPatientBirthDate">Fecha de nacimiento</label>
-                        <input id="selfPatientBirthDate" type="date" class="form-control" value="@selfPatientEditor.FechaNacimiento" @onchange="OnSelfPatientBirthDateChanged" max="@TodayDateIso" />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="selfPatientPhone">Telefono</label>
-                        <input id="selfPatientPhone" class="form-control" @bind="selfPatientEditor.Telefono" maxlength="20" />
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="selfPatientGender">Genero</label>
-                        <select id="selfPatientGender" class="form-select" @bind="selfPatientEditor.Genero">
-                            <option value="">Selecciona</option>
-                            @foreach (var option in genderOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-
-                <div class="management-form-grid patient-form-block">
-                    <div class="patient-form-span">
-                        <label class="form-label" for="selfPatientAddress">Direccion</label>
-                        <input id="selfPatientAddress" class="form-control" @bind="selfPatientEditor.Direccion" maxlength="255" />
-                    </div>
-
-                    <div class="patient-form-span">
-                        <label class="form-label" for="selfPatientNotes">Observaciones</label>
-                        <textarea id="selfPatientNotes" class="form-control" rows="3" @bind="selfPatientEditor.Observaciones"></textarea>
-                    </div>
-                </div>
-
-                <div class="workspace-actions">
-                    <button type="button" class="btn btn-primary" @onclick="SaveLinkedPatientAsync">Guardar y vincular</button>
-                </div>
-            </section>
-        }
 
         <section class="management-card">
             <div class="management-card-header">
@@ -426,7 +369,7 @@ else
                                                     <i class="bi bi-person-lines-fill" style="margin-right: 4px;"></i> Historial
                                                 </button>
                                             }
-                                            @if (!string.IsNullOrWhiteSpace(BuildAppointmentWhatsappUrl(appointment)))
+                                            @if (!isClient && !string.IsNullOrWhiteSpace(BuildAppointmentWhatsappUrl(appointment)))
                                             {
                                                 <a class="btn btn-outline-primary"
                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(37, 211, 102, 0.35) !important; color: #1f9d57 !important;"
@@ -434,17 +377,7 @@ else
                                                     <i class="bi bi-whatsapp" style="margin-right: 4px;"></i> WhatsApp
                                                 </a>
                                             }
-                                            <button type="button" class="btn btn-outline-primary"
-                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important; color: var(--color-taupe) !important;"
-                                                    @onclick='() => OpenApiDraftModal(appointment, "confirm")'>
-                                                <i class="bi bi-plug" style="margin-right: 4px;"></i> API confirmar
-                                            </button>
-                                            <button type="button" class="btn btn-outline-primary"
-                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important; color: var(--color-taupe) !important;"
-                                                    @onclick='() => OpenApiDraftModal(appointment, "reschedule")'>
-                                                <i class="bi bi-arrow-repeat" style="margin-right: 4px;"></i> API reprogramar
-                                            </button>
-                                            @if (CanConfirmAppointments && IsPendingState(stateName))
+                                            @if (CanConfirmAppointments && IsPendingState(stateName) && !isClient)
                                             {
                                                 <button type="button" class="btn btn-outline-primary"
                                                         style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
@@ -460,11 +393,14 @@ else
                                                     <i class="bi bi-x-circle" style="margin-right: 4px;"></i> Cancelar
                                                 </button>
                                             }
-                                            <button type="button" class="btn btn-outline-primary"
-                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
-                                                    @onclick="() => OpenAuditModal(appointment.id_cita)">
-                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoría
-                                            </button>
+                                            @if (!isClient)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary"
+                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
+                                                        @onclick="() => OpenAuditModal(appointment.id_cita)">
+                                                    <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoría
+                                                </button>
+                                            }
                                         </div>
                                     </td>
                                 </tr>
@@ -512,37 +448,16 @@ else
                             </select>
                         </div>
 
-                        @if (isAdmin || isDoctor)
-                        {
-                            <div>
-                                <label class="form-label" for="modalAppointmentPatient">Paciente *</label>
-                                <select id="modalAppointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
-                                    <option value="0">Selecciona</option>
-                                    @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
-                                    {
-                                        <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
-                                    }
-                                </select>
-                            </div>
-                        }
-                        else
-                        {
-                            <div>
-                                <label class="form-label" for="modalAppointmentTarget">La cita es para</label>
-                                <select id="modalAppointmentTarget" class="form-select" value="@appointmentEditor.TargetType" @onchange="OnAppointmentTargetChanged" disabled="@(!CanEditAppointments)">
-                                    <option value="self">Mi usuario</option>
-                                    <option value="family">Un familiar</option>
-                                </select>
-                            </div>
-                        }
-
-                        @if (isClient)
-                        {
-                            <div>
-                                <label class="form-label">Paciente</label>
-                                <input class="form-control" value="@CurrentPatientLabel" readonly />
-                            </div>
-                        }
+                        <div>
+                            <label class="form-label" for="modalAppointmentPatient">Paciente *</label>
+                            <select id="modalAppointmentPatient" class="form-select" @bind="appointmentEditor.IdPaciente" disabled="@(!CanEditAppointments)">
+                                <option value="0">Selecciona un paciente</option>
+                                @foreach (var patient in patients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
+                                {
+                                    <option value="@patient.id_paciente">@GetPatientDisplayName(patient)</option>
+                                }
+                            </select>
+                        </div>
 
                         <div>
                             <label class="form-label" for="modalAppointmentType">Tipo *</label>
@@ -646,45 +561,7 @@ else
                     </section>
                 </div>
 
-                @if (isClient && appointmentEditor.TargetType == "family")
-                {
-                    <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
-                        <div class="patient-form-span">
-                            <label class="form-label" for="modalFamilyPatientSelect">Familiar</label>
-                            <select id="modalFamilyPatientSelect" class="form-select" value="@appointmentEditor.FamilyPatientId" @onchange="OnFamilyPatientSelectionChanged" disabled="@(!CanEditAppointments)">
-                                <option value="0">Registrar nuevo familiar</option>
-                                @foreach (var familyPatient in clientFamilyPatients.OrderBy(p => p.apellidos).ThenBy(p => p.nombres))
-                                {
-                                    <option value="@familyPatient.id_paciente">@GetPatientDisplayName(familyPatient)</option>
-                                }
-                            </select>
-                        </div>
 
-                        @if (appointmentEditor.FamilyPatientId <= 0)
-                        {
-                            <div>
-                                <label class="form-label" for="modalFamilyCedula">Cedula familiar</label>
-                                <input id="modalFamilyCedula" class="form-control" @bind="appointmentEditor.FamilyCedula" maxlength="20" readonly="@(!CanEditAppointments)" />
-                            </div>
-                            <div>
-                                <label class="form-label" for="modalFamilyNames">Nombres</label>
-                                <input id="modalFamilyNames" class="form-control" @bind="appointmentEditor.FamilyNames" maxlength="100" readonly="@(!CanEditAppointments)" />
-                            </div>
-                            <div>
-                                <label class="form-label" for="modalFamilyLastNames">Apellidos</label>
-                                <input id="modalFamilyLastNames" class="form-control" @bind="appointmentEditor.FamilyLastNames" maxlength="100" readonly="@(!CanEditAppointments)" />
-                            </div>
-                            <div>
-                                <label class="form-label" for="modalFamilyPhone">Telefono</label>
-                                <input id="modalFamilyPhone" class="form-control" @bind="appointmentEditor.FamilyPhone" maxlength="20" readonly="@(!CanEditAppointments)" />
-                            </div>
-                            <div>
-                                <label class="form-label" for="modalFamilyBirthDate">Fecha nacimiento</label>
-                                <input id="modalFamilyBirthDate" type="date" class="form-control" value="@appointmentEditor.FamilyBirthDate" @onchange="OnFamilyBirthDateChanged" readonly="@(!CanEditAppointments)" max="@TodayDateIso" />
-                            </div>
-                        }
-                    </div>
-                }
 
                 <details class="additional-details">
                     <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
@@ -893,6 +770,7 @@ else
     private int currentDoctorId;
     private int availabilityDoctorId;
     private string currentRoleName = string.Empty;
+    private string currentUserName = string.Empty;
     private string searchTerm = string.Empty;
     private string selectedTemporalFilter = "upcoming";
     private string selectedStatusFilter = string.Empty;
@@ -946,7 +824,7 @@ else
         : isCreatingAppointment
             ? "Crear cita nueva"
             : selectedAppointmentId > 0
-                ? $"Editar cita #{selectedAppointmentId}"
+                ? "Editar cita"
                 : "Detalle de la cita";
     private string EditorStatusLabel => appointmentEditor is null ? "Sin datos" : CanEditAppointments ? "Edicion habilitada" : "Solo lectura";
     private string EditorDescription => appointmentEditor is null
@@ -966,10 +844,23 @@ else
     private string SelectedAppointmentDateLabel => DateOnly.TryParse(appointmentEditor?.FechaCita, out var selectedDate)
         ? selectedDate.ToString("yyyy-MM-dd")
         : "fecha seleccionada";
-    private IEnumerable<SlotDisplayOption> SchedulerSlots => occupiedSlots
-        .Select(x => new SlotDisplayOption(x.Key, x.Label, true, GetSlotStart(x.Key)))
-        .Concat(availableSlots.Select(x => new SlotDisplayOption(x.Key, x.Label.Split(" - ")[0], false, GetSlotStart(x.Key))))
-        .OrderBy(x => x.Start);
+    private IEnumerable<SlotDisplayOption> SchedulerSlots
+    {
+        get
+        {
+            var slots = occupiedSlots
+                .Select(x => new SlotDisplayOption(x.Key, x.Label, true, GetSlotStart(x.Key)))
+                .Concat(availableSlots.Select(x => new SlotDisplayOption(x.Key, x.Label.Split(" - ")[0], false, GetSlotStart(x.Key))));
+
+            if (DateOnly.TryParse(appointmentEditor?.FechaCita, out var selectedDate) && selectedDate == DateOnly.FromDateTime(DateTime.Now))
+            {
+                var nowTime = TimeOnly.FromDateTime(DateTime.Now);
+                slots = slots.Where(s => s.Start > nowTime || (appointmentEditor != null && s.Key == appointmentEditor.SelectedSlotKey));
+            }
+
+            return slots.OrderBy(x => x.Start);
+        }
+    }
 
     private List<tbl_citas> FilteredAppointments => appointments
         .Where(MatchesFilters)
@@ -1004,6 +895,10 @@ else
         currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
         currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
         currentRoleName = authState.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+        currentUserName = authState.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? authState.User.FindFirst("FullName")?.Value
+            ?? authState.User.Identity?.Name
+            ?? string.Empty;
 
         isAdmin = currentRoleId == 1 || currentRoleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
         isDoctor = currentRoleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
@@ -1044,31 +939,42 @@ else
 
         linkedPatient = null;
         clientFamilyPatients.Clear();
+        var visibleClientPatients = new List<tbl_paciente>();
         if (isClient)
         {
-            var visibleClientPatients = await dbContext.tbl_pacientes
+            visibleClientPatients = await dbContext.tbl_pacientes
                 .AsNoTracking()
+                .Include(p => p.id_usuarioNavigation)
                 .Where(p => p.activo == true && (p.id_usuario == currentUserId || p.id_usuario_registro == currentUserId))
                 .OrderBy(p => p.apellidos)
                 .ThenBy(p => p.nombres)
                 .ToListAsync();
 
             linkedPatient = visibleClientPatients.FirstOrDefault(p => p.id_usuario == currentUserId);
-            clientFamilyPatients.AddRange(visibleClientPatients.Where(p => p.id_usuario != currentUserId));
+            if (linkedPatient is not null)
+            {
+                selfPatientEditor.Cedula = linkedPatient.cedula ?? string.Empty;
+                selfPatientEditor.FechaNacimiento = linkedPatient.fecha_nacimiento?.ToString("yyyy-MM-dd") ?? string.Empty;
+                selfPatientEditor.Telefono = linkedPatient.telefono ?? string.Empty;
+                selfPatientEditor.Genero = linkedPatient.genero ?? string.Empty;
+                selfPatientEditor.Direccion = linkedPatient.direccion ?? string.Empty;
+                selfPatientEditor.Observaciones = linkedPatient.observaciones ?? string.Empty;
+                clientFamilyPatients.AddRange(visibleClientPatients.Where(p => p.id_paciente != linkedPatient.id_paciente));
+            }
+            else
+            {
+                clientFamilyPatients.AddRange(visibleClientPatients);
+            }
         }
 
         patients.Clear();
-        if (isAdmin)
+        if (isAdmin || isDoctor)
         {
-            patients.AddRange(await dbContext.tbl_pacientes.AsNoTracking().Where(p => p.activo == true).OrderBy(p => p.apellidos).ThenBy(p => p.nombres).ToListAsync());
+            patients.AddRange(await dbContext.tbl_pacientes.AsNoTracking().Include(p => p.id_usuarioNavigation).Where(p => p.activo == true).OrderBy(p => p.apellidos).ThenBy(p => p.nombres).ToListAsync());
         }
-        else if (isDoctor)
+        else
         {
-            patients.AddRange(await dbContext.tbl_pacientes.AsNoTracking().Where(p => p.activo == true).OrderBy(p => p.apellidos).ThenBy(p => p.nombres).ToListAsync());
-        }
-        else if (linkedPatient is not null)
-        {
-            patients.Add(linkedPatient);
+            patients.AddRange(visibleClientPatients);
         }
 
         var appointmentsQuery = dbContext.tbl_citas
@@ -1528,17 +1434,26 @@ else
         else
         {
             existingPatient.id_usuario = currentUserId;
-            if (!existingPatient.fecha_nacimiento.HasValue)
+            existingPatient.id_usuario = currentUserId;
+            if (string.IsNullOrWhiteSpace(existingPatient.nombres) || string.Equals(existingPatient.nombres, "Desconocido", StringComparison.OrdinalIgnoreCase))
             {
-                existingPatient.fecha_nacimiento = birthDate;
+                existingPatient.nombres = user.nombres;
             }
-
-            existingPatient.edad ??= age;
-            existingPatient.genero ??= NormalizeOptional(selfPatientEditor.Genero);
-            existingPatient.direccion ??= NormalizeOptional(selfPatientEditor.Direccion);
-            existingPatient.telefono ??= NormalizeOptional(selfPatientEditor.Telefono) ?? user.telefono;
-            existingPatient.email ??= user.email;
-            existingPatient.observaciones = string.Join(" | ", new[] { existingPatient.observaciones, NormalizeOptional(selfPatientEditor.Observaciones) }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (string.IsNullOrWhiteSpace(existingPatient.apellidos) || string.Equals(existingPatient.apellidos, "Desconocido", StringComparison.OrdinalIgnoreCase))
+            {
+                existingPatient.apellidos = user.apellidos;
+            }
+            existingPatient.cedula = selfPatientEditor.Cedula;
+            existingPatient.fecha_nacimiento = birthDate ?? existingPatient.fecha_nacimiento;
+            existingPatient.edad = age ?? existingPatient.edad;
+            existingPatient.genero = NormalizeOptional(selfPatientEditor.Genero) ?? existingPatient.genero;
+            existingPatient.direccion = NormalizeOptional(selfPatientEditor.Direccion) ?? existingPatient.direccion;
+            existingPatient.telefono = NormalizeOptional(selfPatientEditor.Telefono) ?? user.telefono ?? existingPatient.telefono;
+            existingPatient.email = user.email ?? existingPatient.email;
+            if (!string.IsNullOrWhiteSpace(selfPatientEditor.Observaciones))
+            {
+                existingPatient.observaciones = NormalizeOptional(selfPatientEditor.Observaciones);
+            }
         }
 
         WriteAudit(dbContext, "Vincular paciente", $"PacienteId={existingPatient.id_paciente}; UsuarioId={currentUserId}; Cedula={existingPatient.cedula}");
@@ -2484,6 +2399,22 @@ else
         return true;
     }
 
+    private string SelfPatientTargetLabel
+    {
+        get
+        {
+            var displayName = linkedPatient is null ? null : GetPatientDisplayName(linkedPatient);
+            if (string.IsNullOrWhiteSpace(displayName) || string.Equals(displayName, "Desconocido", StringComparison.OrdinalIgnoreCase))
+            {
+                displayName = currentUserName;
+            }
+
+            return string.IsNullOrWhiteSpace(displayName) || string.Equals(displayName, "Desconocido", StringComparison.OrdinalIgnoreCase)
+                ? "Mi usuario"
+                : $"{displayName} (Mi usuario)";
+        }
+    }
+
     private string GetCurrentAppointmentPatientLabel()
     {
         if (appointmentEditor is null)
@@ -2522,82 +2453,28 @@ else
             return null;
         }
 
-        if (!isClient)
+        if (appointmentEditor.IdPaciente > 0)
         {
-            var selectedPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == appointmentEditor.IdPaciente && p.activo == true);
-            if (selectedPatient is null)
+            var selectedPatient = await dbContext.tbl_pacientes
+                .Include(p => p.id_usuarioNavigation)
+                .FirstOrDefaultAsync(p => p.id_paciente == appointmentEditor.IdPaciente && p.activo == true);
+
+            if (selectedPatient is not null)
             {
-                errorMessage = "Selecciona un paciente valido.";
+                return selectedPatient;
             }
-
-            return selectedPatient;
-        }
-
-        if (appointmentEditor.TargetType == "family")
-        {
-            if (appointmentEditor.FamilyPatientId > 0)
-            {
-                var familyPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p =>
-                    p.id_paciente == appointmentEditor.FamilyPatientId &&
-                    p.activo == true &&
-                    (p.id_usuario_registro == currentUserId || p.id_usuario == currentUserId));
-
-                if (familyPatient is null)
-                {
-                    errorMessage = "Selecciona un familiar valido.";
-                }
-
-                return familyPatient;
-            }
-
-            var normalizedCedula = appointmentEditor.FamilyCedula.Trim().ToLowerInvariant();
-            var existingFamilyPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.cedula.ToLower() == normalizedCedula);
-            if (existingFamilyPatient is not null && existingFamilyPatient.id_usuario_registro != currentUserId && existingFamilyPatient.id_usuario != currentUserId)
-            {
-                errorMessage = "La cedula del familiar ya pertenece a otra ficha registrada.";
-                return null;
-            }
-
-            if (existingFamilyPatient is not null)
-            {
-                existingFamilyPatient.nombres = appointmentEditor.FamilyNames.Trim();
-                existingFamilyPatient.apellidos = appointmentEditor.FamilyLastNames.Trim();
-                existingFamilyPatient.telefono = NormalizeOptional(appointmentEditor.FamilyPhone);
-                existingFamilyPatient.fecha_nacimiento = DateOnly.TryParse(appointmentEditor.FamilyBirthDate, out var existingBirthDate) ? existingBirthDate : existingFamilyPatient.fecha_nacimiento;
-                existingFamilyPatient.edad = CalculateAge(existingFamilyPatient.fecha_nacimiento);
-                existingFamilyPatient.activo = true;
-                existingFamilyPatient.id_usuario_registro ??= currentUserId;
-                return existingFamilyPatient;
-            }
-
-            var birthDate = DateOnly.TryParse(appointmentEditor.FamilyBirthDate, out var parsedBirthDate) ? (DateOnly?)parsedBirthDate : null;
-            var newFamilyPatient = new tbl_paciente
-            {
-                codigo_paciente = GeneratePatientCode(),
-                cedula = appointmentEditor.FamilyCedula.Trim(),
-                nombres = appointmentEditor.FamilyNames.Trim(),
-                apellidos = appointmentEditor.FamilyLastNames.Trim(),
-                fecha_nacimiento = birthDate,
-                edad = CalculateAge(birthDate),
-                telefono = NormalizeOptional(appointmentEditor.FamilyPhone),
-                activo = true,
-                fecha_registro = DateTime.Now,
-                id_usuario_registro = currentUserId
-            };
-
-            dbContext.tbl_pacientes.Add(newFamilyPatient);
-            return newFamilyPatient;
         }
 
         if (linkedPatient is not null)
         {
-            var selfPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == linkedPatient.id_paciente && p.activo == true);
-            if (selfPatient is null)
-            {
-                errorMessage = "No se encontro tu ficha de paciente.";
-            }
+            var selfPatient = await dbContext.tbl_pacientes
+                .Include(p => p.id_usuarioNavigation)
+                .FirstOrDefaultAsync(p => p.id_paciente == linkedPatient.id_paciente && p.activo == true);
 
-            return selfPatient;
+            if (selfPatient is not null)
+            {
+                return selfPatient;
+            }
         }
 
         var currentUser = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == currentUserId);
@@ -2715,12 +2592,29 @@ else
         }
 
         var today = DateOnly.FromDateTime(DateTime.Today);
+        var nowTime = TimeOnly.FromDateTime(DateTime.Now);
         switch (selectedTemporalFilter)
         {
-            case "upcoming" when appointment.fecha_cita < today:
-                return false;
-            case "past" when appointment.fecha_cita >= today:
-                return false;
+            case "upcoming":
+                if (appointment.fecha_cita < today)
+                {
+                    return false;
+                }
+                if (appointment.fecha_cita == today && appointment.hora_inicio < nowTime)
+                {
+                    return false;
+                }
+                break;
+            case "past":
+                if (appointment.fecha_cita > today)
+                {
+                    return false;
+                }
+                if (appointment.fecha_cita == today && appointment.hora_inicio >= nowTime)
+                {
+                    return false;
+                }
+                break;
             case "today" when appointment.fecha_cita != today:
                 return false;
         }
@@ -2781,6 +2675,23 @@ else
             return appointment.id_medico == currentDoctorId;
         }
 
+        if (isClient)
+        {
+            if (linkedPatient is not null && appointment.id_paciente == linkedPatient.id_paciente)
+            {
+                return true;
+            }
+            if (clientFamilyPatients.Any(p => p.id_paciente == appointment.id_paciente))
+            {
+                return true;
+            }
+        }
+
+        if (appointment.id_pacienteNavigation is null)
+        {
+            return false;
+        }
+
         return appointment.id_pacienteNavigation.id_usuario == currentUserId ||
                appointment.id_pacienteNavigation.id_usuario_registro == currentUserId;
     }
@@ -2825,9 +2736,39 @@ else
             : $"{fullName} - {doctor.especialidad}";
     }
 
-    private static string GetPatientDisplayName(tbl_paciente patient)
+    private static string GetPatientDisplayName(tbl_paciente? patient)
     {
-        return $"{patient.nombres} {patient.apellidos}".Trim();
+        if (patient is null)
+        {
+            return "Sin paciente";
+        }
+
+        var fullName = $"{patient.nombres} {patient.apellidos}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName) || string.Equals(fullName, "Desconocido", StringComparison.OrdinalIgnoreCase))
+        {
+            if (patient.id_usuarioNavigation is not null)
+            {
+                var userName = $"{patient.id_usuarioNavigation.nombres} {patient.id_usuarioNavigation.apellidos}".Trim();
+                if (!string.IsNullOrWhiteSpace(userName) && !string.Equals(userName, "Desconocido", StringComparison.OrdinalIgnoreCase))
+                {
+                    return userName;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(patient.cedula))
+            {
+                return $"Paciente ({patient.cedula})";
+            }
+
+            if (!string.IsNullOrWhiteSpace(patient.telefono))
+            {
+                return $"Paciente ({patient.telefono})";
+            }
+
+            return $"Paciente #{patient.id_paciente}";
+        }
+
+        return fullName;
     }
 
     private static string GetAppointmentTitle(tbl_citas appointment)

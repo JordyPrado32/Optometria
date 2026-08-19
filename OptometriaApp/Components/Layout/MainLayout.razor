@@ -46,6 +46,7 @@
 
                             @if (ShowNotificationsPanel)
                             {
+                                <div class="header-notification-backdrop" @onclick="CloseNotificationsPanel"></div>
                                 <div class="header-notification-popover" @onclick:stopPropagation="true">
                                     <div class="header-notification-popover-header">
                                         <div>
@@ -476,10 +477,20 @@
         box-sizing: border-box;
     }
 
+    .header-notification-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 9998;
+        background: transparent;
+    }
+
     .header-notification-popover {
         position: fixed;
         top: 4.9rem;
-        right: 1.2rem;
+        right: 5.5rem;
         width: min(24rem, calc(100vw - 1.5rem));
         max-height: 32rem;
         border-radius: 1.15rem;
@@ -658,8 +669,8 @@
 
 @code {
     private string CurrentPageTitle { get; set; } = "Dashboard";
-    private string UserFullName { get; set; } = "Cargando...";
-    private string UserRoleName { get; set; } = "Cargando...";
+    private string UserFullName { get; set; } = string.Empty;
+    private string UserRoleName { get; set; } = string.Empty;
     private string UserAvatarUrl { get; set; } = "/images/avatars/l_sin_lentes.png";
     private string BrandName { get; set; } = "Optica Lux";
     private string AppShellStyle { get; set; } = string.Empty;

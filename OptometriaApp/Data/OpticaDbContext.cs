@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using OptometriaApp.Models;
@@ -930,9 +930,15 @@ public partial class OpticaDbContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false);
 
+            entity.Property(e => e.id_usuario);
+
             entity.HasOne(d => d.id_usuario_registroNavigation).WithMany(p => p.tbl_pacientes)
                 .HasForeignKey(d => d.id_usuario_registro)
                 .HasConstraintName("fk_paciente_usuario");
+
+            entity.HasOne(d => d.id_usuarioNavigation).WithMany()
+                .HasForeignKey(d => d.id_usuario)
+                .HasConstraintName("FK_tbl_paciente_tbl_usuario");
         });
 
         modelBuilder.Entity<tbl_plantilla_mensaje>(entity =>

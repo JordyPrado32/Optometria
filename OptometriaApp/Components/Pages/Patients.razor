@@ -4,9 +4,11 @@
 @using System.Net.Mail
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
+@inject IPasswordHasher<tbl_usuario> PasswordHasher
 
 <PageTitle>Pacientes</PageTitle>
 
@@ -289,6 +291,56 @@ else
                         </div>
                     </div>
                 </details>
+
+                <details class="additional-details" style="border-color: rgba(254, 130, 42, 0.42); background: rgba(254, 130, 42, 0.08); margin-top: 1rem;">
+                    <summary style="color: #9b5a23;"><span><i class="bi bi-shield-lock"></i> Acceso al Portal de Pacientes</span></summary>
+                    <div class="additional-details-body is-single" style="padding-top: 0.5rem;">
+                        <div style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+                            <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; color: #9b5a23;">
+                                <input type="checkbox" @bind="enablePortalAccess" disabled="@(!CanModifyEditor)" /> Habilitar acceso al portal
+                            </label>
+                        </div>
+
+                        @if (enablePortalAccess)
+                        {
+                            <div style="display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; border-top: 1px dashed rgba(254, 130, 42, 0.25); padding-top: 0.8rem;">
+                                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+                                    <input type="radio" name="portalUserType" checked="@(!isNewPortalUser)" @onclick="() => SetPortalUserType(false)" disabled="@(!CanModifyEditor)" /> Asignar a usuario existente
+                                </label>
+                                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+                                    <input type="radio" name="portalUserType" checked="@isNewPortalUser" @onclick="() => SetPortalUserType(true)" disabled="@(!CanModifyEditor)" /> Crear un nuevo usuario
+                                </label>
+                            </div>
+
+                            @if (isNewPortalUser)
+                            {
+                                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 0.5rem;">
+                                    <div>
+                                        <label class="form-label" for="portalUsername">Usuario de ingreso</label>
+                                        <input id="portalUsername" class="form-control" @bind="portalUsername" readonly="@(!CanModifyEditor)" placeholder="Ej. mariacaceres" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="portalPassword">Contraseña</label>
+                                        <input id="portalPassword" type="password" class="form-control" @bind="portalPassword" readonly="@(!CanModifyEditor)" placeholder="Contraseña temporal" />
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="margin-top: 0.5rem;">
+                                    <label class="form-label" for="portalUserSelect">Seleccionar usuario responsable</label>
+                                    <select id="portalUserSelect" class="form-select" @bind="selectedPortalUserId" disabled="@(!CanModifyEditor)">
+                                        <option value="0">-- Selecciona un usuario --</option>
+                                        @foreach (var u in portalUsers)
+                                        {
+                                            <option value="@u.id_usuario">@u.nombres @u.apellidos (@u.usuario)</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                        }
+                    </div>
+                </details>
             </div>
             <footer class="custom-modal-footer">
                 <button type="button" class="btn btn-outline-primary" @onclick="() => showFormModal = false">Cancelar</button>
@@ -493,6 +545,12 @@ else
     private readonly List<tbl_paciente> patients = [];
     private List<tbl_log_auditoria> auditEntries = [];
     private PatientEditorModel? editor;
+    private List<tbl_usuario> portalUsers = [];
+    private bool enablePortalAccess;
+    private bool isNewPortalUser;
+    private string portalUsername = string.Empty;
+    private string portalPassword = string.Empty;
+    private int selectedPortalUserId;
     private ModulePermissions permissions = new();
     private bool isLoading = true;
     private bool canViewPatients;
@@ -562,6 +620,14 @@ else
         patients.Clear();
         patients.AddRange(loadedPatients);
 
+        // Cargar usuarios con rol 'Paciente'
+        portalUsers = await dbContext.tbl_usuarios
+            .AsNoTracking()
+            .Where(u => u.id_rolNavigation.nombre.ToLower() == "paciente" && u.activo == true)
+            .OrderBy(u => u.apellidos)
+            .ThenBy(u => u.nombres)
+            .ToListAsync();
+
         selectedPatientId = 0;
         editor = null;
         auditEntries = [];
@@ -575,6 +641,11 @@ else
         selectedPatientId = 0;
         editor = BuildNewEditor();
         auditEntries = [];
+        enablePortalAccess = false;
+        isNewPortalUser = false;
+        selectedPortalUserId = 0;
+        portalUsername = string.Empty;
+        portalPassword = string.Empty;
         showFormModal = true;
     }
 
@@ -614,8 +685,28 @@ else
         selectedPatientId = patientId;
         isCreatingNewPatient = false;
         errorMessage = null;
-        editor = BuildEditor(patients.FirstOrDefault(p => p.id_paciente == patientId));
+        var patient = patients.FirstOrDefault(p => p.id_paciente == patientId);
+        editor = BuildEditor(patient);
+        if (patient is not null && patient.id_usuario.HasValue)
+        {
+            enablePortalAccess = true;
+            isNewPortalUser = false;
+            selectedPortalUserId = patient.id_usuario.Value;
+        }
+        else
+        {
+            enablePortalAccess = false;
+            isNewPortalUser = false;
+            selectedPortalUserId = 0;
+        }
+        portalUsername = string.Empty;
+        portalPassword = string.Empty;
         await LoadAuditEntriesAsync(patientId);
+    }
+
+    private void SetPortalUserType(bool isNew)
+    {
+        isNewPortalUser = isNew;
     }
 
     private async Task SavePatientAsync()
@@ -680,6 +771,79 @@ else
                 }
             }
 
+            // Procesar credenciales de acceso al portal si están habilitadas
+            int? linkedUserId = null;
+            if (enablePortalAccess)
+            {
+                if (isNewPortalUser)
+                {
+                    if (string.IsNullOrWhiteSpace(portalUsername))
+                    {
+                        ShowAlert("Por favor ingresa un nombre de usuario para el portal.", true);
+                        return;
+                    }
+                    var normalizedUsername = portalUsername.Trim().ToLowerInvariant();
+                    var usernameExists = await dbContext.tbl_usuarios.AnyAsync(u => u.usuario.ToLower() == normalizedUsername);
+                    if (usernameExists)
+                    {
+                        ShowAlert("El nombre de usuario para el portal ya está registrado.", true);
+                        return;
+                    }
+                    if (string.IsNullOrWhiteSpace(portalPassword))
+                    {
+                        ShowAlert("Por favor ingresa una contraseña para el nuevo usuario.", true);
+                        return;
+                    }
+
+                    var pacienteRole = await dbContext.tbl_rols.FirstOrDefaultAsync(r => r.nombre.ToLower() == "paciente");
+                    if (pacienteRole is null)
+                    {
+                        ShowAlert("No se encontró el rol 'Paciente' en la base de datos.", true);
+                        return;
+                    }
+
+                    var newUser = new tbl_usuario
+                    {
+                        id_rol = pacienteRole.id_rol,
+                        nombres = editor.Nombres.Trim(),
+                        apellidos = editor.Apellidos.Trim(),
+                        email = string.IsNullOrWhiteSpace(editor.Email) ? null : editor.Email.Trim(),
+                        usuario = portalUsername.Trim(),
+                        telefono = string.IsNullOrWhiteSpace(editor.Telefono) ? null : editor.Telefono.Trim(),
+                        fecha_nacimiento = birthDate,
+                        activo = true,
+                        bloqueado = false,
+                        intentos_fallidos = 0,
+                        fecha_creacion = DateTime.Now,
+                        ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Now)
+                    };
+                    newUser.password_hash = PasswordHasher.HashPassword(newUser, portalPassword);
+                    dbContext.tbl_usuarios.Add(newUser);
+                    await dbContext.SaveChangesAsync();
+
+                    dbContext.tbl_usuario_seguridad.Add(new tbl_usuario_seguridad
+                    {
+                        id_usuario = newUser.id_usuario,
+                        two_factor_enabled = false,
+                        must_change_password = false,
+                        created_at = DateTime.Now,
+                        updated_at = DateTime.Now
+                    });
+                    await dbContext.SaveChangesAsync();
+
+                    linkedUserId = newUser.id_usuario;
+                }
+                else
+                {
+                    if (selectedPortalUserId <= 0)
+                    {
+                        ShowAlert("Por favor selecciona un usuario responsable.", true);
+                        return;
+                    }
+                    linkedUserId = selectedPortalUserId;
+                }
+            }
+
             if (isCreatingNewPatient)
             {
                 if (!permissions.CanCreate)
@@ -705,7 +869,8 @@ else
                     observaciones = NormalizeOptional(editor.Observaciones),
                     activo = true,
                     fecha_registro = DateTime.Now,
-                    id_usuario_registro = validUserId
+                    id_usuario_registro = validUserId,
+                    id_usuario = linkedUserId
                 };
 
                 dbContext.tbl_pacientes.Add(newPatient);
@@ -749,6 +914,7 @@ else
             patientEntity.telefono = NormalizeOptional(editor.Telefono);
             patientEntity.email = NormalizeOptional(editor.Email);
             patientEntity.observaciones = NormalizeOptional(editor.Observaciones);
+            patientEntity.id_usuario = linkedUserId;
 
             WriteAudit(
                 dbContext,
@@ -1023,6 +1189,7 @@ else
         return new PatientEditorModel
         {
             IdPaciente = patient.id_paciente,
+            IdUsuario = patient.id_usuario,
             CodigoPaciente = patient.codigo_paciente ?? string.Empty,
             Cedula = patient.cedula,
             Nombres = patient.nombres,
@@ -1171,6 +1338,7 @@ else
     private sealed class PatientEditorModel
     {
         public int IdPaciente { get; set; }
+        public int? IdUsuario { get; set; }
         public string CodigoPaciente { get; set; } = string.Empty;
         public string Cedula { get; set; } = string.Empty;
         public string Nombres { get; set; } = string.Empty;
