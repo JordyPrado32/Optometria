@@ -120,33 +120,50 @@
 }
 
 .header-notification-btn {
-    background: transparent;
-    border: none;
-    color: var(--color-taupe-deep, #7F6951);
-    font-size: 1.25rem;
-    cursor: pointer;
     position: relative;
-    padding: 0.3rem;
-    display: flex;
+    width: 2.6rem;
+    height: 2.6rem;
+    border: 1px solid rgba(127, 105, 81, 0.15);
+    border-radius: 50%;
+    background: #ffffff;
+    color: var(--color-taupe-deep, #7F6951);
+    font-size: 1.15rem;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: color 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 4px 12px rgba(127, 105, 81, 0.08);
+    transition: all 0.2s ease;
 }
 
 .header-notification-btn:hover {
-    color: var(--color-sage, #5DA181);
-    transform: scale(1.05);
+    background: #fdfaf7;
+    border-color: rgba(127, 105, 81, 0.3);
+    transform: translateY(-1px);
 }
 
 .notification-badge {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 8px;
-    height: 8px;
-    background-color: var(--color-apricot, #FEBC64);
+    top: -3px;
+    right: -3px;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 1.25rem;
+    max-width: 1.25rem;
+    aspect-ratio: 1;
     border-radius: 50%;
-    border: 1.5px solid #fff;
+    background: linear-gradient(180deg, #ffcb71 0%, #f0a73f 100%);
+    color: #7F6951;
+    font-size: 0.68rem;
+    font-weight: 900;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 6px rgba(240, 167, 63, 0.35);
+    padding: 0;
+    box-sizing: border-box;
 }
 
 .header-profile-divider {

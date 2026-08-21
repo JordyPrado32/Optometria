@@ -104,6 +104,7 @@ builder.Services.AddScoped<SystemReportsService>();
 builder.Services.AddScoped<InventoryInsightsService>();
 builder.Services.AddScoped<PurchaseOrderDocumentService>();
 builder.Services.AddScoped<OpticaCustomizationService>();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddRazorComponents()
@@ -120,6 +121,7 @@ await EnsureProductSchemaAsync(app);
 await EnsureSupplierSchemaAsync(app);
 await EnsureProcurementSchemaAsync(app);
 await EnsureAppointmentSchemaAsync(app);
+await EnsureNotificationSchemaAsync(app);
 await EnsureClinicalHistorySchemaAsync(app);
 await EnsureRoleSecurityMatrixAsync(app);
 
@@ -850,10 +852,7 @@ app.MapGet("/exports/users.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"usuarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"usuarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/patients.csv", async (
@@ -960,10 +959,7 @@ app.MapGet("/exports/patients.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/doctor-patient-entry.csv", async (
@@ -1073,10 +1069,7 @@ app.MapGet("/exports/doctor-patient-entry.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"ingresar-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"ingresar-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/doctor-my-patients.csv", async (
@@ -1186,10 +1179,7 @@ app.MapGet("/exports/doctor-my-patients.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"mis-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"mis-pacientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/appointments.csv", async (
@@ -1335,10 +1325,7 @@ app.MapGet("/exports/appointments.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/appointment-availability.csv", async (
@@ -1389,10 +1376,7 @@ app.MapGet("/exports/appointment-availability.csv", async (
 
     if (doctorId <= 0)
     {
-        return Results.File(
-            Encoding.UTF8.GetBytes("Tipo,Detalle\n"),
-            "text/csv; charset=utf-8",
-            $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+        return ExportStyledExcelCsv("Tipo,Detalle\n", $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
     }
 
     var availabilityQuery = dbContext.tbl_disponibilidad_medico
@@ -1480,10 +1464,7 @@ app.MapGet("/exports/appointment-availability.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"disponibilidad-medica-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/laboratories.csv", async (
@@ -1566,10 +1547,7 @@ app.MapGet("/exports/laboratories.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"laboratorios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"laboratorios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/suppliers.csv", async (
@@ -1658,10 +1636,7 @@ app.MapGet("/exports/suppliers.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/supplier-purchase-history/{supplierId:int}.csv", async (
@@ -1734,10 +1709,7 @@ app.MapGet("/exports/supplier-purchase-history/{supplierId:int}.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"proveedor-compras-{supplierId}-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"proveedor-compras-{supplierId}-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/clients.csv", async (
@@ -1835,10 +1807,7 @@ app.MapGet("/exports/clients.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"clientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"clientes-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/emisor.csv", async (
@@ -1903,10 +1872,7 @@ app.MapGet("/exports/emisor.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"emisor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"emisor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/products.csv", async (
@@ -2026,10 +1992,7 @@ app.MapGet("/exports/products.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"productos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"productos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-orders.csv", async (
@@ -2138,10 +2101,7 @@ app.MapGet("/exports/purchase-orders.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-orders.pdf", async (
@@ -2336,10 +2296,7 @@ app.MapGet("/exports/purchase-receptions.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"recepciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"recepciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/purchase-liquidations.csv", async (
@@ -2431,10 +2388,7 @@ app.MapGet("/exports/purchase-liquidations.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"liquidaciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"liquidaciones-compra-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/inventories.csv", async (
@@ -2527,10 +2481,7 @@ app.MapGet("/exports/inventories.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"inventarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"inventarios-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/kardex.csv", async (
@@ -2659,10 +2610,7 @@ app.MapGet("/exports/kardex.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/income-report.csv", async (
@@ -2778,10 +2726,7 @@ app.MapGet("/exports/income-report.csv", async (
 
     await dbContext.SaveChangesAsync();
 
-    return Results.File(
-        Encoding.UTF8.GetBytes(csvBuilder.ToString()),
-        "text/csv; charset=utf-8",
-        $"ingresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcel(csvBuilder, $"ingresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/system-reports.csv", async (
@@ -2819,7 +2764,7 @@ app.MapGet("/exports/system-reports.csv", async (
     });
     await dbContext.SaveChangesAsync();
 
-    return Results.File(Encoding.UTF8.GetBytes(csv), "text/csv; charset=utf-8", $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+    return ExportStyledExcelCsv(csv, $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
 }).RequireAuthorization("FullAccess");
 
 app.MapGet("/exports/system-reports.pdf", async (
@@ -3200,7 +3145,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error al actualizar las rutas del menú y permisos: {ex.Message}");
+        Console.WriteLine($"Error al actualizar las rutas del menÃº y permisos: {ex.Message}");
     }
 }
 
@@ -3246,6 +3191,12 @@ static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
             VALUES ('Bodeguero', 'Gestion operativa de inventario, kardex y reposicion');
         END;
 
+        IF NOT EXISTS (SELECT 1 FROM dbo.tbl_rol WHERE LOWER(nombre) = 'paciente')
+        BEGIN
+            INSERT INTO dbo.tbl_rol (nombre, descripcion)
+            VALUES ('Paciente', 'Acceso al portal de pacientes para consultas, citas e historial familiar');
+        END;
+
         DECLARE @bodegueroId INT = (
             SELECT TOP (1) id_rol
             FROM dbo.tbl_rol
@@ -3260,6 +3211,11 @@ static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
             SELECT TOP (1) id_rol
             FROM dbo.tbl_rol
             WHERE LOWER(nombre) LIKE '%optomet%');
+
+        DECLARE @pacienteId INT = (
+            SELECT TOP (1) id_rol
+            FROM dbo.tbl_rol
+            WHERE LOWER(nombre) = 'paciente');
 
         IF @bodegueroId IS NOT NULL
         BEGIN
@@ -3295,6 +3251,32 @@ static async Task EnsureRoleSecurityMatrixAsync(WebApplication app)
             INNER JOIN dbo.tbl_menu_app m ON m.id_menu = p.id_menu
             WHERE p.id_rol = @recepcionId
               AND m.ruta IN ('/productos', '/pedidos-laboratorio', '/envios-laboratorio');
+        END;
+
+        IF @pacienteId IS NOT NULL
+        BEGIN
+            MERGE dbo.tbl_rol_menu_permiso AS target
+            USING (
+                SELECT
+                    @pacienteId AS id_rol,
+                    m.id_menu,
+                    CAST(1 AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
+                    CAST(CASE WHEN m.ruta IN ('/citas', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
+                    CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
+                FROM dbo.tbl_menu_app m
+                WHERE m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/mis-facturas', '/mis-compras-online', '/tienda-online')
+            ) AS source
+            ON target.id_rol = source.id_rol AND target.id_menu = source.id_menu
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.puede_ver = source.puede_ver,
+                    target.puede_crear = source.puede_crear,
+                    target.puede_editar = source.puede_editar,
+                    target.puede_eliminar = source.puede_eliminar
+            WHEN NOT MATCHED THEN
+                INSERT (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+                VALUES (source.id_rol, source.id_menu, source.puede_ver, source.puede_crear, source.puede_editar, source.puede_eliminar);
         END;
 
         IF @optometraId IS NOT NULL
@@ -3441,12 +3423,14 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Cuentas por cobrar', '/cuentas-por-cobrar', 'cash-coin', 25, 1),
                 ('Ingresos', '/ingresos', 'graph-up-arrow', 26, 1),
                 ('Tienda online', '/tienda-online', 'shop', 27, 1),
-                ('Usuarios', '/usuarios', 'users', 28, 1),
-                ('Roles', '/roles', 'roles', 29, 1),
-                ('Menus', '/menus', 'menu', 30, 1),
-                ('Registrar usuario', '/registro', 'user-plus', 31, 1),
-                ('Seguridad', '/configurar-2fa', 'shield', 32, 1),
-                ('Configuracion optica', '/configuracion-optica', 'sliders', 33, 1)
+                ('Mis compras online', '/mis-compras-online', 'bag-check', 28, 1),
+                ('Gestion tienda online', '/gestion-tienda-online', 'shop-window', 29, 1),
+                ('Usuarios', '/usuarios', 'users', 30, 1),
+                ('Roles', '/roles', 'roles', 31, 1),
+                ('Menus', '/menus', 'menu', 32, 1),
+                ('Registrar usuario', '/registro', 'user-plus', 33, 1),
+                ('Seguridad', '/configurar-2fa', 'shield', 34, 1),
+                ('Configuracion optica', '/configuracion-optica', 'sliders', 35, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -3580,7 +3564,7 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SELECT
                     2 AS id_rol,
                     m.id_menu,
-                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
+                    CAST(CASE WHEN m.ruta IN ('/dashboard', '/perfil', '/configurar-2fa', '/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online', '/mis-compras-online') THEN 1 ELSE 0 END AS BIT) AS puede_ver,
                     CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_crear,
                     CAST(CASE WHEN m.ruta IN ('/citas', '/facturas', '/mis-facturas', '/mis-notas-de-credito', '/cuentas-por-cobrar', '/pedidos-laboratorio', '/envios-laboratorio', '/tienda-online') THEN 1 ELSE 0 END AS BIT) AS puede_editar,
                     CAST(CASE WHEN m.ruta = '/citas' THEN 1 ELSE 0 END AS BIT) AS puede_eliminar
@@ -3674,9 +3658,14 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
             ADD CONSTRAINT FK_tbl_paciente_tbl_usuario FOREIGN KEY (id_usuario) REFERENCES dbo.tbl_usuario(id_usuario);
         END;
 
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
         BEGIN
-            CREATE UNIQUE NONCLUSTERED INDEX UQ_tbl_paciente_id_usuario ON dbo.tbl_paciente(id_usuario) WHERE id_usuario IS NOT NULL;
+            DROP INDEX UQ_tbl_paciente_id_usuario ON dbo.tbl_paciente;
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_paciente_id_usuario' AND object_id = OBJECT_ID('dbo.tbl_paciente'))
+        BEGIN
+            CREATE NONCLUSTERED INDEX IX_tbl_paciente_id_usuario ON dbo.tbl_paciente(id_usuario) WHERE id_usuario IS NOT NULL;
         END;
 
         IF OBJECT_ID('dbo.tbl_medico', 'U') IS NULL
@@ -4152,6 +4141,7 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_producto', 'centro_costo') IS NULL ALTER TABLE dbo.tbl_producto ADD centro_costo VARCHAR(20) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'naturaleza_item') IS NULL ALTER TABLE dbo.tbl_producto ADD naturaleza_item VARCHAR(50) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'tipo_item') IS NULL ALTER TABLE dbo.tbl_producto ADD tipo_item VARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.tbl_producto', 'imagen_url') IS NULL ALTER TABLE dbo.tbl_producto ADD imagen_url VARCHAR(500) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'porcentaje_margen') IS NULL ALTER TABLE dbo.tbl_producto ADD porcentaje_margen DECIMAL(5,2) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'descuento_mayorista') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_mayorista DECIMAL(5,2) NULL;
         IF COL_LENGTH('dbo.tbl_producto', 'descuento_cliente_fijo') IS NULL ALTER TABLE dbo.tbl_producto ADD descuento_cliente_fijo DECIMAL(5,2) NULL;
@@ -4189,6 +4179,13 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
                 ruta_fondo VARCHAR(255) NULL
             );
         END;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_titulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_titulo VARCHAR(180) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_subtitulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_subtitulo VARCHAR(300) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_boton') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_boton VARCHAR(80) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_hero_imagen') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_hero_imagen VARCHAR(500) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_banner_texto') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_banner_texto VARCHAR(180) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_basicos_titulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_basicos_titulo VARCHAR(120) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_basicos_subtitulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_basicos_subtitulo VARCHAR(240) NULL;
         IF OBJECT_ID('dbo.tbl_plantilla_mensaje', 'U') IS NULL
         BEGIN
             CREATE TABLE dbo.tbl_plantilla_mensaje
@@ -5002,6 +4999,318 @@ static string EscapeCsv(string? value)
     return $"\"{escapedValue}\"";
 }
 
+static IResult ExportStyledExcel(StringBuilder csvBuilder, string fileName, string? title = null)
+    => ExportStyledExcelCsv(csvBuilder.ToString(), fileName, title);
+
+static IResult ExportStyledExcelCsv(string csv, string fileName, string? title = null)
+{
+    var rows = ParseCsvRows(csv).ToList();
+    var columnCount = rows.Count == 0 ? 1 : rows.Max(row => row.Count);
+    var reportTitle = string.IsNullOrWhiteSpace(title)
+        ? Path.GetFileNameWithoutExtension(fileName)
+        : title.Trim();
+
+    var htmlBuilder = new StringBuilder();
+    htmlBuilder.AppendLine("<!doctype html>");
+    htmlBuilder.AppendLine("<html>");
+    htmlBuilder.AppendLine("<head>");
+    htmlBuilder.AppendLine("<meta charset=\"utf-8\">");
+    htmlBuilder.AppendLine("<style>");
+    htmlBuilder.AppendLine("body{font-family:Arial,sans-serif;color:#3c342e;background:#fff;}");
+    htmlBuilder.AppendLine("table{border-collapse:collapse;width:100%;}");
+    htmlBuilder.AppendLine("th{background:#5DA181;color:#fff;font-weight:700;border:1px solid #4b8d70;padding:10px;text-align:left;}");
+    htmlBuilder.AppendLine("td{border:1px solid #d9cec0;padding:8px;mso-number-format:'\\@';}");
+    htmlBuilder.AppendLine("tr:nth-child(even) td{background:#F4F0E4;}");
+    htmlBuilder.AppendLine("tr:nth-child(odd) td{background:#fff;}");
+    htmlBuilder.AppendLine(".title{background:#7F6951;color:#fff;font-size:18px;font-weight:700;text-align:center;border:1px solid #7F6951;padding:12px;}");
+    htmlBuilder.AppendLine(".subtitle{background:#FEBC64;color:#3c342e;font-weight:700;text-align:center;border:1px solid #e3a84e;padding:8px;}");
+    htmlBuilder.AppendLine("</style>");
+    htmlBuilder.AppendLine("</head>");
+    htmlBuilder.AppendLine("<body>");
+    htmlBuilder.AppendLine("<table>");
+    htmlBuilder.Append("<tr><td class=\"title\" colspan=\"").Append(columnCount).Append("\">")
+        .Append(WebUtility.HtmlEncode(reportTitle)).AppendLine("</td></tr>");
+    htmlBuilder.Append("<tr><td class=\"subtitle\" colspan=\"").Append(columnCount).Append("\">Generado el ")
+        .Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm")).AppendLine("</td></tr>");
+
+    if (rows.Count > 0)
+    {
+        htmlBuilder.AppendLine("<tr>");
+        foreach (var header in rows[0])
+        {
+            htmlBuilder.Append("<th>").Append(WebUtility.HtmlEncode(header)).AppendLine("</th>");
+        }
+        for (var index = rows[0].Count; index < columnCount; index++)
+        {
+            htmlBuilder.AppendLine("<th></th>");
+        }
+        htmlBuilder.AppendLine("</tr>");
+
+        foreach (var row in rows.Skip(1))
+        {
+            htmlBuilder.AppendLine("<tr>");
+            foreach (var cell in row)
+            {
+                htmlBuilder.Append("<td>").Append(WebUtility.HtmlEncode(cell)).AppendLine("</td>");
+            }
+            for (var index = row.Count; index < columnCount; index++)
+            {
+                htmlBuilder.AppendLine("<td></td>");
+            }
+            htmlBuilder.AppendLine("</tr>");
+        }
+    }
+
+    htmlBuilder.AppendLine("</table>");
+    htmlBuilder.AppendLine("</body>");
+    htmlBuilder.AppendLine("</html>");
+
+    var excelFileName = Path.ChangeExtension(fileName, ".xls");
+    return Results.File(
+        Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(htmlBuilder.ToString())).ToArray(),
+        "application/vnd.ms-excel; charset=utf-8",
+        excelFileName);
+}
+
+static IEnumerable<List<string>> ParseCsvRows(string csv)
+{
+    var row = new List<string>();
+    var cell = new StringBuilder();
+    var inQuotes = false;
+
+    for (var index = 0; index < csv.Length; index++)
+    {
+        var current = csv[index];
+
+        if (current == '"')
+        {
+            if (inQuotes && index + 1 < csv.Length && csv[index + 1] == '"')
+            {
+                cell.Append('"');
+                index++;
+            }
+            else
+            {
+                inQuotes = !inQuotes;
+            }
+            continue;
+        }
+
+        if (current == ',' && !inQuotes)
+        {
+            row.Add(cell.ToString());
+            cell.Clear();
+            continue;
+        }
+
+        if ((current == '\r' || current == '\n') && !inQuotes)
+        {
+            if (current == '\r' && index + 1 < csv.Length && csv[index + 1] == '\n')
+            {
+                index++;
+            }
+
+            row.Add(cell.ToString());
+            cell.Clear();
+            if (row.Count > 1 || !string.IsNullOrWhiteSpace(row[0]))
+            {
+                yield return row;
+            }
+            row = [];
+            continue;
+        }
+
+        cell.Append(current);
+    }
+
+    if (cell.Length > 0 || row.Count > 0)
+    {
+        row.Add(cell.ToString());
+        yield return row;
+    }
+}
+
+static async Task EnsureNotificationSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.tbl_notificacion', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_notificacion
+            (
+                id_notificacion INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_tbl_notificacion PRIMARY KEY,
+                id_usuario_destino INT NOT NULL,
+                id_usuario_origen INT NULL,
+                titulo VARCHAR(200) NOT NULL,
+                mensaje VARCHAR(MAX) NOT NULL,
+                tipo VARCHAR(40) NOT NULL CONSTRAINT DF_tbl_notificacion_tipo DEFAULT ('General'),
+                ruta_destino VARCHAR(200) NULL,
+                modulo_origen VARCHAR(80) NULL,
+                entidad_tipo VARCHAR(80) NULL,
+                entidad_id INT NULL,
+                leida BIT NOT NULL CONSTRAINT DF_tbl_notificacion_leida DEFAULT (0),
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_notificacion_fecha DEFAULT (GETDATE()),
+                fecha_lectura DATETIME NULL,
+                CONSTRAINT FK_tbl_notificacion_usuario_destino FOREIGN KEY (id_usuario_destino) REFERENCES dbo.tbl_usuario(id_usuario),
+                CONSTRAINT FK_tbl_notificacion_usuario_origen FOREIGN KEY (id_usuario_origen) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_notificacion_usuario_estado' AND object_id = OBJECT_ID('dbo.tbl_notificacion'))
+        BEGIN
+            CREATE INDEX IX_tbl_notificacion_usuario_estado
+            ON dbo.tbl_notificacion(id_usuario_destino, leida, fecha_creacion DESC);
+        END;
+
+        IF OBJECT_ID('dbo.tbl_cobro_transferencia', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_cobro_transferencia
+            (
+                id_cobro_transferencia INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_tbl_cobro_transferencia PRIMARY KEY,
+                id_cta_cobrar INT NULL,
+                id_comprobante INT NULL,
+                id_usuario_solicita INT NOT NULL,
+                id_usuario_aprueba INT NULL,
+                monto DECIMAL(18,2) NOT NULL,
+                referencia VARCHAR(120) NOT NULL,
+                banco_origen VARCHAR(120) NULL,
+                cedula_titular VARCHAR(40) NULL,
+                nombre_titular VARCHAR(180) NULL,
+                ruta_comprobante VARCHAR(300) NULL,
+                observaciones VARCHAR(MAX) NULL,
+                estado VARCHAR(30) NOT NULL CONSTRAINT DF_tbl_cobro_transferencia_estado DEFAULT ('Pendiente'),
+                fecha_solicitud DATETIME NOT NULL CONSTRAINT DF_tbl_cobro_transferencia_fecha DEFAULT (GETDATE()),
+                fecha_resolucion DATETIME NULL,
+                fecha_retiro_estimada DATETIME NULL,
+                mensaje_retiro VARCHAR(MAX) NULL,
+                observacion_resolucion VARCHAR(MAX) NULL,
+                id_abono_generado INT NULL,
+                CONSTRAINT FK_tbl_cobro_transferencia_cta_cobrar FOREIGN KEY (id_cta_cobrar) REFERENCES dbo.tbl_cta_cobrar(id_cta_cobrar),
+                CONSTRAINT FK_tbl_cobro_transferencia_comprobante FOREIGN KEY (id_comprobante) REFERENCES dbo.tbl_comprobante(id_comprobante),
+                CONSTRAINT FK_tbl_cobro_transferencia_usuario_solicita FOREIGN KEY (id_usuario_solicita) REFERENCES dbo.tbl_usuario(id_usuario),
+                CONSTRAINT FK_tbl_cobro_transferencia_usuario_aprueba FOREIGN KEY (id_usuario_aprueba) REFERENCES dbo.tbl_usuario(id_usuario)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_cobro_transferencia_estado' AND object_id = OBJECT_ID('dbo.tbl_cobro_transferencia'))
+        BEGIN
+            CREATE INDEX IX_tbl_cobro_transferencia_estado
+            ON dbo.tbl_cobro_transferencia(estado, fecha_solicitud DESC);
+        END;
+
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'banco_origen') IS NULL ALTER TABLE dbo.tbl_cobro_transferencia ADD banco_origen VARCHAR(120) NULL;
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'cedula_titular') IS NULL ALTER TABLE dbo.tbl_cobro_transferencia ADD cedula_titular VARCHAR(40) NULL;
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'nombre_titular') IS NULL ALTER TABLE dbo.tbl_cobro_transferencia ADD nombre_titular VARCHAR(180) NULL;
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'ruta_comprobante') IS NULL ALTER TABLE dbo.tbl_cobro_transferencia ADD ruta_comprobante VARCHAR(300) NULL;
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'fecha_retiro_estimada') IS NULL ALTER TABLE dbo.tbl_cobro_transferencia ADD fecha_retiro_estimada DATETIME NULL;
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'mensaje_retiro') IS NULL ALTER TABLE dbo.tbl_cobro_transferencia ADD mensaje_retiro VARCHAR(MAX) NULL;
+
+        IF COL_LENGTH('dbo.tbl_cobro_transferencia', 'id_cta_cobrar') IS NOT NULL
+           AND EXISTS
+           (
+               SELECT 1
+               FROM sys.columns
+               WHERE object_id = OBJECT_ID('dbo.tbl_cobro_transferencia')
+                 AND name = 'id_cta_cobrar'
+                 AND is_nullable = 0
+           )
+        BEGIN
+            IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_cobro_transferencia_cta_cobrar')
+                ALTER TABLE dbo.tbl_cobro_transferencia DROP CONSTRAINT FK_tbl_cobro_transferencia_cta_cobrar;
+
+            ALTER TABLE dbo.tbl_cobro_transferencia ALTER COLUMN id_cta_cobrar INT NULL;
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_tbl_cobro_transferencia_cta_cobrar')
+        BEGIN
+            ALTER TABLE dbo.tbl_cobro_transferencia
+            ADD CONSTRAINT FK_tbl_cobro_transferencia_cta_cobrar
+            FOREIGN KEY (id_cta_cobrar) REFERENCES dbo.tbl_cta_cobrar(id_cta_cobrar);
+        END;
+
+        IF OBJECT_ID('dbo.tbl_cobro_transferencia_detalle', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.tbl_cobro_transferencia_detalle
+            (
+                id_cobro_transferencia_detalle INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_tbl_cobro_transferencia_detalle PRIMARY KEY,
+                id_cobro_transferencia INT NOT NULL,
+                id_producto INT NOT NULL,
+                cantidad INT NOT NULL,
+                precio_unitario DECIMAL(18,2) NOT NULL,
+                total_item DECIMAL(18,2) NOT NULL,
+                nombre_producto_snapshot VARCHAR(200) NULL,
+                fecha_creacion DATETIME NOT NULL CONSTRAINT DF_tbl_cobro_transferencia_detalle_fecha DEFAULT (GETDATE()),
+                CONSTRAINT FK_tbl_cobro_transferencia_detalle_transferencia FOREIGN KEY (id_cobro_transferencia) REFERENCES dbo.tbl_cobro_transferencia(id_cobro_transferencia) ON DELETE CASCADE,
+                CONSTRAINT FK_tbl_cobro_transferencia_detalle_producto FOREIGN KEY (id_producto) REFERENCES dbo.tbl_producto(id_producto)
+            );
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_cobro_transferencia_detalle_transferencia' AND object_id = OBJECT_ID('dbo.tbl_cobro_transferencia_detalle'))
+            CREATE INDEX IX_tbl_cobro_transferencia_detalle_transferencia ON dbo.tbl_cobro_transferencia_detalle(id_cobro_transferencia);
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_cobro_transferencia_detalle_producto' AND object_id = OBJECT_ID('dbo.tbl_cobro_transferencia_detalle'))
+            CREATE INDEX IX_tbl_cobro_transferencia_detalle_producto ON dbo.tbl_cobro_transferencia_detalle(id_producto);
+
+        MERGE dbo.tbl_menu_app AS target
+        USING
+        (
+            VALUES
+                ('Gestion tienda online', '/gestion-tienda-online', 'bi bi-shop-window', 65, 1),
+                ('Mis compras online', '/mis-compras-online', 'bi bi-bag-check', 28, 1)
+        ) AS source(nombre, ruta, icono, orden, activo)
+        ON target.ruta = source.ruta
+        WHEN MATCHED THEN
+            UPDATE SET
+                nombre = source.nombre,
+                icono = source.icono,
+                orden = source.orden,
+                activo = source.activo
+        WHEN NOT MATCHED THEN
+            INSERT (nombre, ruta, icono, orden, activo)
+            VALUES (source.nombre, source.ruta, source.icono, source.orden, source.activo);
+
+        INSERT INTO dbo.tbl_rol_menu_permiso (id_rol, id_menu, puede_ver, puede_crear, puede_editar, puede_eliminar)
+        SELECT r.id_rol, m.id_menu,
+               CASE WHEN m.ruta = '/mis-compras-online' THEN 1 WHEN r.id_rol = 1 THEN 1 ELSE 0 END,
+               CASE WHEN r.id_rol = 1 AND m.ruta = '/gestion-tienda-online' THEN 1 ELSE 0 END,
+               CASE WHEN r.id_rol = 1 AND m.ruta = '/gestion-tienda-online' THEN 1 ELSE 0 END,
+               CASE WHEN r.id_rol = 1 AND m.ruta = '/gestion-tienda-online' THEN 1 ELSE 0 END
+        FROM dbo.tbl_rol r
+        CROSS JOIN dbo.tbl_menu_app m
+        WHERE m.ruta IN ('/gestion-tienda-online', '/mis-compras-online')
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.tbl_rol_menu_permiso p
+              WHERE p.id_rol = r.id_rol
+                AND p.id_menu = m.id_menu
+          );
+
+        UPDATE dbo.tbl_menu_app
+        SET activo = 0
+        WHERE ruta IN ('/notificaciones', '/cobros-transferencia');
+
+        UPDATE p
+        SET puede_ver = 1
+        FROM dbo.tbl_rol_menu_permiso p
+        INNER JOIN dbo.tbl_menu_app m ON m.id_menu = p.id_menu
+        WHERE m.ruta = '/mis-compras-online';
+
+        UPDATE dbo.tbl_notificacion
+        SET ruta_destino = CASE
+            WHEN ruta_destino IN ('/mis-facturas', '/tienda-online') THEN '/mis-compras-online'
+            WHEN ruta_destino = '/cobros-transferencia' THEN '/gestion-tienda-online'
+            ELSE ruta_destino
+        END,
+            modulo_origen = 'GestionTiendaOnline'
+        WHERE entidad_tipo = 'CobroTransferencia'
+          AND ruta_destino IN ('/mis-facturas', '/tienda-online', '/cobros-transferencia');
+        """);
+}
+
 const int PasswordMaxAgeDays = 90;
 
 static bool HasPasswordExpired(DateOnly? ultimoCambioPassword, DateTime now)
@@ -5136,3 +5445,4 @@ static class AuthClaimTypes
     public const string RememberMe = "RememberMe";
     public const string RoleId = "RoleId";
 }
+

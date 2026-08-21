@@ -374,14 +374,14 @@ else
     private static readonly string[] civilStatusOptions = ["Soltero(a)", "Casado(a)", "Union libre", "Divorciado(a)", "Viudo(a)"];
 
     private bool IsEntryMode => string.Equals(Mode, "entry", StringComparison.OrdinalIgnoreCase);
-    private string CurrentRoute => IsEntryMode ? "/doctor/patient-entry" : "/doctor/my-patients";
+    private string CurrentRoute => IsEntryMode ? "/doctor/ingresar-pacientes" : "/doctor/mis-pacientes";
     private string CurrentModuleName => IsEntryMode ? "Ingresar pacientes" : "Ver mis pacientes";
     private string ExportRoute => IsEntryMode ? "/exports/doctor-patient-entry.csv" : "/exports/doctor-my-patients.csv";
     private string PageTitleText => IsEntryMode ? "Ingresar pacientes" : "Ver mis pacientes";
     private string PageDescription => IsEntryMode
-        ? "Registra pacientes nuevos, actualiza sus datos base y trabaja solo con los pacientes vinculados a tus consultas."
+        ? "Registra pacientes nuevos y busca o actualiza sus datos base en todo el catalogo."
         : "Consulta tu cartera de pacientes asignados con filtros, busqueda rapida y exportacion controlada.";
-    private string ListTitle => IsEntryMode ? "Pacientes asignados" : "Mis pacientes";
+    private string ListTitle => IsEntryMode ? "Todos los pacientes" : "Mis pacientes";
     private string EditorTitle => isCreatingNewPatient ? "Nuevo paciente" : "Detalle del paciente";
     private string EditorSubtitle => isCreatingNewPatient ? "Alta medica" : (selectedPatientId > 0 ? $"Paciente #{selectedPatientId}" : "Vista");
     private string EmptySelectionMessage => IsEntryMode
@@ -461,12 +461,24 @@ else
             return;
         }
 
-        var loadedPatients = await dbContext.tbl_pacientes
-            .AsNoTracking()
-            .Where(p => p.tbl_consulta.Any(c => c.id_optometra == currentUserId))
-            .Include(p => p.id_usuario_registroNavigation)
-            .Include(p => p.tbl_consulta.Where(c => c.id_optometra == currentUserId))
-            .ToListAsync();
+        List<tbl_paciente> loadedPatients;
+        if (IsEntryMode)
+        {
+            loadedPatients = await dbContext.tbl_pacientes
+                .AsNoTracking()
+                .Include(p => p.id_usuario_registroNavigation)
+                .Include(p => p.tbl_consulta)
+                .ToListAsync();
+        }
+        else
+        {
+            loadedPatients = await dbContext.tbl_pacientes
+                .AsNoTracking()
+                .Where(p => p.tbl_consulta.Any(c => c.id_optometra == currentUserId))
+                .Include(p => p.id_usuario_registroNavigation)
+                .Include(p => p.tbl_consulta.Where(c => c.id_optometra == currentUserId))
+                .ToListAsync();
+        }
 
         patients.Clear();
         patients.AddRange(loadedPatients);

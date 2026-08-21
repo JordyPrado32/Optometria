@@ -74,6 +74,21 @@
 
     private readonly List<NavigationItemWrapper> RenderItems = [];
     private readonly HashSet<int> expandedMenuIds = [];
+    private static readonly HashSet<string> HiddenRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "/registro",
+        "/configurar-2fa",
+        "/notificaciones",
+        "/doctor/ingresar-pacientes",
+        "/doctor/mis-pacientes"
+    };
+    private static readonly string[] ConfigurationRoutes =
+    [
+        "/perfil",
+        "/usuarios",
+        "/roles",
+        "/menus"
+    ];
     private bool menuOpen;
     private string UserName { get; set; } = "Cuenta";
     private string RoleName { get; set; } = "Sesion";
@@ -104,7 +119,9 @@
         var roleIdValue = currentUser.FindFirst("RoleId")?.Value;
         int? roleId = int.TryParse(roleIdValue, out var parsedRoleId) ? parsedRoleId : null;
 
-        var rawMenus = await MenuAccessService.GetMenusForRoleAsync(roleId);
+        var rawMenus = (await MenuAccessService.GetMenusForRoleAsync(roleId))
+            .Where(m => string.IsNullOrWhiteSpace(m.Ruta) || !HiddenRoutes.Contains(m.Ruta))
+            .ToList();
 
         var hasConfiguredParents = rawMenus.Any(m => m.IdMenuPadre.HasValue);
         var childPaths = new[] { "/ordenes-de-compra", "/recepciones-de-compra", "/liquidaciones-de-compra", "/inventarios", "/kardex" };
@@ -113,6 +130,21 @@
         var topLevelMenus = hasConfiguredParents
             ? rawMenus.Where(m => !m.IdMenuPadre.HasValue).ToList()
             : rawMenus.Where(m => !childPaths.Contains(m.Ruta.ToLowerInvariant())).ToList();
+
+        var configurationMenus = !hasConfiguredParents
+            ? rawMenus
+                .Where(m => ConfigurationRoutes.Contains(m.Ruta, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(m => GetRouteOrder(m.Ruta))
+                .ThenBy(m => m.Orden)
+                .ToList()
+            : [];
+
+        if (!hasConfiguredParents)
+        {
+            topLevelMenus = topLevelMenus
+                .Where(menu => !ConfigurationRoutes.Contains(menu.Ruta, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+        }
 
         foreach (var menu in topLevelMenus)
         {
@@ -146,6 +178,23 @@
                     Order = GetRouteOrder("/purchases")
                 });
             }
+        }
+
+        if (!hasConfiguredParents && configurationMenus.Count > 0)
+        {
+            RenderItems.Add(new NavigationItemWrapper
+            {
+                MenuItem = new AppMenuItem
+                {
+                    IdMenu = -1000,
+                    Nombre = "Configuracion",
+                    Ruta = "/configuracion",
+                    Icono = "gear-fill",
+                    Orden = GetRouteOrder("/configuracion")
+                },
+                Children = configurationMenus,
+                Order = GetRouteOrder("/configuracion")
+            });
         }
 
         // Sort items by route order
@@ -238,20 +287,24 @@
         "/cuentas-por-cobrar" => 25,
         "/ingresos" => 26,
         "/tienda-online" => 27,
-        "/usuarios" => 28,
-        "/roles" => 29,
-        "/menus" => 30,
-        "/registro" => 31,
-        "/configurar-2fa" => 32,
-        "/perfil" => 33,
+        "/mis-compras-online" => 28,
+        "/gestion-tienda-online" or "/cobros-transferencia" => 29,
+        "/configuracion" => 30,
+        "/usuarios" => 31,
+        "/roles" => 32,
+        "/menus" => 33,
+        "/registro" => 34,
+        "/configurar-2fa" => 35,
+        "/perfil" => 36,
         _ => 100
     };
 
     private static string GetMenuCategory(string route) => route switch
     {
         "/dashboard" or "/pacientes" or "/doctor/ingresar-pacientes" or "/doctor/mis-pacientes" or "/doctor/historia-clinica" or "/citas" or "/disponibilidad-medica" or "/doctores" or "/laboratorios" or "/pedidos-laboratorio" or "/envios-laboratorio" => "Clinica",
-        "/clientes" or "/emisor" or "/invoices" or "/facturas" or "/mis-facturas" or "/mis-notas-de-credito" or "/cuentas-por-cobrar" or "/ingresos" or "/tienda-online" => "Comercial",
+        "/clientes" or "/emisor" or "/invoices" or "/facturas" or "/mis-facturas" or "/mis-notas-de-credito" or "/cuentas-por-cobrar" or "/ingresos" or "/tienda-online" or "/mis-compras-online" or "/gestion-tienda-online" or "/cobros-transferencia" => "Comercial",
         "/productos" or "/categorias-de-productos" or "/proveedores" or "/purchases" or "/compras" or "/ordenes-de-compra" or "/recepciones-de-compra" or "/liquidaciones-de-compra" or "/inventarios" or "/kardex" => "Inventario",
+        "/configuracion" or "/usuarios" or "/roles" or "/menus" or "/perfil" => "Configuracion",
         _ => "Configuracion"
     };
 
@@ -293,6 +346,8 @@
         "receipt" => "bi bi-receipt",
         "arrow-counterclockwise" => "bi bi-arrow-counterclockwise",
         "cash-coin" => "bi bi-cash-coin",
+        "bag-check" => "bi bi-bag-check",
+        "shop-window" => "bi bi-shop-window",
         "users" => "bi bi-people",
         "roles" => "bi bi-shield-lock-fill",
         "menu" => "bi bi-menu-button-wide-fill",
@@ -332,6 +387,9 @@
         "/cuentas-por-cobrar" => "bi bi-cash-coin",
         "/ingresos" => "bi bi-graph-up-arrow",
         "/tienda-online" => "bi bi-shop",
+        "/mis-compras-online" => "bi bi-bag-check",
+        "/gestion-tienda-online" or "/cobros-transferencia" => "bi bi-shop-window",
+        "/configuracion" => "bi bi-gear-fill",
         "/usuarios" => "bi bi-people",
         "/roles" => "bi bi-shield-lock-fill",
         "/menus" => "bi bi-menu-button-wide-fill",

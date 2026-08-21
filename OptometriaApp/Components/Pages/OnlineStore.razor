@@ -1,26 +1,95 @@
 @page "/tienda-online"
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
+@using System.Text.Json
 @using OptometriaApp.Data
+@using OptometriaApp.Models
 @using OptometriaApp.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NotificationService NotificationService
+@inject IWebHostEnvironment WebHostEnvironment
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Tienda online</PageTitle>
 
 <style>
-    .store-grid { display:grid; gap:1.25rem; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); }
-    .store-card { border:1px solid rgba(127,105,81,0.12); border-radius:1.2rem; padding:1rem; background:linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,240,228,0.56)); box-shadow:0 12px 28px rgba(127,105,81,0.06); }
-    .store-card h3 { margin:0; font-size:1.1rem; color:var(--color-ink); }
-    .store-card p { margin:0.5rem 0 0; color:var(--color-taupe); font-size:0.85rem; min-height:2.8rem; }
-    .store-meta { display:grid; gap:0.5rem; margin-top:1rem; }
-    .store-pill { display:inline-flex; align-items:center; padding:0.28rem 0.65rem; border-radius:999px; font-size:0.75rem; font-weight:700; }
-    .store-pill.stock-ok { background:rgba(93,161,129,0.14); color:#2e7d32; }
-    .store-pill.stock-low { background:rgba(254,188,100,0.18); color:#c77800; }
-    .store-pill.stock-out { background:rgba(198,40,40,0.12); color:#c62828; }
-    .store-price { font-size:1.45rem; color:var(--color-ink); font-weight:800; }
+    .shop-shell { display:grid; gap:1rem; }
+    .shop-top-note { min-height:2rem; border-radius:999px; display:flex; align-items:center; justify-content:center; padding:0.35rem 1rem; background:#2f2a25; color:#fffaf4; font-size:0.78rem; letter-spacing:0.02em; text-align:center; }
+    .shop-nav { position:sticky; top:0.75rem; z-index:12; display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:0.8rem; align-items:center; padding:0.7rem; border:1px solid rgba(127,105,81,0.12); border-radius:1.35rem; background:rgba(255,250,244,0.94); backdrop-filter:blur(8px); box-shadow:0 16px 36px rgba(127,105,81,0.1); }
+    .shop-category-nav { display:flex; gap:0.45rem; overflow-x:auto; padding-bottom:0.1rem; }
+    .shop-category-nav button { flex:0 0 auto; border:0; border-radius:999px; padding:0.48rem 0.85rem; background:transparent; color:var(--color-taupe); font-weight:800; }
+    .shop-category-nav button.is-active, .shop-category-nav button:hover { background:rgba(93,161,129,0.16); color:var(--color-sage); }
+    .shop-nav-actions { display:flex; align-items:center; gap:0.5rem; }
+    .shop-search { min-width:14rem; display:flex; align-items:center; gap:0.45rem; border:1px solid rgba(93,161,129,0.24); border-radius:999px; padding:0.35rem 0.75rem; background:#fff; }
+    .shop-search input { border:0; outline:0; width:100%; background:transparent; color:var(--color-ink); }
+    .shop-history-button { height:2.65rem; border:1px solid rgba(93,161,129,0.24); border-radius:999px; display:inline-flex; align-items:center; justify-content:center; gap:0.42rem; padding:0 0.85rem; background:rgba(93,161,129,0.12); color:var(--color-sage); font-weight:900; white-space:nowrap; }
+    .shop-history-button:hover { background:rgba(93,161,129,0.2); color:#3f7d62; transform:translateY(-1px); }
+    .shop-cart-button { position:relative; width:2.65rem; height:2.65rem; border:1px solid rgba(127,105,81,0.16); border-radius:999px; display:grid; place-items:center; background:#fff; color:var(--color-ink); }
+    .shop-cart-count { position:absolute; right:-0.25rem; top:-0.25rem; min-width:1.15rem; height:1.15rem; border-radius:999px; display:grid; place-items:center; background:var(--color-sage); color:#fff; font-size:0.68rem; font-weight:900; }
+    .shop-hero { min-height:470px; border-radius:1.5rem; overflow:hidden; position:relative; display:grid; align-items:end; padding:2rem; background:linear-gradient(135deg, rgba(93,161,129,0.18), rgba(254,188,100,0.16)); border:1px solid rgba(127,105,81,0.12); }
+    .shop-hero img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+    .shop-hero::after { content:""; position:absolute; inset:0; z-index:1; background:linear-gradient(180deg, rgba(40,34,29,0.08), rgba(40,34,29,0.62)); }
+    .shop-hero-copy { position:relative; z-index:2; max-width:46rem; color:#fff; display:grid; gap:0.8rem; }
+    .shop-hero-brand { color:#5DA181; font-size:clamp(1.25rem, 2.4vw, 2.35rem); line-height:1; font-weight:950; letter-spacing:0; text-transform:none; text-shadow:0 10px 24px rgba(0,0,0,0.28); }
+    .shop-hero-copy h1 { margin:0; color:#fff; font-size:clamp(2rem, 4.8vw, 4.5rem); line-height:1; font-weight:950; }
+    .shop-hero-copy p { margin:0; color:rgba(255,250,244,0.92); font-size:1.05rem; max-width:40rem; }
+    .shop-hero-actions { display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.35rem; }
+    .shop-admin-edit { position:absolute; right:1rem; top:1rem; z-index:3; }
+    .shop-section-title { display:flex; justify-content:space-between; align-items:end; gap:1rem; margin-top:0.5rem; }
+    .shop-section-title h2 { margin:0; color:var(--color-ink); font-size:1.65rem; }
+    .shop-section-title p { margin:0.25rem 0 0; color:var(--color-taupe); }
+    .shop-feature-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:0.8rem; }
+    .shop-feature-card { min-height:170px; border:0; border-radius:1rem; overflow:hidden; position:relative; display:grid; align-items:end; padding:0.9rem; text-align:left; background:rgba(244,240,228,0.8); color:#fff; cursor:pointer; }
+    .shop-feature-card img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .shop-feature-card::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(40,34,29,0.05), rgba(40,34,29,0.62)); }
+    .shop-feature-card span { position:relative; z-index:1; font-weight:900; font-size:1rem; color:#fff; }
+    .shop-feature-card small { position:relative; z-index:1; color:rgba(255,250,244,0.86); font-weight:700; }
+    .shop-storefront { display:block; }
+    .shop-product-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:1rem; }
+    .shop-product-card { border:1px solid rgba(127,105,81,0.12); border-radius:1.25rem; overflow:hidden; background:#fffaf4; box-shadow:0 14px 30px rgba(127,105,81,0.08); display:grid; grid-template-rows:auto 1fr; min-width:0; transition:transform 0.18s ease, box-shadow 0.18s ease; }
+    .shop-product-card:hover { transform:translateY(-2px); box-shadow:0 18px 34px rgba(127,105,81,0.12); }
+    .shop-product-image { aspect-ratio:1 / 0.82; background:linear-gradient(135deg, rgba(93,161,129,0.15), rgba(236,204,197,0.36)); display:grid; place-items:center; overflow:hidden; color:var(--color-taupe); }
+    .shop-product-image img { width:100%; height:100%; object-fit:cover; }
+    .shop-product-image i { font-size:2.2rem; }
+    .shop-product-body { padding:1rem; display:grid; gap:0.75rem; align-content:start; }
+    .shop-product-body h3 { margin:0; color:var(--color-ink); font-size:1rem; overflow-wrap:anywhere; }
+    .shop-product-body p { margin:0; color:var(--color-taupe); font-size:0.82rem; line-height:1.35; min-height:2.2rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .shop-product-meta { display:flex; justify-content:space-between; align-items:center; gap:0.7rem; }
+    .shop-product-title-row { display:flex; justify-content:space-between; gap:0.7rem; align-items:flex-start; }
+    .shop-product-tag { border-radius:999px; padding:0.24rem 0.55rem; background:rgba(236,204,197,0.34); color:var(--color-taupe-deep); font-size:0.68rem; font-weight:900; white-space:nowrap; }
+    .shop-product-footer { display:grid; grid-template-columns:1fr auto; gap:0.75rem; align-items:center; border-top:1px solid rgba(127,105,81,0.08); padding-top:0.75rem; }
+    .shop-price { color:var(--color-ink); font-size:1.25rem; font-weight:950; }
+    .shop-stock { border-radius:999px; padding:0.25rem 0.55rem; font-size:0.7rem; font-weight:900; white-space:nowrap; }
+    .shop-stock.stock-ok { background:rgba(93,161,129,0.14); color:#2e7d32; }
+    .shop-stock.stock-low { background:rgba(254,188,100,0.2); color:#b46e00; }
+    .shop-stock.stock-out { background:rgba(198,40,40,0.12); color:#c62828; }
+    .shop-side { position:sticky; top:5.4rem; display:grid; gap:1rem; }
+    .shop-side-card, .shop-cart-panel { border:1px solid rgba(127,105,81,0.12); border-radius:1rem; background:#fffaf4; padding:1rem; box-shadow:0 12px 28px rgba(127,105,81,0.06); }
+    .shop-side-card h3, .shop-cart-panel h3 { margin:0 0 0.75rem; color:var(--color-ink); font-size:1rem; }
+    .shop-mini-list { display:grid; gap:0.5rem; }
+    .shop-mini-row { display:flex; justify-content:space-between; gap:0.7rem; align-items:center; color:var(--color-taupe); font-weight:800; }
+    .shop-cart-panel { display:none; }
+    .shop-cart-panel.is-open { display:grid; gap:0.75rem; }
+    .shop-cart-item { display:grid; grid-template-columns:1fr auto; gap:0.55rem; padding:0.65rem; border:1px solid rgba(93,161,129,0.14); border-radius:0.8rem; background:#fff; }
+    .shop-cart-item strong { color:var(--color-ink); overflow-wrap:anywhere; }
+    .shop-cart-item small { color:var(--color-taupe); }
+    .shop-qty { display:flex; align-items:center; gap:0.35rem; }
+    .shop-qty button { width:1.7rem; height:1.7rem; border-radius:999px; border:1px solid rgba(127,105,81,0.18); background:#fffaf4; color:var(--color-ink); font-weight:900; }
+    .shop-cart-total { display:flex; justify-content:space-between; border-top:1px solid rgba(127,105,81,0.1); padding-top:0.75rem; color:var(--color-ink); font-weight:950; }
+    .shop-cart-modal-card { width:min(100%, 560px) !important; }
+    .shop-cart-modal-body { display:grid; gap:0.75rem; }
+    .shop-cart-empty { min-height:8rem; display:grid; place-items:center; text-align:center; color:var(--color-taupe); border:1px dashed rgba(127,105,81,0.18); border-radius:1rem; background:rgba(244,240,228,0.42); }
+    .shop-config-grid { display:grid; grid-template-columns:11rem minmax(0, 1fr); gap:1rem; align-items:start; }
+    .shop-config-preview { min-height:9rem; border-radius:1rem; overflow:hidden; display:grid; place-items:center; background:rgba(244,240,228,0.65); color:var(--color-taupe); }
+    .shop-config-preview img { width:100%; height:100%; object-fit:cover; }
+    .shop-config-fields { display:grid; gap:0.65rem; min-width:0; }
+    @@media (max-width: 1100px) { .shop-side { position:static; grid-template-columns:repeat(2, minmax(0, 1fr)); } .shop-feature-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+    @@media (max-width: 820px) { .shop-nav { grid-template-columns:1fr; } .shop-nav-actions { justify-content:space-between; } .shop-search { min-width:0; flex:1; } .shop-history-button span { display:none; } .shop-history-button { width:2.65rem; padding:0; } .shop-hero { min-height:360px; padding:1.1rem; } .shop-side { grid-template-columns:1fr; } .shop-config-grid { grid-template-columns:1fr; } }
+    @@media (max-width: 640px) { .shop-feature-grid, .shop-product-grid { grid-template-columns:1fr; } }
 </style>
 
 @if (isLoading)
@@ -43,89 +112,308 @@ else if (!canViewModule)
 }
 else
 {
-    <section class="management-shell">
-        <div class="management-hero">
-            <div>
-                <span class="eyebrow">E-commerce</span>
-                <h1>Tienda online</h1>
-                <p>Catalogo de marcos, lentes y accesorios listos para vitrina digital, con filtros rapidos y estado de stock para operacion comercial.</p>
+    <section class="management-shell shop-shell">
+        <div class="shop-top-note">@storeSettings.BannerText</div>
+
+        <nav class="shop-nav" aria-label="Navegacion de tienda">
+            <div class="shop-category-nav">
+                @foreach (var category in categories)
+                {
+                    <button type="button" class="@(categoryFilter == category ? "is-active" : string.Empty)" @onclick="() => SelectCategory(category)">@category</button>
+                }
             </div>
-        </div>
+
+            <div class="shop-nav-actions">
+                <label class="shop-search">
+                    <i class="bi bi-search"></i>
+                    <input @bind="searchTerm" @bind:event="oninput" placeholder="Buscar" />
+                </label>
+                <a class="shop-history-button" href="/mis-compras-online" title="Mis compras online" aria-label="Mis compras online">
+                    <i class="bi bi-bag-check"></i>
+                    <span>Mis compras</span>
+                </a>
+                <button type="button" class="shop-cart-button" @onclick="ToggleCart">
+                    <i class="bi bi-bag"></i>
+                    @if (CartCount > 0)
+                    {
+                        <span class="shop-cart-count">@CartCount</span>
+                    }
+                </button>
+            </div>
+        </nav>
 
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Filtros</h2>
-                <span>@FilteredProducts.Count productos visibles</span>
-            </div>
-
-            <div class="management-form-grid" style="margin-top: 1rem;">
-                <div>
-                    <label class="form-label">Buscar</label>
-                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, nombre o categoria" />
-                </div>
-                <div>
-                    <label class="form-label">Categoria</label>
-                    <select class="form-select" @bind="categoryFilter">
-                        <option value="">Todas</option>
-                        @foreach (var category in categories)
-                        {
-                            <option value="@category">@category</option>
-                        }
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">Stock</label>
-                    <select class="form-select" @bind="stockFilter">
-                        <option value="Todos">Todos</option>
-                        <option value="Disponible">Disponible</option>
-                        <option value="Bajo">Stock bajo</option>
-                        <option value="Agotado">Agotado</option>
-                    </select>
+        <section class="shop-hero">
+            @if (!string.IsNullOrWhiteSpace(storeSettings.HeroImage))
+            {
+                <img src="@storeSettings.HeroImage" alt="Imagen principal de tienda" />
+            }
+            @if (CanEditStorefront)
+            {
+                <button type="button" class="btn btn-primary shop-admin-edit" @onclick="OpenStoreEditor">
+                    <i class="bi bi-pencil-square"></i> Editar portada
+                </button>
+            }
+            <div class="shop-hero-copy">
+                <span class="shop-hero-brand">@storeSettings.BrandName</span>
+                <h1>@storeSettings.HeroTitle</h1>
+                <p>@storeSettings.HeroSubtitle</p>
+                <div class="shop-hero-actions">
+                    <button type="button" class="btn btn-primary" @onclick="OpenCart">@storeSettings.HeroButton</button>
+                    <button type="button" class="btn btn-outline-primary" style="background:rgba(255,250,244,0.88) !important;" @onclick="ToggleCart">
+                        <i class="bi bi-bag-check"></i> Ver carrito
+                    </button>
                 </div>
             </div>
         </section>
 
-        <section class="store-grid" style="margin-top: 1.5rem;">
-            @if (FilteredProducts.Count == 0)
-            {
-                <div class="management-card">
-                    <p style="margin:0; color:var(--color-taupe);">No hay productos que coincidan con los filtros actuales.</p>
+        <section>
+            <div class="shop-section-title">
+                <div>
+                    <h2>@storeSettings.FeatureTitle</h2>
+                    <p>@storeSettings.FeatureSubtitle</p>
                 </div>
-            }
-            else
-            {
-                @foreach (var item in FilteredProducts)
+                <span class="eyebrow">@FeaturedCategories.Count opciones</span>
+            </div>
+            <div class="shop-feature-grid" style="margin-top:0.85rem;">
+                @foreach (var item in FeaturedCategories)
                 {
-                    <article class="store-card">
-                        <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
-                            <div>
-                                <h3>@item.Name</h3>
-                                <div style="font-size:0.78rem; color:var(--color-taupe);">@item.Code</div>
-                            </div>
-                            <span class="store-pill @item.StockClass">@item.StockLabel</span>
-                        </div>
-                        <p>@item.Description</p>
-                        <div class="store-meta">
-                            <div><strong>Categoria:</strong> @item.Category</div>
-                            <div><strong>Stock:</strong> @item.Stock</div>
-                            <div><strong>IVA:</strong> @item.TaxLabel</div>
-                            <div class="store-price">@item.Price.ToString("0.00")</div>
-                        </div>
-                    </article>
+                    <button type="button" class="shop-feature-card" @onclick="() => SelectCategory(item.Name)">
+                        @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                        {
+                            <img src="@item.ImageUrl" alt="@item.Name" />
+                        }
+                        <span>@item.Name</span>
+                        <small>@item.Count productos</small>
+                    </button>
                 }
-            }
+            </div>
+        </section>
+
+        <section id="storeCatalog" class="shop-storefront">
+            <div>
+                <div class="shop-section-title">
+                    <div>
+                        <h2>Catalogo</h2>
+                        <p>@FilteredProducts.Count productos listos para comprar</p>
+                    </div>
+                </div>
+
+                <div class="shop-product-grid" style="margin-top:0.85rem;">
+                    @if (FilteredProducts.Count == 0)
+                    {
+                        <div class="management-card store-empty">
+                            <div>
+                                <i class="bi bi-search" style="font-size:2rem; color:var(--color-sage);"></i>
+                                <p style="margin:0.6rem 0 0;">No hay productos que coincidan con la busqueda.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var item in FilteredProducts)
+                        {
+                            <article class="shop-product-card">
+                                <div class="shop-product-image">
+                                    @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                    {
+                                        <img src="@item.ImageUrl" alt="@item.Name" />
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-eyeglasses"></i>
+                                    }
+                                </div>
+                                <div class="shop-product-body">
+                                    <div class="shop-product-title-row">
+                                        <div>
+                                            <h3>@item.Name</h3>
+                                            <small style="color:var(--color-taupe); font-weight:800;">@item.Code</small>
+                                        </div>
+                                        <span class="shop-product-tag">@item.Category</span>
+                                    </div>
+                                    <p>@item.Description</p>
+                                    <div class="shop-product-meta">
+                                        <span class="shop-stock @item.StockClass">@item.StockLabel</span>
+                                    </div>
+                                    <div class="shop-product-footer">
+                                        <span class="shop-price">$@item.Price.ToString("0.00")</span>
+                                        <button type="button" class="btn btn-primary" disabled="@(item.Stock <= 0)" @onclick="() => AddToCart(item)">
+                                            <i class="bi bi-bag-plus-fill"></i> Agregar al carrito
+                                        </button>
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    }
+                </div>
+            </div>
         </section>
     </section>
+}
+
+@if (showCart)
+{
+    <div class="custom-modal-overlay" @onclick="CloseCart">
+        <div class="custom-modal-card shop-cart-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2><i class="bi bi-bag-check" style="color:var(--color-sage); margin-right:0.35rem;"></i>Carrito</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseCart">x</button>
+            </header>
+            <div class="custom-modal-body shop-cart-modal-body">
+                @if (cart.Count == 0)
+                {
+                    <div class="shop-cart-empty">
+                        <div>
+                            <i class="bi bi-bag" style="font-size:2rem; color:var(--color-sage);"></i>
+                            <p style="margin:0.55rem 0 0;">Aun no agregas productos.</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in cart)
+                    {
+                        <div class="shop-cart-item">
+                            <div>
+                                <strong>@item.Name</strong>
+                                <small>@item.Quantity x $@item.Price.ToString("0.00")</small>
+                            </div>
+                            <div class="shop-qty">
+                                <button type="button" @onclick="() => DecreaseCartItem(item.ProductId)">-</button>
+                                <b>@item.Quantity</b>
+                                <button type="button" @onclick="() => IncreaseCartItem(item.ProductId)">+</button>
+                            </div>
+                        </div>
+                    }
+                    <div class="shop-cart-total">
+                        <span>Total</span>
+                        <span>$@CartTotal.ToString("0.00")</span>
+                    </div>
+                    <div style="display:grid; gap:0.75rem;">
+                        <div>
+                            <label class="form-label">Metodo de pago</label>
+                            <input class="form-control" value="Transferencia bancaria" readonly />
+                        </div>
+                        <div>
+                            <label class="form-label">N. comprobante de transferencia *</label>
+                            <input class="form-control" maxlength="120" @bind="checkoutTransferVoucherNumber" placeholder="Ingresa el numero del comprobante" />
+                        </div>
+                        <div>
+                            <label class="form-label">Banco *</label>
+                            <input class="form-control" maxlength="120" @bind="checkoutTransferBank" placeholder="Banco desde donde hiciste la transferencia" />
+                        </div>
+                        <div>
+                            <label class="form-label">N. cedula del titular *</label>
+                            <input class="form-control" maxlength="40" @bind="checkoutTransferOwnerDocument" placeholder="Cedula del titular de la cuenta" />
+                        </div>
+                        <div>
+                            <label class="form-label">Nombre del titular *</label>
+                            <input class="form-control" maxlength="180" @bind="checkoutTransferOwnerName" placeholder="Nombre completo del titular de la cuenta" />
+                        </div>
+                        <div>
+                            <label class="form-label">Foto del comprobante de pago *</label>
+                            <InputFile OnChange="OnTransferProofSelected" class="form-control" accept="image/png,image/jpeg,image/webp" />
+                            @if (!string.IsNullOrWhiteSpace(transferProofPreview))
+                            {
+                                <img src="@transferProofPreview" alt="Comprobante de transferencia" style="margin-top:0.65rem; width:100%; max-height:220px; object-fit:cover; border-radius:1rem; border:1px solid rgba(127,105,81,0.14);" />
+                            }
+                        </div>
+                        <div>
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" rows="3" @bind="checkoutTransferNotes" placeholder="Dato adicional para validar el pago"></textarea>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="SubmitTransferCheckoutAsync">
+                        <i class="bi bi-credit-card-2-front-fill"></i> Pagar por transferencia
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="ClearCart">Vaciar carrito</button>
+                }
+                @if (!string.IsNullOrWhiteSpace(cartMessage))
+                {
+                    <small style="color:var(--color-sage); font-weight:800;">@cartMessage</small>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<StatusModal Visible="@showCheckoutAlert"
+             IsError="@checkoutAlertIsError"
+             Title="@checkoutAlertTitle"
+             Message="@checkoutAlertMessage"
+             OnClose="CloseCheckoutAlert" />
+
+@if (showStoreEditor && storeEditor is not null)
+{
+    <div class="custom-modal-overlay">
+        <div class="custom-modal-card form-modal-card">
+            <header class="custom-modal-header rose-header">
+                <h2>Editar tienda online</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseStoreEditor">x</button>
+            </header>
+            <div class="custom-modal-body">
+                <p style="margin-bottom:1rem; color:var(--color-taupe);">Estos cambios se muestran a los usuarios de la tienda. Solo el administrador ve esta edicion.</p>
+                <div class="shop-config-grid">
+                    <div class="shop-config-preview">
+                        @if (!string.IsNullOrWhiteSpace(StoreHeroPreviewUrl))
+                        {
+                            <img src="@StoreHeroPreviewUrl" alt="Portada de tienda" />
+                        }
+                        else
+                        {
+                            <i class="bi bi-image" style="font-size:2rem;"></i>
+                        }
+                    </div>
+                    <div class="shop-config-fields">
+                        <div>
+                            <label class="form-label">Texto superior</label>
+                            <input class="form-control" @bind="storeEditor.BannerText" maxlength="180" />
+                        </div>
+                        <div>
+                            <label class="form-label">Titulo principal</label>
+                            <input class="form-control" @bind="storeEditor.HeroTitle" maxlength="180" />
+                        </div>
+                        <div>
+                            <label class="form-label">Texto principal</label>
+                            <textarea class="form-control" rows="3" @bind="storeEditor.HeroSubtitle" maxlength="300"></textarea>
+                        </div>
+                        <div>
+                            <label class="form-label">Texto del boton</label>
+                            <input class="form-control" @bind="storeEditor.HeroButton" maxlength="80" />
+                        </div>
+                        <div>
+                            <label class="form-label">Imagen principal</label>
+                            <input class="form-control" @bind="storeEditor.HeroImage" maxlength="500" placeholder="/images/store/portada.jpg o https://..." />
+                            <InputFile OnChange="OnStoreHeroImageSelected" class="form-control" accept="image/png,image/jpeg,image/webp" />
+                        </div>
+                        <div>
+                            <label class="form-label">Titulo productos basicos</label>
+                            <input class="form-control" @bind="storeEditor.FeatureTitle" maxlength="120" />
+                        </div>
+                        <div>
+                            <label class="form-label">Subtitulo productos basicos</label>
+                            <input class="form-control" @bind="storeEditor.FeatureSubtitle" maxlength="240" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveStoreSettingsAsync">Guardar portada</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseStoreEditor">Cerrar</button>
+            </footer>
+        </div>
+    </div>
 }
 
 @code {
     private readonly List<StoreProductRow> products = [];
     private readonly List<string> categories = [];
+    private readonly List<CartItem> cart = [];
     private bool isLoading = true;
     private bool canViewModule;
     private string? errorMessage;
@@ -133,26 +421,69 @@ else
     private int currentUserId;
     private string searchTerm = string.Empty;
     private string categoryFilter = string.Empty;
-    private string stockFilter = "Todos";
+    private bool showCart;
+    private bool cartRestored;
+    private string? cartMessage;
+    private string checkoutTransferVoucherNumber = string.Empty;
+    private string checkoutTransferBank = string.Empty;
+    private string checkoutTransferOwnerDocument = string.Empty;
+    private string checkoutTransferOwnerName = string.Empty;
+    private string checkoutTransferNotes = string.Empty;
+    private byte[]? pendingTransferProofBytes;
+    private string? pendingTransferProofExtension;
+    private string? transferProofPreview;
+    private bool showCheckoutAlert;
+    private bool checkoutAlertIsError;
+    private string checkoutAlertTitle = string.Empty;
+    private string checkoutAlertMessage = string.Empty;
+    private bool showStoreEditor;
+    private StorefrontSettings storeSettings = StorefrontSettings.Default();
+    private StorefrontSettings? storeEditor;
+    private byte[]? pendingHeroImageBytes;
+    private string? pendingHeroImageExtension;
+    private string? pendingHeroImagePreview;
+    private const long MaxStoreImageSize = 4 * 1024 * 1024;
+    private const long MaxTransferProofSize = 4 * 1024 * 1024;
+
+    private bool CanEditStorefront => currentRoleId == 1;
+    private string? StoreHeroPreviewUrl => pendingHeroImagePreview ?? storeEditor?.HeroImage;
+    private int CartCount => cart.Sum(x => x.Quantity);
+    private decimal CartTotal => cart.Sum(x => x.Price * x.Quantity);
+    private string CartStorageKey => currentUserId > 0
+        ? $"optometria-online-store-cart-user-{currentUserId}"
+        : "optometria-online-store-cart-anonymous";
 
     private List<StoreProductRow> FilteredProducts => products
         .Where(x => string.IsNullOrWhiteSpace(searchTerm)
             || x.SearchBlob.Contains(searchTerm.Trim(), StringComparison.OrdinalIgnoreCase))
         .Where(x => string.IsNullOrWhiteSpace(categoryFilter)
             || string.Equals(x.Category, categoryFilter, StringComparison.OrdinalIgnoreCase))
-        .Where(x => stockFilter switch
-        {
-            "Disponible" => x.Stock > 5,
-            "Bajo" => x.Stock > 0 && x.Stock <= 5,
-            "Agotado" => x.Stock <= 0,
-            _ => true
-        })
-        .OrderBy(x => x.Name)
+        .OrderByDescending(x => x.Stock > 0)
+        .ThenBy(x => x.Name)
         .ToList();
+
+    private List<CategorySummary> CategorySummaries => products
+        .GroupBy(x => x.Category)
+        .Select(group => new CategorySummary(group.Key, group.Count(), group.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.ImageUrl))?.ImageUrl ?? string.Empty))
+        .OrderByDescending(x => x.Count)
+        .ThenBy(x => x.Name)
+        .ToList();
+
+    private List<CategorySummary> FeaturedCategories => CategorySummaries.Take(4).ToList();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && canViewModule && !cartRestored)
+        {
+            cartRestored = true;
+            await RestoreCartAsync();
+            StateHasChanged();
+        }
     }
 
     private async Task LoadAsync()
@@ -183,15 +514,20 @@ else
                 return;
             }
 
+            var settingsEntity = await dbContext.tbl_configuracion_opticas.AsNoTracking().OrderBy(x => x.id_configuracion).FirstOrDefaultAsync();
+            storeSettings = StorefrontSettings.FromEntity(settingsEntity);
+
             var rows = await (
                 from product in ProductInventoryRules.FilterStoreVisible(dbContext.tbl_productos.AsNoTracking())
                 join category in dbContext.tbl_categoria_productos.AsNoTracking() on product.id_categoria equals category.id_categoria into categoryJoin
                 from category in categoryJoin.DefaultIfEmpty()
                 select new
                 {
+                    product.id_producto,
                     product.codigo_producto,
                     product.nombre_producto,
                     product.descripcion,
+                    product.imagen_url,
                     product.precio_venta,
                     product.stock_actual,
                     product.tiene_iva,
@@ -203,14 +539,16 @@ else
             products.Clear();
             products.AddRange(rows.Select(x => new StoreProductRow
             {
+                ProductId = x.id_producto,
                 Code = x.codigo_producto ?? "SIN-CODIGO",
                 Name = x.nombre_producto ?? "Producto",
                 Description = string.IsNullOrWhiteSpace(x.descripcion) ? "Sin descripcion comercial cargada." : x.descripcion!,
+                ImageUrl = x.imagen_url ?? string.Empty,
                 Category = string.IsNullOrWhiteSpace(x.CategoryName) ? "Sin categoria" : x.CategoryName!,
                 Price = x.precio_venta,
                 Stock = x.stock_actual ?? 0,
                 TaxLabel = (x.tiene_iva ?? false) ? $"Si, {(x.porcentaje_iva ?? 0m):0.##}%" : "No",
-                SearchBlob = $"{x.codigo_producto} {x.nombre_producto} {x.descripcion} {x.CategoryName}"
+                SearchBlob = $"{x.codigo_producto} {x.nombre_producto} {x.descripcion} {x.imagen_url} {x.CategoryName}"
             }));
 
             categories.Clear();
@@ -226,17 +564,534 @@ else
         }
     }
 
+    private void SelectCategory(string category)
+    {
+        categoryFilter = category;
+        cartMessage = null;
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        categoryFilter = string.Empty;
+    }
+
+    private void ScrollToCatalog()
+    {
+        categoryFilter = string.Empty;
+    }
+
+    private void ToggleCart()
+    {
+        showCart = !showCart;
+    }
+
+    private void OpenCart()
+    {
+        showCart = true;
+    }
+
+    private void CloseCart()
+    {
+        showCart = false;
+    }
+
+    private async Task AddToCart(StoreProductRow product)
+    {
+        if (product.Stock <= 0)
+        {
+            cartMessage = "Este producto esta agotado.";
+            showCart = true;
+            return;
+        }
+
+        var item = cart.FirstOrDefault(x => x.ProductId == product.ProductId);
+        if (item is null)
+        {
+            cart.Add(new CartItem
+            {
+                ProductId = product.ProductId,
+                Name = product.Name,
+                Price = product.Price,
+                Stock = product.Stock,
+                Quantity = 1
+            });
+        }
+        else if (item.Quantity < item.Stock)
+        {
+            item.Quantity++;
+        }
+        else
+        {
+            cartMessage = "No puedes agregar mas unidades de este producto disponible.";
+        }
+
+        showCart = true;
+        await SaveCartAsync();
+    }
+
+    private async Task IncreaseCartItem(int productId)
+    {
+        var item = cart.FirstOrDefault(x => x.ProductId == productId);
+        if (item is not null && item.Quantity < item.Stock)
+        {
+            item.Quantity++;
+            await SaveCartAsync();
+        }
+    }
+
+    private async Task DecreaseCartItem(int productId)
+    {
+        var item = cart.FirstOrDefault(x => x.ProductId == productId);
+        if (item is null)
+        {
+            return;
+        }
+
+        item.Quantity--;
+        if (item.Quantity <= 0)
+        {
+            cart.Remove(item);
+        }
+
+        await SaveCartAsync();
+    }
+
+    private async Task ClearCart()
+    {
+        cart.Clear();
+        cartMessage = null;
+        await SaveCartAsync();
+    }
+
+    private void CheckoutCart()
+    {
+        cartMessage = cart.Count == 0
+            ? "Agrega productos antes de finalizar."
+            : "Pedido preparado. Completa los datos de la transferencia y sube la foto del comprobante para completar la compra.";
+    }
+
+    private async Task SubmitTransferCheckoutAsync()
+    {
+        cartMessage = null;
+
+        if (cart.Count == 0)
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Agrega productos al carrito antes de continuar.", true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(checkoutTransferVoucherNumber))
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Ingresa el numero del comprobante de la transferencia.", true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(checkoutTransferBank) ||
+            string.IsNullOrWhiteSpace(checkoutTransferOwnerDocument) ||
+            string.IsNullOrWhiteSpace(checkoutTransferOwnerName))
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Completa banco, cedula y nombre del titular antes de continuar.", true);
+            return;
+        }
+
+        if (pendingTransferProofBytes is null)
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "Debes subir la foto del comprobante de pago.", true);
+            return;
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+        var currentUser = await dbContext.tbl_usuarios.FirstOrDefaultAsync(x => x.id_usuario == currentUserId && x.activo == true);
+        if (currentUser is null)
+        {
+            ShowCheckoutAlert("No se pudo completar la compra.", "No se encontro el usuario autenticado.", true);
+            return;
+        }
+
+        var productIds = cart.Select(x => x.ProductId).Distinct().ToList();
+        var dbProducts = await dbContext.tbl_productos
+            .Where(x => productIds.Contains(x.id_producto) && x.activo == true)
+            .ToDictionaryAsync(x => x.id_producto);
+
+        foreach (var item in cart)
+        {
+            if (!dbProducts.TryGetValue(item.ProductId, out var product))
+            {
+                ShowCheckoutAlert("No se pudo completar la compra.", $"El producto '{item.Name}' ya no esta disponible.", true);
+                return;
+            }
+
+            if ((product.stock_actual ?? 0) < item.Quantity)
+            {
+                ShowCheckoutAlert("No se pudo completar la compra.", $"No hay stock suficiente para '{product.nombre_producto}'.", true);
+                return;
+            }
+        }
+
+        var transferTotal = cart.Sum(item => dbProducts[item.ProductId].precio_venta * item.Quantity);
+        var transferProofPath = await SaveTransferProofAsync();
+        var request = new tbl_cobro_transferencia
+        {
+            id_cta_cobrar = null,
+            id_comprobante = null,
+            id_usuario_solicita = currentUserId,
+            monto = transferTotal,
+            referencia = checkoutTransferVoucherNumber.Trim(),
+            banco_origen = checkoutTransferBank.Trim(),
+            cedula_titular = checkoutTransferOwnerDocument.Trim(),
+            nombre_titular = checkoutTransferOwnerName.Trim(),
+            ruta_comprobante = transferProofPath,
+            observaciones = NormalizeOptional($"Compra tienda online. {checkoutTransferNotes}".Trim()),
+            estado = "Pendiente",
+            fecha_solicitud = DateTime.Now
+        };
+        dbContext.tbl_cobro_transferencias.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        foreach (var item in cart)
+        {
+            var product = dbProducts[item.ProductId];
+            dbContext.tbl_cobro_transferencia_detalles.Add(new tbl_cobro_transferencia_detalle
+            {
+                id_cobro_transferencia = request.id_cobro_transferencia,
+                id_producto = product.id_producto,
+                cantidad = item.Quantity,
+                precio_unitario = product.precio_venta,
+                total_item = product.precio_venta * item.Quantity,
+                nombre_producto_snapshot = product.nombre_producto,
+                fecha_creacion = DateTime.Now
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        await NotificationService.NotifyTransferRequestedAsync(request.id_cobro_transferencia);
+
+        cart.Clear();
+        checkoutTransferVoucherNumber = string.Empty;
+        checkoutTransferBank = string.Empty;
+        checkoutTransferOwnerDocument = string.Empty;
+        checkoutTransferOwnerName = string.Empty;
+        checkoutTransferNotes = string.Empty;
+        pendingTransferProofBytes = null;
+        pendingTransferProofExtension = null;
+        transferProofPreview = null;
+        showCart = false;
+        await SaveCartAsync();
+
+        ShowCheckoutAlert("Compra enviada", "Recibimos tu comprobante. Puedes revisar el estado y retiro en Mis compras online.", false);
+    }
+
+    private async Task OnTransferProofSelected(InputFileChangeEventArgs args)
+    {
+        cartMessage = null;
+        var file = args.File;
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowCheckoutAlert("Comprobante no valido", "Sube una foto del comprobante en formato imagen.", true);
+            return;
+        }
+
+        if (file.Size > MaxTransferProofSize)
+        {
+            ShowCheckoutAlert("Comprobante no valido", "La foto del comprobante no debe superar 4 MB.", true);
+            return;
+        }
+
+        await using var stream = file.OpenReadStream(MaxTransferProofSize);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        pendingTransferProofBytes = memory.ToArray();
+        pendingTransferProofExtension = GetSafeImageExtension(file.Name, file.ContentType);
+        transferProofPreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(pendingTransferProofBytes)}";
+    }
+
+    private async Task<string> SaveTransferProofAsync()
+    {
+        var extension = pendingTransferProofExtension ?? ".jpg";
+        var fileName = $"transfer-proof-{currentUserId}-{DateTime.Now:yyyyMMddHHmmss}{extension}";
+        var folder = Path.Combine(WebHostEnvironment.WebRootPath, "images", "transfer-proofs");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllBytesAsync(Path.Combine(folder, fileName), pendingTransferProofBytes!);
+        return $"/images/transfer-proofs/{fileName}";
+    }
+
+    private async Task SaveCartAsync()
+    {
+        try
+        {
+            if (cart.Count == 0)
+            {
+                await JSRuntime.InvokeVoidAsync("localStorage.removeItem", CartStorageKey);
+                return;
+            }
+
+            var payload = JsonSerializer.Serialize(cart.Select(x => new StoredCartItem
+            {
+                ProductId = x.ProductId,
+                Quantity = x.Quantity
+            }));
+
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", CartStorageKey, payload);
+        }
+        catch
+        {
+            cartMessage = "No se pudo guardar el carrito en este navegador.";
+        }
+    }
+
+    private async Task RestoreCartAsync()
+    {
+        try
+        {
+            var payload = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", CartStorageKey);
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                return;
+            }
+
+            var storedItems = JsonSerializer.Deserialize<List<StoredCartItem>>(payload) ?? [];
+            cart.Clear();
+
+            foreach (var storedItem in storedItems)
+            {
+                var product = products.FirstOrDefault(x => x.ProductId == storedItem.ProductId && x.Stock > 0);
+                if (product is null)
+                {
+                    continue;
+                }
+
+                cart.Add(new CartItem
+                {
+                    ProductId = product.ProductId,
+                    Name = product.Name,
+                    Price = product.Price,
+                    Stock = product.Stock,
+                    Quantity = Math.Clamp(storedItem.Quantity, 1, product.Stock)
+                });
+            }
+
+            await SaveCartAsync();
+        }
+        catch
+        {
+            cartMessage = "No se pudo recuperar el carrito guardado.";
+        }
+    }
+
+    private void OpenStoreEditor()
+    {
+        if (!CanEditStorefront)
+        {
+            return;
+        }
+
+        storeEditor = storeSettings.Clone();
+        pendingHeroImageBytes = null;
+        pendingHeroImageExtension = null;
+        pendingHeroImagePreview = null;
+        showStoreEditor = true;
+    }
+
+    private void CloseStoreEditor()
+    {
+        showStoreEditor = false;
+        storeEditor = null;
+        pendingHeroImageBytes = null;
+        pendingHeroImageExtension = null;
+        pendingHeroImagePreview = null;
+    }
+
+    private async Task OnStoreHeroImageSelected(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Selecciona una imagen valida.";
+            return;
+        }
+
+        if (file.Size > MaxStoreImageSize)
+        {
+            errorMessage = "La imagen principal no debe superar 4 MB.";
+            return;
+        }
+
+        await using var stream = file.OpenReadStream(MaxStoreImageSize);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        pendingHeroImageBytes = memory.ToArray();
+        pendingHeroImageExtension = GetSafeImageExtension(file.Name, file.ContentType);
+        pendingHeroImagePreview = $"data:{file.ContentType};base64,{Convert.ToBase64String(pendingHeroImageBytes)}";
+    }
+
+    private async Task SaveStoreSettingsAsync()
+    {
+        if (!CanEditStorefront || storeEditor is null)
+        {
+            return;
+        }
+
+        if (pendingHeroImageBytes is not null)
+        {
+            storeEditor.HeroImage = await SaveStoreImageAsync();
+        }
+
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var settingsEntity = await dbContext.tbl_configuracion_opticas.OrderBy(x => x.id_configuracion).FirstOrDefaultAsync();
+        if (settingsEntity is null)
+        {
+            settingsEntity = new tbl_configuracion_optica();
+            dbContext.tbl_configuracion_opticas.Add(settingsEntity);
+        }
+
+        storeEditor.ApplyTo(settingsEntity);
+        await dbContext.SaveChangesAsync();
+        storeSettings = storeEditor.Clone();
+        CloseStoreEditor();
+    }
+
+    private async Task<string> SaveStoreImageAsync()
+    {
+        var extension = pendingHeroImageExtension ?? ".jpg";
+        var fileName = $"store-hero-{DateTime.Now:yyyyMMddHHmmss}{extension}";
+        var folder = Path.Combine(WebHostEnvironment.WebRootPath, "images", "store");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllBytesAsync(Path.Combine(folder, fileName), pendingHeroImageBytes!);
+        return $"/images/store/{fileName}";
+    }
+
+    private static string GetSafeImageExtension(string fileName, string contentType)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (extension is ".jpg" or ".jpeg" or ".png" or ".webp")
+        {
+            return extension;
+        }
+
+        return contentType.ToLowerInvariant() switch
+        {
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            _ => ".jpg"
+        };
+    }
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void ShowCheckoutAlert(string title, string message, bool isError)
+    {
+        checkoutAlertTitle = title;
+        checkoutAlertMessage = message;
+        checkoutAlertIsError = isError;
+        showCheckoutAlert = true;
+    }
+
+    private Task CloseCheckoutAlert()
+    {
+        showCheckoutAlert = false;
+        checkoutAlertTitle = string.Empty;
+        checkoutAlertMessage = string.Empty;
+        checkoutAlertIsError = false;
+        return Task.CompletedTask;
+    }
+
     private sealed class StoreProductRow
     {
+        public int ProductId { get; set; }
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int Stock { get; set; }
         public string TaxLabel { get; set; } = "No";
         public string SearchBlob { get; set; } = string.Empty;
-        public string StockLabel => Stock <= 0 ? "Agotado" : Stock <= 5 ? "Stock bajo" : "Disponible";
+        public string StockLabel => Stock <= 0 ? "Producto agotado" : "Producto disponible";
         public string StockClass => Stock <= 0 ? "stock-out" : Stock <= 5 ? "stock-low" : "stock-ok";
+    }
+
+    private sealed class CartItem
+    {
+        public int ProductId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public int Stock { get; set; }
+        public int Quantity { get; set; }
+    }
+
+    private sealed class StoredCartItem
+    {
+        public int ProductId { get; set; }
+        public int Quantity { get; set; }
+    }
+
+    private sealed record CategorySummary(string Name, int Count, string ImageUrl);
+
+    private sealed class StorefrontSettings
+    {
+        public string BrandName { get; set; } = "Optica Lux";
+        public string BannerText { get; set; } = "Compra tus lentes, monturas y accesorios con atencion personalizada.";
+        public string HeroTitle { get; set; } = "Lentes que se ven bien y se sienten mejor";
+        public string HeroSubtitle { get; set; } = "Explora productos seleccionados para cuidar tu vision con estilo, comodidad y disponibilidad real.";
+        public string HeroButton { get; set; } = "Comprar ahora";
+        public string HeroImage { get; set; } = string.Empty;
+        public string FeatureTitle { get; set; } = "Productos basicos";
+        public string FeatureSubtitle { get; set; } = "Entra rapido a las categorias principales del catalogo.";
+
+        public static StorefrontSettings Default() => new();
+
+        public static StorefrontSettings FromEntity(tbl_configuracion_optica? entity)
+        {
+            var settings = Default();
+            if (entity is null)
+            {
+                return settings;
+            }
+
+            settings.BrandName = string.IsNullOrWhiteSpace(entity.nombre_comercial) ? settings.BrandName : entity.nombre_comercial!;
+            settings.BannerText = string.IsNullOrWhiteSpace(entity.tienda_banner_texto) ? settings.BannerText : entity.tienda_banner_texto!;
+            settings.HeroTitle = string.IsNullOrWhiteSpace(entity.tienda_hero_titulo) ? settings.HeroTitle : entity.tienda_hero_titulo!;
+            settings.HeroSubtitle = string.IsNullOrWhiteSpace(entity.tienda_hero_subtitulo) ? settings.HeroSubtitle : entity.tienda_hero_subtitulo!;
+            settings.HeroButton = string.IsNullOrWhiteSpace(entity.tienda_hero_boton) ? settings.HeroButton : entity.tienda_hero_boton!;
+            settings.HeroImage = string.IsNullOrWhiteSpace(entity.tienda_hero_imagen) ? string.Empty : entity.tienda_hero_imagen!;
+            settings.FeatureTitle = string.IsNullOrWhiteSpace(entity.tienda_basicos_titulo) ? settings.FeatureTitle : entity.tienda_basicos_titulo!;
+            settings.FeatureSubtitle = string.IsNullOrWhiteSpace(entity.tienda_basicos_subtitulo) ? settings.FeatureSubtitle : entity.tienda_basicos_subtitulo!;
+            return settings;
+        }
+
+        public StorefrontSettings Clone() => new()
+        {
+            BrandName = BrandName,
+            BannerText = BannerText,
+            HeroTitle = HeroTitle,
+            HeroSubtitle = HeroSubtitle,
+            HeroButton = HeroButton,
+            HeroImage = HeroImage,
+            FeatureTitle = FeatureTitle,
+            FeatureSubtitle = FeatureSubtitle
+        };
+
+        public void ApplyTo(tbl_configuracion_optica entity)
+        {
+            entity.tienda_banner_texto = NormalizeOptional(BannerText);
+            entity.tienda_hero_titulo = NormalizeOptional(HeroTitle);
+            entity.tienda_hero_subtitulo = NormalizeOptional(HeroSubtitle);
+            entity.tienda_hero_boton = NormalizeOptional(HeroButton);
+            entity.tienda_hero_imagen = NormalizeOptional(HeroImage);
+            entity.tienda_basicos_titulo = NormalizeOptional(FeatureTitle);
+            entity.tienda_basicos_subtitulo = NormalizeOptional(FeatureSubtitle);
+        }
+
+        private static string? NormalizeOptional(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
     }
 }

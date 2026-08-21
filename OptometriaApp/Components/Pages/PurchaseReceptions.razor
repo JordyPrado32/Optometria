@@ -122,14 +122,15 @@ else
         <div class="custom-modal-card">
             <header class="custom-modal-header rose-header"><h2>@(isCreating ? "Nueva recepcion" : "Editar recepcion")</h2><button class="btn-close-modal" @onclick="CloseForm">×</button></header>
             <div class="custom-modal-body">
+                <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
-                    <div><label class="form-label">Numero recepcion</label><input class="form-control" @bind="editor.NumeroRecepcion" /></div>
+                    <div><label class="form-label">Numero recepcion <span class="field-required">*</span></label><input class="form-control" @bind="editor.NumeroRecepcion" /></div>
                     <div>
                         <label class="form-label">Buscar orden</label>
                         <input class="form-control" @bind="orderSearchTerm" @bind:event="oninput" placeholder="Escribe el numero de orden" />
                     </div>
                     <div>
-                        <label class="form-label">Orden compra</label>
+                        <label class="form-label">Orden compra <span class="field-required">*</span></label>
                         <select class="form-select" @bind="editor.IdOrdenCompra">
                             <option value="0">Selecciona</option>
                             @foreach (var order in FilteredAvailableOrders)
@@ -139,15 +140,15 @@ else
                         </select>
                     </div>
                     <div><label class="form-label">Guia remision</label><input class="form-control" @bind="editor.NumeroGuiaRemision" /></div>
-                    <div><label class="form-label">Estado</label><select class="form-select" @bind="editor.EstadoRecepcion">@foreach (var option in stateOptions){<option value="@option">@option</option>}</select></div>
-                    <div><label class="form-label">Clasificacion</label><select class="form-select" @bind="editor.ClasificacionRecepcion">@foreach (var option in classificationOptions){<option value="@option">@option</option>}</select></div>
+                    <div><label class="form-label">Estado <span class="field-required">*</span></label><select class="form-select" @bind="editor.EstadoRecepcion">@foreach (var option in stateOptions){<option value="@option">@option</option>}</select></div>
+                    <div><label class="form-label">Clasificacion <span class="field-required">*</span></label><select class="form-select" @bind="editor.ClasificacionRecepcion">@foreach (var option in classificationOptions){<option value="@option">@option</option>}</select></div>
                     <div class="patient-form-span"><label class="form-label">Observaciones</label><textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea></div>
                 </div>
                 <div class="management-card" style="margin-top:1rem; padding:1rem;">
                     <div class="management-card-header"><h2>Tabla de verificacion</h2><span>Debe aprobarse antes de inventariar</span></div>
                     <div class="management-form-grid" style="margin-top:1rem;">
                         <div>
-                            <label class="form-label">Checklist aprobado</label>
+                            <label class="form-label">Checklist aprobado <span class="field-required">*</span></label>
                             <div class="form-check form-switch" style="margin-top:0.45rem;">
                                 <input class="form-check-input" type="checkbox" @bind="editor.ChecklistAprobado" />
                             </div>
@@ -164,10 +165,11 @@ else
     </div>
 }
 
-@if (showAlert)
-{
-    <div class="custom-modal-overlay"><div class="custom-modal-card alert-modal-card"><header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")"><h2>@(alertIsError ? "Error" : "Ok")</h2></header><div class="custom-modal-body"><p>@alertMessage</p></div><footer class="custom-modal-footer" style="justify-content:center;"><button class="btn btn-primary" @onclick="() => showAlert = false">Aceptar</button></footer></div></div>
-}
+<StatusModal Visible="@showAlert"
+             IsError="@alertIsError"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             OnClose="CloseAlert" />
 
 @code {
     private readonly List<tbl_recepcion_compra> recepciones = [];
@@ -178,7 +180,7 @@ else
     private ReceptionEditor? editor;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError;
     private int currentUserId, currentRoleId;
-    private string alertMessage = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
+    private string alertMessage = string.Empty, alertTitle = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
 
     private List<tbl_recepcion_compra> FilteredReceptions => recepciones.Where(MatchesFilters).ToList();
     private const int TablePageSize = 5;
@@ -238,19 +240,19 @@ else
     {
         if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroRecepcion) || editor.IdOrdenCompra <= 0)
         {
-            ShowAlert("Completa los datos obligatorios.", true);
+            ShowAlert("No se pudo guardar la recepcion.", "Completa numero de recepcion, orden de compra, estado y clasificacion.", true);
             return;
         }
 
         if (isCreating && !editor.ChecklistAprobado)
         {
-            ShowAlert("Debes aprobar la tabla de verificacion antes de actualizar inventario.", true);
+            ShowAlert("No se pudo guardar la recepcion.", "Debes aprobar la tabla de verificacion antes de actualizar inventario.", true);
             return;
         }
 
         await using var db = await DbContextFactory.CreateDbContextAsync();
         var duplicate = await db.tbl_recepcion_compra.AnyAsync(x => x.id_recepcion != editor.Id && x.numero_recepcion == editor.NumeroRecepcion);
-        if (duplicate) { ShowAlert("El numero de recepcion ya existe.", true); return; }
+        if (duplicate) { ShowAlert("No se pudo guardar la recepcion.", "Ya existe una recepcion con ese numero.", true); return; }
 
         tbl_recepcion_compra entity;
         List<int>? affectedProductIds = null;
@@ -283,7 +285,7 @@ else
                 .ToList();
             if (invalidLines.Count > 0)
             {
-                ShowAlert("La recepcion contiene servicios y no puede afectar inventario. Corrige la orden de compra primero.", true);
+                ShowAlert("No se pudo guardar la recepcion.", "La recepcion contiene servicios y no puede afectar inventario. Corrige la orden de compra primero.", true);
                 return;
             }
             affectedProductIds = order.tbl_detalle_orden_compra.Select(x => x.id_producto).Distinct().ToList();
@@ -309,7 +311,7 @@ else
                     .FirstOrDefaultAsync(x => x.id_producto == line.id_producto);
                 if (product is null)
                 {
-                    ShowAlert("Se encontro un item no inventariable en la recepcion. El proceso fue cancelado para proteger el stock.", true);
+                    ShowAlert("No se pudo guardar la recepcion.", "Se encontro un item no inventariable en la recepcion. El proceso fue cancelado para proteger el stock.", true);
                     return;
                 }
                 var previousStock = product.stock_actual ?? 0;
@@ -396,7 +398,12 @@ else
             await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Recepcion de compra");
         }
         CloseForm();
-        ShowAlert("Recepcion guardada.", false);
+        ShowAlert(
+            isCreating ? "Recepcion creada" : "Recepcion actualizada",
+            isCreating
+                ? $"La recepcion {entity.numero_recepcion} se registro correctamente."
+                : $"La recepcion {entity.numero_recepcion} se actualizo correctamente.",
+            false);
         await LoadAsync();
     }
 
@@ -411,14 +418,14 @@ else
 
         if (hasInventoryImpact)
         {
-            ShowAlert("Esta recepcion ya afecto inventario. Para conservar consistencia no se puede eliminar.", true);
+            ShowAlert("No se pudo eliminar la recepcion.", "Esta recepcion ya afecto inventario. Para conservar la consistencia no se puede eliminar.", true);
             return;
         }
 
         WriteAudit(db, "Eliminar recepcion compra", $"RecepcionCompraId={entity.id_recepcion}; Numero={entity.numero_recepcion}; OrdenCompraId={entity.id_orden_compra}");
         db.tbl_recepcion_compra.Remove(entity);
         await db.SaveChangesAsync();
-        ShowAlert("Recepcion eliminada.", false);
+        ShowAlert("Recepcion eliminada", $"La recepcion {entity.numero_recepcion} se elimino correctamente.", false);
         await LoadAsync();
     }
 
@@ -495,7 +502,20 @@ else
         return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
     }
     private void WriteAudit(OpticaDbContext db, string action, string detail) => db.tbl_log_auditoria.Add(new tbl_log_auditoria { id_usuario = currentUserId > 0 ? currentUserId : null, accion = action, modulo = "RecepcionesCompra", fecha = DateTime.Now, detalle = detail });
-    private void ShowAlert(string message, bool isError) { alertMessage = message; alertIsError = isError; showAlert = true; }
+    private void ShowAlert(string title, string message, bool isError)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertIsError = isError;
+        showAlert = true;
+    }
+
+    private void CloseAlert()
+    {
+        showAlert = false;
+        alertTitle = string.Empty;
+        alertMessage = string.Empty;
+    }
     private void CloseForm() { showForm = false; editor = null; orderSearchTerm = string.Empty; }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private sealed class Permissions { public bool CanView { get; set; } public bool CanCreate { get; set; } public bool CanEdit { get; set; } public bool CanDelete { get; set; } }

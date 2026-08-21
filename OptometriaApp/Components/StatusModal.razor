@@ -1,0 +1,54 @@
+@if (Visible)
+{
+    <div class="custom-modal-overlay" @onclick="HandleClose">
+        <div class="custom-modal-card alert-modal-card status-modal-card" @onclick:stopPropagation="true">
+            <header class="custom-modal-header @(IsError ? "error-header" : "success-header")">
+                <div class="status-modal-header-copy">
+                    <span class="status-modal-badge">@(IsError ? "Atencion" : "Confirmacion")</span>
+                    <h2>@Heading</h2>
+                </div>
+            </header>
+            <div class="custom-modal-body status-modal-body">
+                <div class="status-modal-icon @(IsError ? "status-modal-icon--error" : "status-modal-icon--success")" aria-hidden="true">
+                    <span class="status-modal-glyph @(IsError ? "status-modal-glyph--error" : "status-modal-glyph--success")"></span>
+                </div>
+                <p class="status-modal-message">@Message</p>
+            </div>
+            <footer class="custom-modal-footer status-modal-footer">
+                @if (!string.IsNullOrWhiteSpace(ActionText) && OnAction.HasDelegate)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="HandleAction">
+                        @if (!string.IsNullOrWhiteSpace(ActionIconClass))
+                        {
+                            <i class="@ActionIconClass" style="margin-right: 6px;"></i>
+                        }
+                        @ActionText
+                    </button>
+                }
+                <button type="button" class="btn @(IsError ? "btn-primary" : "btn-outline-primary")" @onclick="HandleClose">@CloseText</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public bool IsError { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public string CloseText { get; set; } = "Aceptar";
+    [Parameter] public string? ActionText { get; set; }
+    [Parameter] public string? ActionIconClass { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnAction { get; set; }
+
+    private string Heading => string.IsNullOrWhiteSpace(Title)
+        ? (IsError ? "No se pudo completar la accion" : "Operacion completada")
+        : Title;
+
+    private Task HandleClose()
+        => OnClose.HasDelegate ? OnClose.InvokeAsync() : Task.CompletedTask;
+
+    private Task HandleAction()
+        => OnAction.HasDelegate ? OnAction.InvokeAsync() : Task.CompletedTask;
+}

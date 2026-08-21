@@ -29,6 +29,7 @@ public partial class OpticaDbContext
     {
         ConfigureSecurityEntities(modelBuilder);
         ConfigureNavigationEntities(modelBuilder);
+        ConfigureNotificationEntities(modelBuilder);
         ConfigureElectronicBillingEntities(modelBuilder);
         ConfigureProcurementEntities(modelBuilder);
         ConfigureAppointmentEntities(modelBuilder);
@@ -419,7 +420,11 @@ public partial class OpticaDbContext
         modelBuilder.Entity<tbl_kardex>(entity =>
         {
             entity.HasKey(e => e.id_kardex).HasName("PK_tbl_kardex");
-            entity.ToTable("tbl_kardex");
+            entity.ToTable("tbl_kardex", tableBuilder =>
+            {
+                tableBuilder.HasTrigger("TR_tbl_kardex");
+                tableBuilder.UseSqlOutputClause(false);
+            });
             entity.HasIndex(e => e.id_producto, "IX_kardex_producto");
             entity.HasIndex(e => e.fecha_movimiento, "IX_kardex_fecha");
             entity.HasIndex(e => e.tipo_movimiento, "IX_kardex_tipo");

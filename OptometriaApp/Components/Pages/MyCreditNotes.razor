@@ -27,7 +27,7 @@
     }
 
     .credit-grid {
-        grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr);
+        grid-template-columns: 1fr;
     }
 
     .credit-summary-grid,
@@ -172,6 +172,11 @@
         color: var(--color-ink);
     }
 
+    .credit-detail-modal {
+        width: min(1100px, calc(100vw - 2rem));
+        max-width: 1100px;
+    }
+
     @@media print {
         .workspace-actions,
         .app-nav-shell,
@@ -237,88 +242,6 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        @if (selectedCreditNoteDetail is not null)
-        {
-            <section class="management-card" style="margin-bottom: 1rem;">
-                <div class="workspace-actions" style="margin-bottom: 1rem;">
-                    <button type="button" class="btn btn-outline-primary" onclick="window.print()">Imprimir</button>
-                    <a class="btn btn-outline-primary" href="@BuildInvoiceManagementUrl(selectedCreditNoteDetail.ComprobanteId)">Volver a la factura</a>
-                    <a class="btn btn-outline-primary" href="/my-credit-notes">Ver todas</a>
-                </div>
-
-                <div class="credit-card">
-                    <div class="management-card-header">
-                        <h2>Nota de credito #@selectedCreditNoteDetail.NoteNumber</h2>
-                        <span>@selectedCreditNoteDetail.IssueDateLabel</span>
-                    </div>
-
-                    <div class="credit-summary-grid" style="margin-top: 1rem;">
-                        <div class="credit-card credit-kpi">
-                            <div class="credit-label">Factura origen</div>
-                            <strong style="font-size: 1rem;">@selectedCreditNoteDetail.InvoiceNumber</strong>
-                            <span>@selectedCreditNoteDetail.InvoiceState</span>
-                        </div>
-                        <div class="credit-card credit-kpi">
-                            <div class="credit-label">Cliente</div>
-                            <strong style="font-size: 1rem;">@selectedCreditNoteDetail.ClientName</strong>
-                            <span>@selectedCreditNoteDetail.PatientName</span>
-                        </div>
-                        <div class="credit-card credit-kpi">
-                            <div class="credit-label">Tipo</div>
-                            <strong>@selectedCreditNoteDetail.NoteType</strong>
-                            <span>@selectedCreditNoteDetail.State | vence @selectedCreditNoteDetail.ExpirationDateLabel</span>
-                        </div>
-                        <div class="credit-card credit-kpi">
-                            <div class="credit-label">Total</div>
-                            <strong>@selectedCreditNoteDetail.TotalAmount.ToString("0.00")</strong>
-                            <span>Disponible @selectedCreditNoteDetail.AvailableBalance.ToString("0.00") | Subtotal @selectedCreditNoteDetail.SubtotalAmount.ToString("0.00") | Impuesto @selectedCreditNoteDetail.TaxAmount.ToString("0.00")</span>
-                        </div>
-                    </div>
-
-                    <div class="credit-label" style="margin-top: 1rem;">Motivo</div>
-                    <p style="margin: 0;">@selectedCreditNoteDetail.Reason</p>
-
-                    <div class="credit-label" style="margin-top: 1rem;">Detalle acreditado</div>
-                    @if (selectedCreditNoteDetail.Details.Count == 0)
-                    {
-                        <p style="margin: 0;">Esta nota no tiene detalle por item registrado.</p>
-                    }
-                    else
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-hover" style="margin-bottom: 0;">
-                                <thead>
-                                    <tr>
-                                        <th>Codigo</th>
-                                        <th>Concepto</th>
-                                        <th>IVA</th>
-                                        <th>Cantidad</th>
-                                        <th>Subtotal</th>
-                                        <th>Impuesto</th>
-                                        <th>Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var item in selectedCreditNoteDetail.Details)
-                                    {
-                                        <tr>
-                                            <td>@item.ProductCode</td>
-                                            <td>@item.Concept</td>
-                                            <td>@item.TaxLabel</td>
-                                            <td>@item.QuantityLabel</td>
-                                            <td>@item.Subtotal.ToString("0.00")</td>
-                                            <td>@item.Tax.ToString("0.00")</td>
-                                            <td>@item.Total.ToString("0.00")</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </div>
-            </section>
-        }
-
         <section class="management-card" style="margin-bottom: 1rem;">
             <div class="management-card-header">
                 <h2>Notas de credito emitidas</h2>
@@ -359,7 +282,7 @@ else
                                     <td>@item.AvailableBalance.ToString("0.00")</td>
                                     <td>@item.State</td>
                                     <td style="text-align:right;">
-                                        <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@BuildCreditNoteDetailUrl(item.CreditNoteId, item.ComprobanteId)">Detalle</a>
+                                        <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => OpenCreditNoteDetailAsync(item.CreditNoteId, item.ComprobanteId)">Ver detalle</button>
                                     </td>
                                 </tr>
                             }
@@ -647,7 +570,7 @@ else
                                                 <td>@note.State</td>
                                                 <td>@note.Reason</td>
                                                 <td style="text-align:right;">
-                                                    <a class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" href="@BuildCreditNoteDetailUrl(note.CreditNoteId, selectedIssuedInvoice.ComprobanteId)">Detalle</a>
+                                                    <button type="button" class="btn btn-outline-primary" style="padding:0.3rem 0.8rem !important;" @onclick="() => OpenCreditNoteDetailAsync(note.CreditNoteId, selectedIssuedInvoice.ComprobanteId)">Ver detalle</button>
                                                 </td>
                                             </tr>
                                         }
@@ -661,6 +584,91 @@ else
             </div>
         </section>
     </section>
+}
+
+@if (showCreditNoteDetailModal && selectedCreditNoteDetail is not null)
+{
+    <div class="custom-modal-overlay" @onclick="CloseCreditNoteDetailModal">
+        <div class="custom-modal-card credit-detail-modal" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2>Nota de credito #@selectedCreditNoteDetail.NoteNumber</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseCreditNoteDetailModal">×</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="workspace-actions" style="margin-bottom: 1rem;">
+                    <button type="button" class="btn btn-outline-primary" onclick="window.print()">Imprimir</button>
+                    <a class="btn btn-outline-primary" href="@BuildInvoiceManagementUrl(selectedCreditNoteDetail.ComprobanteId)">Volver a la factura</a>
+                </div>
+
+                <div class="credit-summary-grid">
+                    <div class="credit-card credit-kpi">
+                        <div class="credit-label">Factura origen</div>
+                        <strong style="font-size: 1rem;">@selectedCreditNoteDetail.InvoiceNumber</strong>
+                        <span>@selectedCreditNoteDetail.InvoiceState</span>
+                    </div>
+                    <div class="credit-card credit-kpi">
+                        <div class="credit-label">Cliente</div>
+                        <strong style="font-size: 1rem;">@selectedCreditNoteDetail.ClientName</strong>
+                        <span>@selectedCreditNoteDetail.PatientName</span>
+                    </div>
+                    <div class="credit-card credit-kpi">
+                        <div class="credit-label">Tipo</div>
+                        <strong>@selectedCreditNoteDetail.NoteType</strong>
+                        <span>@selectedCreditNoteDetail.State | vence @selectedCreditNoteDetail.ExpirationDateLabel</span>
+                    </div>
+                    <div class="credit-card credit-kpi">
+                        <div class="credit-label">Total</div>
+                        <strong>@selectedCreditNoteDetail.TotalAmount.ToString("0.00")</strong>
+                        <span>Disponible @selectedCreditNoteDetail.AvailableBalance.ToString("0.00") | Subtotal @selectedCreditNoteDetail.SubtotalAmount.ToString("0.00") | Impuesto @selectedCreditNoteDetail.TaxAmount.ToString("0.00")</span>
+                    </div>
+                </div>
+
+                <div class="credit-label" style="margin-top: 1rem;">Motivo</div>
+                <p style="margin: 0;">@selectedCreditNoteDetail.Reason</p>
+
+                <div class="credit-label" style="margin-top: 1rem;">Detalle acreditado</div>
+                @if (selectedCreditNoteDetail.Details.Count == 0)
+                {
+                    <p style="margin: 0;">Esta nota no tiene detalle por item registrado.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover" style="margin-bottom: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Codigo</th>
+                                    <th>Concepto</th>
+                                    <th>IVA</th>
+                                    <th>Cantidad</th>
+                                    <th>Subtotal</th>
+                                    <th>Impuesto</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in selectedCreditNoteDetail.Details)
+                                {
+                                    <tr>
+                                        <td>@item.ProductCode</td>
+                                        <td>@item.Concept</td>
+                                        <td>@item.TaxLabel</td>
+                                        <td>@item.QuantityLabel</td>
+                                        <td>@item.Subtotal.ToString("0.00")</td>
+                                        <td>@item.Tax.ToString("0.00")</td>
+                                        <td>@item.Total.ToString("0.00")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseCreditNoteDetailModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
 }
 
 @code {
@@ -687,6 +695,7 @@ else
     private ModulePermissions permissions = new();
     private IssuedInvoiceRow? selectedIssuedInvoice;
     private CreditNoteDetailView? selectedCreditNoteDetail;
+    private bool showCreditNoteDetailModal;
     private EmisorEntity? currentIssuer;
     private CreditNoteDraftSummary draftSummary = new();
     private bool isLoading = true;
@@ -761,10 +770,12 @@ else
         if (CreditNoteId.HasValue)
         {
             await LoadCreditNoteDetailAsync(dbContext, CreditNoteId.Value);
+            showCreditNoteDetailModal = selectedCreditNoteDetail is not null;
         }
         else
         {
             selectedCreditNoteDetail = null;
+            showCreditNoteDetailModal = false;
         }
 
         isLoading = false;
@@ -1107,6 +1118,29 @@ else
             InvoiceState = ResolveInvoiceCreditState(header.CurrentInvoiceTotal, totalCredited),
             Details = detailRows
         };
+    }
+
+    private async Task OpenCreditNoteDetailAsync(int creditNoteId, int? comprobanteId = null)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await LoadCreditNoteDetailAsync(dbContext, creditNoteId);
+
+        if (comprobanteId.HasValue && issuedInvoices.Any(x => x.ComprobanteId == comprobanteId.Value))
+        {
+            selectedIssuedInvoice = issuedInvoices.FirstOrDefault(x => x.ComprobanteId == comprobanteId.Value);
+        }
+
+        showCreditNoteDetailModal = selectedCreditNoteDetail is not null;
+    }
+
+    private void CloseCreditNoteDetailModal()
+    {
+        showCreditNoteDetailModal = false;
+
+        if (CreditNoteId.HasValue)
+        {
+            NavigationManager.NavigateTo(BuildInvoiceManagementUrl(selectedCreditNoteDetail?.ComprobanteId ?? InvoiceQuery ?? 0), forceLoad: false);
+        }
     }
 
     private async Task<int?> ResolveInvoiceIdByCreditNoteAsync(OpticaDbContext dbContext, int creditNoteId)

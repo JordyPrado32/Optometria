@@ -1,0 +1,445 @@
+@page "/cobros-transferencia"
+@page "/gestion-tienda-online"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject KardexService KardexService
+@inject NotificationService NotificationService
+
+<PageTitle>Gestion tienda online</PageTitle>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando gestion tienda online...</h1></div></section>
+}
+else if (!canViewModule)
+{
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para ver este modulo.</p></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Aprobaciones</span>
+                <h1>Gestion tienda online</h1>
+                <p>Aprueba o rechaza compras online, define el retiro y registra la salida de inventario.</p>
+            </div>
+        </div>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Solicitudes pendientes</h2>
+                <span>@pendingRequests.Count pendientes</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top:1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Origen</th>
+                            <th>Solicitante</th>
+                            <th>Comprobante</th>
+                            <th>Banco</th>
+                            <th>Titular</th>
+                            <th>Monto</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (pendingRequests.Count == 0)
+                        {
+                            <tr><td colspan="8" style="text-align:center;">No hay transferencias pendientes.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in pendingRequests)
+                            {
+                                <tr>
+                                    <td>@item.fecha_solicitud.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>
+                                        <div style="display:grid; gap:0.15rem;">
+                                            <strong>@FormatTransferSource(item)</strong>
+                                            <small style="color:var(--color-taupe);">@FormatRequestItems(item)</small>
+                                        </div>
+                                    </td>
+                                    <td>@($"{item.id_usuario_solicitaNavigation.nombres} {item.id_usuario_solicitaNavigation.apellidos}".Trim())</td>
+                                    <td>
+                                        <div style="display:grid; gap:0.2rem;">
+                                            <strong>@item.referencia</strong>
+                                            @if (!string.IsNullOrWhiteSpace(item.ruta_comprobante))
+                                            {
+                                                <button type="button" class="btn btn-outline-primary btn-sm" style="padding:0.22rem 0.5rem !important; font-size:0.72rem !important; line-height:1.1;" @onclick="() => OpenProofModal(item)">
+                                                    <i class="bi bi-image-fill" style="font-size:0.72rem; margin-right:0.22rem;"></i> Comprobante
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(item.banco_origen) ? "-" : item.banco_origen)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(item.nombre_titular) ? "-" : $"{item.nombre_titular} ({item.cedula_titular ?? "Sin cedula"})")</td>
+                                    <td>@item.monto.ToString("0.00")</td>
+                                    <td>
+                                        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                                            <select class="form-select" style="width:8.5rem; min-height:2.4rem; padding:0.45rem 0.75rem;" @bind="readyHoursByRequest[item.id_cobro_transferencia]">
+                                                <option value="1">Listo en 1 h</option>
+                                                <option value="2">Listo en 2 h</option>
+                                                <option value="4">Listo en 4 h</option>
+                                                <option value="24">Listo en 24 h</option>
+                                                <option value="48">Listo en 48 h</option>
+                                            </select>
+                                            <button type="button" class="btn btn-primary" @onclick="() => ResolveAsync(item.id_cobro_transferencia, true)">Aprobar</button>
+                                            <button type="button" class="btn btn-outline-primary" @onclick="() => ResolveAsync(item.id_cobro_transferencia, false)">Rechazar</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="management-card" style="margin-top:1.5rem;">
+            <div class="management-card-header">
+                <h2>Historial</h2>
+                <span>@resolvedRequests.Count resueltas</span>
+            </div>
+
+            <div class="table-responsive" style="margin-top:1rem;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Origen</th>
+                            <th>Estado</th>
+                            <th>Monto</th>
+                            <th>Resolucion</th>
+                            <th>Retiro</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (resolvedRequests.Count == 0)
+                        {
+                            <tr><td colspan="6" style="text-align:center;">Aun no hay solicitudes resueltas.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in resolvedRequests)
+                            {
+                                <tr>
+                                    <td>@item.fecha_solicitud.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@FormatTransferSource(item)</td>
+                                    <td>@item.estado</td>
+                                    <td>@item.monto.ToString("0.00")</td>
+                                    <td>@(item.fecha_resolucion?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                                    <td>@(item.fecha_retiro_estimada?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+}
+
+<StatusModal Visible="@showAlert"
+             IsError="@alertIsError"
+             Title="@alertTitle"
+             Message="@alertMessage"
+             OnClose="CloseAlert" />
+
+@if (showProofModal)
+{
+    <div class="custom-modal-overlay" @onclick="CloseProofModal">
+        <div class="custom-modal-card" style="max-width:760px;" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2>Comprobante de transferencia</h2>
+                <button type="button" class="btn-close-modal" @onclick="CloseProofModal">x</button>
+            </header>
+            <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(selectedProofUrl))
+                {
+                    <img src="@selectedProofUrl" alt="Comprobante de transferencia" style="width:100%; max-height:70vh; object-fit:contain; border-radius:1rem; background:#fffaf4;" />
+                }
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseProofModal">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<tbl_cobro_transferencia> pendingRequests = [];
+    private readonly List<tbl_cobro_transferencia> resolvedRequests = [];
+    private bool isLoading = true;
+    private bool canViewModule;
+    private int currentUserId;
+    private int currentRoleId;
+    private bool showAlert;
+    private bool alertIsError;
+    private string alertTitle = string.Empty;
+    private string alertMessage = string.Empty;
+    private bool showProofModal;
+    private string selectedProofUrl = string.Empty;
+    private readonly Dictionary<int, int> readyHoursByRequest = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        currentUserId = int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(user.FindFirstValue("RoleId"), out var parsedRoleId) ? parsedRoleId : 0;
+        canViewModule = await HasModuleAccessAsync(dbContext, currentRoleId);
+
+        if (canViewModule)
+        {
+            var rows = await dbContext.tbl_cobro_transferencias
+                .AsNoTracking()
+                .Include(x => x.id_usuario_solicitaNavigation)
+                .Include(x => x.id_comprobanteNavigation)
+                .Include(x => x.tbl_cobro_transferencia_detalles)
+                .ThenInclude(x => x.id_productoNavigation)
+                .OrderByDescending(x => x.fecha_solicitud)
+                .Take(100)
+                .ToListAsync();
+
+            pendingRequests.Clear();
+            pendingRequests.AddRange(rows.Where(x => string.Equals(x.estado, "Pendiente", StringComparison.OrdinalIgnoreCase)));
+            foreach (var request in pendingRequests)
+            {
+                readyHoursByRequest.TryAdd(request.id_cobro_transferencia, 24);
+            }
+
+            resolvedRequests.Clear();
+            resolvedRequests.AddRange(rows.Where(x => !string.Equals(x.estado, "Pendiente", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        isLoading = false;
+    }
+
+    private async Task ResolveAsync(int requestId, bool approve)
+    {
+        var affectedProductIds = new HashSet<int>();
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+
+        try
+        {
+            var request = await dbContext.tbl_cobro_transferencias
+                .Include(x => x.tbl_cobro_transferencia_detalles)
+                .FirstOrDefaultAsync(x => x.id_cobro_transferencia == requestId);
+            if (request is null || !string.Equals(request.estado, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowAlert("No se pudo actualizar la transferencia.", "La solicitud ya no esta disponible.", true);
+                return;
+            }
+
+            if (approve)
+            {
+                var transferLines = await BuildInventoryLinesAsync(dbContext, request);
+                if (transferLines.Count == 0)
+                {
+                    ShowAlert("No se pudo aprobar la transferencia.", "La transferencia no tiene productos para descontar del inventario.", true);
+                    return;
+                }
+
+                var productIds = transferLines.Select(x => x.ProductId).Distinct().ToList();
+                var products = await dbContext.tbl_productos
+                    .Where(x => productIds.Contains(x.id_producto))
+                    .ToDictionaryAsync(x => x.id_producto);
+
+                foreach (var line in transferLines)
+                {
+                    if (!products.TryGetValue(line.ProductId, out var product))
+                    {
+                        ShowAlert("No se pudo aprobar la transferencia.", "Uno de los productos de la compra ya no existe.", true);
+                        return;
+                    }
+
+                    var previousStock = product.stock_actual ?? 0;
+                    var newStock = previousStock - line.Quantity;
+                    if (newStock < 0)
+                    {
+                        ShowAlert("No se pudo aprobar la transferencia.", $"No hay stock suficiente para '{product.nombre_producto}'.", true);
+                        return;
+                    }
+
+                    product.stock_actual = newStock;
+                    product.estado_producto = newStock <= 0 ? "Agotado" : "Disponible";
+                    affectedProductIds.Add(product.id_producto);
+
+                    dbContext.tbl_movimiento_inventarios.Add(new tbl_movimiento_inventario
+                    {
+                        id_producto = product.id_producto,
+                        id_usuario = currentUserId,
+                        fecha_movimiento = DateTime.Now,
+                        tipo_movimiento = "Salida",
+                        cantidad = line.Quantity,
+                        stock_anterior = previousStock,
+                        stock_resultante = newStock,
+                        id_referencia_documento = request.id_cobro_transferencia,
+                        tipo_documento_referencia = "TransferenciaOnline",
+                        observaciones = $"Salida de inventario por transferencia online {request.referencia}.",
+                        metodo_valuacion = "Promedio"
+                    });
+                }
+
+                request.estado = "Aprobada";
+                var readyHours = readyHoursByRequest.TryGetValue(request.id_cobro_transferencia, out var selectedHours) ? selectedHours : 24;
+                request.fecha_retiro_estimada = DateTime.Now.AddHours(Math.Max(1, readyHours));
+                request.mensaje_retiro = $"Tu compra estara lista para retirar en tienda fisica desde {request.fecha_retiro_estimada.Value:dd/MM/yyyy HH:mm}.";
+                await dbContext.SaveChangesAsync();
+            }
+            else
+            {
+                request.estado = "Rechazada";
+            }
+
+            request.id_usuario_aprueba = currentUserId;
+            request.fecha_resolucion = DateTime.Now;
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            if (approve && affectedProductIds.Count > 0)
+            {
+                await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Salida tienda online");
+            }
+
+            await NotificationService.NotifyTransferApprovedAsync(request.id_cobro_transferencia, approve);
+
+            ShowAlert(
+                approve ? "Compra online aprobada" : "Compra online rechazada",
+                approve ? "La compra fue aprobada, se registro la salida de inventario y el retiro quedo visible para el usuario." : "La compra fue rechazada y se notifico al usuario.",
+                false);
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            ShowAlert("No se pudo procesar la transferencia.", ex.InnerException?.Message ?? ex.Message, true);
+        }
+    }
+
+    private async Task<bool> HasModuleAccessAsync(OpticaDbContext dbContext, int roleId)
+    {
+        if (roleId == 1)
+        {
+            return true;
+        }
+
+        return await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(x => x.id_rol == roleId && x.puede_ver)
+            .Join(dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/cobros-transferencia"), p => p.id_menu, m => m.id_menu, (_, _) => true)
+            .AnyAsync()
+            || await dbContext.tbl_rol_menu_permisos
+            .AsNoTracking()
+            .Where(x => x.id_rol == roleId && x.puede_ver)
+            .Join(dbContext.tbl_menu_apps.AsNoTracking().Where(x => x.ruta == "/gestion-tienda-online"), p => p.id_menu, m => m.id_menu, (_, _) => true)
+            .AnyAsync();
+    }
+
+    private void ShowAlert(string title, string message, bool isError)
+    {
+        alertTitle = title;
+        alertMessage = message;
+        alertIsError = isError;
+        showAlert = true;
+    }
+
+    private Task CloseAlert()
+    {
+        showAlert = false;
+        alertTitle = string.Empty;
+        alertMessage = string.Empty;
+        alertIsError = false;
+        return Task.CompletedTask;
+    }
+
+    private void OpenProofModal(tbl_cobro_transferencia request)
+    {
+        selectedProofUrl = request.ruta_comprobante ?? string.Empty;
+        showProofModal = !string.IsNullOrWhiteSpace(selectedProofUrl);
+    }
+
+    private Task CloseProofModal()
+    {
+        showProofModal = false;
+        selectedProofUrl = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private static string FormatTransferSource(tbl_cobro_transferencia request)
+    {
+        if (request.id_comprobanteNavigation is not null)
+        {
+            return request.id_comprobanteNavigation.numero_comprobante ?? "Comprobante";
+        }
+
+        return request.id_cta_cobrar.HasValue
+            ? $"Cuenta {request.id_cta_cobrar.Value}"
+            : "Compra tienda online";
+    }
+
+    private static string FormatRequestItems(tbl_cobro_transferencia request)
+    {
+        if (request.tbl_cobro_transferencia_detalles.Count == 0)
+        {
+            return "Sin detalle de productos";
+        }
+
+        return string.Join(", ", request.tbl_cobro_transferencia_detalles.Select(x =>
+        {
+            var name = !string.IsNullOrWhiteSpace(x.nombre_producto_snapshot)
+                ? x.nombre_producto_snapshot
+                : x.id_productoNavigation?.nombre_producto ?? $"Producto {x.id_producto}";
+            return $"{name} x{x.cantidad}";
+        }));
+    }
+
+    private static async Task<List<TransferInventoryLine>> BuildInventoryLinesAsync(OpticaDbContext dbContext, tbl_cobro_transferencia request)
+    {
+        if (request.tbl_cobro_transferencia_detalles.Count > 0)
+        {
+            return request.tbl_cobro_transferencia_detalles
+                .GroupBy(x => x.id_producto)
+                .Select(group => new TransferInventoryLine(group.Key, group.Sum(x => x.cantidad)))
+                .ToList();
+        }
+
+        if (!request.id_cta_cobrar.HasValue)
+        {
+            return [];
+        }
+
+        var account = await dbContext.tbl_cta_cobrar
+            .AsNoTracking()
+            .Include(x => x.id_ventaNavigation!)
+            .ThenInclude(x => x.tbl_detalle_venta)
+            .FirstOrDefaultAsync(x => x.id_cta_cobrar == request.id_cta_cobrar.Value);
+
+        return account?.id_ventaNavigation?.tbl_detalle_venta
+            .GroupBy(x => x.id_producto)
+            .Select(group => new TransferInventoryLine(group.Key, group.Sum(x => x.cantidad)))
+            .ToList() ?? [];
+    }
+
+    private sealed record TransferInventoryLine(int ProductId, int Quantity);
+}

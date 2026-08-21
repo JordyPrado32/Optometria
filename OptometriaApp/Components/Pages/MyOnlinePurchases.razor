@@ -1,0 +1,356 @@
+@page "/mis-compras-online"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+
+<PageTitle>Mis compras online</PageTitle>
+
+<style>
+    .purchase-history-grid { display:grid; gap:1rem; }
+    .purchase-card { border:1px solid rgba(127,105,81,0.13); border-radius:1rem; background:#fffaf8; overflow:hidden; box-shadow:0 16px 34px rgba(127,105,81,0.08); }
+    .purchase-card-head { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:start; padding:1rem; background:linear-gradient(135deg, rgba(244,240,228,0.9), rgba(236,204,197,0.35)); }
+    .purchase-card-head h2 { margin:0; color:var(--color-ink); font-size:1.15rem; }
+    .purchase-card-head p { margin:0.3rem 0 0; color:var(--color-taupe); }
+    .purchase-status { border-radius:999px; padding:0.4rem 0.75rem; font-weight:900; font-size:0.78rem; white-space:nowrap; }
+    .purchase-status.pending { background:rgba(254,188,100,0.24); color:#9a641e; }
+    .purchase-status.approved { background:rgba(93,161,129,0.16); color:#2f7958; }
+    .purchase-status.rejected { background:rgba(220,53,69,0.12); color:#b12d3a; }
+    .purchase-body { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(17rem,0.6fr); gap:1rem; padding:1rem; align-items:start; }
+    .purchase-main { display:grid; gap:0.8rem; min-width:0; }
+    .purchase-carousel { border:1px solid rgba(127,105,81,0.1); border-radius:1rem; background:#fff; padding:0.9rem; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:0.8rem; align-items:center; min-height:13.5rem; }
+    .purchase-carousel-media { display:grid; grid-template-columns:minmax(7.5rem, 9rem) minmax(0,1fr); gap:1rem; align-items:center; min-width:0; }
+    .purchase-product-image { width:100%; aspect-ratio:1; border-radius:0.9rem; overflow:hidden; display:grid; place-items:center; background:linear-gradient(135deg, rgba(93,161,129,0.16), rgba(254,188,100,0.18)); color:#7F6951; box-shadow:0 12px 28px rgba(127,105,81,0.08); }
+    .purchase-product-image img { width:100%; height:100%; object-fit:cover; }
+    .purchase-carousel-copy { display:grid; gap:0.35rem; min-width:0; }
+    .purchase-carousel-copy strong { color:var(--color-ink); display:block; font-size:1.15rem; overflow-wrap:anywhere; }
+    .purchase-carousel-copy small { color:var(--color-taupe); font-size:0.92rem; }
+    .purchase-carousel-copy b { color:var(--color-ink); font-size:1.45rem; line-height:1.1; }
+    .purchase-carousel-copy span { color:var(--color-taupe); font-size:0.84rem; }
+    .purchase-carousel-nav { width:2.4rem; height:2.4rem; border:1px solid rgba(127,105,81,0.14); border-radius:999px; background:#fffaf4; color:var(--color-ink); display:inline-flex; align-items:center; justify-content:center; }
+    .purchase-carousel-meta { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0 0.25rem; color:var(--color-taupe); font-size:0.82rem; }
+    .purchase-carousel-dots { display:flex; gap:0.35rem; align-items:center; }
+    .purchase-carousel-dots button { width:0.55rem; height:0.55rem; border:0; border-radius:999px; background:rgba(127,105,81,0.2); padding:0; }
+    .purchase-carousel-dots button.is-active { width:1.35rem; background:#7F6951; }
+    .purchase-detail-toggle { justify-self:start; }
+    .purchase-products { display:grid; gap:0.6rem; border-top:1px solid rgba(127,105,81,0.08); padding-top:0.85rem; }
+    .purchase-product { display:grid; grid-template-columns:3.5rem minmax(0,1fr) auto; gap:0.75rem; align-items:center; border:1px solid rgba(127,105,81,0.08); border-radius:0.8rem; padding:0.55rem 0.65rem; background:#fff; }
+    .purchase-product strong { color:var(--color-ink); display:block; overflow-wrap:anywhere; }
+    .purchase-product small { color:var(--color-taupe); }
+    .purchase-side { display:grid; gap:0.75rem; align-content:start; min-width:0; }
+    .trace-box { border:1px solid rgba(93,161,129,0.18); border-radius:0.85rem; padding:0.85rem; background:rgba(93,161,129,0.07); display:grid; gap:0.35rem; }
+    .trace-box.warning { border-color:rgba(254,188,100,0.35); background:rgba(254,188,100,0.14); }
+    .trace-box.danger { border-color:rgba(220,53,69,0.18); background:rgba(220,53,69,0.07); }
+    .trace-box span { color:var(--color-taupe); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; }
+    .trace-box strong { color:var(--color-ink); overflow-wrap:anywhere; }
+    .trace-box.total-box { margin-top:auto; }
+    @@media (max-width: 860px) {
+        .purchase-body { grid-template-columns:1fr; }
+        .purchase-carousel { grid-template-columns:1fr; }
+        .purchase-carousel-media { grid-template-columns:1fr; }
+        .purchase-carousel-nav { display:none; }
+        .purchase-product { grid-template-columns:3.8rem minmax(0,1fr); }
+    }
+    @@media (max-width: 640px) {
+        .purchase-card-head { grid-template-columns:1fr; }
+        .purchase-carousel-copy b { font-size:1.25rem; }
+    }
+</style>
+
+@if (isLoading)
+{
+    <section class="management-shell"><div class="management-card"><h1>Cargando compras online...</h1></div></section>
+}
+else
+{
+    <section class="management-shell">
+        <div class="management-hero">
+            <div>
+                <span class="eyebrow">Tienda online</span>
+                <h1>Mis compras online</h1>
+                <p>Consulta la aprobacion de tus compras y la fecha estimada para retirar tus productos en tienda fisica.</p>
+            </div>
+        </div>
+
+        @if (purchases.Count == 0)
+        {
+            <section class="management-card">
+                <h2>Aun no tienes compras online</h2>
+                <p style="margin:0.5rem 0 0; color:var(--color-taupe);">Cuando pagues por transferencia, aqui aparecera la traza de tus productos.</p>
+            </section>
+        }
+        else
+        {
+            <section class="purchase-history-grid">
+                @foreach (var item in purchases)
+                {
+                    var details = item.tbl_cobro_transferencia_detalles.OrderBy(x => x.id_cobro_transferencia_detalle).ToList();
+                    var hasMultipleProducts = details.Count > 1;
+                    var activeIndex = GetActiveProductIndex(item);
+                    var activeDetail = details.Count > 0 ? details[activeIndex] : null;
+                    <article class="purchase-card">
+                        <header class="purchase-card-head">
+                            <div>
+                                <h2>Compra del @item.fecha_solicitud.ToString("dd/MM/yyyy HH:mm")</h2>
+                                <p>Comprobante @item.referencia</p>
+                            </div>
+                            <span class="purchase-status @GetStatusClass(item.estado)">@GetStatusLabel(item.estado)</span>
+                        </header>
+
+                        <div class="purchase-body">
+                            <div class="purchase-main">
+                                @if (activeDetail is not null)
+                                {
+                                    @if (hasMultipleProducts)
+                                    {
+                                        <div class="purchase-carousel">
+                                            <button type="button" class="purchase-carousel-nav" @onclick="() => MoveCarousel(item.id_cobro_transferencia, -1)">
+                                                <i class="bi bi-chevron-left"></i>
+                                            </button>
+                                            <div class="purchase-carousel-media">
+                                                <div class="purchase-product-image">
+                                                    @if (!string.IsNullOrWhiteSpace(activeDetail.id_productoNavigation?.imagen_url))
+                                                    {
+                                                        <img src="@activeDetail.id_productoNavigation.imagen_url" alt="@GetProductName(activeDetail)" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-eyeglasses"></i>
+                                                    }
+                                                </div>
+                                                <div class="purchase-carousel-copy">
+                                                    <strong>@GetProductName(activeDetail)</strong>
+                                                    <small>@activeDetail.cantidad unidad(es) x $@activeDetail.precio_unitario.ToString("0.00")</small>
+                                                    <b>$@activeDetail.total_item.ToString("0.00")</b>
+                                                    <span>Precio por unidad $@activeDetail.precio_unitario.ToString("0.00")</span>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="purchase-carousel-nav" @onclick="() => MoveCarousel(item.id_cobro_transferencia, 1)">
+                                                <i class="bi bi-chevron-right"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="purchase-carousel-meta">
+                                            <span>@(activeIndex + 1) de @details.Count producto(s)</span>
+                                            <div class="purchase-carousel-dots">
+                                                @for (var i = 0; i < details.Count; i++)
+                                                {
+                                                    var dotIndex = i;
+                                                    <button type="button" class="@(dotIndex == activeIndex ? "is-active" : string.Empty)" @onclick="() => SetCarouselIndex(item.id_cobro_transferencia, dotIndex)"></button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <button type="button" class="btn btn-outline-primary purchase-detail-toggle" @onclick="() => OpenPurchaseDetails(item.id_cobro_transferencia)">
+                                            <i class="bi bi-list-ul"></i> Ver todos los detalles
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <div class="purchase-carousel" style="grid-template-columns:minmax(0,1fr);">
+                                            <div class="purchase-carousel-media">
+                                                <div class="purchase-product-image">
+                                                    @if (!string.IsNullOrWhiteSpace(activeDetail.id_productoNavigation?.imagen_url))
+                                                    {
+                                                        <img src="@activeDetail.id_productoNavigation.imagen_url" alt="@GetProductName(activeDetail)" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-eyeglasses"></i>
+                                                    }
+                                                </div>
+                                                <div class="purchase-carousel-copy">
+                                                    <strong>@GetProductName(activeDetail)</strong>
+                                                    <small>@activeDetail.cantidad unidad(es) x $@activeDetail.precio_unitario.ToString("0.00")</small>
+                                                    <b>$@activeDetail.total_item.ToString("0.00")</b>
+                                                    <span>Precio por unidad $@activeDetail.precio_unitario.ToString("0.00")</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            <aside class="purchase-side">
+                                <div class="trace-box @GetTraceClass(item.estado)">
+                                    <span>Traza</span>
+                                    <strong>@GetTraceMessage(item)</strong>
+                                </div>
+                                @if (item.fecha_retiro_estimada.HasValue)
+                                {
+                                    <div class="trace-box">
+                                        <span>Retiro en tienda fisica</span>
+                                        <strong>@item.fecha_retiro_estimada.Value.ToString("dd/MM/yyyy HH:mm")</strong>
+                                    </div>
+                                }
+                                <div class="trace-box total-box">
+                                    <span>Total</span>
+                                    <strong>$@item.monto.ToString("0.00")</strong>
+                                </div>
+                            </aside>
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+    </section>
+}
+
+@if (selectedPurchaseForDetails is not null)
+{
+    var modalDetails = selectedPurchaseForDetails.tbl_cobro_transferencia_detalles.OrderBy(x => x.id_cobro_transferencia_detalle).ToList();
+    <div class="custom-modal-overlay" @onclick="ClosePurchaseDetails">
+        <div class="custom-modal-card" style="max-width:860px;" @onclick:stopPropagation="true">
+            <header class="custom-modal-header apricot-header">
+                <h2>Detalle de productos</h2>
+                <button type="button" class="btn-close-modal" @onclick="ClosePurchaseDetails">x</button>
+            </header>
+            <div class="custom-modal-body">
+                <div class="purchase-products" style="border-top:0; padding-top:0;">
+                    @foreach (var detail in modalDetails)
+                    {
+                        <div class="purchase-product">
+                            <div class="purchase-product-image">
+                                @if (!string.IsNullOrWhiteSpace(detail.id_productoNavigation?.imagen_url))
+                                {
+                                    <img src="@detail.id_productoNavigation.imagen_url" alt="@GetProductName(detail)" />
+                                }
+                                else
+                                {
+                                    <i class="bi bi-eyeglasses"></i>
+                                }
+                            </div>
+                            <div>
+                                <strong>@GetProductName(detail)</strong>
+                                <small>@detail.cantidad unidad(es) x $@detail.precio_unitario.ToString("0.00")</small>
+                            </div>
+                            <strong>$@detail.total_item.ToString("0.00")</strong>
+                        </div>
+                    }
+                </div>
+            </div>
+            <footer class="custom-modal-footer">
+                <button type="button" class="btn btn-outline-primary" @onclick="ClosePurchaseDetails">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<tbl_cobro_transferencia> purchases = [];
+    private readonly Dictionary<int, int> purchaseCarouselIndexes = [];
+    private bool isLoading = true;
+    private int currentUserId;
+    private tbl_cobro_transferencia? selectedPurchaseForDetails;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = int.TryParse(authState.User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedUserId) ? parsedUserId : 0;
+
+        if (currentUserId > 0)
+        {
+            purchases.AddRange(await dbContext.tbl_cobro_transferencias
+                .AsNoTracking()
+                .Where(x => x.id_usuario_solicita == currentUserId && x.id_cta_cobrar == null)
+                .Include(x => x.tbl_cobro_transferencia_detalles)
+                .ThenInclude(x => x.id_productoNavigation)
+                .OrderByDescending(x => x.fecha_solicitud)
+                .Take(80)
+                .ToListAsync());
+        }
+
+        isLoading = false;
+    }
+
+    private static string GetProductName(tbl_cobro_transferencia_detalle detail)
+        => !string.IsNullOrWhiteSpace(detail.nombre_producto_snapshot)
+            ? detail.nombre_producto_snapshot
+            : detail.id_productoNavigation?.nombre_producto ?? $"Producto {detail.id_producto}";
+
+    private int GetActiveProductIndex(tbl_cobro_transferencia purchase)
+    {
+        var detailsCount = purchase.tbl_cobro_transferencia_detalles.Count;
+        if (detailsCount <= 0)
+        {
+            return 0;
+        }
+
+        if (!purchaseCarouselIndexes.TryGetValue(purchase.id_cobro_transferencia, out var currentIndex))
+        {
+            purchaseCarouselIndexes[purchase.id_cobro_transferencia] = 0;
+            return 0;
+        }
+
+        if (currentIndex < 0 || currentIndex >= detailsCount)
+        {
+            purchaseCarouselIndexes[purchase.id_cobro_transferencia] = 0;
+            return 0;
+        }
+
+        return currentIndex;
+    }
+
+    private void MoveCarousel(int purchaseId, int direction)
+    {
+        var purchase = purchases.FirstOrDefault(x => x.id_cobro_transferencia == purchaseId);
+        var detailsCount = purchase?.tbl_cobro_transferencia_detalles.Count ?? 0;
+        if (detailsCount <= 1)
+        {
+            return;
+        }
+
+        var currentIndex = purchaseCarouselIndexes.TryGetValue(purchaseId, out var storedIndex) ? storedIndex : 0;
+        var nextIndex = (currentIndex + direction + detailsCount) % detailsCount;
+        purchaseCarouselIndexes[purchaseId] = nextIndex;
+    }
+
+    private void SetCarouselIndex(int purchaseId, int index)
+    {
+        purchaseCarouselIndexes[purchaseId] = Math.Max(0, index);
+    }
+
+    private void OpenPurchaseDetails(int purchaseId)
+        => selectedPurchaseForDetails = purchases.FirstOrDefault(x => x.id_cobro_transferencia == purchaseId);
+
+    private void ClosePurchaseDetails()
+        => selectedPurchaseForDetails = null;
+
+    private static string GetStatusLabel(string? status) => status?.Trim().ToLowerInvariant() switch
+    {
+        "aprobada" => "Aprobada",
+        "rechazada" => "Rechazada",
+        _ => "Pendiente"
+    };
+
+    private static string GetStatusClass(string? status) => status?.Trim().ToLowerInvariant() switch
+    {
+        "aprobada" => "approved",
+        "rechazada" => "rejected",
+        _ => "pending"
+    };
+
+    private static string GetTraceClass(string? status) => status?.Trim().ToLowerInvariant() switch
+    {
+        "aprobada" => string.Empty,
+        "rechazada" => "danger",
+        _ => "warning"
+    };
+
+    private static string GetTraceMessage(tbl_cobro_transferencia purchase)
+    {
+        return purchase.estado?.Trim().ToLowerInvariant() switch
+        {
+            "aprobada" => !string.IsNullOrWhiteSpace(purchase.mensaje_retiro)
+                ? purchase.mensaje_retiro
+                : "Tu compra fue aprobada. Acercate a tienda fisica para retirar tus productos.",
+            "rechazada" => "Tu comprobante fue rechazado. Revisa la informacion y contacta al equipo.",
+            _ => "Estamos validando tu comprobante. Te avisaremos cuando tus productos esten listos para retirar."
+        };
+    }
+}
