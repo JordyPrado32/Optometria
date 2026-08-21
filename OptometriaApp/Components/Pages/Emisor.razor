@@ -2,9 +2,14 @@
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using System.Net.Mail
+@using System.Security.Cryptography.X509Certificates
+@using Microsoft.AspNetCore.Components.Forms
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
+@inject IWebHostEnvironment WebHostEnvironment
+@inject IConfiguration Configuration
+@inject CertificateSecretProtector CertificateSecretProtector
 
 <PageTitle>Emisor</PageTitle>
 
@@ -177,6 +182,11 @@ else
                         <input id="issuerDireccion" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="500" />
                     </div>
 
+                    <div class="patient-form-span">
+                        <label class="form-label" for="issuerDireccionEstablecimiento">Direccion del establecimiento</label>
+                        <input id="issuerDireccionEstablecimiento" class="form-control" @bind="editor.DireccionEstablecimiento" readonly="@(!CanModifyEditor)" maxlength="500" />
+                    </div>
+
                     <div>
                         <label class="form-label" for="issuerPhone">Telefono</label>
                         <input id="issuerPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
@@ -213,6 +223,37 @@ else
                     </div>
 
                     <div>
+                        <label class="form-label" for="issuerSriEnvironment">Ambiente SRI</label>
+                        <select id="issuerSriEnvironment" class="form-select" disabled>
+                            <option value="2" selected>2 - Produccion</option>
+                        </select>
+                        <small class="form-text">Los comprobantes emitidos en este ambiente tienen validez tributaria.</small>
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="issuerEmissionType">Tipo de emision</label>
+                        <select id="issuerEmissionType" class="form-select" disabled>
+                            <option value="1" selected>1 - Emision normal</option>
+                        </select>
+                    </div>
+
+                    <div class="patient-form-span">
+                        <label class="form-label">Certificado de firma electronica</label>
+                        <InputFile class="form-control" OnChange="HandleCertificateSelectedAsync" accept=".p12,.pfx,application/x-pkcs12" disabled="@(!CanModifyEditor)" />
+                        <small class="form-text">
+                            @(string.IsNullOrWhiteSpace(editor.CertificateFileName)
+                                ? "Selecciona un archivo .p12 o .pfx (maximo 1 MB)."
+                                : $"Certificado: {editor.CertificateFileName}")
+                        </small>
+                    </div>
+
+                    <div class="patient-form-span">
+                        <label class="form-label" for="issuerCertificatePassword">Clave del certificado</label>
+                        <input id="issuerCertificatePassword" type="password" class="form-control" @bind="editor.CertificatePassword" readonly="@(!CanModifyEditor)" autocomplete="new-password" maxlength="128" />
+                        <small class="form-text">Solo debes escribirla al cargar o reemplazar el certificado. Se almacena protegida.</small>
+                    </div>
+
+                    <div>
                         <label class="form-label" for="issuerRepresentante">Representante legal</label>
                         <input id="issuerRepresentante" class="form-control" @bind="editor.NombreRepresentanteLegal" readonly="@(!CanModifyEditor)" maxlength="300" />
                     </div>
@@ -241,6 +282,18 @@ else
                         <input type="checkbox" class="form-check-input" @bind="editor.EsContribuyenteEspecial" disabled="@(!CanModifyEditor)" />
                         <span class="form-check-label">Contribuyente especial</span>
                     </label>
+                    <label class="form-check" style="display: flex; gap: 0.55rem; align-items: center;">
+                        <input type="checkbox" class="form-check-input" @bind="editor.ObligadoContabilidad" disabled="@(!CanModifyEditor)" />
+                        <span class="form-check-label">Obligado a llevar contabilidad</span>
+                    </label>
+                    <div>
+                        <label class="form-label" for="issuerRimpe">Regimen RIMPE</label>
+                        <select id="issuerRimpe" class="form-select" @bind="editor.RegimenRimpe" disabled="@(!CanModifyEditor)">
+                            <option value="">No aplica</option>
+                            <option value="RIMPE">Contribuyente regimen RIMPE</option>
+                            <option value="NEGOCIO_POPULAR">Negocio popular - regimen RIMPE</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <footer class="custom-modal-footer">
@@ -500,6 +553,7 @@ else
         issuerEntity.tipo_persona = editor.TipoPersona;
         issuerEntity.tipo_identificacion = editor.TipoIdentificacion;
         issuerEntity.direccion = NormalizeOptional(editor.Direccion);
+        issuerEntity.direccion_establecimiento = NormalizeOptional(editor.DireccionEstablecimiento);
         issuerEntity.telefono = NormalizeOptional(editor.Telefono);
         issuerEntity.correo = NormalizeOptional(editor.Correo);
         issuerEntity.provincia = NormalizeOptional(editor.Provincia);
@@ -507,13 +561,24 @@ else
         issuerEntity.codigo_postal = NormalizeOptional(editor.CodigoPostal);
         issuerEntity.establecimiento_codigo = NormalizeEmissionCode(editor.EstablecimientoCodigo);
         issuerEntity.punto_emision_codigo = NormalizeEmissionCode(editor.PuntoEmisionCodigo);
+        issuerEntity.ambiente_codigo = Configuration["Sri:Environment"] == "2" ? "2" : "1";
+        issuerEntity.tipo_emision_codigo = "1";
         issuerEntity.nombre_representante_legal = NormalizeOptional(editor.NombreRepresentanteLegal);
         issuerEntity.cedula_representante = NormalizeOptional(editor.CedulaRepresentante);
         issuerEntity.es_contribuyente_especial = editor.EsContribuyenteEspecial;
         issuerEntity.numero_contribuyente_especial = NormalizeOptional(editor.NumeroContribuyenteEspecial);
+        issuerEntity.obligado_contabilidad = editor.ObligadoContabilidad;
+        issuerEntity.regimen_rimpe = NormalizeOptional(editor.RegimenRimpe);
         issuerEntity.estado = editor.Estado;
         issuerEntity.fecha_actualizacion = DateTime.Now;
         issuerEntity.id_usuario_actualizacion = isCreatingNewIssuer ? null : currentUserId;
+
+        if (editor.CertificateBytes is not null)
+        {
+            var certificatePath = await ValidateAndSaveCertificateAsync(editor);
+            issuerEntity.certificado_digital_ruta = certificatePath;
+            issuerEntity.certificado_digital_clave = CertificateSecretProtector.Protect(editor.CertificatePassword);
+        }
 
         await dbContext.SaveChangesAsync();
 
@@ -612,6 +677,7 @@ else
         editor.Provincia = editor.Provincia.Trim();
         editor.Ciudad = editor.Ciudad.Trim();
         editor.Direccion = editor.Direccion.Trim();
+        editor.DireccionEstablecimiento = editor.DireccionEstablecimiento.Trim();
         editor.CodigoPostal = editor.CodigoPostal.Trim();
         editor.CedulaRepresentante = editor.CedulaRepresentante.Trim();
         editor.NumeroContribuyenteEspecial = editor.NumeroContribuyenteEspecial.Trim();
@@ -681,6 +747,76 @@ else
         return true;
     }
 
+    private async Task HandleCertificateSelectedAsync(InputFileChangeEventArgs args)
+    {
+        if (editor is null || !CanModifyEditor)
+        {
+            return;
+        }
+
+        errorMessage = null;
+        try
+        {
+            var file = args.File;
+            const long maxCertificateSize = 1024 * 1024;
+            if (!file.Name.EndsWith(".p12", StringComparison.OrdinalIgnoreCase) &&
+                !file.Name.EndsWith(".pfx", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("El certificado debe tener extension .p12 o .pfx.");
+            }
+
+            await using var stream = file.OpenReadStream(maxCertificateSize);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            editor.CertificateBytes = memory.ToArray();
+            editor.CertificateFileName = Path.GetFileName(file.Name);
+        }
+        catch (Exception ex)
+        {
+            editor.CertificateBytes = null;
+            editor.CertificateFileName = string.Empty;
+            errorMessage = GetInnermostMessage(ex);
+        }
+    }
+
+    private async Task<string> ValidateAndSaveCertificateAsync(IssuerEditorModel model)
+    {
+        var certificateBytes = model.CertificateBytes
+            ?? throw new InvalidOperationException("No se selecciono un certificado.");
+        using var certificate = X509CertificateLoader.LoadPkcs12(
+            certificateBytes,
+            model.CertificatePassword,
+            X509KeyStorageFlags.EphemeralKeySet);
+
+        using var privateKey = certificate.GetRSAPrivateKey();
+        if (!certificate.HasPrivateKey || privateKey is null)
+        {
+            throw new InvalidOperationException("El certificado no contiene una clave privada RSA utilizable.");
+        }
+
+        if (privateKey.KeySize < 2048)
+        {
+            throw new InvalidOperationException("La clave RSA del certificado debe tener al menos 2048 bits.");
+        }
+
+        if (DateTime.Now < certificate.NotBefore || DateTime.Now > certificate.NotAfter)
+        {
+            throw new InvalidOperationException($"El certificado no esta vigente. Validez: {certificate.NotBefore:yyyy-MM-dd} a {certificate.NotAfter:yyyy-MM-dd}.");
+        }
+
+        var certificateFolder = Path.GetFullPath(Path.Combine(
+            WebHostEnvironment.ContentRootPath,
+            "App_Data",
+            "SriCertificates",
+            currentUserId.ToString()));
+        Directory.CreateDirectory(certificateFolder);
+        var certificatePath = Path.Combine(
+            certificateFolder,
+            $"{model.Ruc}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}.p12");
+        await File.WriteAllBytesAsync(certificatePath, certificateBytes);
+        return certificatePath;
+    }
+
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
     {
         if (roleId <= 0)
@@ -717,6 +853,8 @@ else
             TipoIdentificacion = "04",
             EstablecimientoCodigo = "001",
             PuntoEmisionCodigo = "001",
+            DireccionEstablecimiento = string.Empty,
+            CertificateFileName = string.Empty,
             Estado = true
         };
     }
@@ -737,6 +875,7 @@ else
             TipoPersona = item.tipo_persona,
             TipoIdentificacion = item.tipo_identificacion,
             Direccion = item.direccion ?? string.Empty,
+            DireccionEstablecimiento = item.direccion_establecimiento ?? string.Empty,
             Telefono = item.telefono ?? string.Empty,
             Correo = item.correo ?? string.Empty,
             Provincia = item.provincia ?? string.Empty,
@@ -748,6 +887,11 @@ else
             CedulaRepresentante = item.cedula_representante ?? string.Empty,
             EsContribuyenteEspecial = item.es_contribuyente_especial,
             NumeroContribuyenteEspecial = item.numero_contribuyente_especial ?? string.Empty,
+            ObligadoContabilidad = item.obligado_contabilidad,
+            RegimenRimpe = item.regimen_rimpe ?? string.Empty,
+            CertificateFileName = string.IsNullOrWhiteSpace(item.certificado_digital_ruta)
+                ? string.Empty
+                : Path.GetFileName(item.certificado_digital_ruta),
             Estado = item.estado
         };
     }
@@ -832,6 +976,7 @@ else
         public string TipoPersona { get; set; } = "J";
         public string TipoIdentificacion { get; set; } = "04";
         public string Direccion { get; set; } = string.Empty;
+        public string DireccionEstablecimiento { get; set; } = string.Empty;
         public string Telefono { get; set; } = string.Empty;
         public string Correo { get; set; } = string.Empty;
         public string Provincia { get; set; } = string.Empty;
@@ -843,6 +988,11 @@ else
         public string CedulaRepresentante { get; set; } = string.Empty;
         public bool EsContribuyenteEspecial { get; set; }
         public string NumeroContribuyenteEspecial { get; set; } = string.Empty;
+        public bool ObligadoContabilidad { get; set; }
+        public string RegimenRimpe { get; set; } = string.Empty;
+        public byte[]? CertificateBytes { get; set; }
+        public string CertificateFileName { get; set; } = string.Empty;
+        public string CertificatePassword { get; set; } = string.Empty;
         public bool Estado { get; set; } = true;
     }
 }

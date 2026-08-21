@@ -123,7 +123,8 @@ else
                             <tr><td>Citas</td><td>Agendadas / pendientes / atendidas / canceladas</td><td>@($"{report.AppointmentSummary.Scheduled} / {report.AppointmentSummary.Pending} / {report.AppointmentSummary.Completed} / {report.AppointmentSummary.Cancelled}")</td></tr>
                             <tr><td>Inventario</td><td>Agotados / bajo minimo / movimientos</td><td>@($"{report.StockSummary.OutOfStock} / {report.StockSummary.BelowMinimum} / {report.InventorySummary.TotalMovements}")</td></tr>
                             <tr><td>Compras</td><td>Ordenes / monto</td><td>@($"{report.PurchaseSummary.TotalOrders} / {report.PurchaseSummary.TotalAmount:0.00}")</td></tr>
-                            <tr><td>Facturacion</td><td>Autorizadas / anuladas / rechazadas</td><td>@($"{report.BillingSummary.Authorized} / {report.BillingSummary.Cancelled} / {report.BillingSummary.Rejected}")</td></tr>
+                            <tr><td>Facturacion</td><td>Autorizadas / anuladas / rechazadas / pendientes</td><td>@($"{report.BillingSummary.Authorized} / {report.BillingSummary.Cancelled} / {report.BillingSummary.Rejected} / {report.BillingSummary.Pending}")</td></tr>
+                            <tr><td>Auditoria</td><td>Eventos trazables</td><td>@report.AuditSummary.TotalEvents</td></tr>
                             <tr><td>Caja diaria</td><td>Cierres almacenados</td><td>@report.DailyCashClosures.Count</td></tr>
                         </tbody>
                     </table>
@@ -203,16 +204,49 @@ else
                         <div class="management-list">
                             @foreach (var item in report.ClinicalSummary.RecentConsultations.Take(8))
                             {
-                                <article class="management-list-item"><strong>@item.Date</strong><span>@item.Diagnosis</span><span>@item.Treatment</span></article>
+                                <article class="management-list-item">
+                                    <strong>@item.Patient</strong>
+                                    <span>@item.Date · @item.Optometrist · @item.State (@item.Progress%)</span>
+                                    <span>@item.Motive</span>
+                                    <span>@item.Diagnosis · @(item.HasSignedConsent ? "Consentimiento firmado" : "Sin firma")</span>
+                                </article>
                             }
                         </div>
                     </div>
                     <div>
-                        <h3 style="font-size:1rem;">Historial de reportes</h3>
+                        <h3 style="font-size:1rem;">Historial de exportaciones</h3>
                         <div class="management-list">
                             @foreach (var item in reportHistory)
                             {
                                 <article class="management-list-item"><strong>@item.accion</strong><span>@(item.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha")</span><span>@item.detalle</span></article>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="management-card" style="margin-top:1.25rem;">
+                <div class="management-card-header"><h2>Historial general de auditoria</h2><span>@report.AuditSummary.TotalEvents eventos</span></div>
+                <div class="clinical-grid-2" style="margin-top:1rem;">
+                    <div>
+                        <h3 style="font-size:1rem;">Actividad por modulo</h3>
+                        <div class="management-list">
+                            @foreach (var item in report.AuditSummary.Modules.Take(15))
+                            {
+                                <article class="management-list-item"><strong>@item.Module</strong><span>@item.Events eventos</span></article>
+                            }
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="font-size:1rem;">Eventos recientes</h3>
+                        <div class="management-list" style="max-height:28rem; overflow:auto;">
+                            @foreach (var item in report.AuditSummary.RecentEvents)
+                            {
+                                <article class="management-list-item">
+                                    <strong>@item.Module · @item.Action</strong>
+                                    <span>@item.Date · @item.Actor</span>
+                                    <span>@item.Detail</span>
+                                </article>
                             }
                         </div>
                     </div>
@@ -228,7 +262,7 @@ else
     private readonly List<Models.tbl_proveedor> suppliers = [];
     private readonly List<Models.tbl_categoria_producto> categories = [];
     private readonly List<Models.tbl_log_auditoria> reportHistory = [];
-    private readonly List<string> states = ["Programada", "Reprogramada", "Confirmada", "Realizada", "Cancelada", "Autorizada", "Anulada", "Rechazada"];
+    private readonly List<string> states = ["Programada", "Reprogramada", "Confirmada", "Realizada", "Cancelada", "Autorizada", "Anulada", "Rechazada", "Pendiente SRI"];
     private bool isLoading = true;
     private string? errorMessage;
     private string startDateText = DateTime.Today.AddDays(-30).ToString("yyyy-MM-dd");
@@ -250,19 +284,27 @@ else
     {
         isLoading = true;
         errorMessage = null;
+        report = null;
         inventoryInsights = null;
         try
         {
-            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
-            await LoadLookupsAsync(dbContext);
-            await LoadHistoryAsync(dbContext);
-
             if (!DateOnly.TryParse(startDateText, out var startDate) || !DateOnly.TryParse(endDateText, out var endDate) || endDate < startDate)
             {
                 errorMessage = "Rango de fechas invalido.";
                 isLoading = false;
                 return;
             }
+
+            if (endDate.DayNumber - startDate.DayNumber > 366)
+            {
+                errorMessage = "El rango maximo permitido es de 366 dias.";
+                isLoading = false;
+                return;
+            }
+
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            await LoadLookupsAsync(dbContext);
+            await LoadHistoryAsync(dbContext);
 
             report = await SystemReportsService.BuildAsync(dbContext, new SystemReportFilters(startDate, endDate, selectedUserId, selectedProductId, selectedSupplierId, selectedCategoryId, selectedState));
             inventoryInsights = await InventoryInsightsService.BuildAsync(

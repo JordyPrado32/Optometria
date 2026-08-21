@@ -8,11 +8,21 @@ namespace OptometriaApp.Services;
 
 public sealed class SystemReportsService
 {
+    private static readonly HashSet<string> AppointmentStates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Programada", "Reprogramada", "Confirmada", "Realizada", "Cancelada"
+    };
+    private static readonly HashSet<string> BillingStates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Autorizada", "Anulada", "Rechazada", "Pendiente SRI"
+    };
+
     public async Task<SystemReportSnapshot> BuildAsync(
         OpticaDbContext dbContext,
         SystemReportFilters filters,
         CancellationToken cancellationToken = default)
     {
+        ValidateFilters(filters);
         var startDate = filters.StartDate.ToDateTime(TimeOnly.MinValue);
         var endDate = filters.EndDate.ToDateTime(TimeOnly.MaxValue);
 
@@ -40,7 +50,12 @@ public sealed class SystemReportsService
             .Where(x => x.fecha_cita >= filters.StartDate && x.fecha_cita <= filters.EndDate)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(filters.State))
+        if (filters.UserId > 0)
+        {
+            appointmentQuery = appointmentQuery.Where(x => x.id_medicoNavigation.id_usuario == filters.UserId);
+        }
+
+        if (AppointmentStates.Contains(filters.State))
         {
             appointmentQuery = appointmentQuery.Where(x => x.id_estadoNavigation != null && x.id_estadoNavigation.nombre_estado == filters.State);
         }
@@ -61,6 +76,15 @@ public sealed class SystemReportsService
             .OrderByDescending(x => x.fecha_evento)
             .Take(100)
             .ToListAsync(cancellationToken);
+
+        var patientIds = clinicalEvents.Select(x => x.id_paciente).Distinct().ToList();
+        var optometristIds = clinicalEvents.Select(x => x.id_optometra).Distinct().ToList();
+        var patientNames = await dbContext.tbl_pacientes.AsNoTracking()
+            .Where(x => patientIds.Contains(x.id_paciente))
+            .ToDictionaryAsync(x => x.id_paciente, x => (x.nombres + " " + x.apellidos).Trim(), cancellationToken);
+        var optometristNames = await dbContext.tbl_usuarios.AsNoTracking()
+            .Where(x => optometristIds.Contains(x.id_usuario))
+            .ToDictionaryAsync(x => x.id_usuario, x => (x.nombres + " " + x.apellidos).Trim(), cancellationToken);
 
         var productsQuery = ProductInventoryRules.FilterGoods(dbContext.tbl_productos)
             .AsNoTracking()
@@ -101,6 +125,16 @@ public sealed class SystemReportsService
             kardexQuery = kardexQuery.Where(x => x.id_producto == filters.ProductId);
         }
 
+        if (filters.SupplierId > 0)
+        {
+            kardexQuery = kardexQuery.Where(x => x.id_productoNavigation.id_proveedor == filters.SupplierId);
+        }
+
+        if (filters.CategoryId > 0)
+        {
+            kardexQuery = kardexQuery.Where(x => x.id_productoNavigation.id_categoria == filters.CategoryId);
+        }
+
         var kardex = await kardexQuery.ToListAsync(cancellationToken);
 
         var purchaseOrdersQuery = dbContext.tbl_orden_compra
@@ -120,17 +154,58 @@ public sealed class SystemReportsService
             purchaseOrdersQuery = purchaseOrdersQuery.Where(x => x.id_proveedor == filters.SupplierId);
         }
 
+        if (filters.UserId > 0)
+        {
+            purchaseOrdersQuery = purchaseOrdersQuery.Where(x => x.id_usuario_solicita == filters.UserId || x.id_usuario_autoriza == filters.UserId);
+        }
+
+        if (filters.ProductId > 0)
+        {
+            purchaseOrdersQuery = purchaseOrdersQuery.Where(x => x.tbl_detalle_orden_compra.Any(line => line.id_producto == filters.ProductId));
+        }
+
+        if (filters.CategoryId > 0)
+        {
+            purchaseOrdersQuery = purchaseOrdersQuery.Where(x => x.tbl_detalle_orden_compra.Any(line => line.id_productoNavigation.id_categoria == filters.CategoryId));
+        }
+
         var purchaseOrders = await purchaseOrdersQuery.ToListAsync(cancellationToken);
 
-        var comprobantes = await dbContext.tbl_comprobantes
+        var comprobantesQuery = dbContext.tbl_comprobantes
             .AsNoTracking()
             .Where(x => x.fecha_emision.HasValue && x.fecha_emision.Value >= startDate && x.fecha_emision.Value <= endDate)
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+
+        if (BillingStates.Contains(filters.State))
+        {
+            comprobantesQuery = ApplyBillingStateFilter(comprobantesQuery, filters.State);
+        }
+
+        var comprobantes = await comprobantesQuery.ToListAsync(cancellationToken);
 
         var receivables = await dbContext.tbl_cta_cobrar
             .AsNoTracking()
             .Where(x => x.fecha_emision >= startDate && x.fecha_emision <= endDate)
             .ToListAsync(cancellationToken);
+
+        var auditQuery = dbContext.tbl_log_auditoria
+            .AsNoTracking()
+            .Include(x => x.id_usuarioNavigation)
+            .Where(x => x.fecha.HasValue && x.fecha.Value >= startDate && x.fecha.Value <= endDate)
+            .AsQueryable();
+        if (filters.UserId > 0)
+        {
+            auditQuery = auditQuery.Where(x => x.id_usuario == filters.UserId);
+        }
+
+        var auditTotal = await auditQuery.CountAsync(cancellationToken);
+        var auditModules = await auditQuery
+            .GroupBy(x => x.modulo ?? "Sin modulo")
+            .Select(x => new AuditModuleRow(x.Key, x.Count()))
+            .OrderByDescending(x => x.Events)
+            .ThenBy(x => x.Module)
+            .ToListAsync(cancellationToken);
+        var auditEvents = await auditQuery.OrderByDescending(x => x.fecha).Take(100).ToListAsync(cancellationToken);
 
         var salesDetails = sales.SelectMany(x => x.tbl_detalle_venta).ToList();
         var filteredSalesDetails = salesDetails.Where(detail =>
@@ -140,9 +215,19 @@ public sealed class SystemReportsService
             (filters.SupplierId <= 0 || detail.id_productoNavigation.id_proveedor == filters.SupplierId))
             .ToList();
 
-        var totalSales = sales.Sum(x => x.total ?? 0m);
-        var totalIncome = sales.Sum(x => x.valor_cobrado ?? 0m);
-        var totalExpenses = purchaseOrders.Sum(x => x.total ?? 0m);
+        var hasProductDimensionFilter = filters.ProductId > 0 || filters.SupplierId > 0 || filters.CategoryId > 0;
+        var totalSales = hasProductDimensionFilter
+            ? filteredSalesDetails.Sum(x => x.total_item ?? 0m)
+            : sales.Sum(x => x.total ?? 0m);
+        var totalIncome = hasProductDimensionFilter
+            ? sales.Sum(sale => CalculateFilteredCollectedAmount(sale, filteredSalesDetails))
+            : sales.Sum(x => x.valor_cobrado ?? 0m);
+        var totalExpenses = filters.ProductId > 0 || filters.CategoryId > 0
+            ? purchaseOrders.SelectMany(x => x.tbl_detalle_orden_compra)
+                .Where(x => (filters.ProductId <= 0 || x.id_producto == filters.ProductId) &&
+                            (filters.CategoryId <= 0 || x.id_productoNavigation?.id_categoria == filters.CategoryId))
+                .Sum(x => x.precio_total_linea ?? (x.precio_unitario * x.cantidad_solicitada))
+            : purchaseOrders.Sum(x => x.total ?? 0m);
 
         return new SystemReportSnapshot
         {
@@ -155,12 +240,13 @@ public sealed class SystemReportsService
                 receivables.Count(x => x.saldo > 0),
                 receivables.Where(x => x.saldo > 0).Sum(x => x.saldo)),
             AppointmentSummary = BuildAppointmentSummary(appointments),
-            ClinicalSummary = BuildClinicalSummary(clinicalEvents),
+            ClinicalSummary = BuildClinicalSummary(clinicalEvents, patientNames, optometristNames),
             ProductRotation = BuildProductRotation(filteredSalesDetails, products),
             StockSummary = BuildStockSummary(products),
             InventorySummary = BuildInventorySummary(kardex),
             PurchaseSummary = BuildPurchaseSummary(purchaseOrders),
             BillingSummary = BuildBillingSummary(comprobantes),
+            AuditSummary = BuildAuditSummary(auditTotal, auditModules, auditEvents),
             DailyCashClosures = BuildDailyCashClosures(sales),
             GeneratedAt = DateTime.Now
         };
@@ -179,6 +265,9 @@ public sealed class SystemReportsService
         csv.AppendLine($"Inventario,Bajo minimo,{report.StockSummary.BelowMinimum},,");
         csv.AppendLine($"Facturacion,Autorizadas,{report.BillingSummary.Authorized},,");
         csv.AppendLine($"Facturacion,Anuladas,{report.BillingSummary.Cancelled},,");
+        csv.AppendLine($"Facturacion,Rechazadas,{report.BillingSummary.Rejected},,");
+        csv.AppendLine($"Facturacion,Pendientes SRI,{report.BillingSummary.Pending},,");
+        csv.AppendLine($"Auditoria,Eventos,{report.AuditSummary.TotalEvents},,");
 
         foreach (var item in report.ProductRotation.TopProducts)
         {
@@ -193,6 +282,16 @@ public sealed class SystemReportsService
         foreach (var item in report.DailyCashClosures)
         {
             csv.AppendLine($"CierreCaja,{item.DateLabel},{item.TotalCollected.ToString("0.00", CultureInfo.InvariantCulture)},{item.CancelledCount},{item.SalesCount}");
+        }
+
+        foreach (var item in report.ClinicalSummary.RecentConsultations)
+        {
+            csv.AppendLine($"HistorialClinico,{Escape(item.Patient)},{item.Date},{Escape(item.Motive)},{Escape(item.Diagnosis)}");
+        }
+
+        foreach (var item in report.AuditSummary.RecentEvents)
+        {
+            csv.AppendLine($"Auditoria,{Escape(item.Module)},{Escape(item.Action)},{Escape(item.Actor)},{Escape(item.Detail)}");
         }
 
         return csv.ToString();
@@ -215,7 +314,9 @@ public sealed class SystemReportsService
             $"Movimientos inventario: {report.InventorySummary.TotalMovements}",
             $"Compras registradas: {report.PurchaseSummary.TotalOrders}",
             $"Facturas autorizadas: {report.BillingSummary.Authorized}",
+            $"Facturas pendientes SRI: {report.BillingSummary.Pending}",
             $"Cuentas pendientes: {report.FinancialSummary.PendingReceivablesCount}",
+            $"Eventos de auditoria: {report.AuditSummary.TotalEvents}",
             "",
             "Top productos:"
         };
@@ -224,6 +325,12 @@ public sealed class SystemReportsService
         lines.Add("");
         lines.Add("Cierres de caja:");
         lines.AddRange(report.DailyCashClosures.Take(10).Select(x => $"{x.DateLabel} | {x.TotalCollected:0.00} | ventas {x.SalesCount}"));
+        lines.Add("");
+        lines.Add("Historias clinicas recientes:");
+        lines.AddRange(report.ClinicalSummary.RecentConsultations.Take(6).Select(x => $"{x.Date} | {x.Patient} | {x.Diagnosis}"));
+        lines.Add("");
+        lines.Add("Auditoria reciente:");
+        lines.AddRange(report.AuditSummary.RecentEvents.Take(6).Select(x => $"{x.Date} | {x.Module} | {x.Action} | {x.Actor}"));
 
         return SimplePdfBuilder.Build("Reporte del sistema", lines);
     }
@@ -252,21 +359,28 @@ public sealed class SystemReportsService
             appointments.Count(x => x.id_estadoNavigation?.nombre_estado == "Realizada"),
             appointments.Count(x => x.id_estadoNavigation?.nombre_estado == "Cancelada"));
 
-    private static ClinicalSummary BuildClinicalSummary(List<Models.tbl_historia_clinica_optometria_evento> events)
+    private static ClinicalSummary BuildClinicalSummary(
+        List<Models.tbl_historia_clinica_optometria_evento> events,
+        IReadOnlyDictionary<int, string> patientNames,
+        IReadOnlyDictionary<int, string> optometristNames)
         => new(
             events.Count,
             events.Take(20).Select(x => new ClinicalReportRow(
                 x.fecha_evento.ToString("yyyy-MM-dd"),
+                patientNames.GetValueOrDefault(x.id_paciente, $"Paciente #{x.id_paciente}"),
+                optometristNames.GetValueOrDefault(x.id_optometra, $"Usuario #{x.id_optometra}"),
                 x.motivo_consulta ?? "Sin motivo",
                 x.diagnostico_resumen ?? "Sin diagnostico",
-                x.anamnesis ?? string.Empty)).ToList());
+                x.estado,
+                Math.Clamp(x.resumen_progreso, 0, 100),
+                x.consentimiento_firmado)).ToList());
 
     private static ProductRotationSummary BuildProductRotation(List<Models.tbl_detalle_venta> details, List<Models.tbl_producto> products)
     {
         var grouped = details
             .GroupBy(x => x.id_producto)
             .Select(x => new ReportMetricRow(
-                x.First().id_productoNavigation.nombre_producto,
+                x.First().id_productoNavigation?.nombre_producto ?? $"Producto #{x.Key}",
                 x.Sum(v => v.cantidad),
                 x.Sum(v => v.total_item ?? 0m)))
             .OrderByDescending(x => x.Quantity)
@@ -312,7 +426,7 @@ public sealed class SystemReportsService
             orders.Sum(x => x.total ?? 0m),
             orders.Take(20).Select(x => new PurchaseReportRow(
                 x.numero_orden,
-                x.id_proveedorNavigation.nombre,
+                x.id_proveedorNavigation?.nombre ?? "Proveedor no disponible",
                 x.fecha_orden?.ToString("yyyy-MM-dd") ?? "Sin fecha",
                 x.total ?? 0m,
                 x.estado_orden ?? "Sin estado")).ToList());
@@ -322,7 +436,24 @@ public sealed class SystemReportsService
             comprobantes.Count,
             comprobantes.Count(x => string.Equals(x.estado_sri, "AUTORIZADO", StringComparison.OrdinalIgnoreCase) || string.Equals(x.estado_comprobante, "Autorizada", StringComparison.OrdinalIgnoreCase)),
             comprobantes.Count(x => string.Equals(x.estado_comprobante, "Anulada", StringComparison.OrdinalIgnoreCase)),
-            comprobantes.Count(x => string.Equals(x.estado_sri, "RECHAZADO", StringComparison.OrdinalIgnoreCase) || string.Equals(x.estado_comprobante, "Rechazada", StringComparison.OrdinalIgnoreCase)));
+            comprobantes.Count(x => MatchesAny(x.estado_sri, "NO_AUTORIZADO", "DEVUELTA", "ERROR_SRI", "RECHAZADO") || string.Equals(x.estado_comprobante, "Rechazada", StringComparison.OrdinalIgnoreCase)),
+            comprobantes.Count(x => x.estado_sri is "PENDIENTE_SRI" or "EN_PROCESO" or "PENDIENTE_FIRMA" || string.Equals(x.estado_comprobante, "PendienteSRI", StringComparison.OrdinalIgnoreCase)));
+
+    private static AuditSummary BuildAuditSummary(
+        int totalEvents,
+        List<AuditModuleRow> modules,
+        List<Models.tbl_log_auditoria> events)
+    {
+        var recent = events.Take(50).Select(x => new AuditReportRow(
+            x.fecha?.ToString("yyyy-MM-dd HH:mm") ?? "Sin fecha",
+            x.modulo ?? "Sin modulo",
+            x.accion ?? "Sin accion",
+            x.id_usuarioNavigation is null
+                ? "Sistema"
+                : $"{x.id_usuarioNavigation.nombres} {x.id_usuarioNavigation.apellidos}".Trim(),
+            x.detalle ?? string.Empty)).ToList();
+        return new AuditSummary(totalEvents, modules, recent);
+    }
 
     private static List<DailyCashClosureRow> BuildDailyCashClosures(List<Models.tbl_venta> sales)
     {
@@ -345,7 +476,7 @@ public sealed class SystemReportsService
             return detail.origen_tipo!;
         }
 
-        var tipo = detail.id_productoNavigation.tipo_item ?? detail.concepto_item ?? "Producto";
+        var tipo = detail.id_productoNavigation?.tipo_item ?? detail.concepto_item ?? "Producto";
         if (tipo.Contains("serv", StringComparison.OrdinalIgnoreCase))
         {
             return "Servicios";
@@ -366,6 +497,48 @@ public sealed class SystemReportsService
 
     private static string Escape(string? value)
         => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
+
+    private static void ValidateFilters(SystemReportFilters filters)
+    {
+        if (filters.EndDate < filters.StartDate)
+        {
+            throw new ArgumentException("La fecha final no puede ser anterior a la fecha inicial.");
+        }
+
+        if (filters.EndDate.DayNumber - filters.StartDate.DayNumber > 366)
+        {
+            throw new ArgumentException("El rango maximo por reporte es de 366 dias para proteger la estabilidad del sistema.");
+        }
+    }
+
+    private static decimal CalculateFilteredCollectedAmount(Models.tbl_venta sale, IReadOnlyCollection<Models.tbl_detalle_venta> filteredDetails)
+    {
+        var saleBase = sale.tbl_detalle_venta.Sum(x => x.total_item ?? 0m);
+        if (saleBase <= 0m)
+        {
+            return 0m;
+        }
+
+        var filteredBase = filteredDetails.Where(x => x.id_venta == sale.id_venta).Sum(x => x.total_item ?? 0m);
+        return Math.Round((sale.valor_cobrado ?? 0m) * filteredBase / saleBase, 2, MidpointRounding.AwayFromZero);
+    }
+
+    private static IQueryable<Models.tbl_comprobante> ApplyBillingStateFilter(
+        IQueryable<Models.tbl_comprobante> query,
+        string state)
+    {
+        return state.ToUpperInvariant() switch
+        {
+            "AUTORIZADA" => query.Where(x => x.estado_sri == "AUTORIZADO" || x.estado_comprobante == "Autorizada"),
+            "ANULADA" => query.Where(x => x.estado_comprobante == "Anulada"),
+            "RECHAZADA" => query.Where(x => x.estado_sri == "NO_AUTORIZADO" || x.estado_sri == "DEVUELTA" || x.estado_sri == "ERROR_SRI" || x.estado_sri == "RECHAZADO" || x.estado_comprobante == "Rechazada"),
+            "PENDIENTE SRI" => query.Where(x => x.estado_sri == "PENDIENTE_SRI" || x.estado_sri == "EN_PROCESO" || x.estado_sri == "PENDIENTE_FIRMA" || x.estado_comprobante == "PendienteSRI"),
+            _ => query
+        };
+    }
+
+    private static bool MatchesAny(string? value, params string[] expected)
+        => expected.Any(item => string.Equals(value, item, StringComparison.OrdinalIgnoreCase));
 
     private static class SimplePdfBuilder
     {
@@ -462,6 +635,7 @@ public sealed class SystemReportSnapshot
     public required InventorySummary InventorySummary { get; init; }
     public required PurchaseSummary PurchaseSummary { get; init; }
     public required BillingSummary BillingSummary { get; init; }
+    public required AuditSummary AuditSummary { get; init; }
     public required List<DailyCashClosureRow> DailyCashClosures { get; init; }
     public required DateTime GeneratedAt { get; init; }
 }
@@ -474,9 +648,20 @@ public sealed record ProductRotationSummary(List<ReportMetricRow> TopProducts, L
 public sealed record StockSummary(int TotalProducts, int OutOfStock, int BelowMinimum, List<StockReportRow> Sample);
 public sealed record InventorySummary(int TotalMovements, int Entries, int Exits, int Returns, int Adjustments);
 public sealed record PurchaseSummary(int TotalOrders, decimal TotalAmount, List<PurchaseReportRow> RecentOrders);
-public sealed record BillingSummary(int TotalDocuments, int Authorized, int Cancelled, int Rejected);
+public sealed record BillingSummary(int TotalDocuments, int Authorized, int Cancelled, int Rejected, int Pending);
+public sealed record AuditSummary(int TotalEvents, List<AuditModuleRow> Modules, List<AuditReportRow> RecentEvents);
+public sealed record AuditModuleRow(string Module, int Events);
+public sealed record AuditReportRow(string Date, string Module, string Action, string Actor, string Detail);
 public sealed record ReportMetricRow(string Label, int Quantity, decimal Amount);
-public sealed record ClinicalReportRow(string Date, string Diagnosis, string Treatment, string Notes);
+public sealed record ClinicalReportRow(
+    string Date,
+    string Patient,
+    string Optometrist,
+    string Motive,
+    string Diagnosis,
+    string State,
+    int Progress,
+    bool HasSignedConsent);
 public sealed record StockReportRow(string Product, int CurrentStock, int MinimumStock, string Category);
 public sealed record PurchaseReportRow(string OrderNumber, string Supplier, string Date, decimal Amount, string Status);
 public sealed record DailyCashClosureRow(string DateLabel, int SalesCount, int CancelledCount, decimal TotalCollected);

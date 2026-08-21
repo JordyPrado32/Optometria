@@ -207,7 +207,7 @@ public partial class OpticaDbContext
                 .IsUnicode(false)
                 .HasDefaultValue("1");
             entity.Property(e => e.certificado_digital_clave)
-                .HasMaxLength(255)
+                .HasMaxLength(1000)
                 .IsUnicode(false);
             entity.Property(e => e.certificado_digital_ruta)
                 .HasMaxLength(500)

@@ -90,6 +90,12 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailBackgroundQue
 builder.Services.AddScoped<MenuAccessService>();
 builder.Services.AddScoped<KardexService>();
 builder.Services.AddScoped<BillingDraftService>();
+builder.Services.AddSingleton<CertificateSecretProtector>();
+builder.Services.AddHttpClient<SriElectronicDocumentClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(45);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("OptometriaApp-SRI/1.0");
+});
 builder.Services.AddScoped<ElectronicBillingDocumentService>();
 builder.Services.AddScoped<ClinicalHistoryService>();
 builder.Services.AddScoped<AccountStatementService>();
@@ -2784,7 +2790,9 @@ app.MapGet("/exports/system-reports.csv", async (
     SystemReportsService systemReportsService) =>
 {
     if (!DateOnly.TryParse(httpContext.Request.Query["start"], out var startDate) ||
-        !DateOnly.TryParse(httpContext.Request.Query["end"], out var endDate))
+        !DateOnly.TryParse(httpContext.Request.Query["end"], out var endDate) ||
+        endDate < startDate ||
+        endDate.DayNumber - startDate.DayNumber > 366)
     {
         return Results.BadRequest("Rango invalido.");
     }
@@ -2820,7 +2828,9 @@ app.MapGet("/exports/system-reports.pdf", async (
     SystemReportsService systemReportsService) =>
 {
     if (!DateOnly.TryParse(httpContext.Request.Query["start"], out var startDate) ||
-        !DateOnly.TryParse(httpContext.Request.Query["end"], out var endDate))
+        !DateOnly.TryParse(httpContext.Request.Query["end"], out var endDate) ||
+        endDate < startDate ||
+        endDate.DayNumber - startDate.DayNumber > 366)
     {
         return Results.BadRequest("Rango invalido.");
     }
@@ -4047,7 +4057,8 @@ static async Task EnsureElectronicBillingSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.emisor', 'ambiente_codigo') IS NULL ALTER TABLE dbo.emisor ADD ambiente_codigo VARCHAR(1) NOT NULL CONSTRAINT DF_emisor_ambiente_codigo DEFAULT ('1');
         IF COL_LENGTH('dbo.emisor', 'tipo_emision_codigo') IS NULL ALTER TABLE dbo.emisor ADD tipo_emision_codigo VARCHAR(1) NOT NULL CONSTRAINT DF_emisor_tipo_emision_codigo DEFAULT ('1');
         IF COL_LENGTH('dbo.emisor', 'certificado_digital_ruta') IS NULL ALTER TABLE dbo.emisor ADD certificado_digital_ruta VARCHAR(500) NULL;
-        IF COL_LENGTH('dbo.emisor', 'certificado_digital_clave') IS NULL ALTER TABLE dbo.emisor ADD certificado_digital_clave VARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.emisor', 'certificado_digital_clave') IS NULL ALTER TABLE dbo.emisor ADD certificado_digital_clave VARCHAR(1000) NULL;
+        IF COL_LENGTH('dbo.emisor', 'certificado_digital_clave') IS NOT NULL ALTER TABLE dbo.emisor ALTER COLUMN certificado_digital_clave VARCHAR(1000) NULL;
         IF COL_LENGTH('dbo.emisor', 'regimen_rimpe') IS NULL ALTER TABLE dbo.emisor ADD regimen_rimpe VARCHAR(50) NULL;
 
         IF COL_LENGTH('dbo.tbl_comprobante', 'clave_acceso') IS NULL ALTER TABLE dbo.tbl_comprobante ADD clave_acceso VARCHAR(49) NULL;
@@ -4106,6 +4117,11 @@ static async Task EnsureElectronicBillingSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_envio_laboratorio', 'observaciones_logistica') IS NULL ALTER TABLE dbo.tbl_envio_laboratorio ADD observaciones_logistica VARCHAR(MAX) NULL;
 
         """);
+
+    var configuredSriEnvironment = app.Configuration["Sri:Environment"] == "2" ? "2" : "1";
+    const string normalEmissionType = "1";
+    await dbContext.Database.ExecuteSqlInterpolatedAsync(
+        $"UPDATE dbo.emisor SET ambiente_codigo = {configuredSriEnvironment}, tipo_emision_codigo = {normalEmissionType} WHERE ambiente_codigo <> {configuredSriEnvironment} OR tipo_emision_codigo <> {normalEmissionType}");
 }
 
 static async Task EnsureProductSchemaAsync(WebApplication app)

@@ -1,5 +1,9 @@
 using OptometriaApp.Models;
 using OptometriaApp.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
+using System.Text;
 
 var failures = new List<string>();
 
@@ -96,6 +100,44 @@ Run("FindNonInventoryProductIds returns service ids", () =>
     AssertSequence(result, [8], "Solo los ids de servicios deben marcarse como invalidos para inventario.");
 });
 
+await RunAsync("SRI SOAP flow parses authorized documents", async () =>
+{
+    var handler = new QueuedHttpMessageHandler(
+        SoapReception("RECIBIDA"),
+        SoapAuthorization("AUTORIZADO", "1234567890123456789012345678901234567890123456789"));
+    var client = CreateSriClient(handler);
+
+    var result = await client.ProcessAsync("<factura id=\"comprobante\"/>", "1234567890123456789012345678901234567890123456789", "1");
+
+    Assert(result.StatusCode == "AUTORIZADO", "El estado autorizado del SRI debe conservarse.");
+    Assert(result.AuthorizationNumber?.Length == 49, "Debe recuperarse el numero de autorizacion.");
+    Assert(result.AuthorizedXml?.Contains("<estado>AUTORIZADO</estado>", StringComparison.Ordinal) == true, "Debe conservarse el XML de autorizacion.");
+});
+
+await RunAsync("SRI SOAP flow preserves rejection details", async () =>
+{
+    var handler = new QueuedHttpMessageHandler(SoapRejectedReception());
+    var client = CreateSriClient(handler);
+
+    var result = await client.ProcessAsync("<factura id=\"comprobante\"/>", "1234567890123456789012345678901234567890123456789", "1");
+
+    Assert(result.StatusCode == "DEVUELTA", "Una recepcion devuelta no debe tratarse como pendiente.");
+    Assert(result.Message.Contains("Codigo 35", StringComparison.Ordinal), "Debe preservarse el codigo de error del SRI.");
+    Assert(result.Message.Contains("DOCUMENTO INVALIDO", StringComparison.Ordinal), "Debe preservarse el detalle del rechazo.");
+});
+
+await RunAsync("SRI retry queries an already registered access key", async () =>
+{
+    var handler = new QueuedHttpMessageHandler(
+        SoapRegisteredReception(),
+        SoapAuthorization("AUTORIZADO", "1234567890123456789012345678901234567890123456789"));
+    var client = CreateSriClient(handler);
+
+    var result = await client.ProcessAsync("<factura id=\"comprobante\"/>", "1234567890123456789012345678901234567890123456789", "1");
+
+    Assert(result.StatusCode == "AUTORIZADO", "La clave ya registrada debe consultarse en autorizacion y no quedar como devuelta.");
+});
+
 if (failures.Count > 0)
 {
     Console.Error.WriteLine("Regression checks failed:");
@@ -122,6 +164,48 @@ void Run(string name, Action test)
     }
 }
 
+async Task RunAsync(string name, Func<Task> test)
+{
+    try
+    {
+        await test();
+    }
+    catch (Exception ex)
+    {
+        failures.Add($"{name}: {ex.Message}");
+    }
+}
+
+SriElectronicDocumentClient CreateSriClient(HttpMessageHandler handler)
+{
+    var configuration = new ConfigurationBuilder().Build();
+    return new SriElectronicDocumentClient(new HttpClient(handler), configuration, NullLogger<SriElectronicDocumentClient>.Instance);
+}
+
+string SoapReception(string status) => $"""
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body><validarComprobanteResponse><RespuestaRecepcionComprobante><estado>{status}</estado><comprobantes /></RespuestaRecepcionComprobante></validarComprobanteResponse></soap:Body>
+</soap:Envelope>
+""";
+
+string SoapAuthorization(string status, string authorizationNumber) => $"""
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body><autorizacionComprobanteResponse><RespuestaAutorizacionComprobante><numeroComprobantes>1</numeroComprobantes><autorizaciones><autorizacion><estado>{status}</estado><numeroAutorizacion>{authorizationNumber}</numeroAutorizacion><fechaAutorizacion>2026-08-16T10:30:00-05:00</fechaAutorizacion><comprobante>&lt;factura/&gt;</comprobante><mensajes /></autorizacion></autorizaciones></RespuestaAutorizacionComprobante></autorizacionComprobanteResponse></soap:Body>
+</soap:Envelope>
+""";
+
+string SoapRejectedReception() => """
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body><validarComprobanteResponse><RespuestaRecepcionComprobante><estado>DEVUELTA</estado><comprobantes><comprobante><mensajes><mensaje><identificador>35</identificador><mensaje>DOCUMENTO INVALIDO</mensaje><informacionAdicional>Error de esquema</informacionAdicional><tipo>ERROR</tipo></mensaje></mensajes></comprobante></comprobantes></RespuestaRecepcionComprobante></validarComprobanteResponse></soap:Body>
+</soap:Envelope>
+""";
+
+string SoapRegisteredReception() => """
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body><validarComprobanteResponse><RespuestaRecepcionComprobante><estado>DEVUELTA</estado><comprobantes><comprobante><mensajes><mensaje><identificador>43</identificador><mensaje>CLAVE ACCESO REGISTRADA</mensaje><tipo>ERROR</tipo></mensaje></mensajes></comprobante></comprobantes></RespuestaRecepcionComprobante></validarComprobanteResponse></soap:Body>
+</soap:Envelope>
+""";
+
 static void Assert(bool condition, string message)
 {
     if (!condition)
@@ -143,5 +227,23 @@ static void AssertSequence(IReadOnlyList<int> actual, IReadOnlyList<int> expecte
         {
             throw new InvalidOperationException($"{message} Esperado={string.Join(",", expected)} Actual={string.Join(",", actual)}");
         }
+    }
+}
+
+sealed class QueuedHttpMessageHandler(params string[] responses) : HttpMessageHandler
+{
+    private readonly Queue<string> responses = new(responses);
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (responses.Count == 0)
+        {
+            throw new InvalidOperationException("No hay una respuesta SOAP preparada para la solicitud.");
+        }
+
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responses.Dequeue(), Encoding.UTF8, "text/xml")
+        });
     }
 }

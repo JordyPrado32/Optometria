@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
@@ -14,10 +15,58 @@ namespace OptometriaApp.Services;
 public sealed class ElectronicBillingDocumentService
 {
     private readonly IWebHostEnvironment environment;
+    private readonly SriElectronicDocumentClient sriClient;
+    private readonly IConfiguration configuration;
+    private readonly CertificateSecretProtector certificateSecretProtector;
 
-    public ElectronicBillingDocumentService(IWebHostEnvironment environment)
+    public ElectronicBillingDocumentService(
+        IWebHostEnvironment environment,
+        SriElectronicDocumentClient sriClient,
+        IConfiguration configuration,
+        CertificateSecretProtector certificateSecretProtector)
     {
         this.environment = environment;
+        this.sriClient = sriClient;
+        this.configuration = configuration;
+        this.certificateSecretProtector = certificateSecretProtector;
+    }
+
+    public string? ValidateIssuerForEmission(EmisorEntity issuer)
+    {
+        ApplyConfiguredSriEnvironment(issuer);
+        var documentError = ValidateDocumentData(issuer, 1, 1);
+        if (documentError is not null)
+        {
+            return documentError;
+        }
+
+        var certificatePath = issuer.certificado_digital_ruta?.Trim();
+        if (string.IsNullOrWhiteSpace(certificatePath) || !Path.IsPathRooted(certificatePath) || !File.Exists(certificatePath))
+        {
+            return "Configura un certificado digital vigente antes de emitir.";
+        }
+
+        try
+        {
+            using var certificate = X509CertificateLoader.LoadPkcs12FromFile(
+                certificatePath,
+                certificateSecretProtector.Unprotect(issuer.certificado_digital_clave),
+                X509KeyStorageFlags.EphemeralKeySet);
+            using var privateKey = certificate.GetRSAPrivateKey();
+            if (!certificate.HasPrivateKey || privateKey is null || privateKey.KeySize < 2048)
+            {
+                return "El certificado no contiene una clave privada RSA valida de al menos 2048 bits.";
+            }
+
+            var now = DateTime.Now;
+            return now < certificate.NotBefore || now > certificate.NotAfter
+                ? $"El certificado no esta vigente. Validez: {certificate.NotBefore:yyyy-MM-dd} a {certificate.NotAfter:yyyy-MM-dd}."
+                : null;
+        }
+        catch (Exception ex)
+        {
+            return $"No se pudo validar el certificado digital: {ex.Message}";
+        }
     }
 
     public async Task<ElectronicDocumentResult> GenerateInvoiceDocumentAsync(
@@ -46,6 +95,14 @@ public sealed class ElectronicBillingDocumentService
             return ElectronicDocumentResult.Error("La venta no tiene un paciente asociado valido para generar el XML de factura.");
         }
 
+        ApplyConfiguredSriEnvironment(issuer);
+
+        var validationError = ValidateDocumentData(issuer, comprobante.secuencial ?? 0, sale.tbl_detalle_venta.Count);
+        if (validationError is not null)
+        {
+            return ElectronicDocumentResult.Error(validationError);
+        }
+
         var issueDate = comprobante.fecha_emision ?? DateTime.Now;
         var accessKey = BuildAccessKey(issueDate, "01", issuer, comprobante.secuencial ?? 0, BuildNumericCode(comprobante.id_comprobante, sale.id_venta));
         var xml = BuildInvoiceXml(issuer, client, sale, comprobante, issueDate, accessKey);
@@ -70,13 +127,18 @@ public sealed class ElectronicBillingDocumentService
                 comprobante.ruta_xml = result.XmlPath;
                 comprobante.estado_sri = result.StatusCode;
                 comprobante.mensajes_sri = result.Message;
+                comprobante.numero_autorizacion = result.AuthorizationNumber;
+                comprobante.fecha_autorizacion = result.AuthorizedAt;
                 comprobante.estado_comprobante = result.StatusCode switch
                 {
                     "PENDIENTE_FIRMA" => "PendienteFirma",
                     "ERROR_XML" => "ErrorXML",
+                    "AUTORIZADO" => "Autorizada",
+                    "NO_AUTORIZADO" or "DEVUELTA" => "Rechazada",
                     _ => "PendienteSRI"
                 };
-            });
+            },
+            cancellationToken);
     }
 
     public async Task<ElectronicDocumentResult> GenerateCreditNoteDocumentAsync(
@@ -125,8 +187,16 @@ public sealed class ElectronicBillingDocumentService
             return ElectronicDocumentResult.Error("Una o mas lineas de la nota de credito no tienen producto asociado y no pueden exportarse al XML.");
         }
 
+        ApplyConfiguredSriEnvironment(issuer);
+
         var issueDate = creditNote.fecha_emision;
         var sequence = creditNote.secuencial ?? ParseTrailingSequence(creditNote.numero_nota) ?? 0;
+        var validationError = ValidateDocumentData(issuer, sequence, detailRows.Count);
+        if (validationError is not null)
+        {
+            return ElectronicDocumentResult.Error(validationError);
+        }
+
         var accessKey = BuildAccessKey(issueDate, "04", issuer, sequence, BuildNumericCode(creditNote.id_nota_credito, relatedInvoice.id_comprobante));
         var xml = BuildCreditNoteXml(issuer, client, relatedInvoice, creditNote, detailRows, issueDate, accessKey, sequence);
 
@@ -151,7 +221,85 @@ public sealed class ElectronicBillingDocumentService
                 creditNote.ruta_xml = result.XmlPath;
                 creditNote.estado_sri = result.StatusCode;
                 creditNote.mensajes_sri = result.Message;
-            });
+                creditNote.estado = result.StatusCode switch
+                {
+                    "AUTORIZADO" => "Autorizada",
+                    "NO_AUTORIZADO" or "DEVUELTA" => "Rechazada",
+                    _ => creditNote.estado
+                };
+            },
+            cancellationToken);
+    }
+
+    public async Task<ElectronicDocumentResult> RetryInvoiceSriAsync(
+        OpticaDbContext dbContext,
+        int comprobanteId,
+        CancellationToken cancellationToken = default)
+    {
+        var comprobante = await dbContext.tbl_comprobantes
+            .FirstOrDefaultAsync(x => x.id_comprobante == comprobanteId, cancellationToken);
+        if (comprobante is null)
+        {
+            return ElectronicDocumentResult.Error("No se encontro la factura solicitada.");
+        }
+
+        if (string.IsNullOrWhiteSpace(comprobante.xml_firmado) || string.IsNullOrWhiteSpace(comprobante.clave_acceso))
+        {
+            return ElectronicDocumentResult.Error("La factura no tiene un XML firmado y una clave de acceso validos para reenviar.");
+        }
+
+        var issuer = await ResolveIssuerAsync(dbContext, comprobante.id_emisor, cancellationToken);
+        if (issuer is null)
+        {
+            return ElectronicDocumentResult.Error("No se encontro el emisor de la factura.");
+        }
+
+        ApplyConfiguredSriEnvironment(issuer);
+
+        if (!string.Equals(comprobante.ambiente_sri, issuer.ambiente_codigo, StringComparison.Ordinal))
+        {
+            return ElectronicDocumentResult.Error(
+                $"No se puede reenviar en ambiente {issuer.ambiente_codigo} una factura creada en ambiente {comprobante.ambiente_sri ?? "desconocido"}. Emite un comprobante nuevo en produccion.");
+        }
+
+        var sriResult = await sriClient.ProcessAsync(
+            comprobante.xml_firmado,
+            comprobante.clave_acceso,
+            issuer.ambiente_codigo,
+            cancellationToken);
+        comprobante.estado_sri = sriResult.StatusCode;
+        comprobante.mensajes_sri = sriResult.Message;
+        comprobante.numero_autorizacion = sriResult.AuthorizationNumber ?? comprobante.numero_autorizacion;
+        comprobante.fecha_autorizacion = sriResult.AuthorizedAt ?? comprobante.fecha_autorizacion;
+        comprobante.estado_comprobante = sriResult.StatusCode switch
+        {
+            "AUTORIZADO" => "Autorizada",
+            "NO_AUTORIZADO" or "DEVUELTA" => "Rechazada",
+            _ => "PendienteSRI"
+        };
+
+        var xmlPath = comprobante.ruta_xml ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(sriResult.AuthorizedXml))
+        {
+            xmlPath = SaveXml(
+                "factura",
+                comprobante.numero_comprobante ?? $"factura-{comprobante.id_comprobante}",
+                comprobante.fecha_emision ?? DateTime.Now,
+                sriResult.AuthorizedXml);
+            comprobante.ruta_xml = xmlPath;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new ElectronicDocumentResult
+        {
+            SignedXml = comprobante.xml_firmado,
+            XmlPath = xmlPath,
+            StatusCode = sriResult.StatusCode,
+            Message = sriResult.Message,
+            AuthorizationNumber = sriResult.AuthorizationNumber,
+            AuthorizedAt = sriResult.AuthorizedAt,
+            AuthorizedXml = sriResult.AuthorizedXml
+        };
     }
 
     private async Task<ElectronicDocumentResult> PersistAndSignAsync(
@@ -160,7 +308,8 @@ public sealed class ElectronicBillingDocumentService
         string folderName,
         string documentNumber,
         DateTime issueDate,
-        Action<ElectronicDocumentResult> applyResult)
+        Action<ElectronicDocumentResult> applyResult,
+        CancellationToken cancellationToken)
     {
         var unsignedXml = document.Declaration + Environment.NewLine + document;
         var result = new ElectronicDocumentResult
@@ -172,13 +321,19 @@ public sealed class ElectronicBillingDocumentService
             Message = "XML generado correctamente. Falta configurar o validar el certificado digital del emisor."
         };
 
-        var certificateOutcome = TrySignXml(unsignedXml, issuer);
+        var certificateOutcome = TrySignXml(unsignedXml, issuer, certificateSecretProtector);
         if (certificateOutcome.Success)
         {
             result.SignedXml = certificateOutcome.SignedXml!;
             result.SignedAt = DateTime.Now;
-            result.StatusCode = "PENDIENTE_SRI";
-            result.Message = "XML generado y firmado localmente. Queda pendiente el envío al SRI.";
+            var accessKey = document.Root?.Element("infoTributaria")?.Element("claveAcceso")?.Value
+                ?? throw new InvalidOperationException("El XML no contiene clave de acceso.");
+            var sriResult = await sriClient.ProcessAsync(result.SignedXml, accessKey, issuer.ambiente_codigo, cancellationToken);
+            result.StatusCode = sriResult.StatusCode;
+            result.Message = sriResult.Message;
+            result.AuthorizationNumber = sriResult.AuthorizationNumber;
+            result.AuthorizedAt = sriResult.AuthorizedAt;
+            result.AuthorizedXml = sriResult.AuthorizedXml;
         }
         else if (!string.IsNullOrWhiteSpace(certificateOutcome.ErrorMessage))
         {
@@ -186,7 +341,7 @@ public sealed class ElectronicBillingDocumentService
         }
 
         result.HashHex = ComputeSha256Hex(result.SignedXml);
-        result.XmlPath = SaveXml(folderName, documentNumber, issueDate, result.SignedXml);
+        result.XmlPath = SaveXml(folderName, documentNumber, issueDate, result.AuthorizedXml ?? result.SignedXml);
         applyResult(result);
         return result;
     }
@@ -218,13 +373,13 @@ public sealed class ElectronicBillingDocumentService
                 OptionalElement("dirEstablecimiento", issuer.direccion_establecimiento ?? issuer.direccion),
                 OptionalElement(issuer.es_contribuyente_especial ? "contribuyenteEspecial" : null, issuer.numero_contribuyente_especial),
                 new XElement("obligadoContabilidad", issuer.obligado_contabilidad ? "SI" : "NO"),
-                new XElement("tipoIdentificacionComprador", NormalizeBuyerIdentificationType(client)),
+                new XElement("tipoIdentificacionComprador", NormalizeBuyerIdentificationType(client, sale.id_pacienteNavigation)),
                 new XElement("razonSocialComprador", NormalizeBuyerName(client, sale.id_pacienteNavigation)),
                 new XElement("identificacionComprador", NormalizeBuyerIdentification(client, sale.id_pacienteNavigation)),
                 OptionalElement("direccionComprador", client?.direccion ?? sale.id_pacienteNavigation.direccion),
                 new XElement("totalSinImpuestos", DecimalText(totalWithoutTaxes)),
                 new XElement("totalDescuento", DecimalText(totalDiscount)),
-                new XElement("totalConImpuestos", BuildTaxTotalsElement(sale.tbl_detalle_venta)),
+                BuildTaxTotalsElement(sale.tbl_detalle_venta),
                 new XElement("propina", DecimalText(0m)),
                 new XElement("importeTotal", DecimalText(totalAmount)),
                 new XElement("moneda", "DOLAR"),
@@ -258,7 +413,7 @@ public sealed class ElectronicBillingDocumentService
             new XElement("infoNotaCredito",
                 new XElement("fechaEmision", issueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)),
                 OptionalElement("dirEstablecimiento", issuer.direccion_establecimiento ?? issuer.direccion),
-                new XElement("tipoIdentificacionComprador", NormalizeBuyerIdentificationType(client)),
+                new XElement("tipoIdentificacionComprador", NormalizeBuyerIdentificationType(client, sale.id_pacienteNavigation)),
                 new XElement("razonSocialComprador", NormalizeBuyerName(client, sale.id_pacienteNavigation)),
                 new XElement("identificacionComprador", NormalizeBuyerIdentification(client, sale.id_pacienteNavigation)),
                 OptionalElement(issuer.es_contribuyente_especial ? "contribuyenteEspecial" : null, issuer.numero_contribuyente_especial),
@@ -269,7 +424,7 @@ public sealed class ElectronicBillingDocumentService
                 new XElement("totalSinImpuestos", DecimalText(detailRows.Sum(x => x.monto_subtotal))),
                 new XElement("valorModificacion", DecimalText(creditNote.monto_total)),
                 new XElement("moneda", "DOLAR"),
-            new XElement("totalConImpuestos", BuildCreditNoteTaxTotalsElement(detailRows)),
+            BuildCreditNoteTaxTotalsElement(detailRows),
             new XElement("motivo", SafeText(creditNote.motivo, "AJUSTE COMERCIAL"))),
             new XElement("detalles", detailRows.Select(BuildCreditNoteLineElement)),
             BuildCreditNoteAdditionalInfo(client, sale.id_pacienteNavigation));
@@ -290,13 +445,16 @@ public sealed class ElectronicBillingDocumentService
             new XElement("estab", NormalizeCode(issuer.establecimiento_codigo, 3, "001")),
             new XElement("ptoEmi", NormalizeCode(issuer.punto_emision_codigo, 3, "001")),
             new XElement("secuencial", sequence.ToString("D9", CultureInfo.InvariantCulture)),
-            new XElement("dirMatriz", SafeText(issuer.direccion, "SIN DIRECCION")));
+            new XElement("dirMatriz", SafeText(issuer.direccion, "SIN DIRECCION")),
+            OptionalElement("contribuyenteRimpe", NormalizeRimpeLegend(issuer.regimen_rimpe)));
     }
 
     private static XElement BuildTaxTotalsElement(IEnumerable<tbl_detalle_venta> lines)
     {
         var groups = lines
-            .GroupBy(x => ResolveVatPercentage(x.id_productoNavigation?.porcentaje_iva))
+            .GroupBy(x => ResolveVatPercentage(x.id_productoNavigation?.tiene_iva == true
+                ? x.id_productoNavigation.porcentaje_iva
+                : 0m))
             .Select(g =>
             {
                 var baseAmount = Round2(g.Sum(x => x.total_item ?? 0m));
@@ -342,7 +500,7 @@ public sealed class ElectronicBillingDocumentService
         var subtotal = Round2(line.total_item ?? 0m);
         var unitPrice = Round2(line.precio_unitario ?? 0m);
         var discount = Round2(line.descuento ?? 0m);
-        var vatRate = ResolveVatPercentage(product.porcentaje_iva);
+        var vatRate = ResolveVatPercentage(product.tiene_iva == true ? product.porcentaje_iva : 0m);
         var taxValue = Round2(subtotal * vatRate / 100m);
 
         return new XElement("detalle",
@@ -416,7 +574,10 @@ public sealed class ElectronicBillingDocumentService
         fields.Add(new XElement("campoAdicional", new XAttribute("nombre", name), SafeText(value, string.Empty)));
     }
 
-    private static SignOutcome TrySignXml(string xml, EmisorEntity issuer)
+    private static SignOutcome TrySignXml(
+        string xml,
+        EmisorEntity issuer,
+        CertificateSecretProtector certificateSecretProtector)
     {
         var certificatePath = issuer.certificado_digital_ruta?.Trim();
         if (string.IsNullOrWhiteSpace(certificatePath))
@@ -438,8 +599,19 @@ public sealed class ElectronicBillingDocumentService
         {
             var certificate = X509CertificateLoader.LoadPkcs12FromFile(
                 certificatePath,
-                issuer.certificado_digital_clave,
+                certificateSecretProtector.Unprotect(issuer.certificado_digital_clave),
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+
+            if (!certificate.HasPrivateKey)
+            {
+                throw new InvalidOperationException("El certificado no contiene una clave privada.");
+            }
+
+            var now = DateTime.Now;
+            if (now < certificate.NotBefore || now > certificate.NotAfter)
+            {
+                throw new InvalidOperationException($"El certificado no esta vigente. Validez: {certificate.NotBefore:yyyy-MM-dd} a {certificate.NotAfter:yyyy-MM-dd}.");
+            }
 
             var xmlDocument = new XmlDocument { PreserveWhitespace = true };
             xmlDocument.LoadXml(xml);
@@ -447,23 +619,30 @@ public sealed class ElectronicBillingDocumentService
             var signatureId = $"Signature-{Guid.NewGuid():N}";
             var signedPropertiesId = $"{signatureId}-SignedProperties";
             var documentReferenceId = $"Reference-{Guid.NewGuid():N}";
+            var keyInfoId = $"{signatureId}-KeyInfo";
 
             var signedXml = new FlexibleIdSignedXml(xmlDocument)
             {
                 Signature = { Id = signatureId }
             };
 
-            signedXml.SigningKey = certificate.GetRSAPrivateKey()
+            using var signingKey = certificate.GetRSAPrivateKey()
                 ?? throw new InvalidOperationException("El certificado no contiene una clave privada RSA utilizable.");
+            if (signingKey.KeySize < 2048)
+            {
+                throw new InvalidOperationException("La clave RSA del certificado debe tener al menos 2048 bits.");
+            }
+
+            signedXml.SigningKey = signingKey;
 
             signedXml.SignedInfo!.CanonicalizationMethod = SignedXml.XmlDsigCanonicalizationUrl;
-            signedXml.SignedInfo.SignatureMethod = SignedXml.XmlDsigRSASHA256Url;
+            signedXml.SignedInfo.SignatureMethod = SignedXml.XmlDsigRSASHA1Url;
 
             var documentReference = new Reference
             {
                 Uri = "#comprobante",
                 Id = documentReferenceId,
-                DigestMethod = SignedXml.XmlDsigSHA256Url
+                DigestMethod = SignedXml.XmlDsigSHA1Url
             };
             documentReference.AddTransform(new XmlDsigEnvelopedSignatureTransform());
             documentReference.AddTransform(new XmlDsigC14NTransform());
@@ -480,19 +659,29 @@ public sealed class ElectronicBillingDocumentService
             {
                 Uri = $"#{signedPropertiesId}",
                 Type = "http://uri.etsi.org/01903#SignedProperties",
-                DigestMethod = SignedXml.XmlDsigSHA256Url
+                DigestMethod = SignedXml.XmlDsigSHA1Url
             };
             signedPropertiesReference.AddTransform(new XmlDsigC14NTransform());
             signedXml.AddReference(signedPropertiesReference);
 
             var keyInfo = new KeyInfo();
+            keyInfo.Id = keyInfoId;
             keyInfo.AddClause(new KeyInfoX509Data(certificate));
             signedXml.KeyInfo = keyInfo;
+
+            var keyInfoReference = new Reference
+            {
+                Uri = $"#{keyInfoId}",
+                DigestMethod = SignedXml.XmlDsigSHA1Url
+            };
+            keyInfoReference.AddTransform(new XmlDsigC14NTransform());
+            signedXml.AddReference(keyInfoReference);
 
             signedXml.ComputeSignature();
             var xmlSignature = signedXml.GetXml();
 
             xmlDocument.DocumentElement?.AppendChild(xmlDocument.ImportNode(xmlSignature, true));
+            VerifySignature(xmlDocument, certificate);
             return SignOutcome.Successful(xmlDocument.OuterXml);
         }
         catch (Exception ex)
@@ -527,9 +716,9 @@ public sealed class ElectronicBillingDocumentService
         var cert = document.CreateElement("etsi", "Cert", etsiNs);
         var certDigest = document.CreateElement("etsi", "CertDigest", etsiNs);
         var digestMethod = document.CreateElement("ds", "DigestMethod", dsNs);
-        digestMethod.SetAttribute("Algorithm", SignedXml.XmlDsigSHA256Url);
+        digestMethod.SetAttribute("Algorithm", SignedXml.XmlDsigSHA1Url);
         var digestValue = document.CreateElement("ds", "DigestValue", dsNs);
-        digestValue.InnerText = Convert.ToBase64String(SHA256.HashData(certificate.RawData));
+        digestValue.InnerText = Convert.ToBase64String(SHA1.HashData(certificate.RawData));
         certDigest.AppendChild(digestMethod);
         certDigest.AppendChild(digestValue);
 
@@ -537,7 +726,10 @@ public sealed class ElectronicBillingDocumentService
         var issuerName = document.CreateElement("ds", "X509IssuerName", dsNs);
         issuerName.InnerText = certificate.Issuer;
         var serialNumber = document.CreateElement("ds", "X509SerialNumber", dsNs);
-        serialNumber.InnerText = certificate.SerialNumber;
+        serialNumber.InnerText = new BigInteger(
+            Convert.FromHexString(certificate.SerialNumber),
+            isUnsigned: true,
+            isBigEndian: true).ToString(CultureInfo.InvariantCulture);
         issuerSerial.AppendChild(issuerName);
         issuerSerial.AppendChild(serialNumber);
 
@@ -562,6 +754,20 @@ public sealed class ElectronicBillingDocumentService
         qualifyingProperties.AppendChild(signedProperties);
         objectElement.AppendChild(qualifyingProperties);
         return objectElement;
+    }
+
+    private static void VerifySignature(XmlDocument document, X509Certificate2 certificate)
+    {
+        var signatureElement = document.GetElementsByTagName("Signature", SignedXml.XmlDsigNamespaceUrl)
+            .OfType<XmlElement>()
+            .SingleOrDefault()
+            ?? throw new CryptographicException("No se genero el nodo XMLDSig Signature.");
+        var verifier = new FlexibleIdSignedXml(document);
+        verifier.LoadXml(signatureElement);
+        if (!verifier.CheckSignature(certificate, verifySignatureOnly: true))
+        {
+            throw new CryptographicException("La verificacion local de la firma XAdES-BES no fue satisfactoria.");
+        }
     }
 
     private string SaveXml(string folderName, string documentNumber, DateTime issueDate, string xml)
@@ -594,6 +800,53 @@ public sealed class ElectronicBillingDocumentService
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    private void ApplyConfiguredSriEnvironment(EmisorEntity issuer)
+    {
+        issuer.ambiente_codigo = configuration["Sri:Environment"] == "2" ? "2" : "1";
+        issuer.tipo_emision_codigo = "1";
+    }
+
+    private static string? ValidateDocumentData(EmisorEntity issuer, long sequence, int detailCount)
+    {
+        var ruc = new string((issuer.ruc ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (ruc.Length != 13)
+        {
+            return "El RUC del emisor debe contener exactamente 13 digitos.";
+        }
+
+        if (string.IsNullOrWhiteSpace(issuer.razon_social) || string.IsNullOrWhiteSpace(issuer.direccion))
+        {
+            return "El emisor debe tener razon social y direccion matriz configuradas.";
+        }
+
+        if (issuer.ambiente_codigo is not ("1" or "2"))
+        {
+            return "El ambiente SRI debe ser 1 (pruebas) o 2 (produccion).";
+        }
+
+        if (issuer.tipo_emision_codigo != "1")
+        {
+            return "El esquema off-line del SRI solo admite tipo de emision normal (1).";
+        }
+
+        if (!IsExactNumericCode(issuer.establecimiento_codigo, 3) || !IsExactNumericCode(issuer.punto_emision_codigo, 3))
+        {
+            return "Los codigos de establecimiento y punto de emision deben contener exactamente 3 digitos.";
+        }
+
+        if (sequence is <= 0 or > 999999999)
+        {
+            return "El secuencial debe estar entre 1 y 999999999.";
+        }
+
+        return detailCount > 0 ? null : "El comprobante debe contener al menos un detalle valido.";
+    }
+
+    private static bool IsExactNumericCode(string? value, int length)
+    {
+        return value?.Length == length && value.All(char.IsDigit);
+    }
+
     private static string BuildAccessKey(DateTime issueDate, string documentCode, EmisorEntity issuer, long sequence, string numericCode)
     {
         var raw = string.Concat(
@@ -613,7 +866,8 @@ public sealed class ElectronicBillingDocumentService
 
     private static string BuildNumericCode(int firstSeed, int secondSeed)
     {
-        var value = Math.Abs(HashCode.Combine(firstSeed, secondSeed, DateTime.UtcNow.Minute)) % 100000000;
+        var seed = Encoding.UTF8.GetBytes($"{firstSeed}:{secondSeed}");
+        var value = new BigInteger(SHA256.HashData(seed), isUnsigned: true, isBigEndian: true) % 100000000;
         return value.ToString("D8", CultureInfo.InvariantCulture);
     }
 
@@ -652,8 +906,13 @@ public sealed class ElectronicBillingDocumentService
         return Convert.ToHexString(hash);
     }
 
-    private static string NormalizeBuyerIdentificationType(ClientEntity? client)
+    private static string NormalizeBuyerIdentificationType(ClientEntity? client, tbl_paciente patient)
     {
+        if (client?.es_consumidor_final == true || (string.IsNullOrWhiteSpace(client?.numero_identificacion) && string.IsNullOrWhiteSpace(patient.cedula)))
+        {
+            return "07";
+        }
+
         var type = client?.tipo_identificacion?.Trim();
         return type switch
         {
@@ -664,6 +923,11 @@ public sealed class ElectronicBillingDocumentService
 
     private static string NormalizeBuyerName(ClientEntity? client, tbl_paciente patient)
     {
+        if (client?.es_consumidor_final == true)
+        {
+            return "CONSUMIDOR FINAL";
+        }
+
         if (!string.IsNullOrWhiteSpace(client?.razon_social))
         {
             return SafeText(client.razon_social, "CONSUMIDOR FINAL");
@@ -674,6 +938,11 @@ public sealed class ElectronicBillingDocumentService
 
     private static string NormalizeBuyerIdentification(ClientEntity? client, tbl_paciente patient)
     {
+        if (client?.es_consumidor_final == true)
+        {
+            return "9999999999999";
+        }
+
         var raw = client?.numero_identificacion ?? patient.cedula;
         var digits = new string((raw ?? string.Empty).Where(char.IsLetterOrDigit).ToArray());
         return string.IsNullOrWhiteSpace(digits) ? "9999999999999" : digits;
@@ -702,7 +971,7 @@ public sealed class ElectronicBillingDocumentService
             0m => "0",
             5m => "5",
             12m => "2",
-            13m => "3",
+            13m => "10",
             14m => "3",
             15m => "4",
             _ => "0"
@@ -712,6 +981,18 @@ public sealed class ElectronicBillingDocumentService
     private static decimal ResolveVatPercentage(decimal? vatRate)
     {
         return Round2(vatRate ?? 0m);
+    }
+
+    private static string? NormalizeRimpeLegend(string? regime)
+    {
+        if (string.IsNullOrWhiteSpace(regime))
+        {
+            return null;
+        }
+
+        return regime.Contains("negocio", StringComparison.OrdinalIgnoreCase)
+            ? "CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE"
+            : "CONTRIBUYENTE RÉGIMEN RIMPE";
     }
 
     private static string DecimalText(decimal? value)
@@ -780,6 +1061,9 @@ public sealed class ElectronicBillingDocumentService
         public string StatusCode { get; set; } = "PENDIENTE_FIRMA";
         public string Message { get; set; } = string.Empty;
         public DateTime? SignedAt { get; set; }
+        public string? AuthorizationNumber { get; set; }
+        public DateTime? AuthorizedAt { get; set; }
+        public string? AuthorizedXml { get; set; }
 
         public static ElectronicDocumentResult Error(string message)
         {

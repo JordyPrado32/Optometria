@@ -10,6 +10,11 @@
   <ItemGroup>
     <Compile Include="..\OptometriaApp\Models\tbl_producto.cs" Link="Models\tbl_producto.cs" />
     <Compile Include="..\OptometriaApp\Services\ProductInventoryRules.cs" Link="Services\ProductInventoryRules.cs" />
+    <Compile Include="..\OptometriaApp\Services\SriElectronicDocumentClient.cs" Link="Services\SriElectronicDocumentClient.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>
