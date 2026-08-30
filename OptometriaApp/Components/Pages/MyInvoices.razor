@@ -7,6 +7,7 @@
 @using OptometriaApp.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject ElectronicBillingDocumentService ElectronicBillingDocumentService
 
 <PageTitle>Mis facturas</PageTitle>
 
@@ -204,9 +205,28 @@ else
                     </div>
                 </div>
 
-                <div class="workspace-actions" style="margin-top: 1rem;">
-                    <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
-                </div>
+                        <div class="workspace-actions" style="margin-top: 1rem;">
+                            <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
+                            @if (!string.Equals(selectedInvoice.SriStatus, "AUTORIZADO", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <button type="button" class="btn btn-outline-primary" disabled="@isRetryingSri" @onclick="RetrySriAsync">
+                                    @(isRetryingSri ? "Consultando SRI..." : "Reintentar autorizacion SRI")
+                                </button>
+                            }
+                        </div>
+
+                        <div class="documents-card" style="margin-top: 1rem;">
+                            <div class="documents-label">Facturacion electronica SRI</div>
+                            <strong>@selectedInvoice.SriStatus</strong>
+                            @if (!string.IsNullOrWhiteSpace(selectedInvoice.AuthorizationNumber))
+                            {
+                                <div>Autorizacion: @selectedInvoice.AuthorizationNumber</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(selectedInvoice.SriMessages))
+                            {
+                                <div style="margin-top: 0.5rem; white-space: pre-wrap;">@selectedInvoice.SriMessages</div>
+                            }
+                        </div>
 
                 <div class="documents-label" style="margin-top: 1rem;">Lineas de la factura</div>
                 @if (selectedLines.Count == 0)
@@ -266,6 +286,7 @@ else
     private string invoiceSearchTerm = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private bool isRetryingSri;
     private List<IssuedInvoiceRow> FilteredIssuedInvoices => issuedInvoices
         .Where(MatchesInvoiceSearch)
         .ToList();
@@ -329,7 +350,9 @@ else
                 PatientIdentification = patient != null ? patient.cedula : string.Empty,
                 PatientFirstName = patient != null ? patient.nombres : string.Empty,
                 PatientLastName = patient != null ? patient.apellidos : string.Empty,
-                AccountId = account != null ? account.id_cta_cobrar : 0
+                comprobante.estado_sri,
+                comprobante.mensajes_sri,
+                comprobante.numero_autorizacion
             })
             .Take(40)
             .ToListAsync();
@@ -350,13 +373,16 @@ else
             ClientIdentification = item.numero_identificacion ?? string.Empty,
             PatientName = GetDisplayPersonName(item.PatientFirstName, item.PatientLastName),
             PatientIdentification = item.PatientIdentification ?? string.Empty,
-                IssueDate = item.IssueDate ?? DateTime.Now,
-                State = item.SaleState ?? "Facturada",
-                TotalAmount = item.total ?? 0m,
-                CollectedAmount = item.valor_cobrado ?? 0m,
-                Balance = item.saldo_pendiente ?? 0m,
-                TotalCredited = noteSums.TryGetValue(item.id_comprobante, out var totalCredited) ? totalCredited : 0m
-            }));
+            IssueDate = item.IssueDate ?? DateTime.Now,
+            State = item.SaleState ?? "Facturada",
+            TotalAmount = item.total ?? 0m,
+            CollectedAmount = item.valor_cobrado ?? 0m,
+            Balance = item.saldo_pendiente ?? 0m,
+            TotalCredited = noteSums.TryGetValue(item.id_comprobante, out var totalCredited) ? totalCredited : 0m,
+            SriStatus = item.estado_sri ?? "PENDIENTE_SRI",
+            SriMessages = item.mensajes_sri ?? string.Empty,
+            AuthorizationNumber = item.numero_autorizacion
+        }));
 
         var targetId = preserveSelectedComprobanteId ?? selectedInvoice?.ComprobanteId;
         if (targetId.HasValue && issuedInvoices.Any(x => x.ComprobanteId == targetId.Value))
@@ -409,6 +435,47 @@ else
     private void CloseInvoiceDetailModal()
     {
         showInvoiceDetailModal = false;
+    }
+
+    private async Task RetrySriAsync()
+    {
+        if (selectedInvoice is null || isRetryingSri)
+        {
+            return;
+        }
+
+        isRetryingSri = true;
+        statusMessage = null;
+        errorMessage = null;
+        var comprobanteId = selectedInvoice.ComprobanteId;
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var result = await ElectronicBillingDocumentService.RetryInvoiceSriAsync(dbContext, comprobanteId);
+            if (result.StatusCode is "ERROR_XML" or "ERROR_SRI" or "DEVUELTA" or "NO_AUTORIZADO")
+            {
+                errorMessage = result.Message;
+            }
+            else
+            {
+                statusMessage = result.Message;
+            }
+
+            await LoadAsync(comprobanteId);
+            if (result.StatusCode is "ERROR_XML" or "ERROR_SRI" or "DEVUELTA" or "NO_AUTORIZADO")
+            {
+                errorMessage = result.Message;
+                statusMessage = null;
+            }
+            else
+            {
+                statusMessage = result.Message;
+            }
+        }
+        finally
+        {
+            isRetryingSri = false;
+        }
     }
 
     private async Task<ModulePermissions> GetModulePermissionsAsync(OpticaDbContext dbContext, int roleId)
@@ -511,6 +578,9 @@ else
         public decimal CollectedAmount { get; set; }
         public decimal Balance { get; set; }
         public decimal TotalCredited { get; set; }
+        public string SriStatus { get; set; } = "PENDIENTE_SRI";
+        public string SriMessages { get; set; } = string.Empty;
+        public string? AuthorizationNumber { get; set; }
         public string DisplayState => Balance <= 0m ? "Completada" : "Pendiente";
         public string IssueDateLabel => IssueDate.ToString("yyyy-MM-dd HH:mm");
     }

@@ -1,21 +1,42 @@
 @rendermode InteractiveServer
+@inject NavigationManager NavigationManager
+
 <Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
-            <NotAuthorized>
-                <LayoutView Layout="typeof(Layout.AuthLayout)">
-                    <div class="auth-shell">
-                        <div class="auth-panel auth-panel-form">
-                            <div class="auth-card">
-                                <h1>Acceso requerido</h1>
-                                <p>Inicia sesion para continuar con el sistema de optometria.</p>
-                                <a class="btn btn-primary" href="/">Ir al login</a>
+        <ErrorBoundary @key="routeData.PageType">
+            <ChildContent>
+                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                    <NotAuthorized>
+                        <LayoutView Layout="typeof(Layout.AuthLayout)">
+                            <div class="auth-shell">
+                                <div class="auth-panel auth-panel-form">
+                                    <div class="auth-card">
+                                        <h1>Acceso requerido</h1>
+                                        <p>Inicia sesion para continuar con el sistema de optometria.</p>
+                                        <a class="btn btn-primary" href="/">Ir al login</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </LayoutView>
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+            </ChildContent>
+            <ErrorContent Context="exception">
+                <LayoutView Layout="typeof(Layout.MainLayout)">
+                    <section class="management-shell">
+                        <div class="management-card">
+                            <span class="eyebrow">Recuperacion segura</span>
+                            <h1>No se pudo completar esta operacion</h1>
+                            <p>El error fue contenido para evitar que se cierre toda la sesion. Puedes volver al tablero o recargar esta seccion.</p>
+                            <div class="workspace-actions">
+                                <a class="btn btn-primary" href="/dashboard">Ir al tablero</a>
+                                <a class="btn btn-outline-primary" href="@NavigationManager.Uri">Reintentar</a>
                             </div>
                         </div>
-                    </div>
+                    </section>
                 </LayoutView>
-            </NotAuthorized>
-        </AuthorizeRouteView>
+            </ErrorContent>
+        </ErrorBoundary>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
     <NotFound>

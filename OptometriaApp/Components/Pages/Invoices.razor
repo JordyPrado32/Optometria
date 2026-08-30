@@ -1892,6 +1892,13 @@ else
                 return;
             }
 
+            var issuerReadinessError = ElectronicBillingDocumentService.ValidateIssuerForEmission(issuer);
+            if (issuerReadinessError is not null)
+            {
+                errorMessage = issuerReadinessError;
+                return;
+            }
+
             var lastSequence = await BillingDraftService.GetLastInvoiceSequenceAsync(dbContext, issuer);
             var requiresInitialSequence = !lastSequence.HasValue;
             long resolvedInitialSequence = 0;
@@ -2006,13 +2013,6 @@ else
             dbContext.tbl_comprobantes.Add(comprobante);
             await dbContext.SaveChangesAsync();
 
-            var electronicDocumentResult = await ElectronicBillingDocumentService.GenerateInvoiceDocumentAsync(dbContext, comprobante);
-            if (electronicDocumentResult.StatusCode == "ERROR_XML")
-            {
-                errorMessage = electronicDocumentResult.Message;
-                return;
-            }
-
             var inventoryProductIds = new List<int>();
             foreach (var groupedLine in linesByProduct)
             {
@@ -2105,14 +2105,20 @@ else
             await dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
 
+            var electronicDocumentResult = await ElectronicBillingDocumentService.GenerateInvoiceDocumentAsync(dbContext, comprobante);
+            await dbContext.SaveChangesAsync();
+
             if (inventoryProductIds.Count > 0)
             {
                 await KardexService.RebuildForProductsAsync(inventoryProductIds, currentUserId, $"Salida por factura {invoiceNumber}");
             }
 
+            var sriSummary = electronicDocumentResult.StatusCode == "AUTORIZADO"
+                ? "El SRI la autorizo correctamente."
+                : $"Estado SRI: {electronicDocumentResult.StatusCode}.";
             var successMessage = currentBalance > 0
-                ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. Quedo pendiente para autorizacion SRI."
-                : $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y pendiente para autorizacion SRI.";
+                ? $"Factura {invoiceNumber} emitida correctamente, vinculada al emisor y enviada a cuentas por cobrar. {sriSummary}"
+                : $"Factura {invoiceNumber} emitida correctamente y vinculada al emisor. {sriSummary}";
 
             if (!string.IsNullOrWhiteSpace(electronicDocumentResult.Message))
             {

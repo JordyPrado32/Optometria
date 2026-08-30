@@ -9,7 +9,9 @@ IF COL_LENGTH('dbo.emisor', 'tipo_emision_codigo') IS NULL
 IF COL_LENGTH('dbo.emisor', 'certificado_digital_ruta') IS NULL
     ALTER TABLE dbo.emisor ADD certificado_digital_ruta VARCHAR(500) NULL;
 IF COL_LENGTH('dbo.emisor', 'certificado_digital_clave') IS NULL
-    ALTER TABLE dbo.emisor ADD certificado_digital_clave VARCHAR(255) NULL;
+    ALTER TABLE dbo.emisor ADD certificado_digital_clave VARCHAR(1000) NULL;
+IF COL_LENGTH('dbo.emisor', 'certificado_digital_clave') IS NOT NULL
+    ALTER TABLE dbo.emisor ALTER COLUMN certificado_digital_clave VARCHAR(1000) NULL;
 IF COL_LENGTH('dbo.emisor', 'regimen_rimpe') IS NULL
     ALTER TABLE dbo.emisor ADD regimen_rimpe VARCHAR(50) NULL;
 
