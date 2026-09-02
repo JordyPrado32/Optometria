@@ -1,0 +1,21 @@
+name: optometria-aws
+
+services:
+  optometria:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: optometria-app:aws
+    container_name: optometria-app
+    network_mode: host
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      ConnectionStrings__OpticaConnection: ${OPTICA_CONNECTION_STRING:?Configura OPTICA_CONNECTION_STRING en .env.aws}
+      Infrastructure__ApplyDatabaseSchemaOnStartup: "false"
+      Infrastructure__EnableAppointmentReminders: "false"
+      Deployment__UseHttpsRedirection: "false"
+      TZ: America/Guayaquil

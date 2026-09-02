@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OptometriaApp.Api;
 using OptometriaApp.Components;
 using OptometriaApp.Configuration;
 using OptometriaApp.Data;
@@ -105,25 +106,36 @@ builder.Services.AddScoped<InventoryInsightsService>();
 builder.Services.AddScoped<PurchaseOrderDocumentService>();
 builder.Services.AddScoped<OpticaCustomizationService>();
 builder.Services.AddScoped<NotificationService>();
-builder.Services.AddHostedService<AppointmentReminderService>();
+if (builder.Configuration.GetValue("Infrastructure:EnableAppointmentReminders", true))
+{
+    builder.Services.AddHostedService<AppointmentReminderService>();
+}
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
 
-await EnsureSecuritySchemaAsync(app);
-await EnsureNavigationSchemaAsync(app);
-await EnsureUserProfileSchemaAsync(app);
-await EnsureAuditSchemaAsync(app);
-await EnsureElectronicBillingSchemaAsync(app);
-await EnsureProductSchemaAsync(app);
-await EnsureSupplierSchemaAsync(app);
-await EnsureProcurementSchemaAsync(app);
-await EnsureAppointmentSchemaAsync(app);
-await EnsureNotificationSchemaAsync(app);
-await EnsureClinicalHistorySchemaAsync(app);
-await EnsureRoleSecurityMatrixAsync(app);
+if (app.Configuration.GetValue("Infrastructure:ApplyDatabaseSchemaOnStartup", true))
+{
+    await EnsureSecuritySchemaAsync(app);
+    await EnsureNavigationSchemaAsync(app);
+    await EnsureUserProfileSchemaAsync(app);
+    await EnsureAuditSchemaAsync(app);
+    await EnsureElectronicBillingSchemaAsync(app);
+    await EnsureProductSchemaAsync(app);
+    await EnsureSupplierSchemaAsync(app);
+    await EnsureProcurementSchemaAsync(app);
+    await EnsureAppointmentSchemaAsync(app);
+    await EnsureNotificationSchemaAsync(app);
+    await EnsureClinicalHistorySchemaAsync(app);
+    await EnsureRoleSecurityMatrixAsync(app);
+}
+else
+{
+    app.Logger.LogInformation(
+        "La actualizacion automatica del esquema esta deshabilitada para este entorno.");
+}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -131,7 +143,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/StatusCode/{0}"); app.UseHttpsRedirection();
+app.UseStatusCodePagesWithReExecute("/StatusCode/{0}");
+
+if (app.Configuration.GetValue("Deployment:UseHttpsRedirection", true))
+{
+    app.UseHttpsRedirection();
+}
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
@@ -2805,6 +2822,7 @@ app.MapGet("/exports/system-reports.pdf", async (
     return Results.File(pdf, "application/pdf", $"reportes-sistema-{DateTime.Now:yyyyMMdd-HHmmss}.pdf");
 }).RequireAuthorization("FullAccess");
 
+app.MapProductApi();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -5445,4 +5463,3 @@ static class AuthClaimTypes
     public const string RememberMe = "RememberMe";
     public const string RoleId = "RoleId";
 }
-
