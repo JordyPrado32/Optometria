@@ -197,6 +197,45 @@
             });
         }
 
+        RenderItems.Add(new NavigationItemWrapper
+        {
+            MenuItem = new AppMenuItem
+            {
+                IdMenu = -2001,
+                Nombre = "Asistente de Recomendación",
+                Ruta = "/smart-lens-advisor",
+                Icono = "bi bi-cpu-fill",
+                Orden = 350
+            },
+            Order = 350
+        });
+
+        RenderItems.Add(new NavigationItemWrapper
+        {
+            MenuItem = new AppMenuItem
+            {
+                IdMenu = -2002,
+                Nombre = "Simulador Visual",
+                Ruta = "/vision-simulator",
+                Icono = "bi bi-eye-fill",
+                Orden = 360
+            },
+            Order = 360
+        });
+
+        RenderItems.Add(new NavigationItemWrapper
+        {
+            MenuItem = new AppMenuItem
+            {
+                IdMenu = -2003,
+                Nombre = "Renovación de Lentes",
+                Ruta = "/lens-lifecycle",
+                Icono = "bi bi-hourglass-split",
+                Orden = 370
+            },
+            Order = 370
+        });
+
         // Sort items by route order
         var sorted = RenderItems.OrderBy(item => item.Order).ToList();
         RenderItems.Clear();
@@ -353,6 +392,7 @@
         "menu" => "bi bi-menu-button-wide-fill",
         "user-plus" => "bi bi-person-add",
         "shield" => "bi bi-shield-fill-check",
+        "bar-chart-line" or "reports" => "bi bi-bar-chart-line-fill",
         _ when icon.StartsWith("bi ", StringComparison.OrdinalIgnoreCase) => icon,
         _ => $"bi bi-{icon}"
     };
@@ -389,6 +429,19 @@
         "/tienda-online" => "bi bi-shop",
         "/mis-compras-online" => "bi bi-bag-check",
         "/gestion-tienda-online" or "/cobros-transferencia" => "bi bi-shop-window",
+        "/smart-lens-advisor" => "bi bi-cpu-fill",
+        "/vision-simulator" => "bi bi-eye-fill",
+        "/lens-lifecycle" => "bi bi-hourglass-split",
+        "/reportes/cuentas-por-cobrar" => "bi bi-cash-coin",
+        "/reportes/ingresos-egresos" => "bi bi-graph-up-arrow",
+        "/reportes/cierre-caja" => "bi bi-receipt",
+        "/reportes/ventas-facturacion" => "bi bi-receipt-cutoff",
+        "/reportes/citas" => "bi bi-calendar2-check-fill",
+        "/reportes/consultas-clinicas" => "bi bi-journal-medical",
+        "/reportes/inventario-stock" => "bi bi-boxes",
+        "/reportes/movimientos-inventario" => "bi bi-journal-text",
+        "/reportes/compras-proveedores" => "bi bi-truck",
+        "/reportes/historial-auditoria" => "bi bi-shield-lock-fill",
         "/configuracion" => "bi bi-gear-fill",
         "/usuarios" => "bi bi-people",
         "/roles" => "bi bi-shield-lock-fill",

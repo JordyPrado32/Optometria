@@ -1,0 +1,269 @@
+@page "/reportes/ingresos-egresos"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Ingresos, Egresos y Flujo de Caja</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería Financiera</span>
+            <h1>Ingresos y Egresos Económicos</h1>
+            <p>Consolida las ventas y cobros frente a las compras y gastos operativos para obtener el flujo neto de la óptica.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-arrow-down-left-circle-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Ingresos Totales</span>
+                <span class="kpi-value" style="color:#5cb85c;">+$@data.TotalIncome.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#d9534f;"><i class="bi bi-arrow-up-right-circle-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Egresos Totales</span>
+                <span class="kpi-value" style="color:#d9534f;">-$@data.TotalExpense.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color: @(data.NetCashFlow >= 0 ? "#0275d8" : "#d9534f");"><i class="bi bi-cash-coin"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Flujo Neto Operativo</span>
+                <span class="kpi-value" style="color: @(data.NetCashFlow >= 0 ? "#0275d8" : "#d9534f");">$@data.NetCashFlow.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#f0ad4e;"><i class="bi bi-credit-card-2-front-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Ingresos Electrónicos</span>
+                <span class="kpi-value">$@data.IncomeElectronic.ToString("N2")</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Tipo de Movimiento</label>
+                <select class="form-select" @bind="filters.TransactionType">
+                    <option value="Todos">Todos (Ingresos y Egresos)</option>
+                    <option value="Ingreso">Solo Ingresos</option>
+                    <option value="Egreso">Solo Egresos</option>
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Usuario / Cajero</label>
+                <select class="form-select" @bind="filters.UserId">
+                    <option value="0">Todos los usuarios</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.id_usuario">@($"{u.nombres} {u.apellidos}")</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Aplicar Filtros
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Movimientos Registrados (@data.Rows.Count registros)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando información financiera...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se encontraron movimientos en este rango de fechas.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Categoría</th>
+                            <th>Comprobante / Ref</th>
+                            <th>Descripción</th>
+                            <th>Método de Pago</th>
+                            <th>Responsable</th>
+                            <th style="text-align:right;">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>
+                                    <span class="badge @(row.Type == "Ingreso" ? "bg-success" : "bg-danger")">
+                                        @row.Type
+                                    </span>
+                                </td>
+                                <td>@row.Category</td>
+                                <td><strong>@row.DocumentNumber</strong></td>
+                                <td><small>@row.Description</small></td>
+                                <td>@row.PaymentMethod</td>
+                                <td>@row.ResponsibleUser</td>
+                                <td style="text-align:right; font-weight:bold; color: @(row.Type == "Ingreso" ? "#5cb85c" : "#d9534f");">
+                                    @(row.Type == "Ingreso" ? "+" : "-")$@row.Amount.ToString("N2")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private CashFlowReportFilters filters = new();
+    private CashFlowReportResult data = new();
+    private List<tbl_usuario> users = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<CashFlowMovementRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        users = await db.tbl_usuarios.AsNoTracking().Where(u => u.activo ?? true).OrderBy(u => u.nombres).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetCashFlowReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha", "Tipo", "Categoria", "Documento", "Descripcion", "Metodo Pago", "Responsable", "Monto" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.Type,
+            r.Category,
+            r.DocumentNumber,
+            r.Description,
+            r.PaymentMethod,
+            r.ResponsibleUser,
+            (r.Type == "Ingreso" ? r.Amount : -r.Amount).ToString("F2")
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Ingresos y Egresos", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "IngresosEgresos", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-ingresos-egresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total Ingresos"] = $"+${data.TotalIncome:N2}",
+            ["Total Egresos"] = $"-${data.TotalExpense:N2}",
+            ["Flujo Neto"] = $"${data.NetCashFlow:N2}",
+            ["Ingresos Efectivo"] = $"${data.IncomeCash:N2}",
+            ["Ingresos Electronicos"] = $"${data.IncomeElectronic:N2}"
+        };
+
+        var headers = new[] { "Fecha", "Tipo", "Categoria", "Documento", "Metodo", "Monto" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.Type,
+            r.Category,
+            r.DocumentNumber,
+            r.PaymentMethod,
+            (r.Type == "Ingreso" ? "+" : "-" ) + $"${r.Amount:F2}"
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Ingresos y Egresos Economicos", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "IngresosEgresos", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-ingresos-egresos-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

@@ -1,0 +1,290 @@
+@page "/reportes/inventario-stock"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Stock y Rotación de Inventario</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería de Inventario</span>
+            <h1>Stock Actual, Agotados y Rotación de Productos</h1>
+            <p>Control de existencias valorizadas, alertas de stock mínimo o agotado y análisis de productos de mayor y menor rotación.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-boxes"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Valorización de Inventario</span>
+                <span class="kpi-value">$@data.TotalValuation.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#d9534f;"><i class="bi bi-x-octagon-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Productos Agotados</span>
+                <span class="kpi-value" style="color:#d9534f;">@data.DepletedCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#f0ad4e;"><i class="bi bi-exclamation-triangle-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Stock Bajo / Crítico</span>
+                <span class="kpi-value" style="color:#f0ad4e;">@data.CriticalStockCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-fire"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Alta Rotación (Top)</span>
+                <span class="kpi-value" style="color:#5cb85c;">@data.TopSellingProductsCount</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Categoría</label>
+                <select class="form-select" @bind="filters.CategoryId">
+                    <option value="0">Todas las categorías</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c.id_categoria">@c.nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Proveedor</label>
+                <select class="form-select" @bind="filters.SupplierId">
+                    <option value="0">Todos los proveedores</option>
+                    @foreach (var s in suppliers)
+                    {
+                        <option value="@s.id_proveedor">@s.nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Estado Stock</label>
+                <select class="form-select" @bind="filters.StockStatus">
+                    <option value="Todos">Todos</option>
+                    <option value="Agotado">Agotados</option>
+                    <option value="Stock Crítico">Stock Crítico</option>
+                    <option value="Óptimo">Óptimo</option>
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Rotación</label>
+                <select class="form-select" @bind="filters.SortBy">
+                    <option value="MayorRotacion">Más Vendidos</option>
+                    <option value="MenorRotacion">Menor Rotación</option>
+                </select>
+            </div>
+            <div class="reports-filter-item" style="flex: 2 1 200px;">
+                <label>Buscar producto / código</label>
+                <input type="text" class="form-control" placeholder="Nombre o código..." @bind="filters.SearchTerm" @bind:event="oninput" />
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Aplicar Filtros
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Inventario de Productos (@data.Rows.Count productos)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando inventario y métricas de rotación...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se encontraron productos con los filtros seleccionados.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Proveedor</th>
+                            <th>Stock Actual</th>
+                            <th>Stock Mínimo</th>
+                            <th>Estado</th>
+                            <th>Ventas (90d)</th>
+                            <th>Rotación</th>
+                            <th>P. Compra</th>
+                            <th>Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td><code>@row.Code</code></td>
+                                <td><strong>@row.Name</strong></td>
+                                <td>@row.Category</td>
+                                <td>@row.Supplier</td>
+                                <td style="font-weight:bold; font-size:1.05rem; color: @(row.CurrentStock <= 0 ? "#d9534f" : row.CurrentStock <= row.MinStock ? "#f0ad4e" : "#333");">
+                                    @row.CurrentStock
+                                </td>
+                                <td>@row.MinStock</td>
+                                <td>
+                                    <span class="badge @(row.StockStatus == "Agotado" ? "bg-danger" : row.StockStatus == "Stock Crítico" ? "bg-warning text-dark" : "bg-success")">
+                                        @row.StockStatus
+                                    </span>
+                                </td>
+                                <td>@row.UnitsSold90Days unid.</td>
+                                <td>
+                                    <span class="badge @(row.RotationLevel.Contains("Alta") ? "bg-success" : row.RotationLevel.Contains("Media") ? "bg-info text-dark" : "bg-secondary")">
+                                        @row.RotationLevel
+                                    </span>
+                                </td>
+                                <td>$@row.CostPrice.ToString("N2")</td>
+                                <td><strong>$@row.TotalValuation.ToString("N2")</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private InventoryStockReportFilters filters = new();
+    private InventoryStockReportResult data = new();
+    private List<tbl_categoria_producto> categories = [];
+    private List<tbl_proveedor> suppliers = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<InventoryStockReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        categories = await db.tbl_categoria_productos.AsNoTracking().Where(c => c.activo ?? true).OrderBy(c => c.nombre).ToListAsync();
+        suppliers = await db.tbl_proveedors.AsNoTracking().Where(s => s.es_activo ?? true).OrderBy(s => s.nombre).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetInventoryStockReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Codigo", "Producto", "Categoria", "Proveedor", "Stock Actual", "Stock Minimo", "Estado", "Ventas 90d", "Rotacion", "P. Compra", "P. Venta", "Valor Total" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Code,
+            r.Name,
+            r.Category,
+            r.Supplier,
+            r.CurrentStock.ToString(),
+            r.MinStock.ToString(),
+            r.StockStatus,
+            r.UnitsSold90Days.ToString(),
+            r.RotationLevel,
+            r.CostPrice.ToString("F2"),
+            r.SalePrice.ToString("F2"),
+            r.TotalValuation.ToString("F2")
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Inventario y Rotacion", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "InventarioStock", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-inventario-stock-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Total de Productos"] = $"{data.TotalProductsCount}",
+            ["Valor Total de Inventario"] = $"${data.TotalValuation:N2}",
+            ["Productos Agotados"] = $"{data.DepletedCount}",
+            ["En Stock Critico"] = $"{data.CriticalStockCount}",
+            ["Alta Rotacion"] = $"{data.TopSellingProductsCount}",
+            ["Baja Rotacion"] = $"{data.SlowMovingProductsCount}"
+        };
+
+        var headers = new[] { "Codigo", "Producto", "Categoria", "Stock", "Estado", "Ventas", "Valor Total" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Code,
+            r.Name,
+            r.Category,
+            r.CurrentStock.ToString(),
+            r.StockStatus,
+            r.UnitsSold90Days.ToString(),
+            $"${r.TotalValuation:F2}"
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Stock y Rotacion de Inventario", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "InventarioStock", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-inventario-stock-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

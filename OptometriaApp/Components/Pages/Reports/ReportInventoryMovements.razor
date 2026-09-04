@@ -1,0 +1,280 @@
+@page "/reportes/movimientos-inventario"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Movimientos de Inventario (Kardex)</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería de Inventario</span>
+            <h1>Movimientos de Inventario y Kardex</h1>
+            <p>Auditoría de trazabilidad de entradas, salidas, ventas, devoluciones y ajustes de inventario con saldos resultantes.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-journal-text"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Total Movimientos</span>
+                <span class="kpi-value">@data.TotalMovementsCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-box-arrow-in-down"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Unidades Ingresadas</span>
+                <span class="kpi-value" style="color:#5cb85c;">+@data.TotalEntriesQuantity unid.</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#d9534f;"><i class="bi bi-box-arrow-up"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Unidades Egresadas</span>
+                <span class="kpi-value" style="color:#d9534f;">-@data.TotalExitsQuantity unid.</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#f0ad4e;"><i class="bi bi-sliders"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Ajustes Realizados</span>
+                <span class="kpi-value">@data.TotalAdjustmentsQuantity unid.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Tipo Movimiento</label>
+                <select class="form-select" @bind="filters.MovementType">
+                    <option value="Todos">Todos</option>
+                    <option value="Entrada">Entrada (Compra/Ingreso)</option>
+                    <option value="Salida">Salida (Venta/Egreso)</option>
+                    <option value="Ajuste">Ajuste de Inventario</option>
+                    <option value="Devolución">Devolución</option>
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Categoría</label>
+                <select class="form-select" @bind="filters.CategoryId">
+                    <option value="0">Todas las categorías</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c.id_categoria">@c.nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Filtrar Movimientos
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Movimientos Registrados en Kardex (@data.Rows.Count registros)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando movimientos de inventario...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se registraron movimientos en este período con los filtros indicados.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Tipo</th>
+                            <th>Referencia</th>
+                            <th>Cantidad</th>
+                            <th>Costo Unit.</th>
+                            <th>Costo Total</th>
+                            <th>Stock Ant.</th>
+                            <th>Stock Nuevo</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><strong>@row.ProductName</strong></td>
+                                <td>@row.Category</td>
+                                <td>
+                                    <span class="badge @(row.MovementType.Contains("Entrada") ? "bg-success" : row.MovementType.Contains("Salida") ? "bg-danger" : "bg-warning text-dark")">
+                                        @row.MovementType
+                                    </span>
+                                </td>
+                                <td>@row.DocumentReference</td>
+                                <td style="font-weight:bold;">@row.Quantity</td>
+                                <td>$@row.UnitCost.ToString("N2")</td>
+                                <td>$@row.TotalCost.ToString("N2")</td>
+                                <td>@row.PreviousStock</td>
+                                <td style="font-weight:bold; color:#0275d8;">@row.NewStock</td>
+                                <td>@row.User</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private InventoryMovementsReportFilters filters = new();
+    private InventoryMovementsReportResult data = new();
+    private List<tbl_categoria_producto> categories = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<InventoryMovementReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        categories = await db.tbl_categoria_productos.AsNoTracking().Where(c => c.activo ?? true).OrderBy(c => c.nombre).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetInventoryMovementsReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha", "Producto", "Categoria", "Tipo Movimiento", "Referencia", "Cantidad", "Costo Unit", "Costo Total", "Stock Anterior", "Stock Nuevo", "Usuario", "Motivo" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.ProductName,
+            r.Category,
+            r.MovementType,
+            r.DocumentReference,
+            r.Quantity.ToString(),
+            r.UnitCost.ToString("F2"),
+            r.TotalCost.ToString("F2"),
+            r.PreviousStock.ToString(),
+            r.NewStock.ToString(),
+            r.User,
+            r.Reason
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Movimientos de Inventario", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "MovimientosInventario", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total Movimientos"] = $"{data.TotalMovementsCount}",
+            ["Total Unidades Ingreso"] = $"+{data.TotalEntriesQuantity}",
+            ["Total Unidades Egreso"] = $"-{data.TotalExitsQuantity}",
+            ["Total Ajustes"] = $"{data.TotalAdjustmentsQuantity}",
+            ["Valor Absoluto Movido"] = $"${data.TotalMovementsValue:N2}"
+        };
+
+        var headers = new[] { "Fecha", "Producto", "Tipo", "Ref", "Cant", "Stock Ant", "Stock Nuevo" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.ProductName,
+            r.MovementType,
+            r.DocumentReference,
+            r.Quantity.ToString(),
+            r.PreviousStock.ToString(),
+            r.NewStock.ToString()
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Movimientos de Inventario (Kardex)", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "MovimientosInventario", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-kardex-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

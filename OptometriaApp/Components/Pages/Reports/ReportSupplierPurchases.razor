@@ -1,0 +1,275 @@
+@page "/reportes/compras-proveedores"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Compras a Proveedores</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería de Adquisiciones</span>
+            <h1>Compras Realizadas a Proveedores</h1>
+            <p>Historial de compras realizadas a cada proveedor con fechas, productos adquiridos, montos e impuestos acumulados.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-cart-check-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Compras Totales ($)</span>
+                <span class="kpi-value">$@data.TotalPurchasesAmount.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-truck"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Proveedores Facturados</span>
+                <span class="kpi-value">@data.DistinctSuppliersCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#6f42c1;"><i class="bi bi-receipt"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Órdenes de Compra</span>
+                <span class="kpi-value">@data.TotalOrdersCount órdenes</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#f0ad4e;"><i class="bi bi-percent"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">IVA Crédito Tributario</span>
+                <span class="kpi-value">$@data.TotalTaxAmount.ToString("N2")</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Proveedor</label>
+                <select class="form-select" @bind="filters.SupplierId">
+                    <option value="0">Todos los proveedores</option>
+                    @foreach (var s in suppliers)
+                    {
+                        <option value="@s.id_proveedor">@s.nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Estado Orden</label>
+                <select class="form-select" @bind="filters.State">
+                    <option value="Todos">Todos</option>
+                    <option value="Emitida">Emitida</option>
+                    <option value="Aprobada">Aprobada</option>
+                    <option value="Recibida">Recibida</option>
+                    <option value="Completada">Completada</option>
+                    <option value="Anulada">Anulada</option>
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Aplicar Filtros
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Detalle de Compras Realizadas (@data.Rows.Count registros)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando historial de compras...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se registraron compras a proveedores en este período.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>No. Orden</th>
+                            <th>Proveedor</th>
+                            <th>RUC / Cédula</th>
+                            <th>Productos Adquiridos</th>
+                            <th>Comprador</th>
+                            <th>Subtotal</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><strong>@row.OrderNumber</strong></td>
+                                <td><strong>@row.SupplierName</strong></td>
+                                <td>@row.SupplierRuc</td>
+                                <td><small>@row.ItemsDetails</small></td>
+                                <td>@row.BuyerUser</td>
+                                <td>$@row.Subtotal.ToString("N2")</td>
+                                <td>$@row.Tax.ToString("N2")</td>
+                                <td><strong>$@row.Total.ToString("N2")</strong></td>
+                                <td>
+                                    <span class="badge @(row.State == "Completada" || row.State == "Recibida" ? "bg-success" : row.State == "Anulada" ? "bg-danger" : "bg-primary")">
+                                        @row.State
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private SupplierPurchasesReportFilters filters = new();
+    private SupplierPurchasesReportResult data = new();
+    private List<tbl_proveedor> suppliers = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<SupplierPurchaseReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        suppliers = await db.tbl_proveedors.AsNoTracking().Where(s => s.es_activo ?? true).OrderBy(s => s.nombre).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetSupplierPurchasesReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha", "No. Orden", "Proveedor", "RUC", "Productos", "Comprador", "Subtotal", "IVA", "Total", "Estado" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.OrderNumber,
+            r.SupplierName,
+            r.SupplierRuc,
+            r.ItemsDetails,
+            r.BuyerUser,
+            r.Subtotal.ToString("F2"),
+            r.Tax.ToString("F2"),
+            r.Total.ToString("F2"),
+            r.State
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Compras a Proveedores", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "ComprasProveedores", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-compras-proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total Compras"] = $"${data.TotalPurchasesAmount:N2}",
+            ["Total IVA Credito"] = $"${data.TotalTaxAmount:N2}",
+            ["Proveedores Comprados"] = $"{data.DistinctSuppliersCount}",
+            ["Total de Ordenes"] = $"{data.TotalOrdersCount}"
+        };
+
+        var headers = new[] { "Fecha", "Orden", "Proveedor", "RUC", "Total", "Estado" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.OrderNumber,
+            r.SupplierName,
+            r.SupplierRuc,
+            $"${r.Total:F2}",
+            r.State
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Compras a Proveedores", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "ComprasProveedores", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-compras-proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

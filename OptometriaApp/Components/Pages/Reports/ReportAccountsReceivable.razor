@@ -1,0 +1,264 @@
+@page "/reportes/cuentas-por-cobrar"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Cuentas por Cobrar y Mora</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería Financiera</span>
+            <h1>Clientes con Deuda y Días de Mora</h1>
+            <p>Monitorea la cartera de clientes, pagos pendientes y detecta deudas que superan el umbral de mora configurable.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#d9534f;"><i class="bi bi-exclamation-triangle-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Mora Crítica (> @(filters.MinOverdueDays ?? 30) días)</span>
+                <span class="kpi-value">@data.CriticalOverdueCount clientes</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#f0ad4e;"><i class="bi bi-cash-stack"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Saldo Total Vencido</span>
+                <span class="kpi-value">$@data.TotalOverdueBalance.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-wallet2"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Saldo Total por Cobrar</span>
+                <span class="kpi-value">$@data.TotalBalance.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Total Recaudado</span>
+                <span class="kpi-value">$@data.TotalCollected.ToString("N2")</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Días de mora mínimos</label>
+                <select class="form-select" @bind="filters.MinOverdueDays">
+                    <option value="0">Sin umbral (Todos)</option>
+                    <option value="15">> 15 días</option>
+                    <option value="30">> 30 días (Crítico)</option>
+                    <option value="45">> 45 días</option>
+                    <option value="60">> 60 días</option>
+                    <option value="90">> 90 días</option>
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Estado de cuenta</label>
+                <select class="form-select" @bind="filters.Status">
+                    <option value="Todos">Todos los estados</option>
+                    <option value="Vencida">Vencidas</option>
+                    <option value="Pendiente">Pendientes al día</option>
+                    <option value="Pagada">Pagadas</option>
+                </select>
+            </div>
+            <div class="reports-filter-item" style="flex: 2 1 240px;">
+                <label>Buscar cliente / factura</label>
+                <input type="text" class="form-control" placeholder="Nombre, cédula o comprobante..." @bind="filters.SearchTerm" @bind:event="oninput" />
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Consultar
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Detalle de Cuentas (@data.Rows.Count registros)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando información...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se encontraron registros con los filtros seleccionados.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Contacto</th>
+                            <th>Documento</th>
+                            <th>Emisión</th>
+                            <th>Vencimiento</th>
+                            <th>Días Mora</th>
+                            <th>Monto Total</th>
+                            <th>Saldo Pendiente</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td><strong>@row.ClientName</strong></td>
+                                <td><small>@row.Phone<br />@row.Email</small></td>
+                                <td>@row.DocumentNumber</td>
+                                <td>@row.IssueDate.ToString("yyyy-MM-dd")</td>
+                                <td>@row.DueDate.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    @if (row.DaysOverdue > 0)
+                                    {
+                                        <span class="badge @(row.DaysOverdue >= 30 ? "bg-danger" : "bg-warning text-dark")">@row.DaysOverdue días</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Al día</span>
+                                    }
+                                </td>
+                                <td>$@row.TotalAmount.ToString("N2")</td>
+                                <td><strong style="color: @(row.Balance > 0 ? "#d9534f" : "#5cb85c");">$@row.Balance.ToString("N2")</strong></td>
+                                <td>
+                                    <span class="badge @(row.Status == "Vencida" ? "bg-danger" : row.Status == "Pendiente" ? "bg-warning text-dark" : "bg-success")">
+                                        @row.Status
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private AccountsReceivableReportFilters filters = new();
+    private AccountsReceivableReportResult data = new();
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<AccountsReceivableReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetAccountsReceivableReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Cliente", "Telefono", "Email", "Documento", "Fecha Emision", "Fecha Vencimiento", "Dias Mora", "Monto Total", "Abonado", "Saldo", "Estado" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.ClientName,
+            r.Phone,
+            r.Email,
+            r.DocumentNumber,
+            r.IssueDate.ToString("yyyy-MM-dd"),
+            r.DueDate.ToString("yyyy-MM-dd"),
+            r.DaysOverdue.ToString(),
+            r.TotalAmount.ToString("F2"),
+            r.PaidAmount.ToString("F2"),
+            r.Balance.ToString("F2"),
+            r.Status
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Clientes con Deuda y Mora", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "CuentasPorCobrar", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-deudas-mora-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Cartera Total"] = $"${data.TotalPortfolio:N2}",
+            ["Saldo Vencido"] = $"${data.TotalOverdueBalance:N2}",
+            ["Saldo por Cobrar"] = $"${data.TotalBalance:N2}",
+            ["Clientes en Mora Critica"] = $"{data.CriticalOverdueCount}"
+        };
+
+        var headers = new[] { "Cliente", "Documento", "Vencimiento", "Mora", "Total", "Saldo", "Estado" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.ClientName,
+            r.DocumentNumber,
+            r.DueDate.ToString("yyyy-MM-dd"),
+            $"{r.DaysOverdue}d",
+            $"${r.TotalAmount:F2}",
+            $"${r.Balance:F2}",
+            r.Status
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Clientes con Deuda y Mora", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "CuentasPorCobrar", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-deudas-mora-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

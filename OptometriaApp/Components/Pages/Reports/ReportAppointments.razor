@@ -1,0 +1,270 @@
+@page "/reportes/citas"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Citas y Turnos</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería Médica y de Agenda</span>
+            <h1>Control de Citas y Turnos</h1>
+            <p>Auditoría de agenda médica: citas programadas, atendidas, canceladas, reprogramadas y tasa de cumplimiento.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-calendar2-check-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Citas Totales</span>
+                <span class="kpi-value">@data.TotalAppointments</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-person-check-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Atendidas / Realizadas</span>
+                <span class="kpi-value" style="color:#5cb85c;">@data.AttendedCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#d9534f;"><i class="bi bi-person-x-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Canceladas</span>
+                <span class="kpi-value" style="color:#d9534f;">@data.CancelledCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#f0ad4e;"><i class="bi bi-pie-chart-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Tasa de Cumplimiento</span>
+                <span class="kpi-value">@data.FulfillmentRate%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Médico / Especialista</label>
+                <select class="form-select" @bind="filters.DoctorId">
+                    <option value="0">Todos los médicos</option>
+                    @foreach (var d in doctors)
+                    {
+                        <option value="@d.id_medico">@($"{d.id_usuarioNavigation?.nombres} {d.id_usuarioNavigation?.apellidos}")</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Estado de Cita</label>
+                <select class="form-select" @bind="filters.State">
+                    <option value="Todos">Todos los estados</option>
+                    <option value="Realizada">Realizada / Atendida</option>
+                    <option value="Confirmada">Confirmada</option>
+                    <option value="Programada">Programada</option>
+                    <option value="Reprogramada">Reprogramada</option>
+                    <option value="Cancelada">Cancelada</option>
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Aplicar Filtros
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Listado de Citas (@data.Rows.Count registros)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando reporte de citas...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se encontraron citas con los criterios seleccionados.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Horario</th>
+                            <th>Paciente</th>
+                            <th>Contacto</th>
+                            <th>Médico Asignado</th>
+                            <th>Tipo</th>
+                            <th>Motivo</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd")</td>
+                                <td><span class="badge bg-light text-dark">@row.TimeSlot</span></td>
+                                <td><strong>@row.PatientName</strong></td>
+                                <td><small>@row.PatientPhone</small></td>
+                                <td>@row.DoctorName</td>
+                                <td>@row.Type</td>
+                                <td><small>@row.Reason</small></td>
+                                <td>
+                                    <span class="badge @(row.State.Contains("Realizada") ? "bg-success" : row.State.Contains("Cancelada") ? "bg-danger" : row.State.Contains("Confirmada") ? "bg-primary" : "bg-warning text-dark")">
+                                        @row.State
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private AppointmentsReportFilters filters = new();
+    private AppointmentsReportResult data = new();
+    private List<tbl_medico> doctors = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<AppointmentsReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        doctors = await db.tbl_medico.AsNoTracking().Include(m => m.id_usuarioNavigation).Where(m => m.activo ?? true).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetAppointmentsReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha", "Horario", "Paciente", "Telefono", "Medico", "Tipo", "Motivo", "Estado" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.TimeSlot,
+            r.PatientName,
+            r.PatientPhone,
+            r.DoctorName,
+            r.Type,
+            r.Reason,
+            r.State
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Citas y Turnos", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "CitasTurnos", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total de Citas"] = $"{data.TotalAppointments}",
+            ["Atendidas"] = $"{data.AttendedCount}",
+            ["Canceladas"] = $"{data.CancelledCount}",
+            ["Pendientes / En Curso"] = $"{data.PendingCount}",
+            ["Cumplimiento"] = $"{data.FulfillmentRate}%"
+        };
+
+        var headers = new[] { "Fecha", "Horario", "Paciente", "Medico", "Tipo", "Estado" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.TimeSlot,
+            r.PatientName,
+            r.DoctorName,
+            r.Type,
+            r.State
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Citas y Turnos", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "CitasTurnos", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-citas-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}
