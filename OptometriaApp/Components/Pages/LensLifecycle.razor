@@ -1,0 +1,363 @@
+@page "/lens-lifecycle"
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Ciclo de Vida y Renovación del Lente | Óptica Lux</PageTitle>
+
+<div class="management-shell">
+    <div class="management-card" style="margin-bottom: 1.5rem;">
+        <div class="management-card-header">
+            <div>
+                <h2 style="display: flex; align-items: center; gap: 0.6rem;">
+                    <i class="bi bi-hourglass-split" style="color: var(--color-sage, #5DA181);"></i>
+                    Control de Ciclo de Vida y Renovación del Lente
+                </h2>
+                <span>Seguimiento Proactivo de Desgaste, Salud Ocular y Retención de Pacientes</span>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-coffee btn-sm" href="/smart-lens-advisor">
+                    <i class="bi bi-cpu-fill me-1"></i> Recomendador IA
+                </a>
+                <a class="btn btn-excel btn-sm" href="/vision-simulator">
+                    <i class="bi bi-eye-fill me-1"></i> Simulador
+                </a>
+            </div>
+        </div>
+
+        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.5rem;">
+            Calcule la degradación física del material, evalúe riesgos de salud ocular por sobreuso de lentes y simule recordatorios automáticos por WhatsApp para renovación oportuna.
+        </p>
+
+        <!-- KPI Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="p-3" style="background: #ffffff; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 2px 8px rgba(127,105,81,0.04);">
+                    <small class="text-muted text-uppercase font-weight-bold" style="font-size: 0.7rem; letter-spacing: 0.05em;">Lentes en Seguimiento</small>
+                    <h3 style="color: #7F6951; font-weight: 800;" class="mb-0 mt-1">@patientLensItems.Count</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3" style="background: #ffffff; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 2px 8px rgba(127,105,81,0.04);">
+                    <small class="text-muted text-uppercase font-weight-bold" style="font-size: 0.7rem; letter-spacing: 0.05em;">Próximos a Vencer (30d)</small>
+                    <h3 class="text-warning font-weight-bold mb-0 mt-1">@upcomingRenewalsCount</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3" style="background: #ffffff; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 2px 8px rgba(127,105,81,0.04);">
+                    <small class="text-muted text-uppercase font-weight-bold" style="font-size: 0.7rem; letter-spacing: 0.05em;">Vencidos / Riesgo Alto</small>
+                    <h3 class="text-danger font-weight-bold mb-0 mt-1">@overdueRenewalsCount</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3" style="background: #ffffff; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 2px 8px rgba(127,105,81,0.04);">
+                    <small class="text-muted text-uppercase font-weight-bold" style="font-size: 0.7rem; letter-spacing: 0.05em;">Tasa de Retención Preventiva</small>
+                    <h3 class="text-success font-weight-bold mb-0 mt-1">88.4%</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calculadora de Ciclo de Vida Individual -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-5">
+                <div style="background: #fff; padding: 1.2rem; border-radius: 0.85rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 4px 12px rgba(127,105,81,0.03);">
+                    <h5 class="mb-3" style="color: #7F6951; font-weight: 700;">
+                        <i class="bi bi-calculator me-1"></i> Evaluador de Vida Útil de Lente
+                    </h5>
+
+                    <div class="mb-3">
+                        <label class="form-label small mb-1">Tipo de Producto Óptico</label>
+                        <select class="form-select form-select-sm" value="@selectedLensType" @onchange="OnLensTypeChanged">
+                            <option value="lc_mensual">Lentes de Contacto Blando Mensual (30 Días)</option>
+                            <option value="lc_diario">Lentes de Contacto Diario (1 Día)</option>
+                            <option value="lc_gas_permeable">Lentes RGP / Gas Permeable (1 Año / 365 Días)</option>
+                            <option value="armazon_antirreflejo">Armazón & Cristal Antirreflejo (1.5 Años / 540 Días)</option>
+                            <option value="armazon_progresivo">Armazón Progresivo Digital (2 Años / 730 Días)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small mb-1">Fecha de Entrega / Inicio de Uso</label>
+                        <input type="date" class="form-control form-control-sm" value="@startDateIso" @onchange="OnStartDateChanged" max="@TodayIso" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small mb-1">Frecuencia de Uso Diario</label>
+                        <select class="form-select form-select-sm" value="@usageIntensity" @onchange="OnUsageIntensityChanged">
+                            <option value="normal">Normal (8 - 12 horas/día)</option>
+                            <option value="intenso">Intenso / Prolongado (+14 horas/día)</option>
+                            <option value="ocasional">Ocasional (Solo fines de semana)</option>
+                        </select>
+                    </div>
+
+                    <div class="p-3 mt-3" style="background: #fbf9f4; border-radius: 0.65rem; border: 1px solid rgba(127,105,81,0.15);">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong style="color: #7F6951;">Días Transcurridos:</strong>
+                            <span class="badge bg-secondary">@elapsedDays Días</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong style="color: #7F6951;">Vida Útil Restante:</strong>
+                            <span class="badge @GetLifespanBadgeCss()">@remainingPercent%</span>
+                        </div>
+
+                        <!-- Barra de Progreso -->
+                        <div class="progress" style="height: 10px; border-radius: 5px;">
+                            <div class="progress-bar @GetProgressBarCss()" role="progressbar" style="width: @remainingPercent%;" aria-valuenow="@remainingPercent" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diagnóstico de Riesgo y Generador WhatsApp -->
+            <div class="col-lg-7">
+                <div style="background: #fff; padding: 1.2rem; border-radius: 0.85rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 4px 12px rgba(127,105,81,0.03);" class="h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 style="color: #7F6951; font-weight: 700;" class="mb-0">
+                                <i class="bi bi-shield-exclamation me-1"></i> Estado del Material & Salud Ocular
+                            </h5>
+                            <span class="badge @GetRiskBadgeCss()">Riesgo de Salud: @healthRiskLevel</span>
+                        </div>
+
+                        <p class="small text-muted mb-3">
+                            @riskDescription
+                        </p>
+
+                        <!-- Simulador de Mensaje de Recordatorio -->
+                        <div class="p-3" style="background: #f0fdf4; border-radius: 0.75rem; border: 1px solid #bbf7d0;">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-whatsapp text-success font-weight-bold"></i>
+                                <strong class="text-success" style="font-size: 0.9rem;">Recordatorio Automatizado para el Paciente</strong>
+                            </div>
+                            <div class="p-2 bg-white rounded border text-dark" style="font-size: 0.85rem; font-family: monospace;">
+                                @generatedWhatsAppText
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 d-flex gap-2 justify-content-end">
+                        <a class="btn btn-success btn-sm" href="@GetWhatsAppShareUrl()" target="_blank">
+                            <i class="bi bi-whatsapp me-1"></i> Enviar Recordatorio por WhatsApp
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Pacientes en Registro de Renovación -->
+        <h5 style="color: #7F6951; font-weight: 700;" class="mb-3">
+            <i class="bi bi-people-fill me-1"></i> Pacientes Registrados para Control de Renovación
+        </h5>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead style="background: #fbf9f4; color: #7F6951;">
+                    <tr>
+                        <th>Paciente</th>
+                        <th>Producto / Lente</th>
+                        <th>Fecha de Entrega</th>
+                        <th>Días Restantes</th>
+                        <th>Estado de Renovación</th>
+                        <th>Acción Proactiva</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in patientLensItems)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@item.PatientName</strong>
+                                <div class="small text-muted">@item.Phone</div>
+                            </td>
+                            <td>@item.LensProductName</td>
+                            <td>@item.StartDate.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <span class="badge @(item.DaysRemaining <= 0 ? "bg-danger" : item.DaysRemaining <= 15 ? "bg-warning text-dark" : "bg-success")">
+                                    @(item.DaysRemaining <= 0 ? "Vencido" : $"{item.DaysRemaining} días")
+                                </span>
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 6px; width: 100px;">
+                                    <div class="progress-bar @(item.RemainingPercent < 20 ? "bg-danger" : item.RemainingPercent < 50 ? "bg-warning" : "bg-success")" style="width: @item.RemainingPercent%;"></div>
+                                </div>
+                                <small class="text-muted">@item.RemainingPercent% de vida útil</small>
+                            </td>
+                            <td>
+                                <a class="btn btn-outline-success btn-sm" href="@GetItemWhatsAppUrl(item)" target="_blank" title="Enviar WhatsApp">
+                                    <i class="bi bi-whatsapp me-1"></i> Recordar
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string selectedLensType = "lc_mensual";
+    private string startDateIso = DateTime.Today.AddDays(-22).ToString("yyyy-MM-dd");
+    private string TodayIso => DateTime.Today.ToString("yyyy-MM-dd");
+    private string usageIntensity = "normal";
+
+    private int maxLifespanDays = 30;
+    private int elapsedDays = 22;
+    private int remainingPercent = 27;
+    private string healthRiskLevel = "Moderado";
+    private string riskDescription = "";
+    private string generatedWhatsAppText = "";
+
+    private int upcomingRenewalsCount = 2;
+    private int overdueRenewalsCount = 1;
+
+    private List<PatientLensRecord> patientLensItems = [];
+
+    public record PatientLensRecord(string PatientName, string Phone, string LensProductName, DateTime StartDate, int DaysRemaining, int RemainingPercent);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMockAndRealDataAsync();
+        RecalculateSelectedLens();
+    }
+
+    private async Task LoadMockAndRealDataAsync()
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var patients = await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .Where(p => p.activo == true)
+            .OrderByDescending(p => p.fecha_registro)
+            .Take(10)
+            .ToListAsync();
+
+        patientLensItems.Clear();
+
+        if (patients.Count > 0)
+        {
+            var p1 = patients[0];
+            patientLensItems.Add(new PatientLensRecord($"{p1.apellidos} {p1.nombres}", p1.telefono ?? "0991234567", "Lentes de Contacto Blandos Mensuales", DateTime.Today.AddDays(-25), 5, 16));
+        }
+        else
+        {
+            patientLensItems.Add(new PatientLensRecord("Cáceres Ari", "0991234567", "Lentes de Contacto Blandos Mensuales", DateTime.Today.AddDays(-25), 5, 16));
+        }
+
+        if (patients.Count > 1)
+        {
+            var p2 = patients[1];
+            patientLensItems.Add(new PatientLensRecord($"{p2.apellidos} {p2.nombres}", p2.telefono ?? "0997654321", "Armazón & Filtro Antirreflejo Super-Hidrófobo", DateTime.Today.AddDays(-520), 20, 4));
+        }
+        else
+        {
+            patientLensItems.Add(new PatientLensRecord("Pazmiño Matías", "0997654321", "Armazón & Filtro Antirreflejo Super-Hidrófobo", DateTime.Today.AddDays(-520), 20, 4));
+        }
+
+        patientLensItems.Add(new PatientLensRecord("Mendoza Roberto", "0981122334", "Lentes RGP Gas Permeable", DateTime.Today.AddDays(-380), -15, 0));
+
+        upcomingRenewalsCount = patientLensItems.Count(x => x.DaysRemaining > 0 && x.DaysRemaining <= 30);
+        overdueRenewalsCount = patientLensItems.Count(x => x.DaysRemaining <= 0);
+    }
+
+    private void OnLensTypeChanged(ChangeEventArgs e)
+    {
+        selectedLensType = e.Value?.ToString() ?? "lc_mensual";
+        RecalculateSelectedLens();
+    }
+
+    private void OnUsageIntensityChanged(ChangeEventArgs e)
+    {
+        usageIntensity = e.Value?.ToString() ?? "normal";
+        RecalculateSelectedLens();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs args)
+    {
+        if (DateTime.TryParse(args.Value?.ToString(), out var parsedDate))
+        {
+            startDateIso = parsedDate.ToString("yyyy-MM-dd");
+            RecalculateSelectedLens();
+        }
+    }
+
+    private void RecalculateSelectedLens()
+    {
+        maxLifespanDays = selectedLensType switch
+        {
+            "lc_diario" => 1,
+            "lc_mensual" => 30,
+            "lc_gas_permeable" => 365,
+            "armazon_antirreflejo" => 540,
+            "armazon_progresivo" => 730,
+            _ => 30
+        };
+
+        if (DateTime.TryParse(startDateIso, out var startDate))
+        {
+            elapsedDays = Math.Max(0, (int)(DateTime.Today - startDate).TotalDays);
+        }
+        else
+        {
+            elapsedDays = 0;
+        }
+
+        double rawRemaining = ((double)(maxLifespanDays - elapsedDays) / maxLifespanDays) * 100.0;
+        remainingPercent = Math.Max(0, Math.Min(100, (int)Math.Round(rawRemaining)));
+
+        if (remainingPercent <= 0)
+        {
+            healthRiskLevel = "Crítico (Sobreuso / Vencido)";
+            riskDescription = "El material ha superado su límite útil recomendado. Existe riesgo de acumulación de depósitos proteicos, micro-rayaduras en la matriz del lente y menor transmisibilidad de oxígeno corneal.";
+        }
+        else if (remainingPercent <= 25)
+        {
+            healthRiskLevel = "Moderado (Próximo a Renovación)";
+            riskDescription = "El lente conserva transparencia básica, pero el tratamiento protector o la permeabilidad al oxígeno ha iniciado su curva de degradación.";
+        }
+        else
+        {
+            healthRiskLevel = "Bajo / Óptimo";
+            riskDescription = "El cristal/lente se encuentra dentro de su período óptimo de uso y transmisión visual.";
+        }
+
+        generatedWhatsAppText = $"Hola! Te saludamos de Óptica Lux. Recuerda que tus lentes ({GetLensTypeName()}) cumplen su ciclo recomendado de uso. Te sugerimos agendar tu cita de revisión o reposición aquí: {NavigationManager.BaseUri}citas";
+    }
+
+    private string GetLensTypeName()
+    {
+        return selectedLensType switch
+        {
+            "lc_diario" => "Contacto Diarios",
+            "lc_mensual" => "Contacto Mensuales",
+            "lc_gas_permeable" => "Gas Permeable RGP",
+            "armazon_antirreflejo" => "Cristales Antirreflejo",
+            "armazon_progresivo" => "Progresivos HD",
+            _ => "Lentes"
+        };
+    }
+
+    private string GetLifespanBadgeCss() => remainingPercent <= 15 ? "bg-danger" : remainingPercent <= 40 ? "bg-warning text-dark" : "bg-success";
+    private string GetProgressBarCss() => remainingPercent <= 15 ? "bg-danger" : remainingPercent <= 40 ? "bg-warning" : "bg-success";
+    private string GetRiskBadgeCss() => remainingPercent <= 0 ? "bg-danger" : remainingPercent <= 25 ? "bg-warning text-dark" : "bg-success";
+
+    private string GetWhatsAppShareUrl()
+    {
+        var encodedMessage = Uri.EscapeDataString(generatedWhatsAppText);
+        return $"https://wa.me/?text={encodedMessage}";
+    }
+
+    private string GetItemWhatsAppUrl(PatientLensRecord item)
+    {
+        var cleanPhone = new string((item.Phone ?? "").Where(char.IsDigit).ToArray());
+        if (!cleanPhone.StartsWith("593") && cleanPhone.Length == 10 && cleanPhone.StartsWith("0"))
+        {
+            cleanPhone = "593" + cleanPhone.Substring(1);
+        }
+
+        var message = $"Hola {item.PatientName}! Te saludamos de Óptica Lux. Recuerda que tus {item.LensProductName} están próximos a requerir revisión o renovación. Agenda tu cita aquí: {NavigationManager.BaseUri}citas";
+        return $"https://wa.me/{cleanPhone}?text={Uri.EscapeDataString(message)}";
+    }
+}

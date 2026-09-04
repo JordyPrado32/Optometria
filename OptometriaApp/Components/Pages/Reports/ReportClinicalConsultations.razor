@@ -1,0 +1,257 @@
+@page "/reportes/consultas-clinicas"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Consultas Optométricas y Diagnósticos</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería Clínica</span>
+            <h1>Consultas Optométricas y Diagnósticos</h1>
+            <p>Historial clínico de consultas realizadas, diagnósticos refractivos/oculares, prescripciones y tratamientos.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-journal-medical"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Consultas Realizadas</span>
+                <span class="kpi-value">@data.TotalConsultations</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-people-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Pacientes Únicos Atendidos</span>
+                <span class="kpi-value">@data.DistinctPatientsCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#6f42c1;"><i class="bi bi-prescription2"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Tratamientos / Recetas</span>
+                <span class="kpi-value">@data.TreatmentsCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#20c997;"><i class="bi bi-calendar-check"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Período de Análisis</span>
+                <span class="kpi-value">@filters.StartDate.ToString("dd/MM") - @filters.EndDate.ToString("dd/MM")</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Optometrista / Especialista</label>
+                <select class="form-select" @bind="filters.OptometristId">
+                    <option value="0">Todos los especialistas</option>
+                    @foreach (var d in optometrists)
+                    {
+                        <option value="@d.id_usuario">@($"{d.nombres} {d.apellidos}")</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item" style="flex: 2 1 240px;">
+                <label>Buscar paciente o diagnóstico</label>
+                <input type="text" class="form-control" placeholder="Nombre, cédula, miopía, etc..." @bind="filters.SearchTerm" @bind:event="oninput" />
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Filtrar Consultas
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Registro de Evaluaciones Clínicas (@data.Rows.Count consultas)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando historial clínico...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se registraron consultas optométricas con los filtros especificados.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Paciente</th>
+                            <th>Identificación</th>
+                            <th>Edad</th>
+                            <th>Optometrista</th>
+                            <th>Diagnóstico</th>
+                            <th>Tratamiento / Prescripción</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><strong>@row.PatientName</strong></td>
+                                <td>@row.PatientCedula</td>
+                                <td>@(row.PatientAge != "-" ? $"{row.PatientAge} años" : "-")</td>
+                                <td>@row.OptometristName</td>
+                                <td><span class="badge bg-primary">@row.Diagnosis</span></td>
+                                <td><small>@row.Treatment</small></td>
+                                <td><small style="color:#666;">@row.Observations</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private ClinicalConsultationsReportFilters filters = new();
+    private ClinicalConsultationsReportResult data = new();
+    private List<tbl_usuario> optometrists = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<ClinicalConsultationReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        optometrists = await db.tbl_usuarios.AsNoTracking().Where(u => u.activo ?? true).OrderBy(u => u.nombres).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetClinicalConsultationsReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha", "Paciente", "Cedula", "Edad", "Optometrista", "Diagnostico", "Tratamiento", "Observaciones" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.PatientName,
+            r.PatientCedula,
+            r.PatientAge,
+            r.OptometristName,
+            r.Diagnosis,
+            r.Treatment,
+            r.Observations
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Consultas Optometricas", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "ConsultasOptometria", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-consultas-optometria-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total de Consultas"] = $"{data.TotalConsultations}",
+            ["Pacientes Unicos"] = $"{data.DistinctPatientsCount}",
+            ["Tratamientos/Recetas"] = $"{data.TreatmentsCount}"
+        };
+
+        var headers = new[] { "Fecha", "Paciente", "Cedula", "Optometrista", "Diagnostico", "Tratamiento" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.PatientName,
+            r.PatientCedula,
+            r.OptometristName,
+            r.Diagnosis,
+            r.Treatment
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Consultas Optometricas y Diagnosticos", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "ConsultasOptometria", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-consultas-optometria-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

@@ -1,0 +1,244 @@
+@page "/reportes/historial-auditoria"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Historial y Auditoría de Reportes</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Seguridad y Auditoría</span>
+            <h1>Historial de Reportes Generados</h1>
+            <p>Registro y trazabilidad de todos los reportes generados y exportados en el sistema para control de cumplimiento y auditorías.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-shield-check"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Reportes Generados</span>
+                <span class="kpi-value">@data.TotalGeneratedCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#d9534f;"><i class="bi bi-file-earmark-pdf-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Exportaciones PDF</span>
+                <span class="kpi-value">@data.PdfExportsCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-file-earmark-excel-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Exportaciones Excel (CSV)</span>
+                <span class="kpi-value">@data.ExcelExportsCount</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#6f42c1;"><i class="bi bi-person-badge-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Auditoría Activa</span>
+                <span class="kpi-value">100% Auditado</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item" style="flex: 2 1 220px;">
+                <label>Usuario Solicitante</label>
+                <select class="form-select" @bind="filters.UserId">
+                    <option value="0">Todos los usuarios</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.id_usuario">@($"{u.nombres} {u.apellidos}")</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Consultar Auditoría
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Registro Histórico de Auditoría (@data.Rows.Count eventos)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando registros de auditoría...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se registran eventos de reportería en este período.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha y Hora</th>
+                            <th>Usuario</th>
+                            <th>Módulo</th>
+                            <th>Acción Realizada</th>
+                            <th>Detalles y Parámetros</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td><strong>@row.User</strong></td>
+                                <td><span class="badge bg-secondary">@row.Module</span></td>
+                                <td>
+                                    <span class="badge @(row.Action.Contains("PDF") ? "bg-danger" : row.Action.Contains("Excel") ? "bg-success" : "bg-primary")">
+                                        @row.Action
+                                    </span>
+                                </td>
+                                <td><small>@row.Details</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private AuditHistoryReportFilters filters = new();
+    private AuditHistoryReportResult data = new();
+    private List<tbl_usuario> users = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<AuditHistoryReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        users = await db.tbl_usuarios.AsNoTracking().Where(u => u.activo ?? true).OrderBy(u => u.nombres).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetAuditHistoryReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha y Hora", "Usuario", "Modulo", "Accion", "Detalles" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm:ss"),
+            r.User,
+            r.Module,
+            r.Action,
+            r.Details
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Historial de Reportes Generados", headers, rows);
+        await DownloadFileAsync($"historial-reportes-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total de Reportes Generados"] = $"{data.TotalGeneratedCount}",
+            ["Exportaciones PDF"] = $"{data.PdfExportsCount}",
+            ["Exportaciones Excel"] = $"{data.ExcelExportsCount}"
+        };
+
+        var headers = new[] { "Fecha y Hora", "Usuario", "Accion", "Detalles" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.User,
+            r.Action,
+            r.Details
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Historial y Auditoria de Reportes", kpis, headers, rows);
+        await DownloadFileAsync($"historial-reportes-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

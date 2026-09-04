@@ -1,0 +1,717 @@
+@page "/vision-simulator"
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Simulador 3D Interactivo y Refracción Óptica | Óptica Lux</PageTitle>
+
+<div class="management-shell">
+    <!-- Hero Principal -->
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow"><i class="bi bi-box-fill me-1"></i> Tecnología e Innovación 3D</span>
+            <h1>Simulador 3D Interactivo de Óptica y Visión</h1>
+            <p>Laboratorio tridimensional de simulación: anatomía ocular con física de refracción en tiempo real, estudio 360° de monturas y experiencia visual del paciente.</p>
+        </div>
+        <div class="workspace-actions">
+            <a class="btn btn-outline-primary" href="/smart-lens-advisor">
+                <i class="bi bi-cpu-fill me-1"></i> Asistente IA de Lentes
+            </a>
+        </div>
+    </div>
+
+    <!-- Pestañas de Modos de Simulación 3D -->
+    <div class="simulator-mode-tabs mb-4">
+        <button type="button" class="tab-btn @(activeTab == "eye3d" ? "active" : "")" @onclick='() => ChangeTab("eye3d")'>
+            <i class="bi bi-eye-fill"></i>
+            <div>
+                <strong>1. Ojo Anatómico 3D & Rayos Ópticos</strong>
+                <small>Trazado de refracción, miopía, hipermetropía y lentes correctores</small>
+            </div>
+        </button>
+        <button type="button" class="tab-btn @(activeTab == "glasses3d" ? "active" : "")" @onclick='() => ChangeTab("glasses3d")'>
+            <i class="bi bi-eyeglasses"></i>
+            <div>
+                <strong>2. Estudio 3D de Monturas & Tratamientos</strong>
+                <small>Probador 360°, Blue Cut, Antirreflejo y Fotocromático</small>
+            </div>
+        </button>
+        <button type="button" class="tab-btn @(activeTab == "scenes" ? "active" : "")" @onclick='() => ChangeTab("scenes")'>
+            <i class="bi bi-display"></i>
+            <div>
+                <strong>3. Visión Subjetiva del Paciente</strong>
+                <small>Simulación escénica: conducción nocturna y fatiga digital</small>
+            </div>
+        </button>
+    </div>
+
+    @if (activeTab == "eye3d")
+    {
+        <!-- ============================================================== -->
+        <!-- MODO 1: OJO ANATÓMICO 3D Y TRAZADO DE RAYOS REFRACTIVOS -->
+        <!-- ============================================================== -->
+        <div class="row g-4">
+            <!-- Panel de Controles Ópticos -->
+            <div class="col-lg-4">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Parámetros de Refracción</h2>
+                        <span>Física Óptica</span>
+                    </div>
+
+                    <div style="padding-top: 1rem;">
+                        <!-- Tipo de Defecto Refractivo -->
+                        <div class="mb-3">
+                            <label class="form-label font-weight-bold">Condición Refractiva del Ojo</label>
+                            <select class="form-select" @onchange="OnDefectTypeChange" value="@selectedDefect">
+                                <option value="Emetrope">✨ Visión Normal (Emétrope)</option>
+                                <option value="Miopia">🔴 Miopía (Foco antes de retina)</option>
+                                <option value="Hipermetropia">🟠 Hipermetropía (Foco detrás de retina)</option>
+                                <option value="Astigmatismo">🟡 Astigmatismo (Doble plano focal)</option>
+                            </select>
+                        </div>
+
+                        <!-- Slider de Dioptrías del Defecto -->
+                        @if (selectedDefect != "Emetrope")
+                        {
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label small mb-0 font-weight-bold">Magnitud del Defecto</label>
+                                    <span class="badge bg-danger">@defectDiopters.ToString("F2") D</span>
+                                </div>
+                                <input type="range" class="form-range" min="0.5" max="6.0" step="0.25" value="@defectDiopters" @oninput="OnDefectDioptersInput" />
+                                <small class="text-muted d-block" style="font-size:0.76rem;">Desplaza el foco fuera de la fóvea retinal.</small>
+                            </div>
+                        }
+
+                        <hr style="border-color: rgba(186, 160, 134, 0.25);" />
+
+                        <!-- Lente Corrector 3D -->
+                        <h6 style="color: #4e937a; font-weight:700; display:flex; align-items:center; gap:0.4rem;">
+                            <i class="bi bi-plus-circle-fill"></i> Lente Corrector 3D
+                        </h6>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="switchCorrectiveLens" checked="@hasCorrectiveLens" @onchange="OnToggleCorrectiveLens" style="width: 2.4em; height: 1.2em; cursor:pointer;" />
+                            <label class="form-check-label font-weight-bold small" for="switchCorrectiveLens" style="cursor:pointer;">
+                                @(hasCorrectiveLens ? "Lente Colocada en Simulación 3D" : "Sin Lente (Ojo Desnudo)")
+                            </label>
+                        </div>
+
+                        @if (hasCorrectiveLens)
+                        {
+                            <div class="mb-3 p-3 rounded" style="background: rgba(78, 147, 122, 0.08); border: 1px dashed rgba(78, 147, 122, 0.35);">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label small mb-0 font-weight-bold" style="color: #2d5a44;">Graduación de Lente</label>
+                                    <span class="badge @(isFocusPerfect ? "bg-success" : "bg-warning text-dark") font-weight-bold">
+                                        @(lensPower > 0 ? "+" : "")@lensPower.ToString("F2") D
+                                    </span>
+                                </div>
+                                <input type="range" class="form-range" min="0.0" max="6.0" step="0.25" value="@lensPower" @oninput="OnLensPowerInput" />
+                                <div class="mt-2 text-center">
+                                    @if (isFocusPerfect)
+                                    {
+                                        <span class="badge bg-success" style="font-size: 0.82rem;">
+                                            <i class="bi bi-check-circle-fill me-1"></i> ¡Foco Foveal Perfecto! (20/20)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark" style="font-size: 0.78rem;">
+                                            <i class="bi bi-exclamation-circle me-1"></i> Ajusta la potencia para alinear los rayos
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <hr style="border-color: rgba(186, 160, 134, 0.25);" />
+
+                        <!-- Herramientas Anatómicas 3D -->
+                        <h6 style="color: #7f6951; font-weight:700; display:flex; align-items:center; gap:0.4rem;">
+                            <i class="bi bi-sliders"></i> Controles del Modelo 3D
+                        </h6>
+
+                        <div class="d-flex gap-2 flex-wrap mb-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ToggleCrossSection">
+                                <i class="bi bi-scissors me-1"></i> Corte Sagital
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetEyeView">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Reset Vista
+                            </button>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Color del Iris:</label>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="color-dot" style="background:#1f77b4;" title="Azul Océano" @onclick='() => SetIrisColor("#1f77b4")'></button>
+                                <button type="button" class="color-dot" style="background:#5c3d2e;" title="Café Avellana" @onclick='() => SetIrisColor("#5c3d2e")'></button>
+                                <button type="button" class="color-dot" style="background:#2e7d32;" title="Verde Esmeralda" @onclick='() => SetIrisColor("#2e7d32")'></button>
+                                <button type="button" class="color-dot" style="background:#b8860b;" title="Miel / Ámbar" @onclick='() => SetIrisColor("#b8860b")'></button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Viewport 3D con Three.js -->
+            <div class="col-lg-8">
+                <section class="management-card" style="padding: 0; overflow: hidden; position: relative; min-height: 520px; background: #0a0e14;">
+                    <!-- Overlay de información óptica 3D -->
+                    <div class="viewport-3d-overlay">
+                        <div class="badge bg-dark border text-light px-3 py-2 d-flex align-items-center gap-2" style="background: rgba(10, 14, 20, 0.85) !important;">
+                            <i class="bi bi-arrows-move text-success"></i>
+                            <span>Arrastra para rotar en 360° • Rueda del ratón para zoom</span>
+                        </div>
+                        <div class="badge @(isFocusPerfect ? "bg-success" : "bg-danger") px-3 py-2">
+                            @(isFocusPerfect ? "⚡ RAYOS CONVERGENTES: FOCO EN RETINA" : "⚠️ RAYOS ABERRADOS: DESENFOQUE")
+                        </div>
+                    </div>
+
+                    <!-- Canvas 3D de Three.js -->
+                    <div id="eye-3d-canvas-container" style="width: 100%; height: 520px; cursor: grab;"></div>
+
+                    <!-- Leyenda anatómica interactiva -->
+                    <div class="viewport-3d-legend">
+                        <span><span class="legend-dot" style="background:#90e0ef;"></span> Córnea (1.376)</span>
+                        <span><span class="legend-dot" style="background:#1f77b4;"></span> Iris & Pupila</span>
+                        <span><span class="legend-dot" style="background:#ebf8ff;"></span> Cristalino (1.406)</span>
+                        <span><span class="legend-dot" style="background:#c84b31;"></span> Retina</span>
+                        <span><span class="legend-dot" style="background:#ffdd00;"></span> Fóvea Central</span>
+                        <span><span class="legend-dot" style="background:@(isFocusPerfect ? "#00ff88" : "#ff4757");"></span> Haces Láser</span>
+                    </div>
+                </section>
+            </div>
+        </div>
+    }
+    else if (activeTab == "glasses3d")
+    {
+        <!-- ============================================================== -->
+        <!-- MODO 2: ESTUDIO 3D 360° DE MONTURAS Y TRATAMIENTOS -->
+        <!-- ============================================================== -->
+        <div class="row g-4">
+            <!-- Panel de Personalización 3D -->
+            <div class="col-lg-4">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Personalizador 3D</h2>
+                        <span>Armazones & Lunas</span>
+                    </div>
+
+                    <div style="padding-top: 1rem;">
+                        <!-- Estilo de Montura -->
+                        <div class="mb-3">
+                            <label class="form-label font-weight-bold">Estilo del Armazón</label>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn @(frameStyle == "aviator" ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick='() => SetFrameStyle("aviator")'>
+                                    Aviador
+                                </button>
+                                <button type="button" class="btn @(frameStyle == "wayfarer" ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick='() => SetFrameStyle("wayfarer")'>
+                                    Wayfarer
+                                </button>
+                                <button type="button" class="btn @(frameStyle == "round" ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick='() => SetFrameStyle("round")'>
+                                    Redondo
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Material y Color del Armazón -->
+                        <div class="mb-3">
+                            <label class="form-label font-weight-bold">Color y Acabado del Marco</label>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="frame-swatch" style="background:#d4af37;" title="Oro Metálico" @onclick='() => SetFrameColor("#d4af37", 0.9, 0.2)'></button>
+                                <button type="button" class="frame-swatch" style="background:#1a1a1a;" title="Negro Mate" @onclick='() => SetFrameColor("#1a1a1a", 0.1, 0.8)'></button>
+                                <button type="button" class="frame-swatch" style="background:#4a2c11;" title="Carey Habana" @onclick='() => SetFrameColor("#4a2c11", 0.4, 0.4)'></button>
+                                <button type="button" class="frame-swatch" style="background:#1d4e89;" title="Titanio Azul" @onclick='() => SetFrameColor("#1d4e89", 0.8, 0.3)'></button>
+                                <button type="button" class="frame-swatch" style="background:#c0c0c0;" title="Plata Cromado" @onclick='() => SetFrameColor("#c0c0c0", 0.95, 0.15)'></button>
+                            </div>
+                        </div>
+
+                        <hr style="border-color: rgba(186, 160, 134, 0.25);" />
+
+                        <!-- Tratamiento de Lunas 3D -->
+                        <h6 style="color: #4e937a; font-weight:700; display:flex; align-items:center; gap:0.4rem;">
+                            <i class="bi bi-shield-check"></i> Tratamiento de Lunas 3D
+                        </h6>
+
+                        <div class="mb-3">
+                            <select class="form-select" @onchange="OnTreatmentChange" value="@selectedTreatment">
+                                <option value="clear">💎 Luna Transparente Estándar</option>
+                                <option value="bluecut">🛡️ Filtro Luz Azul (Blue Cut / UV)</option>
+                                <option value="antireflective">✨ Antirreflejo Verde Crizal (99.8%)</option>
+                                <option value="transitions">☀️ Fotocromático (Transitions Signature)</option>
+                                <option value="polarized">🕶️ Polarizado Espejado UV400</option>
+                            </select>
+                        </div>
+
+                        @if (selectedTreatment == "transitions")
+                        {
+                            <div class="mb-3 p-3 rounded" style="background: rgba(0,0,0,0.04); border: 1px solid #ddd;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label small mb-0 font-weight-bold">Simulación de Radiación UV / Sol</label>
+                                    <span class="badge bg-dark">@((int)(uvIntensity * 100))% Sol</span>
+                                </div>
+                                <input type="range" class="form-range" min="0" max="1" step="0.05" value="@uvIntensity" @oninput="OnUvIntensityInput" />
+                                <small class="text-muted d-block" style="font-size:0.75rem;">Observa cómo la luna 3D se oscurece automáticamente.</small>
+                            </div>
+                        }
+
+                        <hr style="border-color: rgba(186, 160, 134, 0.25);" />
+
+                        <!-- Controles de Giro y Vista -->
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="autoRotateSwitch" checked="@autoRotate" @onchange="OnToggleAutoRotate" />
+                                <label class="form-check-label small font-weight-bold" for="autoRotateSwitch">Rotación Automática</label>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetGlassesView">
+                                <i class="bi bi-camera-reels me-1"></i> Centrar
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Viewport 3D de Monturas -->
+            <div class="col-lg-8">
+                <section class="management-card" style="padding: 0; overflow: hidden; position: relative; min-height: 520px; background: #12161f;">
+                    <div class="viewport-3d-overlay">
+                        <div class="badge bg-dark border text-light px-3 py-2 d-flex align-items-center gap-2" style="background: rgba(18, 22, 31, 0.85) !important;">
+                            <i class="bi bi-badge-3d text-primary fs-6"></i>
+                            <span>Estudio 3D 360° con Iluminación Cinematográfica</span>
+                        </div>
+                        <div class="badge bg-primary px-3 py-2 text-capitalize">
+                            @frameStyle • @selectedTreatment
+                        </div>
+                    </div>
+
+                    <div id="glasses-3d-canvas-container" style="width: 100%; height: 520px; cursor: grab;"></div>
+                </section>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- ============================================================== -->
+        <!-- MODO 3: SIMULADOR SUBJETIVO DE ESCENAS DEL PACIENTE (2D/3D) -->
+        <!-- ============================================================== -->
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <section class="management-card">
+                    <div class="management-card-header">
+                        <h2>Escenarios y Graduación</h2>
+                        <span>Entorno de Prueba</span>
+                    </div>
+
+                    <div style="padding-top: 1rem;">
+                        <div class="mb-3">
+                            <label class="form-label font-weight-bold">Escenario</label>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn @(selectedScene == "night" ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick='() => SetScene("night")'>
+                                    <i class="bi bi-moon-stars-fill me-1"></i> Nocturno
+                                </button>
+                                <button type="button" class="btn @(selectedScene == "digital" ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick='() => SetScene("digital")'>
+                                    <i class="bi bi-laptop me-1"></i> Pantalla
+                                </button>
+                                <button type="button" class="btn @(selectedScene == "outdoor" ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick='() => SetScene("outdoor")'>
+                                    <i class="bi bi-sun-fill me-1"></i> Exterior
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small mb-0 font-weight-bold">Desenfoque (Miopía)</label>
+                                <span class="badge bg-light text-dark border">@myopiaStep.ToString("F2") D</span>
+                            </div>
+                            <input type="range" class="form-range" min="0" max="6" step="0.25" value="@myopiaStep" @oninput="OnSceneMyopiaInput" />
+                        </div>
+
+                        <hr style="border-color: rgba(186, 160, 134, 0.25);" />
+
+                        <h6 style="color: #4e937a; font-weight:700;">Filtros de Tratamiento</h6>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="scBlueCut" checked="@enableBlueCut" @onchange="OnToggleSceneBlueCut" />
+                            <label class="form-check-label small font-weight-bold" for="scBlueCut">Filtro Luz Azul (Blue Cut)</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="scAR" checked="@enableAntiReflective" @onchange="OnToggleSceneAR" />
+                            <label class="form-check-label small font-weight-bold" for="scAR">Antirreflejo Super-Hidrófobo</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="scPolarized" checked="@enablePolarized" @onchange="OnToggleScenePolarized" />
+                            <label class="form-check-label small font-weight-bold" for="scPolarized">Filtro Polarizado UV400</label>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-lg-8">
+                <section class="management-card" style="background: #111; padding: 1rem; border-radius: 1.15rem; min-height: 480px; color: #fff;">
+                    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2" style="border-color: #333 !important;">
+                        <span class="badge bg-primary">VISTA COMPARATIVA: SIN LENTE vs CON TRATAMIENTO</span>
+                        <span class="small text-muted">Escenario: @selectedScene.ToUpperInvariant()</span>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-6 position-relative border-end border-secondary" style="height: 380px; overflow:hidden; border-radius:0.75rem;">
+                            <div class="position-absolute top-0 start-0 m-2 badge bg-danger" style="z-index:10;">SIN LENTE</div>
+                            <div style="@GetSceneStyle(false)" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                                @GetSceneText(false)
+                            </div>
+                        </div>
+                        <div class="col-6 position-relative" style="height: 380px; overflow:hidden; border-radius:0.75rem;">
+                            <div class="position-absolute top-0 start-0 m-2 badge bg-success" style="z-index:10;">CON LENTE & TRATAMIENTO</div>
+                            <div style="@GetSceneStyle(true)" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center text-center p-3">
+                                @GetSceneText(true)
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .simulator-mode-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
+    .tab-btn {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.1rem 1.4rem;
+        background: #ffffff;
+        border: 2px solid rgba(186, 160, 134, 0.25);
+        border-radius: 1.15rem;
+        text-align: left;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 14px rgba(127, 105, 81, 0.05);
+    }
+
+    .tab-btn i {
+        font-size: 2rem;
+        color: #7f6951;
+        transition: transform 0.3s ease;
+    }
+
+    .tab-btn strong {
+        display: block;
+        font-size: 0.98rem;
+        color: #2c2520;
+    }
+
+    .tab-btn small {
+        display: block;
+        font-size: 0.78rem;
+        color: #777;
+    }
+
+    .tab-btn:hover {
+        border-color: #4e937a;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(78, 147, 122, 0.12);
+    }
+
+    .tab-btn.active {
+        border-color: #4e937a;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(240, 250, 245, 1) 100%);
+        box-shadow: 0 10px 28px rgba(78, 147, 122, 0.16);
+    }
+
+    .tab-btn.active i {
+        color: #4e937a;
+        transform: scale(1.1);
+    }
+
+    .tab-btn.active strong {
+        color: #1e5a40;
+    }
+
+    .viewport-3d-overlay {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        right: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 10;
+        pointer-events: none;
+    }
+
+    .viewport-3d-legend {
+        position: absolute;
+        bottom: 1rem;
+        left: 1rem;
+        right: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.2rem;
+        justify-content: center;
+        background: rgba(10, 14, 20, 0.85);
+        padding: 0.6rem 1rem;
+        border-radius: 2rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #ccc;
+        font-size: 0.78rem;
+        z-index: 10;
+        pointer-events: none;
+    }
+
+    .legend-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 4px;
+    }
+
+    .color-dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+    .color-dot:hover {
+        transform: scale(1.2);
+    }
+
+    .frame-swatch {
+        width: 32px;
+        height: 32px;
+        border-radius: 0.5rem;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+    .frame-swatch:hover {
+        transform: scale(1.15);
+    }
+
+    @@media (max-width: 900px) {
+        .simulator-mode-tabs {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private string activeTab = "eye3d";
+
+    // Variables Modo 1: Ojo 3D
+    private string selectedDefect = "Miopia";
+    private double defectDiopters = 2.50;
+    private bool hasCorrectiveLens = true;
+    private double lensPower = 2.50;
+    private bool isFocusPerfect => Math.Abs(defectDiopters - (hasCorrectiveLens ? lensPower : 0)) < 0.25;
+
+    // Variables Modo 2: Monturas 3D
+    private string frameStyle = "aviator";
+    private string selectedTreatment = "bluecut";
+    private double uvIntensity = 0.7;
+    private bool autoRotate = true;
+
+    // Variables Modo 3: Escenas
+    private string selectedScene = "night";
+    private double myopiaStep = 2.5;
+    private bool enableBlueCut = true;
+    private bool enableAntiReflective = true;
+    private bool enablePolarized = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(150); // Dar tiempo al DOM para montar el contenedor
+            if (activeTab == "eye3d")
+            {
+                await JSRuntime.InvokeVoidAsync("Vision3D.initEyeSimulator", "eye-3d-canvas-container");
+                await UpdateEye3D();
+            }
+        }
+    }
+
+    private async Task ChangeTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+        await Task.Delay(120);
+
+        if (activeTab == "eye3d")
+        {
+            await JSRuntime.InvokeVoidAsync("Vision3D.initEyeSimulator", "eye-3d-canvas-container");
+            await UpdateEye3D();
+        }
+        else if (activeTab == "glasses3d")
+        {
+            await JSRuntime.InvokeVoidAsync("Vision3D.initGlassesStudio", "glasses-3d-canvas-container");
+            await SetFrameStyle(frameStyle);
+            await JSRuntime.InvokeVoidAsync("Vision3D.setLensTreatment", selectedTreatment, uvIntensity);
+        }
+    }
+
+    // Handlers Modo 1: Ojo 3D
+    private async Task OnDefectTypeChange(ChangeEventArgs e)
+    {
+        selectedDefect = e.Value?.ToString() ?? "Miopia";
+        if (selectedDefect == "Emetrope")
+        {
+            defectDiopters = 0;
+            hasCorrectiveLens = false;
+        }
+        else
+        {
+            if (defectDiopters == 0) defectDiopters = 2.50;
+            lensPower = defectDiopters;
+            hasCorrectiveLens = true;
+        }
+        await UpdateEye3D();
+    }
+
+    private async Task OnDefectDioptersInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var d))
+        {
+            defectDiopters = d;
+            await UpdateEye3D();
+        }
+    }
+
+    private async Task OnToggleCorrectiveLens(ChangeEventArgs e)
+    {
+        hasCorrectiveLens = (bool)(e.Value ?? false);
+        await UpdateEye3D();
+    }
+
+    private async Task OnLensPowerInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var d))
+        {
+            lensPower = d;
+            await UpdateEye3D();
+        }
+    }
+
+    private async Task UpdateEye3D()
+    {
+        await JSRuntime.InvokeVoidAsync(
+            "Vision3D.updateEyeOptics",
+            selectedDefect,
+            defectDiopters,
+            0,
+            hasCorrectiveLens,
+            lensPower
+        );
+    }
+
+    private async Task SetIrisColor(string hex)
+    {
+        await JSRuntime.InvokeVoidAsync("Vision3D.setEyeIrisColor", hex);
+    }
+
+    private async Task ToggleCrossSection()
+    {
+        await JSRuntime.InvokeVoidAsync("Vision3D.toggleEyeCrossSection");
+    }
+
+    private async Task ResetEyeView()
+    {
+        await JSRuntime.InvokeVoidAsync("Vision3D.resetEyeCamera");
+    }
+
+    // Handlers Modo 2: Monturas 3D
+    private async Task SetFrameStyle(string style)
+    {
+        frameStyle = style;
+        await JSRuntime.InvokeVoidAsync("Vision3D.setFrameStyle", style);
+    }
+
+    private async Task SetFrameColor(string hex, double metalness, double roughness)
+    {
+        await JSRuntime.InvokeVoidAsync("Vision3D.setFrameColor", hex, metalness, roughness);
+    }
+
+    private async Task OnTreatmentChange(ChangeEventArgs e)
+    {
+        selectedTreatment = e.Value?.ToString() ?? "clear";
+        await JSRuntime.InvokeVoidAsync("Vision3D.setLensTreatment", selectedTreatment, uvIntensity);
+    }
+
+    private async Task OnUvIntensityInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var uv))
+        {
+            uvIntensity = uv;
+            await JSRuntime.InvokeVoidAsync("Vision3D.setLensTreatment", "transitions", uvIntensity);
+        }
+    }
+
+    private async Task OnToggleAutoRotate(ChangeEventArgs e)
+    {
+        autoRotate = (bool)(e.Value ?? false);
+        await JSRuntime.InvokeVoidAsync("Vision3D.toggleGlassesAutoRotate", autoRotate);
+    }
+
+    private async Task ResetGlassesView()
+    {
+        await JSRuntime.InvokeVoidAsync("Vision3D.resetGlassesCamera");
+    }
+
+    // Handlers Modo 3: Escenas
+    private void SetScene(string sc) => selectedScene = sc;
+    private void OnSceneMyopiaInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), CultureInfo.InvariantCulture, out var d)) myopiaStep = d;
+    }
+    private void OnToggleSceneBlueCut(ChangeEventArgs e) => enableBlueCut = (bool)(e.Value ?? false);
+    private void OnToggleSceneAR(ChangeEventArgs e) => enableAntiReflective = (bool)(e.Value ?? false);
+    private void OnToggleScenePolarized(ChangeEventArgs e) => enablePolarized = (bool)(e.Value ?? false);
+
+    private string GetSceneStyle(bool withLens)
+    {
+        var blur = withLens ? 0 : myopiaStep * 2.8;
+        var glare = (!withLens && selectedScene == "night") ? "drop-shadow(0 0 25px rgba(255,255,200,0.9))" : "";
+        var blueTint = (withLens && enableBlueCut && selectedScene == "digital") ? "sepia(0.25) saturate(1.1)" : "";
+        var polarDim = (withLens && enablePolarized && selectedScene == "outdoor") ? "contrast(1.25) brightness(0.9)" : "";
+
+        return $"filter: blur({blur}px) {glare} {blueTint} {polarDim}; transition: filter 0.3s ease;";
+    }
+
+    private string GetSceneText(bool withLens)
+    {
+        if (selectedScene == "night")
+        {
+            return withLens
+                ? "🚗 Conducción Nocturna Nítida • Destellos de faros suprimidos con Antirreflejo Super-Hidrófobo."
+                : "🚗 Destellos deslumbrantes y halos luminosos intensos de vehículos en contraflujo.";
+        }
+        else if (selectedScene == "digital")
+        {
+            return withLens
+                ? "💻 Texto de pantalla 100% nítido • Luz azul de alta energía bloqueada (Protección de retina)."
+                : "💻 Fatiga visual severa, deslumbramiento digital y letras borrosas por falta de corrección.";
+        }
+        else
+        {
+            return withLens
+                ? "☀️ Paisaje exterior sin reflejos cegadores • Filtro polarizado UV400 activo."
+                : "☀️ Exceso de resplandor en asfalto y agua con pérdida de contraste.";
+        }
+    }
+}

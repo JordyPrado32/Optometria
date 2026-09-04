@@ -3737,3 +3737,176 @@ body .clinical-card .form-select:focus {
         flex-direction: column;
     }
 }
+
+/* ==========================================================================
+   SUITE DE REPORTERÍA - KPI CARDS CON DESTELLOS Y FILTROS EN LÍNEA
+   ========================================================================== */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.15rem;
+    margin-bottom: 1.5rem;
+    width: 100%;
+}
+
+.kpi-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1.15rem;
+    padding: 1.15rem 1.35rem;
+    border-radius: 1.15rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(254, 250, 246, 0.92) 100%);
+    border: 1px solid rgba(186, 160, 134, 0.22);
+    box-shadow: 0 8px 24px rgba(127, 105, 81, 0.06), 0 1px 3px rgba(0,0,0,0.03);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(8px);
+}
+
+/* Destello brillante animado (Glow Shimmer) */
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 80%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+    transform: skewX(-25deg);
+    transition: left 0.75s ease-in-out;
+    pointer-events: none;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 32px rgba(127, 105, 81, 0.14), 0 0 20px rgba(78, 147, 122, 0.18);
+    border-color: rgba(78, 147, 122, 0.4);
+}
+
+.kpi-card:hover::before {
+    left: 140%;
+}
+
+/* Indicador de acento superior */
+.kpi-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3.5px;
+    background: linear-gradient(90deg, rgba(78, 147, 122, 0.85), rgba(217, 83, 79, 0.85), rgba(2, 117, 216, 0.85));
+    opacity: 0.8;
+}
+
+.kpi-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 0.95rem;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(186, 160, 134, 0.18);
+    font-size: 1.55rem;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.kpi-card:hover .kpi-icon {
+    transform: scale(1.08) rotate(3deg);
+}
+
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.kpi-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(74, 63, 53, 0.72);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-value {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: var(--color-taupe-deep, #2c2520);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+}
+
+/* FILTROS EN UNA SOLA LÍNEA */
+.reports-filter-card {
+    background: #ffffff;
+    border-radius: 1.15rem;
+    border: 1px solid rgba(186, 160, 134, 0.18);
+    box-shadow: 0 8px 24px rgba(127, 105, 81, 0.05);
+    padding: 1.15rem 1.4rem;
+    margin-bottom: 1.5rem;
+}
+
+.reports-inline-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.85rem;
+    width: 100%;
+}
+
+.reports-filter-item {
+    flex: 1 1 170px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.reports-filter-item label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: rgba(60, 52, 46, 0.85);
+    margin: 0;
+    white-space: nowrap;
+}
+
+.reports-filter-item .form-control,
+.reports-filter-item .form-select {
+    height: 2.55rem;
+    border-radius: 0.65rem;
+    font-size: 0.88rem;
+    border: 1px solid rgba(186, 160, 134, 0.3);
+    background-color: #fff;
+}
+
+.reports-filter-item .form-control:focus,
+.reports-filter-item .form-select:focus {
+    border-color: #4e937a;
+    box-shadow: 0 0 0 3px rgba(78, 147, 122, 0.15);
+}
+
+.reports-filter-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-end;
+}
+
+.reports-filter-actions .btn {
+    height: 2.55rem;
+    padding: 0 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-weight: 600;
+    border-radius: 0.65rem;
+    white-space: nowrap;
+}
+

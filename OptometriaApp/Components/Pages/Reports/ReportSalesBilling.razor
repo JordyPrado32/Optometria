@@ -1,0 +1,277 @@
+@page "/reportes/ventas-facturacion"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Ventas y Facturación Electrónica</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería Comercial y Tributaria</span>
+            <h1>Ventas y Facturación Electrónica</h1>
+            <p>Monitorea las ventas desglosadas por consultas, lentes, productos y servicios, así como el estado de autorización SRI.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-cash-stack"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Ventas Totales ($)</span>
+                <span class="kpi-value">$@data.GrandTotal.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-eyeglasses"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Lentes y Armazones</span>
+                <span class="kpi-value">$@data.TotalLenses.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#6f42c1;"><i class="bi bi-journal-medical"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Consultas Médicas</span>
+                <span class="kpi-value">$@data.TotalConsultations.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#20c997;"><i class="bi bi-check2-all"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Autorizadas SRI</span>
+                <span class="kpi-value">@data.AuthorizedCount / @data.TotalInvoicesCount</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item">
+                <label>Fecha Desde</label>
+                <input type="date" class="form-control" value="@filters.StartDate.ToString("yyyy-MM-dd")" @onchange="OnStartDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Fecha Hasta</label>
+                <input type="date" class="form-control" value="@filters.EndDate.ToString("yyyy-MM-dd")" @onchange="OnEndDateChanged" />
+            </div>
+            <div class="reports-filter-item">
+                <label>Categoría de Producto</label>
+                <select class="form-select" @bind="filters.CategoryId">
+                    <option value="0">Todas las categorías</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c.id_categoria">@c.nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item">
+                <label>Estado SRI</label>
+                <select class="form-select" @bind="filters.SriStatus">
+                    <option value="Todos">Todos los estados</option>
+                    <option value="Autorizada">Autorizada</option>
+                    <option value="Pendiente SRI">Pendiente SRI</option>
+                    <option value="Rechazada">Rechazada</option>
+                    <option value="Anulada">Anulada</option>
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-search"></i> Aplicar Filtros
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tabla -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Detalle de Ventas (@data.Rows.Count comprobantes)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando ventas y facturación...</div>
+        }
+        else if (data.Rows.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No se encontraron registros de ventas en este período.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Código Venta</th>
+                            <th>No. Factura</th>
+                            <th>Detalle de Productos / Servicios</th>
+                            <th>Método Pago</th>
+                            <th>Vendedor</th>
+                            <th>Subtotal</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                            <th>Estado SRI</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><strong>@row.SaleCode</strong></td>
+                                <td>@row.InvoiceNumber</td>
+                                <td><small>@row.ItemsSummary</small></td>
+                                <td>@row.PaymentMethod</td>
+                                <td>@row.Seller</td>
+                                <td>$@row.Subtotal.ToString("N2")</td>
+                                <td>$@row.Tax.ToString("N2")</td>
+                                <td><strong>$@row.Total.ToString("N2")</strong></td>
+                                <td>
+                                    <span class="badge @(row.SriStatus.Contains("Autorizada") ? "bg-success" : row.SriStatus.Contains("Anulada") ? "bg-danger" : "bg-warning text-dark")">
+                                        @row.SriStatus
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Rows.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private SalesBillingReportFilters filters = new();
+    private SalesBillingReportResult data = new();
+    private List<tbl_categoria_producto> categories = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
+    private IEnumerable<SalesBillingReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        categories = await db.tbl_categoria_productos.AsNoTracking().Where(c => c.activo ?? true).OrderBy(c => c.nombre).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+    }
+
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetSalesBillingReportAsync(filters);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Fecha", "Codigo Venta", "Factura", "Productos", "Metodo Pago", "Vendedor", "Subtotal", "IVA", "Total", "Estado SRI" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.SaleCode,
+            r.InvoiceNumber,
+            r.ItemsSummary,
+            r.PaymentMethod,
+            r.Seller,
+            r.Subtotal.ToString("F2"),
+            r.Tax.ToString("F2"),
+            r.Total.ToString("F2"),
+            r.SriStatus
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes("Reporte de Ventas y Facturacion", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "VentasFacturacion", "Excel", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-ventas-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Total Facturado"] = $"${data.GrandTotal:N2}",
+            ["Total Lentes/Armazones"] = $"${data.TotalLenses:N2}",
+            ["Total Consultas"] = $"${data.TotalConsultations:N2}",
+            ["Total Otros Productos"] = $"${data.TotalProducts:N2}",
+            ["Total Servicios"] = $"${data.TotalServices:N2}",
+            ["Comprobantes Autorizados"] = $"{data.AuthorizedCount} de {data.TotalInvoicesCount}"
+        };
+
+        var headers = new[] { "Fecha", "Venta", "Factura", "Metodo", "Vendedor", "Total", "SRI" };
+        var rows = data.Rows.Select(r => new[]
+        {
+            r.Date.ToString("yyyy-MM-dd"),
+            r.SaleCode,
+            r.InvoiceNumber,
+            r.PaymentMethod,
+            r.Seller,
+            $"${r.Total:F2}",
+            r.SriStatus
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Ventas y Facturacion", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "VentasFacturacion", "PDF", $"Registros={rows.Count}");
+        await DownloadFileAsync($"reporte-ventas-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

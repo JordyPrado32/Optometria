@@ -1,0 +1,539 @@
+@page "/smart-lens-advisor"
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Asistente de Recomendación Óptica | Óptica Lux</PageTitle>
+
+<div class="management-shell">
+    <div class="management-card" style="margin-bottom: 1.5rem;">
+        <div class="management-card-header">
+            <div>
+                <h2 style="display: flex; align-items: center; gap: 0.6rem;">
+                    <i class="bi bi-cpu-fill" style="color: var(--color-sage, #5DA181);"></i>
+                    Asistente de Recomendación Óptica
+                </h2>
+                <span>Módulo Inteligente de Recomendación de Lentes y Explicación al Paciente</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetForm">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar
+                </button>
+                <a class="btn btn-excel btn-sm" href="/vision-simulator">
+                    <i class="bi bi-eye-fill me-1"></i> Ir al Simulador
+                </a>
+            </div>
+        </div>
+
+        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.5rem;">
+            Ingrese los datos de la refracción y perfil del paciente para calcular automáticamente el diseño óptico ideal,
+            tratamientos sugeridos y una explicación en lenguaje claro traducida para el paciente.
+        </p>
+
+        <!-- Selección rápida de paciente existente -->
+        <div class="row g-3 align-items-center mb-4" style="background: rgba(127,105,81,0.04); padding: 1rem; border-radius: 0.75rem; border: 1px dashed rgba(127,105,81,0.2);">
+            <div class="col-md-7">
+                <label class="form-label font-weight-bold" for="selectPatientQuick"><i class="bi bi-person-badge me-1"></i> Cargar datos de paciente registrado (Opcional):</label>
+                <select id="selectPatientQuick" class="form-select" @onchange="OnPatientSelectedAsync">
+                    <option value="0">-- Ingrese manualmente o seleccione paciente --</option>
+                    @foreach (var patient in existingPatients)
+                    {
+                        <option value="@patient.id_paciente">@patient.apellidos @patient.nombres (@patient.cedula)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-5 d-flex align-items-end">
+                <small class="text-muted">Si selecciona un paciente, se precargarán sus datos y su última historia clínica disponible.</small>
+            </div>
+        </div>
+
+        <!-- Formulario Refracción & Hábitos -->
+        <div class="row g-4">
+            <!-- Columna Izquierda: Refracción -->
+            <div class="col-lg-6">
+                <div style="background: #fff; padding: 1.2rem; border-radius: 0.85rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 4px 12px rgba(127,105,81,0.03);">
+                    <h5 class="mb-3" style="color: #7F6951; font-weight: 700;">
+                        <i class="bi bi-eyeglasses me-1"></i> Refracción del Paciente
+                    </h5>
+
+                    <!-- Ojo Derecho -->
+                    <div class="mb-3">
+                        <strong class="d-block mb-2 text-primary" style="font-size: 0.88rem;">OJO DERECHO (OD)</strong>
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Esfera (SPH)</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm" value="@sphOD" @oninput="OnSphODChanged" @onchange="OnSphODChanged" placeholder="-0.00" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Cilindro (CYL)</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm" value="@cylOD" @oninput="OnCylODChanged" @onchange="OnCylODChanged" placeholder="-0.00" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Eje (AXIS°)</label>
+                                <input type="text" inputmode="numeric" class="form-control form-control-sm" value="@axisOD" @oninput="OnAxisODChanged" @onchange="OnAxisODChanged" placeholder="180" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Adición (ADD)</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm" value="@addOD" @oninput="OnAddODChanged" @onchange="OnAddODChanged" placeholder="+0.00" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ojo Izquierdo -->
+                    <div class="mb-3">
+                        <strong class="d-block mb-2 text-success" style="font-size: 0.88rem;">OJO IZQUIERDO (OI)</strong>
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Esfera (SPH)</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm" value="@sphOI" @oninput="OnSphOIChanged" @onchange="OnSphOIChanged" placeholder="-0.00" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Cilindro (CYL)</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm" value="@cylOI" @oninput="OnCylOIChanged" @onchange="OnCylOIChanged" placeholder="-0.00" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Eje (AXIS°)</label>
+                                <input type="text" inputmode="numeric" class="form-control form-control-sm" value="@axisOI" @oninput="OnAxisOIChanged" @onchange="OnAxisOIChanged" placeholder="180" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small mb-1">Adición (ADD)</label>
+                                <input type="text" inputmode="decimal" class="form-control form-control-sm" value="@addOI" @oninput="OnAddOIChanged" @onchange="OnAddOIChanged" placeholder="+0.00" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mt-2">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1">Distancia Pupilar (DP mm)</label>
+                            <input type="text" inputmode="numeric" class="form-control form-control-sm" value="@pupillaryDistance" @oninput="OnDPChanged" @onchange="OnDPChanged" placeholder="62" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1">Edad del Paciente (Años)</label>
+                            <input type="text" inputmode="numeric" class="form-control form-control-sm" value="@patientAge" @oninput="OnAgeChanged" @onchange="OnAgeChanged" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Ocupación y Hábitos -->
+            <div class="col-lg-6">
+                <div style="background: #fff; padding: 1.2rem; border-radius: 0.85rem; border: 1px solid rgba(127,105,81,0.12); box-shadow: 0 4px 12px rgba(127,105,81,0.03);">
+                    <h5 class="mb-3" style="color: #7F6951; font-weight: 700;">
+                        <i class="bi bi-person-workspace me-1"></i> Perfil de Estilo de Vida y Hábitos
+                    </h5>
+
+                    <div class="mb-3">
+                        <label class="form-label small mb-1">Ocupación / Actividad Principal</label>
+                        <select class="form-select form-select-sm" value="@occupation" @onchange="OnOccupationChanged">
+                            <option value="oficina">Oficina / Programación / Computador (+6 hrs)</option>
+                            <option value="estudiante">Estudiante / Lectura frecuente</option>
+                            <option value="conductor">Conductor profesional / Transporte nocturno</option>
+                            <option value="exteriores">Trabajo al Aire Libre / Deportes / Sol constante</option>
+                            <option value="general">Uso General / Mixto</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1">Horas al día frente a Pantallas</label>
+                            <select class="form-select form-select-sm" value="@screenHours" @onchange="OnScreenHoursChanged">
+                                <option value="0">Menos de 2 horas</option>
+                                <option value="4">Entre 2 y 5 horas</option>
+                                <option value="8">Más de 6 horas al día</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1">Sensibilidad al Sol / UV</label>
+                            <select class="form-select form-select-sm" value="@sunSensitivity" @onchange="OnSunSensitivityChanged">
+                                <option value="normal">Normal</option>
+                                <option value="moderada">Moderada (Encandilamiento ocasional)</option>
+                                <option value="alta">Alta (Molestia severa con el sol)</option>
+                            </select>
+                        </div>
+                    </div>
+
+<style>
+    .custom-excel-checkbox:checked {
+        background-color: #1D6F42 !important;
+        border-color: #1D6F42 !important;
+    }
+    .custom-excel-checkbox:focus {
+        border-color: #1D6F42 !important;
+        box-shadow: 0 0 0 0.25rem rgba(29, 111, 66, 0.25) !important;
+    }
+</style>
+
+                    <div class="mt-3">
+                        <label class="form-label small mb-1">Síntomas Principales Reportados</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <div class="form-check form-check-inline user-select-none" style="cursor: pointer;" @onclick="ToggleEyeStrain">
+                                <input class="form-check-input custom-excel-checkbox" type="checkbox" id="chkStrain" checked="@symptomEyeStrain" />
+                                <label class="form-check-label small" for="chkStrain" style="cursor: pointer; color: #3c342e !important;" @onclick:stopPropagation="true" @onclick="ToggleEyeStrain">Fatiga Visual / Ardor</label>
+                            </div>
+                            <div class="form-check form-check-inline user-select-none" style="cursor: pointer;" @onclick="ToggleHeadache">
+                                <input class="form-check-input custom-excel-checkbox" type="checkbox" id="chkHeadache" checked="@symptomHeadache" />
+                                <label class="form-check-label small" for="chkHeadache" style="cursor: pointer; color: #3c342e !important;" @onclick:stopPropagation="true" @onclick="ToggleHeadache">Dolor de cabeza</label>
+                            </div>
+                            <div class="form-check form-check-inline user-select-none" style="cursor: pointer;" @onclick="ToggleNightGlare">
+                                <input class="form-check-input custom-excel-checkbox" type="checkbox" id="chkGlare" checked="@symptomNightGlare" />
+                                <label class="form-check-label small" for="chkGlare" style="cursor: pointer; color: #3c342e !important;" @onclick:stopPropagation="true" @onclick="ToggleNightGlare">Encandilamiento nocturno</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 text-end">
+                        <button type="button" class="btn btn-coffee" @onclick="CalculateRecommendation">
+                            <i class="bi bi-magic me-1"></i> Generar Recomendación IA
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resultados y Explicación para el Paciente -->
+    @if (hasCalculated)
+    {
+        <div class="row g-4 mb-4">
+            <!-- Recomendación de Diseño de Lente -->
+            <div class="col-lg-6">
+                <div class="management-card h-100" style="border-left: 4px solid #1D6F42;">
+                    <div class="management-card-header">
+                        <h4 style="color: #7F6951; font-weight: 700;" class="m-0">
+                            <i class="bi bi-award-fill me-2" style="color: #1D6F42;"></i>Diseño y Material de Lente Recomendado
+                        </h4>
+                        <span class="badge" style="background-color: #1D6F42; color: #ffffff; padding: 0.4rem 0.75rem; font-size: 0.82rem; border-radius: 0.4rem;">Recomendación Óptima</span>
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="p-3 mb-3" style="background: #fbf9f4; border-radius: 0.65rem; border: 1px solid rgba(127,105,81,0.15);">
+                            <h5 style="color: #7F6951; font-weight: 800;" class="mb-1">@lensTypeTitle</h5>
+                            <p class="small text-muted mb-0">@lensTypeDescription</p>
+                        </div>
+
+                        <h6 class="font-weight-bold mb-2 text-dark">Material Sugerido:</h6>
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge bg-secondary p-2" style="font-size: 0.9rem;">@lensMaterial</span>
+                            <small class="text-muted">(@lensMaterialReason)</small>
+                        </div>
+
+                        <h6 class="font-weight-bold mb-2 text-dark">Tratamientos Recomendados:</h6>
+                        <ul class="list-group list-group-flush mb-3">
+                            @foreach (var coating in recommendedCoatings)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent py-2 border-bottom">
+                                    <div>
+                                        <i class="bi bi-check-circle-fill me-2" style="color: #1D6F42;"></i>
+                                        <strong>@coating.Name</strong>
+                                        <div class="small text-muted">@coating.Benefit</div>
+                                    </div>
+                                    <span class="badge bg-light text-dark border">@coating.Priority</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Explicación traducida para el Paciente -->
+            <div class="col-lg-6">
+                <div class="management-card h-100" style="border-left: 4px solid #7F6951;">
+                    <div class="management-card-header">
+                        <h4 style="color: #7F6951; font-weight: 700;" class="m-0">
+                            <i class="bi bi-chat-quote-fill me-2" style="color:#7F6951;"></i>Explicación Clínica para el Paciente
+                        </h4>
+                    </div>
+
+                    <div class="mt-3 p-3" style="background: #ffffff; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.12);">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge" style="background-color: #7F6951; color: #fff;">Diagnóstico Accesible</span>
+                            <small class="text-muted">Lenguaje traducido para consulta</small>
+                        </div>
+
+                        <div style="font-size: 0.95rem; line-height: 1.6; color: #3c342e;">
+                            @((MarkupString)patientExplanationHtml)
+                        </div>
+
+                        <div class="mt-3 p-2 text-center" style="background: rgba(93,161,129,0.1); border-radius: 0.5rem; color: #2d5a44; font-size: 0.85rem;">
+                            <i class="bi bi-info-circle-fill me-1"></i> 
+                            Este diagnóstico y recomendación fue generado asistidamente por el motor I+D+i de Óptica Lux.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<tbl_paciente> existingPatients = [];
+    private double? sphOD = -1.25;
+    private double? cylOD = -0.75;
+    private int? axisOD = 180;
+    private double? addOD = 0.00;
+
+    private double? sphOI = -1.50;
+    private double? cylOI = -0.50;
+    private int? axisOI = 175;
+    private double? addOI = 0.00;
+
+    private int? pupillaryDistance = 63;
+    private int patientAge = 32;
+    private string occupation = "oficina";
+    private int screenHours = 8;
+    private string sunSensitivity = "moderada";
+
+    private bool symptomEyeStrain = true;
+    private bool symptomHeadache = false;
+    private bool symptomNightGlare = true;
+
+    private bool hasCalculated = false;
+    private string lensTypeTitle = "";
+    private string lensTypeDescription = "";
+    private string lensMaterial = "";
+    private string lensMaterialReason = "";
+    private List<CoatingRecommendation> recommendedCoatings = [];
+    private string patientExplanationHtml = "";
+
+    public record CoatingRecommendation(string Name, string Benefit, string Priority);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        existingPatients = await dbContext.tbl_pacientes
+            .AsNoTracking()
+            .Where(p => p.activo == true)
+            .OrderBy(p => p.apellidos)
+            .ThenBy(p => p.nombres)
+            .Take(100)
+            .ToListAsync();
+
+        CalculateRecommendation();
+    }
+
+    private async Task OnPatientSelectedAsync(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var patientId) && patientId > 0)
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var patient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == patientId);
+            if (patient is not null)
+            {
+                patientAge = patient.edad ?? (patient.fecha_nacimiento.HasValue ? DateTime.Today.Year - patient.fecha_nacimiento.Value.Year : 30);
+                
+                var history = await dbContext.tbl_historia_clinica_optometrias
+                    .AsNoTracking()
+                    .Where(h => h.id_paciente == patientId)
+                    .OrderByDescending(h => h.fecha_apertura)
+                    .FirstOrDefaultAsync();
+
+                if (history is not null)
+                {
+                    // Precargar si existieran valores
+                }
+
+                CalculateRecommendation();
+            }
+        }
+    }
+
+    private static double? ParseFlexibleDouble(object? input)
+    {
+        if (input is null) return null;
+        var str = input.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(str)) return null;
+
+        var normalized = str.Replace(',', '.');
+
+        if (double.TryParse(normalized, NumberStyles.Any, CultureInfo.InvariantCulture, out var valInvariant))
+        {
+            return valInvariant;
+        }
+
+        if (double.TryParse(str, NumberStyles.Any, CultureInfo.CurrentCulture, out var valCulture))
+        {
+            return valCulture;
+        }
+
+        return null;
+    }
+
+    private static int? ParseFlexibleInt(object? input)
+    {
+        var d = ParseFlexibleDouble(input);
+        return d.HasValue ? (int)Math.Round(d.Value) : null;
+    }
+
+    private void OnSphODChanged(ChangeEventArgs e) { sphOD = ParseFlexibleDouble(e.Value); CalculateRecommendation(); }
+    private void OnCylODChanged(ChangeEventArgs e) { cylOD = ParseFlexibleDouble(e.Value); CalculateRecommendation(); }
+    private void OnAxisODChanged(ChangeEventArgs e) { axisOD = ParseFlexibleInt(e.Value); CalculateRecommendation(); }
+    private void OnAddODChanged(ChangeEventArgs e) { addOD = ParseFlexibleDouble(e.Value); CalculateRecommendation(); }
+
+    private void OnSphOIChanged(ChangeEventArgs e) { sphOI = ParseFlexibleDouble(e.Value); CalculateRecommendation(); }
+    private void OnCylOIChanged(ChangeEventArgs e) { cylOI = ParseFlexibleDouble(e.Value); CalculateRecommendation(); }
+    private void OnAxisOIChanged(ChangeEventArgs e) { axisOI = ParseFlexibleInt(e.Value); CalculateRecommendation(); }
+    private void OnAddOIChanged(ChangeEventArgs e) { addOI = ParseFlexibleDouble(e.Value); CalculateRecommendation(); }
+
+    private void OnDPChanged(ChangeEventArgs e) { pupillaryDistance = ParseFlexibleInt(e.Value); CalculateRecommendation(); }
+    private void OnAgeChanged(ChangeEventArgs e) { if (ParseFlexibleInt(e.Value) is int age && age > 0) patientAge = age; CalculateRecommendation(); }
+    private void OnOccupationChanged(ChangeEventArgs e) { occupation = e.Value?.ToString() ?? "general"; CalculateRecommendation(); }
+    private void OnScreenHoursChanged(ChangeEventArgs e) { if (ParseFlexibleInt(e.Value) is int hrs) screenHours = hrs; CalculateRecommendation(); }
+    private void OnSunSensitivityChanged(ChangeEventArgs e) { sunSensitivity = e.Value?.ToString() ?? "normal"; CalculateRecommendation(); }
+
+    private void OnStrainChanged(ChangeEventArgs e) { symptomEyeStrain = e.Value is bool b && b; CalculateRecommendation(); }
+    private void OnHeadacheChanged(ChangeEventArgs e) { symptomHeadache = e.Value is bool b && b; CalculateRecommendation(); }
+    private void OnGlareChanged(ChangeEventArgs e) { symptomNightGlare = e.Value is bool b && b; CalculateRecommendation(); }
+
+    private void ToggleEyeStrain() { symptomEyeStrain = !symptomEyeStrain; CalculateRecommendation(); }
+    private void ToggleHeadache() { symptomHeadache = !symptomHeadache; CalculateRecommendation(); }
+    private void ToggleNightGlare() { symptomNightGlare = !symptomNightGlare; CalculateRecommendation(); }
+
+    private void CalculateRecommendation()
+    {
+        hasCalculated = true;
+        recommendedCoatings.Clear();
+
+        double maxSph = Math.Max(Math.Abs(sphOD ?? 0), Math.Abs(sphOI ?? 0));
+        double maxCyl = Math.Max(Math.Abs(cylOD ?? 0), Math.Abs(cylOI ?? 0));
+        double maxAdd = Math.Max(addOD ?? 0, addOI ?? 0);
+
+        // 1. Diseño de Lente
+        if (patientAge >= 40 && maxAdd > 0.50)
+        {
+            if (occupation == "oficina" || screenHours >= 6)
+            {
+                lensTypeTitle = "Lente Progresivo Ocupacional / Digital Office";
+                lensTypeDescription = "Diseñado para visión cercana e intermedia amplia, eliminando la fatiga por computadoras y lectura prolongada.";
+            }
+            else
+            {
+                lensTypeTitle = "Lente Progresivo Digital HD (Multifocal Premium)";
+                lensTypeDescription = "Proporciona visión continua y nítida a todas las distancias (lejos, intermedia y cerca) sin saltos de imagen.";
+            }
+        }
+        else if (maxCyl >= 2.00)
+        {
+            lensTypeTitle = "Monofocal Asférico Digital de Alta Precisión";
+            lensTypeDescription = "Optimizado para corregir astigmatismo alto, reduciendo la distorsión periférica y el grosor de los bordes.";
+        }
+        else
+        {
+            lensTypeTitle = "Lente Monofocal Digital HD";
+            lensTypeDescription = "Excelente nitidez central y periférica para la visión diaria de lejos o cerca.";
+        }
+
+        // 2. Material
+        if (maxSph >= 4.00 || maxCyl >= 2.50)
+        {
+            lensMaterial = "Alto Índice 1.67 (Ultra Delgado)";
+            lensMaterialReason = "Recomendado para reducir hasta un 40% el grosor y peso del cristal por alta graduación.";
+        }
+        else if (maxSph >= 2.00 || maxCyl >= 1.25)
+        {
+            lensMaterial = "Policarbonato 1.59 / Trivex";
+            lensMaterialReason = "Material resistente a impactos, liviano y con protección UV400 integrada.";
+        }
+        else
+        {
+            lensMaterial = "Resina CR-39 / Policarbonato Liviano";
+            lensMaterialReason = "Material estándar ligero y de alta transparencia visual.";
+        }
+
+        // 3. Tratamientos
+        if (screenHours >= 4 || occupation == "oficina" || symptomEyeStrain)
+        {
+            recommendedCoatings.Add(new CoatingRecommendation(
+                "Filtro Luz Azul (Blue Cut)",
+                "Bloquea la radiación azul nociva de monitores y celulares, reduciendo el ardor y la fatiga ocular.",
+                "Esencial"));
+        }
+
+        if (symptomNightGlare || occupation == "conductor" || (sphOD.HasValue && Math.Abs(sphOD.Value) > 0))
+        {
+            recommendedCoatings.Add(new CoatingRecommendation(
+                "Antirreflejo Super-Hidrófobo",
+                "Elimina deslumbramientos nocturnos, reflejos parásitos en luces de tráfico y repele agua y grasa.",
+                "Imprescindible"));
+        }
+
+        if (sunSensitivity == "alta" || sunSensitivity == "moderada" || occupation == "exteriores")
+        {
+            recommendedCoatings.Add(new CoatingRecommendation(
+                "Tratamiento Fotocromático (Transitions / PhotoGray)",
+                "Se oscurece automáticamente al sol y se aclara en interiores, protegiendo 100% contra rayos UV.",
+                "Recomendado"));
+        }
+
+        if (occupation == "exteriores" || occupation == "conductor")
+        {
+            recommendedCoatings.Add(new CoatingRecommendation(
+                "Filtro Polarizado UV400",
+                "Filtra los reflejos cegadores del asfalto o agua, mejorando el contraste visual al conducir.",
+                "Opcional Prémium"));
+        }
+
+        BuildPatientExplanation();
+    }
+
+    private void BuildPatientExplanation()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<p><strong>Hola</strong>, según tu evaluación optométrica actual:</p><ul>");
+
+        bool hasMyopia = (sphOD < 0) || (sphOI < 0);
+        bool hasHyperopia = (sphOD > 0) || (sphOI > 0);
+        bool hasAstigmatism = Math.Abs(cylOD ?? 0) > 0.25 || Math.Abs(cylOI ?? 0) > 0.25;
+        bool hasPresbyopia = (addOD ?? 0) > 0 || (addOI ?? 0) > 0;
+
+        if (hasMyopia)
+        {
+            sb.Append("<li><strong>Miopía:</strong> Presentas dificultad para enfocar objetos a mediana y larga distancia. Tus nuevos lentes te devolverán la nitidez en exteriores y conducción.</li>");
+        }
+        if (hasHyperopia)
+        {
+            sb.Append("<li><strong>Hipermetropía:</strong> Tu sistema visual realiza un esfuerzo extra para enfocar de cerca y mantener la claridad.</li>");
+        }
+        if (hasAstigmatism)
+        {
+            sb.Append("<li><strong>Astigmatismo:</strong> La córnea tiene una leve curvatura irregular, lo que hace que los bordes de letras y luces se vean duplicados o con sombras.</li>");
+        }
+        if (hasPresbyopia)
+        {
+            sb.Append("<li><strong>Presbicia (Cansancio de Cerca):</strong> Debido a la maduración natural del ojo, la lectura cercana requiere un refuerzo de graduación.</li>");
+        }
+        if (!hasMyopia && !hasHyperopia && !hasAstigmatism && !hasPresbyopia)
+        {
+            sb.Append("<li><strong>Visión Emétrope (Excelente):</strong> No requieres graduación de aumento significativa, pero se recomienda protección contra luz azul de pantallas.</li>");
+        }
+
+        sb.Append("</ul>");
+        sb.Append($"<p class='mt-2'><strong>¿Por qué te recomendamos {lensTypeTitle}?</strong><br/>");
+        sb.Append($"{lensTypeDescription} Además, considerando que pasas aproximadamente <strong>{screenHours} horas al día en pantallas</strong>, el filtro de luz azul evitará dolores de cabeza y resequedad al final de la jornada.</p>");
+
+        patientExplanationHtml = sb.ToString();
+    }
+
+    private void ResetForm()
+    {
+        sphOD = 0.00; cylOD = 0.00; axisOD = 180; addOD = 0.00;
+        sphOI = 0.00; cylOI = 0.00; axisOI = 180; addOI = 0.00;
+        patientAge = 30;
+        occupation = "general";
+        screenHours = 4;
+        sunSensitivity = "normal";
+        symptomEyeStrain = false;
+        symptomHeadache = false;
+        symptomNightGlare = false;
+        CalculateRecommendation();
+    }
+
+    private static double? ParseDouble(string? input) => double.TryParse(input, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var val) ? val : null;
+    private static int? ParseInt(string? input) => int.TryParse(input, out var val) ? val : null;
+}

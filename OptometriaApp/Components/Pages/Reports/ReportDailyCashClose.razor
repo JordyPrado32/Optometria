@@ -1,0 +1,318 @@
+@page "/reportes/cierre-caja"
+@attribute [Authorize(Policy = "FullAccess")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject ReportsDataService ReportsService
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Reporte de Cierre de Caja Diario</PageTitle>
+
+<section class="management-shell">
+    <div class="management-hero">
+        <div>
+            <span class="eyebrow">Reportería de Caja</span>
+            <h1>Cierre de Caja Diario</h1>
+            <p>Arqueo diario automatizado: recaudación por forma de pago, ventas brutas, anulaciones y total neto recaudado.</p>
+        </div>
+        <div class="workspace-actions">
+            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs de Caja -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#5cb85c;"><i class="bi bi-cash-stack"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Efectivo en Caja</span>
+                <span class="kpi-value">$@data.TotalCash.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#0275d8;"><i class="bi bi-bank"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Transferencias</span>
+                <span class="kpi-value">$@data.TotalTransfer.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#6f42c1;"><i class="bi bi-credit-card-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Tarjetas</span>
+                <span class="kpi-value">$@data.TotalCard.ToString("N2")</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="color:#28a745;"><i class="bi bi-safe-fill"></i></div>
+            <div class="kpi-content">
+                <span class="kpi-label">Total Neto Recaudado</span>
+                <span class="kpi-value" style="color:#28a745;">$@data.TotalNetCollected.ToString("N2")</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros en una sola línea -->
+    <section class="reports-filter-card">
+        <div class="reports-inline-filters">
+            <div class="reports-filter-item" style="flex: 1 1 200px;">
+                <label>Fecha de Corte</label>
+                <input type="date" class="form-control" value="@cutoffDate.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
+            </div>
+            <div class="reports-filter-item" style="flex: 1 1 240px;">
+                <label>Cajero / Usuario</label>
+                <select class="form-select" @bind="selectedUserId">
+                    <option value="0">Todos los cajeros</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.id_usuario">@($"{u.nombres} {u.apellidos}")</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-actions">
+                <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
+                    <i class="bi bi-calculator"></i> Generar Cierre de Caja
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Resumen de Arqueo -->
+    <div class="clinical-grid-2" style="margin-bottom:1.5rem;">
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Resumen de Formas de Pago</h2>
+            </div>
+            <div style="padding: 1rem 0;">
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span><i class="bi bi-cash" style="color:#5cb85c; margin-right:6px;"></i> Total Efectivo:</span>
+                    <strong>$@data.TotalCash.ToString("N2")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span><i class="bi bi-bank" style="color:#0275d8; margin-right:6px;"></i> Total Transferencia / Depósito:</span>
+                    <strong>$@data.TotalTransfer.ToString("N2")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span><i class="bi bi-credit-card" style="color:#6f42c1; margin-right:6px;"></i> Total Tarjeta (Débito/Crédito):</span>
+                    <strong>$@data.TotalCard.ToString("N2")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span><i class="bi bi-hourglass-split" style="color:#f0ad4e; margin-right:6px;"></i> Ventas a Crédito Otorgadas:</span>
+                    <strong>$@data.TotalCredit.ToString("N2")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span><i class="bi bi-x-circle" style="color:#d9534f; margin-right:6px;"></i> Anulaciones y Devoluciones:</span>
+                    <strong style="color:#d9534f;">-$@data.TotalCancelled.ToString("N2")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.75rem 0; font-size:1.1rem; border-top: 2px solid #ddd; margin-top:0.5rem;">
+                    <span><strong>Total Recaudación Líquida:</strong></span>
+                    <span style="color:#28a745; font-weight:bold; font-size:1.2rem;">$@data.TotalNetCollected.ToString("N2")</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="management-card">
+            <div class="management-card-header">
+                <h2>Indicadores de Operación Diaria</h2>
+            </div>
+            <div style="padding: 1rem 0;">
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span>Ventas Brutas Totales:</span>
+                    <strong>$@data.TotalGrossSales.ToString("N2")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span>Cantidad de Transacciones:</span>
+                    <strong>@data.TotalTransactionsCount operaciones</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span>Fecha de Emisión del Informe:</span>
+                    <strong>@DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                    <span>Estado de Cierre:</span>
+                    <span class="badge bg-success">Cuadrado Automático</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Tabla Detallada -->
+    <section class="management-card">
+        <div class="management-card-header">
+            <h2>Movimientos Detallados del Día (@data.Items.Count transacciones)</h2>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="padding: 2rem; text-align: center;">Cargando operaciones de caja...</div>
+        }
+        else if (data.Items.Count == 0)
+        {
+            <div style="padding: 2rem; text-align: center; color: #888;">No hubo transacciones registradas en la fecha seleccionada.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table management-table">
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Concepto</th>
+                            <th>Documento</th>
+                            <th>Método de Pago</th>
+                            <th>Cajero</th>
+                            <th>Importe Bruto</th>
+                            <th>Importe Neto</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in PagedItems)
+                        {
+                            <tr>
+                                <td>@item.Time.ToString("HH:mm:ss")</td>
+                                <td><strong>@item.Concept</strong></td>
+                                <td>@item.DocumentNumber</td>
+                                <td>@item.PaymentMethod</td>
+                                <td>@item.Cashier</td>
+                                <td>$@item.GrossAmount.ToString("N2")</td>
+                                <td style="font-weight:bold; color: @(item.IsCancelled ? "#888" : item.NetAmount < 0 ? "#d9534f" : "#5cb85c");">
+                                    @(item.IsCancelled ? "$0.00" : (item.NetAmount >= 0 ? "+" : "") + $"${item.NetAmount:N2}")
+                                </td>
+                                <td>
+                                    @if (item.IsCancelled)
+                                    {
+                                        <span class="badge bg-danger">Anulada</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Efectiva</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+                <span>Página @currentPage de @TotalPages (Total: @data.Items.Count)</span>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Anterior</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Siguiente</button>
+                </div>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private DateOnly cutoffDate = DateOnly.FromDateTime(DateTime.Today);
+    private int selectedUserId;
+    private DailyCashCloseResult data = new();
+    private List<tbl_usuario> users = [];
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+    private int? currentUserId;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Items.Count / (double)PageSize));
+    private IEnumerable<DailyCashCloseItem> PagedItems => data.Items.Skip((currentPage - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        users = await db.tbl_usuarios.AsNoTracking().Where(u => u.activo ?? true).OrderBy(u => u.nombres).ToListAsync();
+
+        await LoadReportAsync();
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) cutoffDate = d;
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        currentPage = 1;
+        try
+        {
+            data = await ReportsService.GetDailyCashCloseReportAsync(cutoffDate, selectedUserId);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var headers = new[] { "Hora", "Concepto", "Documento", "Metodo Pago", "Cajero", "Importe Bruto", "Importe Neto", "Estado" };
+        var rows = data.Items.Select(r => new[]
+        {
+            r.Time.ToString("HH:mm:ss"),
+            r.Concept,
+            r.DocumentNumber,
+            r.PaymentMethod,
+            r.Cashier,
+            r.GrossAmount.ToString("F2"),
+            r.NetAmount.ToString("F2"),
+            r.IsCancelled ? "Anulada" : "Efectiva"
+        }).ToList();
+
+        var bytes = ReportsService.GenerateCsvBytes($"Cierre de Caja Diario - {cutoffDate:yyyy-MM-dd}", headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "CierreCaja", "Excel", $"Fecha={cutoffDate}; Registros={rows.Count}");
+        await DownloadFileAsync($"cierre-caja-{cutoffDate:yyyyMMdd}-{DateTime.Now:HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        var kpis = new Dictionary<string, string>
+        {
+            ["Fecha de Corte"] = cutoffDate.ToString("yyyy-MM-dd"),
+            ["Total Efectivo"] = $"${data.TotalCash:N2}",
+            ["Total Transferencias"] = $"${data.TotalTransfer:N2}",
+            ["Total Tarjetas"] = $"${data.TotalCard:N2}",
+            ["Ventas a Credito"] = $"${data.TotalCredit:N2}",
+            ["Total Anulaciones"] = $"${data.TotalCancelled:N2}",
+            ["Total Neto Recaudado"] = $"${data.TotalNetCollected:N2}"
+        };
+
+        var headers = new[] { "Hora", "Concepto", "Documento", "Metodo", "Cajero", "Neto" };
+        var rows = data.Items.Select(r => new[]
+        {
+            r.Time.ToString("HH:mm"),
+            r.Concept,
+            r.DocumentNumber,
+            r.PaymentMethod,
+            r.Cashier,
+            $"${r.NetAmount:F2}"
+        }).ToList();
+
+        var bytes = ReportsService.GeneratePdfBytes($"Cierre de Caja Diario ({cutoffDate:yyyy-MM-dd})", kpis, headers, rows);
+        await ReportsService.LogReportActionAsync(currentUserId, "CierreCaja", "PDF", $"Fecha={cutoffDate}; Registros={rows.Count}");
+        await DownloadFileAsync($"cierre-caja-{cutoffDate:yyyyMMdd}-{DateTime.Now:HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+    }
+}

@@ -101,6 +101,7 @@ builder.Services.AddScoped<ClinicalHistoryService>();
 builder.Services.AddScoped<AccountStatementService>();
 builder.Services.AddScoped<LabMessagingService>();
 builder.Services.AddScoped<SystemReportsService>();
+builder.Services.AddScoped<ReportsDataService>();
 builder.Services.AddScoped<InventoryInsightsService>();
 builder.Services.AddScoped<PurchaseOrderDocumentService>();
 builder.Services.AddScoped<OpticaCustomizationService>();
@@ -3430,7 +3431,17 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 ('Menus', '/menus', 'menu', 32, 1),
                 ('Registrar usuario', '/registro', 'user-plus', 33, 1),
                 ('Seguridad', '/configurar-2fa', 'shield', 34, 1),
-                ('Configuracion optica', '/configuracion-optica', 'sliders', 35, 1)
+                ('Configuracion optica', '/configuracion-optica', 'sliders', 35, 1),
+                ('Clientes con deuda y mora', '/reportes/cuentas-por-cobrar', 'cash-coin', 40, 1),
+                ('Ingresos y egresos', '/reportes/ingresos-egresos', 'graph-up-arrow', 41, 1),
+                ('Cierre de caja diario', '/reportes/cierre-caja', 'receipt', 42, 1),
+                ('Ventas y facturacion', '/reportes/ventas-facturacion', 'receipt-cutoff', 43, 1),
+                ('Citas y turnos', '/reportes/citas', 'calendar2-check-fill', 44, 1),
+                ('Consultas optometria', '/reportes/consultas-clinicas', 'journal-medical', 45, 1),
+                ('Inventario y rotacion', '/reportes/inventario-stock', 'boxes', 46, 1),
+                ('Movimientos kardex', '/reportes/movimientos-inventario', 'journal-text', 47, 1),
+                ('Compras a proveedores', '/reportes/compras-proveedores', 'truck', 48, 1),
+                ('Historial y auditoria', '/reportes/historial-auditoria', 'shield-lock', 49, 1)
         ) AS source(nombre, ruta, icono, orden, activo)
         ON target.ruta = source.ruta
         WHEN MATCHED THEN
@@ -3527,6 +3538,44 @@ static async Task EnsureNavigationSchemaAsync(WebApplication app)
                 SET id_menu_padre = @comprasMenuId
                 WHERE ruta IN (''/ordenes-de-compra'', ''/recepciones-de-compra'', ''/liquidaciones-de-compra'', ''/inventarios'', ''/kardex'')
                   AND id_menu_padre IS NULL;
+            END;
+
+            DECLARE @reporteriaMenuId INT = (SELECT TOP 1 id_menu FROM dbo.tbl_menu_app WHERE nombre IN (''Reportería'', ''Reporteria'') OR ruta = ''/reporteria'' ORDER BY CASE WHEN nombre IN (''Reportería'', ''Reporteria'') THEN 0 ELSE 1 END);
+
+            IF @reporteriaMenuId IS NULL
+            BEGIN
+                INSERT INTO dbo.tbl_menu_app (nombre, ruta, icono, orden, activo)
+                VALUES (''Reportería'', NULL, ''bar-chart-line'', 39, 1);
+
+                SET @reporteriaMenuId = SCOPE_IDENTITY();
+            END
+            ELSE
+            BEGIN
+                UPDATE dbo.tbl_menu_app
+                SET nombre = ''Reportería'',
+                    ruta = NULL,
+                    icono = ''bar-chart-line'',
+                    orden = 39,
+                    activo = 1
+                WHERE id_menu = @reporteriaMenuId;
+            END;
+
+            IF @reporteriaMenuId IS NOT NULL
+            BEGIN
+                UPDATE dbo.tbl_menu_app
+                SET id_menu_padre = @reporteriaMenuId
+                WHERE ruta IN (
+                    ''/reportes/cuentas-por-cobrar'',
+                    ''/reportes/ingresos-egresos'',
+                    ''/reportes/cierre-caja'',
+                    ''/reportes/ventas-facturacion'',
+                    ''/reportes/citas'',
+                    ''/reportes/consultas-clinicas'',
+                    ''/reportes/inventario-stock'',
+                    ''/reportes/movimientos-inventario'',
+                    ''/reportes/compras-proveedores'',
+                    ''/reportes/historial-auditoria''
+                );
             END;
         ');
 
