@@ -27,6 +27,7 @@ public partial class OpticaDbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        ConfigureCompletionEntities(modelBuilder);
         ConfigureSecurityEntities(modelBuilder);
         ConfigureNavigationEntities(modelBuilder);
         ConfigureNotificationEntities(modelBuilder);

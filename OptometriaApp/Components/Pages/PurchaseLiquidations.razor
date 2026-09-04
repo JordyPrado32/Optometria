@@ -98,13 +98,14 @@ else
                                             <button class="btn btn-outline-primary" @onclick="() => GoToRetention(item.id_liquidacion_compra)">
                                                 <i class="bi bi-receipt" style="margin-right:4px;"></i> Retencion
                                             </button>
-                                            <button class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">
+                                            <a class="btn btn-outline-primary" href="@($"/liquidaciones-de-compra/{item.id_liquidacion_compra}/abonos")">Abonos</a>
+                                            <button disabled="@(!permissions.CanEdit)" class="btn btn-outline-primary" @onclick="() => PrepareEdit(item)">
                                                 <i class="bi bi-pencil-fill"></i> Editar
                                             </button>
                                             @if (permissions.CanDelete)
                                             {
-                                                <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(item)">
-                                                    <i class="bi bi-trash3-fill"></i> Eliminar
+                                                <button class="btn btn-outline-primary" @onclick="() => pendingDelete = item">
+                                                    <i class="bi bi-archive"></i> Archivar
                                                 </button>
                                             }
                                         </div>
@@ -145,7 +146,7 @@ else
                     </div>
                     <div>
                         <label class="form-label">Estado</label>
-                        <select class="form-select" @bind="editor.EstadoLiquidacion">
+                        <select class="form-select" @bind="editor.EstadoLiquidacion" disabled>
                             @foreach (var option in stateOptions)
                             {
                                 <option value="@option">@option</option>
@@ -167,7 +168,7 @@ else
                             <div><label class="form-label">Subtotal</label><input type="number" step="0.01" class="form-control" @bind="editor.Subtotal" /></div>
                             <div><label class="form-label">Descuento</label><input type="number" step="0.01" class="form-control" @bind="editor.DescuentoTotal" /></div>
                             <div><label class="form-label">Impuesto</label><input type="number" step="0.01" class="form-control" @bind="editor.ImpuestoTotal" /></div>
-                            <div><label class="form-label">Pagado</label><input type="number" step="0.01" class="form-control" @bind="editor.SaldoPagado" /></div>
+                            <div><label class="form-label">Pagado</label><input type="number" step="0.01" class="form-control" @bind="editor.SaldoPagado" readonly /></div>
                         </div>
                     </details>
 
@@ -179,11 +180,20 @@ else
                     </details>
                 </div>
             </div>
-            <footer class="custom-modal-footer"><button class="btn btn-primary" @onclick="SaveAsync">Guardar</button><button class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button></footer>
+            <footer class="custom-modal-footer"><button class="btn btn-primary" disabled="@saving" @onclick="SaveAsync">Guardar</button><button class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button></footer>
         </div>
     </div>
 }
 
+@if (pendingDelete is not null)
+{
+    <section class="management-card" role="alert">
+        <h2>Archivar liquidacion @pendingDelete.numero_liquidacion</h2>
+        <p>Se conservara su registro. No se puede archivar si tiene movimientos de pago.</p>
+        <button class="btn btn-danger" @onclick="() => DeleteAsync(pendingDelete)">Confirmar archivo</button>
+        <button class="btn btn-outline-primary" @onclick="() => pendingDelete = null">Cancelar</button>
+    </section>
+}
 <StatusModal Visible="@showAlert"
              IsError="@alertIsError"
              Title="@alertTitle"
@@ -199,6 +209,8 @@ else
     private readonly string[] stateOptions = ["Pendiente", "Parcial", "Pagada"];
     private Permissions permissions = new();
     private LiquidationEditor? editor;
+    private tbl_liquidacion_compra? pendingDelete;
+    private bool saving;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError, showRetentionAction;
     private int currentUserId, currentRoleId, generatedDocumentLiquidationId;
     private string alertMessage = string.Empty, alertTitle = string.Empty, searchTerm = string.Empty, stateFilter = string.Empty, orderFilter = string.Empty, orderSearchTerm = string.Empty;
@@ -228,7 +240,7 @@ else
         availableOrders.Clear();
         availableOrders.AddRange(await db.tbl_orden_compra.AsNoTracking().Where(x => x.id_usuario_solicita == currentUserId).OrderByDescending(x => x.fecha_orden).ToListAsync());
         items.Clear();
-        items.AddRange(await db.tbl_liquidacion_compra.AsNoTracking().Include(x => x.id_orden_compraNavigation).Where(x => x.id_usuario_registro == currentUserId).OrderByDescending(x => x.fecha_liquidacion).ToListAsync());
+        items.AddRange(await db.tbl_liquidacion_compra.AsNoTracking().Include(x => x.id_orden_compraNavigation).Where(x => x.id_usuario_registro == currentUserId && x.activo == true).OrderByDescending(x => x.fecha_liquidacion).ToListAsync());
         isLoading = false;
     }
 
@@ -250,8 +262,25 @@ else
 
     private async Task SaveAsync()
     {
+        if (saving) return;
+        saving = true;
+        try { await SaveCoreAsync(); }
+        catch (InvalidOperationException ex) { ShowAlert("No se pudo guardar", ex.Message, true); }
+        catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException) { ShowAlert("No se pudo guardar", "Recarga las liquidaciones y comprueba los datos antes de reintentar.", true); }
+        finally { saving = false; }
+    }
+
+    private async Task SaveCoreAsync()
+    {
         if (editor is null || string.IsNullOrWhiteSpace(editor.NumeroLiquidacion) || editor.IdOrdenCompra <= 0) { ShowAlert("No se pudo guardar la liquidacion.", "Completa numero de liquidacion y orden de compra.", true); return; }
         await using var db = await DbContextFactory.CreateDbContextAsync();
+        permissions = await GetPermissionsAsync(db);
+        if (!permissions.CanView || (isCreating ? !permissions.CanCreate : !permissions.CanEdit)) throw new InvalidOperationException("No tienes permiso para guardar esta liquidacion.");
+        if (!await db.tbl_orden_compra.AnyAsync(x => x.id_orden_compra == editor.IdOrdenCompra && x.id_usuario_solicita == currentUserId)) throw new InvalidOperationException("Selecciona una orden propia.");
+        editor.NumeroLiquidacion = editor.NumeroLiquidacion.Trim();
+        if (editor.NumeroLiquidacion.Length > 20 || editor.NumeroFactura.Trim().Length > 50 || editor.NumeroAutorizacion.Trim().Length > 100)
+            throw new InvalidOperationException("Limites: numero de liquidacion 20, factura 50 y autorizacion 100 caracteres.");
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var duplicate = await db.tbl_liquidacion_compra.AnyAsync(x => x.id_liquidacion_compra != editor.Id && x.numero_liquidacion == editor.NumeroLiquidacion);
         if (duplicate) { ShowAlert("No se pudo guardar la liquidacion.", "Ya existe una liquidacion con ese numero.", true); return; }
 
@@ -263,9 +292,11 @@ else
         }
         else
         {
-            entity = await db.tbl_liquidacion_compra.FirstAsync(x => x.id_liquidacion_compra == editor.Id && x.id_usuario_registro == currentUserId);
+            entity = await db.tbl_liquidacion_compra.FromSqlInterpolated($"SELECT * FROM dbo.tbl_liquidacion_compra WITH (UPDLOCK, HOLDLOCK) WHERE id_liquidacion_compra = {editor.Id}").FirstAsync(x => x.id_usuario_registro == currentUserId && x.activo == true);
         }
 
+        PurchasePaymentRules.ValidateTotals(editor.Subtotal, editor.DescuentoTotal, editor.ImpuestoTotal, entity.saldo_pagado ?? 0);
+        if ((entity.saldo_pagado ?? 0) > 0 && entity.id_orden_compra != editor.IdOrdenCompra) throw new InvalidOperationException("No puedes cambiar la orden de una liquidacion con pagos.");
         entity.id_orden_compra = editor.IdOrdenCompra;
         entity.numero_liquidacion = editor.NumeroLiquidacion.Trim();
         entity.numero_factura = NullIfBlank(editor.NumeroFactura);
@@ -274,14 +305,15 @@ else
         entity.descuento_total = editor.DescuentoTotal;
         entity.impuesto_total = editor.ImpuestoTotal;
         entity.total = editor.Subtotal - editor.DescuentoTotal + editor.ImpuestoTotal;
-        entity.saldo_pagado = editor.SaldoPagado;
+        entity.saldo_pagado ??= 0;
         entity.saldo_pendiente = entity.total - entity.saldo_pagado;
-        entity.estado_liquidacion = editor.EstadoLiquidacion;
+        entity.estado_liquidacion = PurchasePaymentRules.State(entity.total ?? 0, entity.saldo_pagado ?? 0);
         entity.observaciones = NullIfBlank(editor.Observaciones);
         entity.fecha_actualizacion = DateTime.Now;
 
         WriteAudit(db, isCreating ? "Crear liquidacion compra" : "Editar liquidacion compra", $"LiquidacionCompraId={entity.id_liquidacion_compra}; Numero={entity.numero_liquidacion}; OrdenCompraId={entity.id_orden_compra}");
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         CloseForm();
         ShowAlert(
             isCreating ? "Liquidacion creada" : "Liquidacion actualizada",
@@ -294,34 +326,32 @@ else
 
     private async Task DeleteAsync(tbl_liquidacion_compra item)
     {
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        var entity = await db.tbl_liquidacion_compra.FirstAsync(x => x.id_liquidacion_compra == item.id_liquidacion_compra && x.id_usuario_registro == currentUserId);
-        WriteAudit(db, "Eliminar liquidacion compra", $"LiquidacionCompraId={entity.id_liquidacion_compra}; Numero={entity.numero_liquidacion}; OrdenCompraId={entity.id_orden_compra}");
-        db.tbl_liquidacion_compra.Remove(entity);
-        await db.SaveChangesAsync();
-        ShowAlert("Liquidacion eliminada", $"La liquidacion {entity.numero_liquidacion} se elimino correctamente.", false);
-        await LoadAsync();
-    }
-
-    private async Task GenerateDocumentAsync(tbl_liquidacion_compra item)
-    {
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        var entity = await db.tbl_liquidacion_compra
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.id_liquidacion_compra == item.id_liquidacion_compra && x.id_usuario_registro == currentUserId);
-
-        if (entity is null)
+        try
         {
-            ShowAlert("No se pudo generar el documento.", "No se encontro la liquidacion seleccionada.", true);
-            return;
+            await using var db = await DbContextFactory.CreateDbContextAsync();
+            permissions = await GetPermissionsAsync(db);
+            if (!permissions.CanView || !permissions.CanDelete) throw new InvalidOperationException("No tienes permiso para archivar.");
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var entity = await db.tbl_liquidacion_compra.FromSqlInterpolated($"SELECT * FROM dbo.tbl_liquidacion_compra WITH (UPDLOCK, HOLDLOCK) WHERE id_liquidacion_compra = {item.id_liquidacion_compra}")
+                .FirstAsync(x => x.id_usuario_registro == currentUserId);
+            if ((entity.saldo_pagado ?? 0) != 0 || await db.PurchasePayments.AnyAsync(x => x.LiquidationId == entity.id_liquidacion_compra))
+                throw new InvalidOperationException("Conserva la liquidacion: tiene movimientos de pago.");
+            entity.activo = false;
+            WriteAudit(db, "Archivar liquidacion", $"Liquidacion={entity.id_liquidacion_compra}");
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            pendingDelete = null;
+            await LoadAsync();
         }
-
-        WriteAudit(db, "Generar documento liquidacion compra", $"LiquidacionCompraId={entity.id_liquidacion_compra}; Numero={entity.numero_liquidacion}; OrdenCompraId={entity.id_orden_compra}");
-        await db.SaveChangesAsync();
-
-        ShowAlert("Documento generado", $"El documento de la liquidacion {entity.numero_liquidacion} se genero correctamente.", false, true, entity.id_liquidacion_compra);
+        catch (InvalidOperationException ex) { ShowAlert("No se pudo archivar", ex.Message, true); }
+        catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException) { ShowAlert("No se pudo archivar", "Recarga y comprueba el estado de la liquidacion.", true); }
     }
 
+    private Task GenerateDocumentAsync(tbl_liquidacion_compra item)
+    {
+        NavigationManager.NavigateTo($"/purchase-liquidations/{item.id_liquidacion_compra}/print", forceLoad: true);
+        return Task.CompletedTask;
+    }
     private void GoToRetention(int liquidationId)
     {
         showAlert = false;
@@ -396,8 +426,11 @@ else
 
     private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
     {
+        var user = await db.tbl_usuarios.AsNoTracking().FirstOrDefaultAsync(x => x.id_usuario == currentUserId && x.activo == true && x.bloqueado != true);
+        if (user == null) return new Permissions();
+        currentRoleId = user.id_rol;
         var permission = await db.tbl_rol_menu_permisos.AsNoTracking().Where(p => p.id_rol == currentRoleId)
-            .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.ruta == "/liquidaciones-de-compra"), p => p.id_menu, m => m.id_menu, (p, _) => p)
+            .Join(db.tbl_menu_apps.AsNoTracking().Where(m => m.activo && m.ruta == "/liquidaciones-de-compra"), p => p.id_menu, m => m.id_menu, (p, _) => p)
             .FirstOrDefaultAsync();
         return permission is null ? new Permissions() : new Permissions { CanView = permission.puede_ver, CanCreate = permission.puede_crear, CanEdit = permission.puede_editar, CanDelete = permission.puede_eliminar };
     }

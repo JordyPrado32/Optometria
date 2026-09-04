@@ -1,0 +1,89 @@
+@page "/liquidaciones-de-compra/{LiquidationId:int}/abonos"
+@attribute [Authorize(Policy = "OperationalAccess")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject ClinicCompletionService Completion
+
+<PageTitle>Abonos de compra</PageTitle>
+<section class="management-shell">
+    <div class="management-hero"><div><span class="eyebrow">Compras</span><h1>Abonos de compra</h1><p>Registra pagos y conserva su historial. Los reversos no eliminan el movimiento original.</p></div><a class="btn btn-outline-primary" href="/liquidaciones-de-compra">Volver a liquidaciones</a></div>
+    @if (message != null) { <div class="alert alert-info" role="status">@message</div> }
+    @if (liquidation != null)
+    {
+        <div class="management-card">
+            <h2>@liquidation.numero_liquidacion</h2>
+            <p>Total: <strong>@liquidation.total?.ToString("N2")</strong> · Pagado: <strong>@liquidation.saldo_pagado?.ToString("N2")</strong> · Pendiente: <strong>@liquidation.saldo_pendiente?.ToString("N2")</strong></p>
+            @if (canEdit)
+            {
+                <EditForm Model="editor" OnSubmit="SaveAsync">
+                    <fieldset disabled="@busy">
+                        <legend>@(reverseId.HasValue ? "Revertir abono" : "Registrar abono")</legend>
+                        @if (!reverseId.HasValue)
+                        {
+                            <label for="payment-amount" class="form-label">Importe</label><InputNumber id="payment-amount" class="form-control" @bind-Value="editor.Amount" min="0.01" step="0.01" />
+                            <label for="payment-method" class="form-label">Método de pago</label><InputSelect id="payment-method" class="form-select" @bind-Value="editor.Method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option><option>Cheque</option></InputSelect>
+                        }
+                        <label for="payment-reference" class="form-label">@(reverseId.HasValue ? "Motivo del reverso" : "Referencia del pago")</label>
+                        <InputText id="payment-reference" class="form-control" @bind-Value="editor.Reference" maxlength="300" />
+                        <div class="workspace-actions mt-3"><button type="submit" class="btn btn-primary">@(busy ? "Guardando…" : reverseId.HasValue ? "Confirmar reverso" : "Registrar abono")</button><button type="button" class="btn btn-outline-primary" @onclick="Reset">Cancelar</button></div>
+                    </fieldset>
+                </EditForm>
+            }
+        </div>
+        <div class="management-card mt-3"><h2>Historial de movimientos</h2><div class="table-responsive"><table class="table"><caption>Fechas en UTC. El saldo inicial conserva pagos anteriores a este historial.</caption><thead><tr><th>Fecha</th><th>Método</th><th>Referencia</th><th>Importe</th><th>Acción</th></tr></thead><tbody>
+        @foreach (var payment in payments)
+        {
+            <tr><td>@payment.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td><td>@payment.Method</td><td>@payment.Reference</td><td>@payment.Amount.ToString("N2")</td><td>
+            @if (canEdit && payment.Amount > 0 && payment.Method != "Saldo inicial" && !payments.Any(x => x.ReversesId == payment.Id))
+            { <button disabled="@busy" class="btn btn-outline-primary" @onclick="() => PrepareReverse(payment.Id)">Revertir abono #@payment.Id</button> }
+            </td></tr>
+        }
+        @if (payments.Count == 0) { <tr><td colspan="5">Todavía no hay abonos.</td></tr> }
+        </tbody></table></div></div>
+    }
+</section>
+
+@code {
+    [Parameter] public int LiquidationId { get; set; }
+    private int userId;
+    private bool busy, canEdit;
+    private string? message;
+    private int? reverseId;
+    private Guid operationId = Guid.NewGuid();
+    private PaymentEditor editor = new();
+    private tbl_liquidacion_compra? liquidation;
+    private List<PurchasePayment> payments = [];
+    protected override async Task OnParametersSetAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        userId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
+        await RefreshAsync();
+    }
+    private async Task RefreshAsync()
+    {
+        liquidation = null;
+        payments.Clear();
+        try
+        {
+            await using var db = await DbContextFactory.CreateDbContextAsync();
+            if (!await ClinicCompletionService.CanPurchaseAsync(db, userId, false)) { message = "No tienes acceso a las compras."; return; }
+            liquidation = await db.tbl_liquidacion_compra.AsNoTracking().FirstOrDefaultAsync(x => x.id_liquidacion_compra == LiquidationId && x.id_usuario_registro == userId && x.activo == true);
+            if (liquidation == null) { message = "Liquidacion no disponible."; return; }
+            canEdit = await ClinicCompletionService.CanPurchaseAsync(db, userId, true);
+            payments = await db.PurchasePayments.AsNoTracking().Where(x => x.LiquidationId == LiquidationId).OrderByDescending(x => x.CreatedAt).ToListAsync();
+        }
+        catch (Microsoft.Data.SqlClient.SqlException) { liquidation = null; message = "No se pudo consultar el historial. Verifica la conexion y la actualizacion de la base de datos."; }
+    }
+    private void Reset() { editor = new(); reverseId = null; operationId = Guid.NewGuid(); }
+    private void PrepareReverse(int id) { Reset(); reverseId = id; }
+    private async Task SaveAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try { await Completion.RecordPaymentAsync(userId, LiquidationId, editor.Amount, editor.Method, editor.Reference, operationId, reverseId); Reset(); message = "Movimiento registrado."; await RefreshAsync(); }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException) { message = "No se pudo confirmar el movimiento. Recarga el historial antes de volver a intentarlo."; }
+        finally { busy = false; }
+    }
+    private sealed class PaymentEditor { public decimal Amount { get; set; } public string Method { get; set; } = "Efectivo"; public string Reference { get; set; } = ""; }
+}

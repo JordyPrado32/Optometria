@@ -35,7 +35,7 @@ public sealed class MenuAccessService
 
         if (roleId is null)
         {
-            return activeMenus;
+            return [];
         }
 
         if (roleId.Value == 1)
@@ -50,7 +50,7 @@ public sealed class MenuAccessService
 
         if (configuredPermissions.Count == 0)
         {
-            return activeMenus;
+            return [];
         }
 
         var allowedMenuIds = configuredPermissions
@@ -58,7 +58,6 @@ public sealed class MenuAccessService
             .Select(p => p.id_menu)
             .ToHashSet();
 
-        EnsureClinicalHistoryFallbackAccess(activeMenus, configuredPermissions, allowedMenuIds);
 
         var visibleMenus = activeMenus
             .Where(m => allowedMenuIds.Contains(m.IdMenu))
@@ -92,49 +91,6 @@ public sealed class MenuAccessService
         }
 
         return visibleMenus;
-    }
-
-    private static void EnsureClinicalHistoryFallbackAccess(
-        List<AppMenuItem> activeMenus,
-        List<tbl_rol_menu_permiso> configuredPermissions,
-        HashSet<int> allowedMenuIds)
-    {
-        var clinicalHistoryMenu = activeMenus.FirstOrDefault(m =>
-            string.Equals(m.Ruta, "/doctor/historia-clinica", StringComparison.OrdinalIgnoreCase));
-
-        if (clinicalHistoryMenu is null || allowedMenuIds.Contains(clinicalHistoryMenu.IdMenu))
-        {
-            return;
-        }
-
-        var hasExplicitClinicalHistoryPermission = configuredPermissions.Any(p => p.id_menu == clinicalHistoryMenu.IdMenu);
-        if (hasExplicitClinicalHistoryPermission)
-        {
-            return;
-        }
-
-        var fallbackRoutes = new[]
-        {
-            "/doctor/ingresar-pacientes",
-            "/doctor/mis-pacientes",
-            "/citas"
-        };
-
-        var fallbackMenuIds = activeMenus
-            .Where(m => fallbackRoutes.Contains(m.Ruta, StringComparer.OrdinalIgnoreCase))
-            .Select(m => m.IdMenu)
-            .ToHashSet();
-
-        if (fallbackMenuIds.Count == 0)
-        {
-            return;
-        }
-
-        var canViewRelatedClinicalModule = configuredPermissions.Any(p => p.puede_ver && fallbackMenuIds.Contains(p.id_menu));
-        if (canViewRelatedClinicalModule)
-        {
-            allowedMenuIds.Add(clinicalHistoryMenu.IdMenu);
-        }
     }
 
     public async Task NotifyMenusChangedAsync()

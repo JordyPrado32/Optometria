@@ -668,6 +668,7 @@ public partial class OpticaDbContext : DbContext
             entity.HasKey(e => e.id_nota_credito);
 
             entity.ToTable("tbl_nota_credito");
+            entity.Property(e => e.saldo_disponible).HasPrecision(15, 2);
 
             entity.HasIndex(e => new { e.id_comprobante_relacionado, e.id_cta_cobrar }, "IX_nota_relacion");
 

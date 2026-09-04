@@ -4,6 +4,8 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -26,28 +28,27 @@ builder.Services.AddDbContextFactory<OpticaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("OpticaConnection")),
     ServiceLifetime.Scoped);
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddAuthorization(options =>
+builder.Services.AddScoped<SessionValidationService>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, ClinicAuthenticationStateProvider>();
+builder.Services.AddRateLimiter(options =>
 {
-    options.AddPolicy("FullAccess", policy =>
-        policy.RequireAssertion(context =>
-            !string.IsNullOrWhiteSpace(context.User.FindFirstValue(AuthClaimTypes.AuthStage))));
-
-    options.AddPolicy("OperationalAccess", policy =>
-        policy.RequireAssertion(context =>
-            !string.IsNullOrWhiteSpace(context.User.FindFirstValue(AuthClaimTypes.AuthStage)) &&
-            !string.Equals(context.User.FindFirstValue(AuthClaimTypes.ForcePasswordChange), bool.TrueString, StringComparison.OrdinalIgnoreCase)));
-
-    options.AddPolicy("TwoFactorSetup", policy =>
-        policy.RequireAssertion(context =>
-        {
-            var stage = context.User.FindFirstValue(AuthClaimTypes.AuthStage);
-            return stage is AuthStages.TwoFactorSetupRequired or AuthStages.FullAccess;
-        }));
-
-    options.AddPolicy("TwoFactorVerification", policy =>
-        policy.RequireClaim(AuthClaimTypes.AuthStage, AuthStages.TwoFactorPending));
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+    {
+        if (!HttpMethods.IsPost(context.Request.Method) || !context.Request.Path.StartsWithSegments("/auth"))
+            return RateLimitPartition.GetNoLimiter("other");
+        var identity = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter($"{context.Request.Path}:{identity}", _ => new FixedWindowRateLimiterOptions
+            { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true });
+    });
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await context.HttpContext.Response.WriteAsync("Demasiados intentos. Espera un minuto antes de volver a intentar.", token);
+    };
 });
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddAuthorization(AccessPolicies.Configure);
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -60,20 +61,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         {
             OnValidatePrincipal = async context =>
             {
-                var rawUserId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (!int.TryParse(rawUserId, out var userId) || userId <= 0)
-                {
-                    context.RejectPrincipal();
-                    await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                    return;
-                }
-
-                var dbContext = context.HttpContext.RequestServices.GetRequiredService<OpticaDbContext>();
-                var userExists = await dbContext.tbl_usuarios
-                    .AsNoTracking()
-                    .AnyAsync(u => u.id_usuario == userId && u.activo == true);
-
-                if (!userExists)
+                var validator = context.HttpContext.RequestServices.GetRequiredService<SessionValidationService>();
+                if (context.Principal == null || !await validator.IsValidAsync(context.Principal, context.HttpContext.RequestAborted))
                 {
                     context.RejectPrincipal();
                     await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -98,6 +87,7 @@ builder.Services.AddHttpClient<SriElectronicDocumentClient>(client =>
 });
 builder.Services.AddScoped<ElectronicBillingDocumentService>();
 builder.Services.AddScoped<ClinicalHistoryService>();
+builder.Services.AddScoped<ClinicCompletionService>();
 builder.Services.AddScoped<AccountStatementService>();
 builder.Services.AddScoped<LabMessagingService>();
 builder.Services.AddScoped<SystemReportsService>();
@@ -124,6 +114,14 @@ await EnsureProcurementSchemaAsync(app);
 await EnsureAppointmentSchemaAsync(app);
 await EnsureNotificationSchemaAsync(app);
 await EnsureClinicalHistorySchemaAsync(app);
+await using (var completionScope = app.Services.CreateAsyncScope())
+{
+    var completionDb = completionScope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+    await using var script = typeof(ClinicCompletionService).Assembly.GetManifestResourceStream("OptometriaApp.Sql.010_clinic_completion.sql")
+        ?? throw new InvalidOperationException("Falta el script de actualizacion clinica.");
+    using var reader = new StreamReader(script);
+    await completionDb.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
+}
 await EnsureRoleSecurityMatrixAsync(app);
 
 if (!app.Environment.IsDevelopment())
@@ -134,8 +132,28 @@ if (!app.Environment.IsDevelopment())
 
 app.UseStatusCodePagesWithReExecute("/StatusCode/{0}"); app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.UseAntiforgery();
+// These endpoints read forms manually, so validate CSRF explicitly before any mutation.
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsPost(context.Request.Method) && context.Request.Path.StartsWithSegments("/auth"))
+    {
+        var antiforgery = context.RequestServices.GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>();
+        try
+        {
+            await antiforgery.ValidateRequestAsync(context);
+        }
+        catch (Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("La solicitud no es valida. Recarga la pagina e intenta nuevamente.");
+            return;
+        }
+    }
+    await next(context);
+});
 
 app.MapPost("/auth/login", async (
     HttpContext httpContext,
@@ -270,14 +288,15 @@ app.MapPost("/auth/login", async (
     await dbContext.SaveChangesAsync();
 
     var forcePasswordChange = seguridad.must_change_password;
+    var loginStage = seguridad.two_factor_enabled ? AuthStages.TwoFactorPending : AuthStages.FullAccess;
 
     await httpContext.SignInAsync(
         CookieAuthenticationDefaults.AuthenticationScheme,
-        BuildPrincipal(usuarioDb, AuthStages.FullAccess, forcePasswordChange, rememberMe),
+        BuildPrincipal(usuarioDb, loginStage, forcePasswordChange, rememberMe),
         BuildAuthenticationProperties(rememberMe));
 
-    return Results.LocalRedirect(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
-}).DisableAntiforgery();
+    return Results.LocalRedirect(loginStage == AuthStages.TwoFactorPending ? "/verificar-2fa" : forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
+});
 
 app.MapPost("/auth/register", async (
     HttpContext httpContext,
@@ -387,7 +406,7 @@ app.MapPost("/auth/register", async (
         BuildAuthenticationProperties(false));
 
     return Results.LocalRedirect("/dashboard");
-}).DisableAntiforgery();
+});
 
 app.MapPost("/auth/forgot-password", async (
     HttpContext httpContext,
@@ -441,7 +460,7 @@ app.MapPost("/auth/forgot-password", async (
         minutesValid);
 
     return Results.LocalRedirect("/?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
-}).DisableAntiforgery();
+});
 
 app.MapPost("/auth/setup-2fa/confirm", async (
     HttpContext httpContext,
@@ -489,7 +508,7 @@ app.MapPost("/auth/setup-2fa/confirm", async (
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
     return Results.LocalRedirect(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
-}).DisableAntiforgery();
+}).RequireAuthorization("TwoFactorSetup");
 
 app.MapPost("/auth/verify-2fa", async (
     HttpContext httpContext,
@@ -529,7 +548,7 @@ app.MapPost("/auth/verify-2fa", async (
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
     return Results.LocalRedirect(forcePasswordChange ? "/cambiar-contrasena" : "/dashboard");
-}).DisableAntiforgery();
+}).RequireAuthorization("TwoFactorVerification");
 
 app.MapPost("/auth/change-password", async (
     HttpContext httpContext,
@@ -589,7 +608,7 @@ app.MapPost("/auth/change-password", async (
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
     return Results.LocalRedirect("/dashboard");
-}).DisableAntiforgery();
+}).RequireAuthorization("PasswordChangeAccess");
 
 app.MapPost("/auth/profile", async (
     HttpContext httpContext,
@@ -729,7 +748,7 @@ app.MapPost("/auth/profile", async (
         BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
     return Results.LocalRedirect("/perfil?message=Perfil+actualizado");
-});
+}).RequireAuthorization("OperationalAccess");
 
 app.MapGet("/auth/logout", async (HttpContext httpContext) =>
 {
@@ -2896,12 +2915,48 @@ app.MapGet("/exports/lab-orders/{orderId:int}.html", async (
     return Results.File(document.PdfContent, "application/pdf", $"{document.OrderNumber}-rx.pdf");
 }).RequireAuthorization("OperationalAccess");
 
+app.MapGet("/purchase-liquidations/{id:int}/print", async (int id, HttpContext context, IDbContextFactory<OpticaDbContext> factory) =>
+{
+    await using var db = await factory.CreateDbContextAsync();
+    var userId = GetUserId(context.User) ?? 0;
+    if (!await ClinicCompletionService.CanPurchaseAsync(db, userId, false)) return Results.NotFound();
+    var item = await db.tbl_liquidacion_compra.AsNoTracking().Include(x => x.id_orden_compraNavigation)
+        .FirstOrDefaultAsync(x => x.id_liquidacion_compra == id && x.id_usuario_registro == userId && x.activo == true);
+    if (item == null) return Results.NotFound();
+    static string H(string? value) => WebUtility.HtmlEncode(value ?? "");
+    var payments = await db.PurchasePayments.AsNoTracking().Where(x => x.LiquidationId == id).OrderBy(x => x.CreatedAt).ToListAsync();
+    var rows = string.Join("", payments.Select(x => $"<tr><td>{x.CreatedAt:yyyy-MM-dd HH:mm} UTC</td><td>{H(x.Method)}</td><td>{H(x.Reference)}</td><td>{x.Amount:N2}</td></tr>"));
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Content($$"""
+    <!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Liquidacion {{H(item.numero_liquidacion)}}</title>
+    <style>body{font:16px/1.6 system-ui;max-width:900px;margin:30px auto;padding:16px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:8px;text-align:left} .table-wrap{overflow:auto}button{font:inherit;min-height:44px;padding:8px 18px}button:focus-visible{outline:3px solid #17684e;outline-offset:3px}@media print{button{display:none} }</style></head><body>
+    <button onclick="window.print()">Imprimir</button><h1>Liquidación de compra {{H(item.numero_liquidacion)}}</h1>
+    <p>Orden: {{H(item.id_orden_compraNavigation.numero_orden)}} · Factura: {{H(item.numero_factura)}}</p>
+    <p>Subtotal: {{item.subtotal:N2}} · Descuento: {{item.descuento_total:N2}} · Impuesto: {{item.impuesto_total:N2}}</p>
+    <p>Total: {{item.total:N2}} · Pagado: {{item.saldo_pagado:N2}} · Pendiente: {{item.saldo_pendiente:N2}}</p>
+    <h2>Movimientos de pago</h2><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Metodo</th><th>Referencia</th><th>Importe</th></tr></thead><tbody>{{rows}}</tbody></table></div>
+    <p>Comprobante interno de liquidación y pagos. No sustituye un comprobante tributario autorizado.</p></body></html>
+    """, "text/html; charset=utf-8");
+}).RequireAuthorization("OperationalAccess");
+app.MapGet("/medical-certificates/{id:int}/print", async (int id, HttpContext context, IDbContextFactory<OpticaDbContext> factory) =>
+{
+    await using var db = await factory.CreateDbContextAsync();
+    var certificate = await db.MedicalCertificates.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+    if (certificate == null || !await ClinicCompletionService.CanReadConsultationAsync(db, GetUserId(context.User) ?? 0, certificate.ConsultationId))
+        return Results.NotFound();
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Content(MedicalCertificateDocument.Build(certificate), "text/html; charset=utf-8");
+}).RequireAuthorization("OperationalAccess");
 app.MapGet("/prescriptions/{consultationId:int}/print", async (
     int consultationId,
+    HttpContext httpContext,
     IDbContextFactory<OpticaDbContext> dbContextFactory,
     CancellationToken cancellationToken) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+    if (!await ClinicCompletionService.CanReadConsultationAsync(dbContext, GetUserId(httpContext.User) ?? 0, consultationId))
+        return Results.NotFound();
+    httpContext.Response.Headers.CacheControl = "no-store";
     var prescription = await dbContext.tbl_receta_medica
         .AsNoTracking()
         .Include(x => x.id_pacienteNavigation)
@@ -4939,7 +4994,9 @@ static ClaimsPrincipal BuildPrincipal(tbl_usuario usuario, string authStage, boo
         new(AuthClaimTypes.AuthStage, authStage),
         new(AuthClaimTypes.ForcePasswordChange, forcePasswordChange.ToString()),
         new(AuthClaimTypes.RememberMe, rememberMe.ToString()),
-        new(AuthClaimTypes.RoleId, usuario.id_rol.ToString())
+        new(AuthClaimTypes.RoleId, usuario.id_rol.ToString()),
+        new("CredentialVersion", SessionValidationService.CredentialVersion(usuario.password_hash)),
+        new("TwoFactorVerified", (authStage == AuthStages.FullAccess && usuario.tbl_usuario_seguridad?.two_factor_enabled == true).ToString())
     };
 
     if (!string.IsNullOrWhiteSpace(usuario.email))

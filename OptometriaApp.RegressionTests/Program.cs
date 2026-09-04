@@ -4,8 +4,74 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Text;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
+using OptometriaApp.Configuration;
 
 var failures = new List<string>();
+
+Run("Purchase payments reject overpayments and invalid precision", () =>
+{
+    foreach (var amount in new[] { -1m, 0m, 80.01m, 0.001m })
+    {
+        var rejected = false;
+        try { PurchasePaymentRules.ValidatePayment(100, 20, amount); }
+        catch (InvalidOperationException) { rejected = true; }
+        Assert(rejected, $"Invalid payment accepted: {amount}");
+    }
+    PurchasePaymentRules.ValidatePayment(100, 20, 80);
+    Assert(PurchasePaymentRules.State(100, 100) == "Pagada", "Full payment must settle the account.");
+    Assert(PurchasePaymentRules.State(100, 20) == "Parcial", "Partial payment state is incorrect.");
+    Assert(PurchasePaymentRules.State(100, 0) == "Pendiente", "Reversed balance should be pending.");
+    foreach (var values in new[] { (-1m, 0m, 0m, 0m), (10m, 11m, 0m, 0m), (10m, 0m, 0m, 11m), (10m, 0m, 0.001m, 0m) })
+    {
+        var rejected = false;
+        try { PurchasePaymentRules.ValidateTotals(values.Item1, values.Item2, values.Item3, values.Item4); }
+        catch (InvalidOperationException) { rejected = true; }
+        Assert(rejected, "Invalid liquidation totals accepted.");
+    }
+});
+
+Run("Medical certificates escape all user text and mark revocations", () =>
+{
+    var certificate = new MedicalCertificate { Statement = "<script>alert(1)</script>", PatientName = "<img src=x>",
+        DoctorName = "<b>Doctor</b>", License = "<svg>", PatientIdentification = "<&>", RevocationReason = "<script>revoked</script>" };
+    var html = MedicalCertificateDocument.Build(certificate);
+    Assert(!html.Contains("<script>") && !html.Contains("<img") && !html.Contains("<svg>"), "Unescaped certificate field.");
+    Assert(html.Contains("ANULADO") && html.Contains("&lt;script&gt;"), "Revocation or encoded statement missing.");
+    Assert(html.Contains("</body></html>"), "Certificate must be a complete printable document.");
+});
+
+await RunAsync("Authorization blocks incomplete authentication and forced password bypass", async () =>
+{
+    var services = new ServiceCollection();
+    services.AddLogging();
+    services.AddAuthorization(AccessPolicies.Configure);
+    using var provider = services.BuildServiceProvider();
+    var authorization = provider.GetRequiredService<IAuthorizationService>();
+    foreach (var stage in new[] { "", "Unknown", "TwoFactorPending", "TwoFactorSetupRequired", "FullAccess" })
+    foreach (var authenticated in new[] { false, true })
+    foreach (var forced in new[] { false, true })
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim("AuthStage", stage), new Claim("ForcePasswordChange", forced.ToString())
+        }, authenticated ? "Test" : null));
+        foreach (var policy in new[] { "FullAccess", "OperationalAccess", "PasswordChangeAccess", "TwoFactorVerification", "TwoFactorSetup" })
+        {
+            var expected = authenticated && (policy switch
+            {
+                "PasswordChangeAccess" => stage == "FullAccess",
+                "TwoFactorVerification" => stage == "TwoFactorPending",
+                "TwoFactorSetup" => stage is "TwoFactorSetupRequired" or "FullAccess",
+                _ => stage == "FullAccess" && !forced
+            });
+            var result = await authorization.AuthorizeAsync(principal, null, policy);
+            Assert(result.Succeeded == expected, $"Unexpected authorization: {policy}, {stage}, authenticated={authenticated}, forced={forced}");
+        }
+    }
+});
 
 Run("FilterGoods excludes services", () =>
 {

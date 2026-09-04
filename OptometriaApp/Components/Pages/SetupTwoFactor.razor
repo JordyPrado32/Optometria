@@ -60,6 +60,7 @@
                 </div>
 
                 <form method="post" action="/auth/setup-2fa/confirm" class="auth-form totp-form">
+                <AntiforgeryToken />
                     <div>
                         <label class="form-label" for="code">Codigo de Google Authenticator</label>
                         <input id="code" name="code" class="form-control auth-code-input" inputmode="numeric" maxlength="6" placeholder="123456" required />

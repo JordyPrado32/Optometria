@@ -38,6 +38,7 @@
                 <div class="alert alert-danger" role="alert">@Error</div>
             }
             <form method="post" action="/auth/register" class="auth-form auth-register-form">
+                <AntiforgeryToken />
                 <input type="hidden" name="avatar_url" value="@ObtenerNombreImagen()" />
 
                 <div class="auth-grid">

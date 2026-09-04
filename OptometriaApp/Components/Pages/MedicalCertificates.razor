@@ -1,0 +1,87 @@
+@page "/certificados-medicos/{ConsultationId:int}"
+@attribute [Authorize(Policy = "OperationalAccess")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<OpticaDbContext> DbContextFactory
+@inject ClinicCompletionService Completion
+
+<PageTitle>Certificados médicos</PageTitle>
+<section class="management-shell">
+    <div class="management-hero"><div><span class="eyebrow">Documentos clínicos</span><h1>Certificados médicos</h1><p>Consulta #@ConsultationId. Cada emisión conserva el texto y los datos del profesional y del paciente.</p></div><a class="btn btn-outline-primary" href="/doctor/historia-clinica">Volver a historia clínica</a></div>
+    @if (message != null) { <div role="status" class="alert alert-info">@message</div> }
+    @if (canIssue)
+    {
+        <div class="management-card"><h2>Emitir certificado</h2><p>Redacta únicamente hechos comprobados en esta atención. Revisa el texto antes de emitir; una corrección posterior requiere anular y emitir otro documento.</p>
+            <label for="certificate-statement" class="form-label">Texto del certificado</label><textarea id="certificate-statement" class="form-control" rows="6" maxlength="2000" @bind="statement" disabled="@busy"></textarea>
+            <label class="mt-3"><input type="checkbox" @bind="confirmed" disabled="@busy" /> Confirmo que revisé y respaldo el contenido como profesional tratante.</label>
+            <div class="workspace-actions mt-3"><button disabled="@(busy || !confirmed)" class="btn btn-primary" @onclick="IssueAsync">Emitir certificado</button></div>
+        </div>
+    }
+    @if (canRead)
+    {
+        <div class="management-card mt-3"><h2>Certificados emitidos</h2>
+            @if (certificates.Count == 0) { <p>No hay certificados emitidos. La emisión se habilita para el profesional tratante cuando la consulta está cerrada.</p> }
+            @foreach (var certificate in certificates)
+            {
+                <article class="mb-3"><h3>Certificado #@certificate.Id</h3><p>@certificate.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC · @(certificate.RevocationReason == null ? "Emitido" : "Anulado")</p>
+                    <p style="white-space:pre-wrap">@certificate.Statement</p>
+                    <a class="btn btn-outline-primary" href="@($"/medical-certificates/{certificate.Id}/print")" target="_blank" rel="noopener">Imprimir certificado #@certificate.Id</a>
+                    @if (canIssue && certificate.RevocationReason == null)
+                    { <button disabled="@busy" class="btn btn-outline-primary" @onclick="() => revokeId = certificate.Id">Anular certificado #@certificate.Id</button> }
+                    @if (certificate.RevocationReason != null) { <p>Motivo de anulación: @certificate.RevocationReason</p> }
+                </article>
+            }
+        </div>
+    }
+    @if (revokeId.HasValue)
+    {
+        <div class="management-card mt-3"><h2>Anular certificado #@revokeId</h2><label for="revocation-reason">Motivo</label><input id="revocation-reason" class="form-control" maxlength="300" @bind="reason" /><div class="workspace-actions mt-3"><button disabled="@busy" class="btn btn-danger" @onclick="RevokeAsync">Confirmar anulación</button><button class="btn btn-outline-primary" @onclick="() => revokeId = null">Cancelar</button></div></div>
+    }
+</section>
+
+@code {
+    [Parameter] public int ConsultationId { get; set; }
+    private int userId;
+    private bool canRead, canIssue, busy, confirmed;
+    private int? revokeId;
+    private string statement = "", reason = "";
+    private string? message;
+    private Guid number = Guid.NewGuid();
+    private List<MedicalCertificate> certificates = [];
+    protected override async Task OnParametersSetAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        userId = int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
+        await RunAsync(LoadAsync);
+    }
+    private async Task LoadAsync()
+    {
+        canRead = canIssue = false;
+        certificates.Clear();
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        canRead = await ClinicCompletionService.CanReadConsultationAsync(db, userId, ConsultationId);
+        if (!canRead) { message = "No tienes acceso a esta consulta."; return; }
+        canIssue = await ClinicCompletionService.CanIssueAsync(db, userId, ConsultationId);
+        certificates = await db.MedicalCertificates.AsNoTracking().Where(x => x.ConsultationId == ConsultationId).OrderByDescending(x => x.CreatedAt).ToListAsync();
+    }
+    private Task IssueAsync() => RunAsync(async () =>
+    {
+        if (!confirmed) return;
+        await Completion.IssueCertificateAsync(userId, ConsultationId, statement, number);
+        number = Guid.NewGuid(); statement = ""; confirmed = false; message = "Certificado emitido. Puedes imprimirlo para su firma profesional.";
+        await LoadAsync();
+    });
+    private Task RevokeAsync() => RunAsync(async () =>
+    {
+        if (!revokeId.HasValue) return;
+        await Completion.RevokeCertificateAsync(userId, revokeId.Value, reason);
+        revokeId = null; reason = ""; message = "Certificado anulado; su historial se conserva."; await LoadAsync();
+    });
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (busy) return; busy = true;
+        try { await action(); }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException) { message = "No se pudo completar la operacion. Recarga los documentos para comprobar su estado."; }
+        finally { busy = false; }
+    }
+}

@@ -150,20 +150,12 @@ public sealed class ReportsDataService
             .Where(a => a.fecha_abono >= startDt && a.fecha_abono <= endDt)
             .ToListAsync(ct);
 
-        var receptions = await db.tbl_recepcion_compra
-            .AsNoTracking()
-            .Include(r => r.id_orden_compraNavigation).ThenInclude(o => o.id_proveedorNavigation)
-            .Include(r => r.id_usuario_recibeNavigation)
-            .Where(r => r.fecha_recepcion >= startDt && r.fecha_recepcion <= endDt && (r.activo ?? true))
+        var startUtc = startDt.ToUniversalTime();
+        var endUtc = endDt.ToUniversalTime();
+        var purchasePayments = await db.PurchasePayments.AsNoTracking()
+            .Where(p => p.CreatedAt >= startUtc && p.CreatedAt <= endUtc && p.Method != "Saldo inicial")
+            .Where(p => filters.UserId <= 0 || p.UserId == filters.UserId)
             .ToListAsync(ct);
-
-        var liquidations = await db.tbl_liquidacion_compra
-            .AsNoTracking()
-            .Include(l => l.id_orden_compraNavigation).ThenInclude(o => o.id_proveedorNavigation)
-            .Include(l => l.id_usuario_registroNavigation)
-            .Where(l => l.fecha_liquidacion >= startDt && l.fecha_liquidacion <= endDt && (l.activo ?? true))
-            .ToListAsync(ct);
-
         var rows = new List<CashFlowMovementRow>();
 
         foreach (var s in sales)
@@ -196,38 +188,21 @@ public sealed class ReportsDataService
             });
         }
 
-        foreach (var r in receptions)
+        // Receipts and liquidations are not cash payments. Count the ledger once.
+        foreach (var payment in purchasePayments)
         {
-            var amount = r.id_orden_compraNavigation?.total ?? 0m;
             rows.Add(new CashFlowMovementRow
             {
-                Date = r.fecha_recepcion ?? startDt,
+                Date = DateTime.SpecifyKind(payment.CreatedAt, DateTimeKind.Utc).ToLocalTime(),
                 Type = "Egreso",
-                Category = "Compra Proveedor",
-                DocumentNumber = r.numero_recepcion ?? $"REC-{r.id_recepcion}",
-                Description = $"Recepción de compra - Proveedor: {r.id_orden_compraNavigation?.id_proveedorNavigation?.nombre ?? "General"}",
-                PaymentMethod = "Transferencia/Crédito",
-                Amount = amount,
-                ResponsibleUser = r.id_usuario_recibeNavigation?.usuario ?? "Bodega"
+                Category = payment.ReversesId.HasValue ? "Reverso de abono de compra" : "Abono de compra",
+                DocumentNumber = $"ABCOMP-{payment.Id}",
+                Description = $"Liquidacion #{payment.LiquidationId}: {payment.Reference}",
+                PaymentMethod = payment.Method,
+                Amount = payment.Amount,
+                ResponsibleUser = $"Usuario #{payment.UserId}"
             });
         }
-
-        foreach (var l in liquidations)
-        {
-            var amount = l.total ?? 0m;
-            rows.Add(new CashFlowMovementRow
-            {
-                Date = l.fecha_liquidacion ?? startDt,
-                Type = "Egreso",
-                Category = "Liquidación de Compra",
-                DocumentNumber = l.numero_liquidacion ?? $"LIQ-{l.id_liquidacion_compra}",
-                Description = $"Liquidación de bienes/servicios - Proveedor: {l.id_orden_compraNavigation?.id_proveedorNavigation?.nombre ?? "General"}",
-                PaymentMethod = "Liquidación",
-                Amount = amount,
-                ResponsibleUser = l.id_usuario_registroNavigation?.usuario ?? "Administración"
-            });
-        }
-
         if (!string.IsNullOrWhiteSpace(filters.TransactionType) && filters.TransactionType != "Todos")
         {
             rows = rows.Where(r => string.Equals(r.Type, filters.TransactionType, StringComparison.OrdinalIgnoreCase)).ToList();

@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\OptometriaApp\Services\PurchasePaymentRules.cs" Link="Services\PurchasePaymentRules.cs" />
+    <Compile Include="..\OptometriaApp\Services\MedicalCertificateDocument.cs" Link="Services\MedicalCertificateDocument.cs" />
+    <Compile Include="..\OptometriaApp\Models\ClinicCompletion.cs" Link="Models\ClinicCompletion.cs" />
+    <Compile Include="..\OptometriaApp\Configuration\AccessPolicies.cs" Link="Configuration\AccessPolicies.cs" />
     <Compile Include="..\OptometriaApp\Models\tbl_producto.cs" Link="Models\tbl_producto.cs" />
     <Compile Include="..\OptometriaApp\Services\ProductInventoryRules.cs" Link="Services\ProductInventoryRules.cs" />
     <Compile Include="..\OptometriaApp\Services\SriElectronicDocumentClient.cs" Link="Services\SriElectronicDocumentClient.cs" />

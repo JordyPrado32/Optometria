@@ -3910,3 +3910,32 @@ body .clinical-card .form-select:focus {
     white-space: nowrap;
 }
 
+
+/* Keyboard access and reduced motion across the clinical workspace. */
+.skip-to-content {
+    position: fixed;
+    top: .75rem;
+    left: .75rem;
+    z-index: 10000;
+    padding: .75rem 1rem;
+    background: #173d32;
+    color: #fff;
+    border-radius: .5rem;
+    transform: translateY(-200%);
+}
+.skip-to-content:focus {
+    transform: translateY(0);
+    color: #fff;
+}
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid #17684e;
+    outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

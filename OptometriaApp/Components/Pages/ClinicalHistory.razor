@@ -41,6 +41,11 @@ else
             </div>
 
             <div class="workspace-actions">
+                @if (selectedEncounterSummary is not null)
+                {
+                    <a class="btn btn-outline-primary" href="@($"/certificados-medicos/{selectedEncounterSummary.ConsultationId}")">Certificados médicos</a>
+                    <a class="btn btn-outline-primary" href="@($"/prescriptions/{selectedEncounterSummary.ConsultationId}/print")" target="_blank" rel="noopener">Imprimir receta</a>
+                }
                 <a class="btn btn-outline-primary" href="/doctor/historia-clinica">Cambiar paciente</a>
                 @if (patient is not null && editor is not null)
                 {
