@@ -1,0 +1,45 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<div class="vl-viewport" id="@id">
+    <div class="vl-canvas" @ref="host" role="img" aria-label="@Description"></div>
+    @if (loading) { <div class="vl-loading"><span class="vl-spinner"></span> Preparando el estudio…</div> }
+    @if (error is not null) { <div class="vl-loading"><i class="bi bi-display"></i><p>@error</p><p>@Description</p><button @onclick="Retry">Reintentar vista 3D</button></div> }
+    <div class="vl-stage-top">@Top</div>
+    <div class="vl-stage-bottom">@Bottom</div>
+    <div class="vl-tools"><button @onclick='() => Action("rotate")' title="Activar o pausar rotación"><i class="bi bi-arrow-repeat"></i> Rotar</button><button @onclick='() => Action("zoom")' title="Acercar la cámara"><i class="bi bi-zoom-in"></i> Zoom</button><button @onclick='() => Action("reset")'><i class="bi bi-crosshair"></i> Centrar</button><button @onclick='() => Action("fullscreen")'><i class="bi bi-fullscreen"></i> Ampliar</button></div>
+</div>
+@code {
+    [Parameter] public string Kind { get; set; } = "eye";
+    [Parameter] public object? Settings { get; set; }
+    [Parameter] public string Description { get; set; } = "";
+    [Parameter] public RenderFragment? Top { get; set; }
+    [Parameter] public RenderFragment? Bottom { get; set; }
+    private readonly string id = "lab-" + Guid.NewGuid().ToString("N");
+    private ElementReference host;
+    private IJSObjectReference? module, scene;
+    private bool loading = true, dirty = true, disposed, updating;
+    private string? error;
+    protected override void OnParametersSet() => dirty = true;
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (disposed || !dirty || updating) return;
+        updating = true;
+        dirty = false;
+        try {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./visual-lab.js");
+            if (scene is null) scene = await module.InvokeAsync<IJSObjectReference>("createScene", host, Kind, Settings);
+            else await scene.InvokeVoidAsync("update", Settings);
+            if (disposed) { await scene.InvokeVoidAsync("dispose"); return; }
+            if (loading) { loading = false; StateHasChanged(); }
+        } catch (JSDisconnectedException) { }
+        catch (JSException) { loading = false; error = "No se pudo cargar la vista 3D. Comprueba tu conexión y la disponibilidad de WebGL."; StateHasChanged(); }
+        finally { updating = false; if (dirty && !disposed) StateHasChanged(); }
+    }
+    private void Retry() { error = null; loading = true; dirty = true; }
+    public async Task Action(string command) { if (scene is not null) await scene.InvokeVoidAsync("action", command); }
+    public async ValueTask DisposeAsync() {
+        disposed = true;
+        try { if (scene is not null) { await scene.InvokeVoidAsync("dispose"); await scene.DisposeAsync(); } if (module is not null) await module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

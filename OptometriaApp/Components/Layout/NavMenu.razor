@@ -215,12 +215,25 @@
             MenuItem = new AppMenuItem
             {
                 IdMenu = -2002,
-                Nombre = "Simulador Visual",
+                Nombre = "Laboratorio Visual",
                 Ruta = "/vision-simulator",
                 Icono = "bi bi-eye-fill",
                 Orden = 360
             },
             Order = 360
+        });
+
+        RenderItems.Add(new NavigationItemWrapper
+        {
+            MenuItem = new AppMenuItem
+            {
+                IdMenu = -2004,
+                Nombre = "Test de Agudeza Visual",
+                Ruta = "/visual-acuity-test",
+                Icono = "bi bi-body-text",
+                Orden = 365
+            },
+            Order = 365
         });
 
         RenderItems.Add(new NavigationItemWrapper

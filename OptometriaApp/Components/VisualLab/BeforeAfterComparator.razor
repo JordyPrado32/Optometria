@@ -1,0 +1,20 @@
+@using System.Globalization
+<div class="vl-comparator" style="@($"--split:{split.ToString(CultureInfo.InvariantCulture)}%")">
+    <div class="vl-comparison-image" style="@($"background-image:url('{Source}');{AfterStyle}")"></div>
+    <div class="vl-comparison-before"><div class="vl-comparison-image" style="@($"background-image:url('{Source}');{BeforeStyle}")"></div></div>
+    <span class="vl-image-label before">@BeforeLabel<small>@BeforeCaption</small></span><span class="vl-image-label after">@AfterLabel<small>@AfterCaption</small></span>
+    <div class="vl-divider"><b>‹ ›</b></div>
+    <input class="vl-comparison-slider" type="range" min="0" max="100" step="1" @bind="split" @bind:event="oninput" aria-label="División de la comparación antes y después" aria-valuetext="@($"{split}% sin corrección")" />
+    <span class="vl-comparison-hint"><i class="bi bi-arrows"></i> Desliza para comparar</span>
+</div>
+@code {
+    [Parameter] public string Source { get; set; } = "/images/visual-lab/street.png";
+    [Parameter] public string BeforeStyle { get; set; } = "filter:blur(5px)";
+    [Parameter] public string AfterStyle { get; set; } = "";
+    [Parameter] public string BeforeLabel { get; set; } = "Sin corrección";
+    [Parameter] public string AfterLabel { get; set; } = "Con corrección";
+    [Parameter] public string BeforeCaption { get; set; } = "Percepción simulada";
+    [Parameter] public string AfterCaption { get; set; } = "Imagen de referencia";
+    private double split = 50;
+}
+

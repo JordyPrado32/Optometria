@@ -1,0 +1,17 @@
+@using System.Globalization
+<div class="vl-optotype" style="@($"width:{Pixels.ToString("0.00",CultureInfo.InvariantCulture)}px;height:{Pixels.ToString("0.00",CultureInfo.InvariantCulture)}px;transform:rotate({Direction*90}deg)")" role="img" aria-label="Optotipo direccional">
+    <svg viewBox="0 0 5 5" width="100%" height="100%" aria-hidden="true"><path fill="#172329" d="@PathData" /></svg>
+</div>
+@code {
+    [Parameter] public double Pixels {get;set;} = 80;
+    [Parameter] public int Direction {get;set;}
+    [Parameter] public string Letter {get;set;} = "E";
+    private string PathData => Letter switch {
+        "F" => "M0 0H5V1H1V2H4V3H1V5H0Z",
+        "P" => "M0 0H5V3H1V5H0Z M1 1V2H4V1Z",
+        "T" => "M0 0H5V1H3V5H2V1H0Z",
+        "O" => "M0 0H5V5H0Z M1 1V4H4V1Z",
+        "Z" => "M0 0H5V1L1.5 4H5V5H0V4L3.5 1H0Z",
+        _ => "M0 0H5V1H1V2H5V3H1V4H5V5H0Z"
+    };
+}

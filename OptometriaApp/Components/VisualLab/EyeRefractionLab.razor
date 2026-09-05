@@ -1,0 +1,46 @@
+@using System.Globalization
+<div class="vl-workspace">
+    <aside class="vl-panel">
+        <section><h2>Condición refractiva</h2><div class="vl-choice-grid">
+            @foreach (var c in conditions) { <button class="@(condition == c.Id ? "selected" : "")" aria-pressed="@(condition == c.Id)" @onclick="() => Select(c.Id)">@c.Label</button> }
+        </div></section>
+        <section><label for="eye-defect">Magnitud del defecto <output>@Signed(Target) D</output></label><input id="eye-defect" type="range" min="0" max="6" step=".25" @bind="magnitude" @bind:event="oninput" disabled="@(condition == "normal")" /><div class="vl-range-ends"><span>0 D</span><span>6 D</span></div>
+        @if (condition == "astigmatism") { <label for="eye-axis">Eje del cilindro <output>@axis°</output></label><input id="eye-axis" type="range" min="0" max="180" step="5" @bind="axis" @bind:event="oninput" /> }
+        </section>
+        <section><h2>Lente correctora</h2><label class="vl-switch"><input type="checkbox" @bind="corrected" /> Con corrección</label><label for="eye-power">@(condition == "astigmatism" ? "Cilindro" : "Esfera") <output>@Signed(power) D</output></label><input id="eye-power" type="range" min="-6" max="6" step=".25" @bind="power" @bind:event="oninput" disabled="@(!corrected)" />
+        <div class="vl-insight @(Aligned ? "good" : "")" role="status"><i class="bi @(Aligned ? "bi-check-circle-fill" : "bi-bullseye")"></i><div><strong>@Focus</strong><small>@Explanation</small></div></div></section>
+        <section><h2>Comparar vista</h2><div class="vl-segments"><button class="@(!corrected ? "active" : "")" @onclick="() => corrected = false">Sin corrección</button><button class="@(corrected ? "active" : "")" @onclick="Correct">Corregido</button></div><button class="vl-primary vl-full" @onclick="Next"><i class="bi bi-play-fill"></i> @(step < 0 ? "Explicar paso a paso" : "Siguiente paso")</button></section>
+    </aside>
+    <main class="vl-main">
+        <LabViewport Kind="eye" Settings="Settings" Description="@($"{Focus}. {Explanation}")">
+            <Top><div class="vl-stage-bar">@foreach(var l in layers) { <button class="@(visible.Contains(l.Id) ? "on" : "")" aria-pressed="@visible.Contains(l.Id)" @onclick="() => Toggle(l.Id)">@l.Label</button> }</div><button class="vl-dark-button" @onclick="() => cut = !cut"><i class="bi bi-circle-half"></i> @(cut ? "Corte anatómico" : "Ojo completo")</button></Top>
+            <Bottom><div class="vl-focus-card"><i class="bi bi-eye"></i><div><strong>@Focus</strong><small>@Explanation</small></div><span class="vl-focus-measure">@(Aligned ? "ALINEADO" : "DESENFOQUE")<b>@Signed(Residual) D</b><small>residual del modelo</small></span></div></Bottom>
+        </LabViewport>
+        @if (Guided || step >= 0) { <div class="vl-guidance"><span>0@(Math.Max(step, 0) + 1) / 04</span><p>@steps[Math.Max(step, 0)]</p><button @onclick="Next">Continuar <i class="bi bi-arrow-right"></i></button></div> }
+        <div class="vl-anatomy-legend"><span><b class="cornea"></b>Córnea</span><span><b class="iris"></b>Iris & pupila</span><span><b class="lens"></b>Cristalino</span><span><b class="retina"></b>Retina</span><span><b class="focus"></b>Fóvea</span></div>
+    </main>
+</div>
+@code {
+    [Parameter] public bool Guided { get; set; }
+    [Parameter] public bool ReducedMotion { get; set; }
+    private string condition = "myopia";
+    private double magnitude = 2.5, power = -2.5;
+    private int axis = 90, step = -1;
+    private bool corrected = true, cut = true;
+    private readonly HashSet<string> visible = ["anatomy", "rays", "retina", "lens", "labels"];
+    private readonly (string Id, string Label)[] conditions = [("normal","Emétrope"),("myopia","Miopía"),("hyperopia","Hipermetropía"),("astigmatism","Astigmatismo")];
+    private readonly (string Id, string Label)[] layers = [("anatomy","Anatomía"),("rays","Rayos"),("retina","Retina"),("lens","Lente"),("labels","Etiquetas")];
+    private readonly string[] steps = ["La luz entra por la córnea y atraviesa el cristalino.", "Observa el foco sin corrección. Cambia la magnitud para desplazarlo.", "Una lente correctora modifica el recorrido de los rayos.", "El foco vuelve a la retina en este modelo simplificado. Puedes seguir explorando."];
+    private double Target => condition == "normal" ? 0 : condition == "hyperopia" ? magnitude : -magnitude;
+    private double Residual => Target - (corrected ? power : 0);
+    private bool Aligned => Math.Abs(Residual) < .125;
+    private string Focus => Aligned ? "Foco alineado en retina" : Residual < 0 ? "Foco delante de la retina" : "Foco detrás de la retina";
+    private string Explanation => condition == "astigmatism" ? "Dos meridianos enfocan en planos diferentes." : Aligned ? "La corrección coincide con el defecto representado." : condition == "myopia" ? "El ojo miope enfoca antes de la retina." : "Ajusta la lente para observar cómo se desplaza el foco.";
+    private object Settings => new { condition, residual = Residual, axis, corrected, cut, layers = visible.ToArray(), reduced = ReducedMotion };
+    private static string Signed(double v) => v.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture);
+    private void Select(string value) { condition = value; power = Target; }
+    private void Correct() { corrected = true; power = Target; }
+    private void Toggle(string value) { if (!visible.Remove(value)) visible.Add(value); }
+    private void Next() { step = (step + 1) % 4; if (step == 1) corrected = false; if (step >= 2) Correct(); }
+}
+

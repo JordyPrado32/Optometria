@@ -10,10 +10,24 @@ window.Vision3D = (function () {
     let rayLines = [];
     let eyeContainer = null;
     let isEyeCrossSection = false;
+    let eyeResizeObserver, glassesResizeObserver;
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    function createRenderer(container) {
+        try {
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            if (!renderer.getContext()) throw new Error('WebGL unavailable');
+            return renderer;
+        } catch {
+            container.innerHTML = '<div role="status" style="padding:2rem;color:#fff">La vista 3D no está disponible en este navegador. Usa los controles y la leyenda para revisar la explicación óptica en texto.</div>';
+            return null;
+        }
+    }
 
     let glassesScene, glassesCamera, glassesRenderer, glassesControls, glassesAnimId;
     let glassesMeshes = {};
     let glassesContainer = null;
+    let localCameraStream = null;
 
     // --------------------------------------------------------------------------
     // 1. SIMULADOR 3D DE OJO ANATÓMICO Y RAYOS REFRACTIVOS
@@ -41,7 +55,8 @@ window.Vision3D = (function () {
         eyeCamera.position.set(0, 1.5, 7.5);
 
         // Renderizador con antialias
-        eyeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        eyeRenderer = createRenderer(eyeContainer);
+        if (!eyeRenderer) return;
         eyeRenderer.setSize(width, height);
         eyeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         eyeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -85,7 +100,7 @@ window.Vision3D = (function () {
             eyeControls.update();
 
             // Animación sutil de pulso en fóvea y haces de luz
-            if (eyeMeshes.foveaGlow) {
+            if (eyeMeshes.foveaGlow && !prefersReducedMotion) {
                 const time = Date.now() * 0.003;
                 const scale = 1 + Math.sin(time) * 0.15;
                 eyeMeshes.foveaGlow.scale.set(scale, scale, scale);
@@ -96,7 +111,9 @@ window.Vision3D = (function () {
         animateEye();
 
         // Responsive resize
-        window.addEventListener('resize', onEyeResize);
+        if (eyeResizeObserver) eyeResizeObserver.disconnect();
+        eyeResizeObserver = new ResizeObserver(onEyeResize);
+        eyeResizeObserver.observe(eyeContainer);
     }
 
     function onEyeResize() {
@@ -287,7 +304,7 @@ window.Vision3D = (function () {
     }
 
     // Actualiza los rayos y curvatura óptica según refracción y dioptrías
-    function updateEyeOptics(defectType, diopters, astigmatismAxis, hasCorrectiveLens, lensPower) {
+    function updateEyeOptics(defectType, diopters, cylinder, astigmatismAxis, hasCorrectiveLens, lensSphere) {
         if (!eyeScene || rayLines.length === 0) return;
 
         // Posición de la retina en el espacio mundial
@@ -309,11 +326,11 @@ window.Vision3D = (function () {
         // Si tiene lente correctora activada, compensar el foco
         if (hasCorrectiveLens) {
             if (defectType === "Miopia") {
-                focalX += Math.abs(lensPower) * 0.28;
+                focalX -= lensSphere * 0.28; // la esfera miópica correctora es negativa
             } else if (defectType === "Hipermetropia") {
-                focalX -= Math.abs(lensPower) * 0.28;
+                focalX -= lensSphere * 0.28; // la esfera hipermetrópica correctora es positiva
             } else if (defectType === "Astigmatismo") {
-                focalX += Math.abs(lensPower) * 0.15;
+                focalX += Math.abs(cylinder) * 0.15;
             }
             if (eyeMeshes.correctiveLens) eyeMeshes.correctiveLens.visible = true;
             if (eyeMeshes.lensFrame) eyeMeshes.lensFrame.visible = true;
@@ -337,7 +354,7 @@ window.Vision3D = (function () {
 
             if (hasCorrectiveLens) {
                 // Desviación en el lente corrector
-                const lensBend = defectType === "Miopia" ? 1.15 : 0.85;
+            const lensBend = defectType === "Miopia" ? 1.15 : 0.85;
                 points.push(new THREE.Vector3(-1.4, off[0] * lensBend, off[1] * lensBend));
             } else {
                 points.push(new THREE.Vector3(-0.15, off[0], off[1])); // Llega directo a la córnea
@@ -415,7 +432,8 @@ window.Vision3D = (function () {
         glassesCamera = new THREE.PerspectiveCamera(40, width / height, 0.1, 50);
         glassesCamera.position.set(0, 0.3, 4.2);
 
-        glassesRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        glassesRenderer = createRenderer(glassesContainer);
+        if (!glassesRenderer) return;
         glassesRenderer.setSize(width, height);
         glassesRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         glassesRenderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -427,7 +445,7 @@ window.Vision3D = (function () {
         glassesControls.dampingFactor = 0.05;
         glassesControls.minDistance = 2;
         glassesControls.maxDistance = 8;
-        glassesControls.autoRotate = true;
+        glassesControls.autoRotate = !prefersReducedMotion;
         glassesControls.autoRotateSpeed = 1.2;
 
         // Iluminación de estudio
@@ -459,7 +477,9 @@ window.Vision3D = (function () {
         }
         animateGlasses();
 
-        window.addEventListener('resize', onGlassesResize);
+        if (glassesResizeObserver) glassesResizeObserver.disconnect();
+        glassesResizeObserver = new ResizeObserver(onGlassesResize);
+        glassesResizeObserver.observe(glassesContainer);
     }
 
     function onGlassesResize() {
@@ -670,15 +690,37 @@ window.Vision3D = (function () {
         }
     }
 
+    async function startLocalCamera(videoId) {
+        const video = document.getElementById(videoId);
+        if (!video || !navigator.mediaDevices?.getUserMedia) throw new Error('Camera unavailable');
+        stopLocalCamera(videoId);
+        localCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        video.srcObject = localCameraStream;
+    }
+
+    function stopLocalCamera(videoId) {
+        if (localCameraStream) {
+            localCameraStream.getTracks().forEach(track => track.stop());
+            localCameraStream = null;
+        }
+        const video = document.getElementById(videoId);
+        if (video) video.srcObject = null;
+    }
+
     // Cleanup global
     function disposeAll() {
+        stopLocalCamera('virtual-tryon-video');
+        if (eyeResizeObserver) eyeResizeObserver.disconnect();
+        if (glassesResizeObserver) glassesResizeObserver.disconnect();
         if (eyeRenderer) {
             cancelAnimationFrame(eyeAnimId);
             eyeRenderer.dispose();
+            eyeRenderer.forceContextLoss();
         }
         if (glassesRenderer) {
             cancelAnimationFrame(glassesAnimId);
             glassesRenderer.dispose();
+            glassesRenderer.forceContextLoss();
         }
     }
 
@@ -694,6 +736,8 @@ window.Vision3D = (function () {
         setFrameStyle,
         toggleGlassesAutoRotate,
         resetGlassesCamera,
+        startLocalCamera,
+        stopLocalCamera,
         disposeAll
     };
 })();

@@ -1,0 +1,21 @@
+@inject IDbContextFactory<OpticaDbContext> Factory
+<details class="vl-catalog"><summary>Consultar catálogo de la óptica</summary><button class="vl-secondary vl-full" disabled="@busy" @onclick="Load">@(busy ? "Consultando…" : "Cargar productos disponibles")</button>
+@if(message is not null) { <p role="status">@message</p> }
+@foreach(var p in products) { <div class="vl-catalog-item"><strong>@p.Name</strong><small>@p.Material · @p.Size</small><span>@p.Price.ToString("0.00") · Stock: @p.Stock</span></div> }
+</details>
+@code {
+    private bool busy;
+    private string? message;
+    private List<CatalogItem> products = [];
+    private async Task Load() {
+        busy = true; message = null;
+        try { await using var db = await Factory.CreateDbContextAsync();
+            products = await ProductInventoryRules.FilterStoreVisible(db.tbl_productos.AsNoTracking()).OrderBy(p => p.nombre_producto)
+                .Select(p => new CatalogItem(p.nombre_producto, p.material_principal ?? "Material sin especificar", p.talla ?? "Talla sin especificar",p.precio_venta,p.stock_actual ?? 0)).Take(30).ToListAsync();
+            if(products.Count == 0) message = "No hay productos disponibles.";
+        } catch { message = "El catálogo no está disponible. Puedes continuar explorando el estudio."; }
+        finally { busy = false; }
+    }
+    private record CatalogItem(string Name,string Material,string Size,decimal Price,int Stock);
+}
+

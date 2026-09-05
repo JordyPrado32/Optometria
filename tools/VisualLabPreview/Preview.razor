@@ -1,0 +1,9 @@
+@page "/"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><base href="/"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;650;700&display=swap"/><HeadOutlet/><style>body{margin:0;background:#faf9f6}</style></head><body>
+@if(Test) { <OptometriaApp.Components.Pages.VisualAcuityTest/> }
+else { <OptometriaApp.Components.Pages.VisionSimulator/> }
+<script src="_framework/blazor.web.js"></script></body></html>
+@code { [SupplyParameterFromQuery] public bool Test {get;set;} }

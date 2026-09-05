@@ -124,7 +124,7 @@ else
 @if (showForm && editor is not null)
 {
     <div class="custom-modal-overlay">
-        <div class="custom-modal-card">
+        <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header"><h2>@(isCreating ? "Nueva liquidacion" : "Editar liquidacion")</h2><button class="btn-close-modal" @onclick="CloseForm">×</button></header>
             <div class="custom-modal-body">
                 <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>

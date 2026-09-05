@@ -1,0 +1,87 @@
+@page "/visual-acuity-test"
+@using OptometriaApp.Components.VisualLab
+@using System.Globalization
+@rendermode InteractiveServer
+<PageTitle>Test de Agudeza Visual | Óptica Lux</PageTitle>
+<link rel="stylesheet" href="visual-lab.css" />
+<div class="vl-shell">
+    <header class="vl-header"><div><span class="vl-eyebrow">ÓPTICA LUX / EXPERIENCIAS</span><h1>Test de Agudeza Visual</h1><p>Explora tu visión con una experiencia interactiva y orientativa.</p></div><a class="vl-secondary" href="/vision-simulator"><i class="bi bi-eye"></i> Laboratorio Visual</a></header>
+    <div class="vl-test-grid">
+        <aside class="vl-panel"><ol class="vl-test-stages">
+            @for(int i=0;i<4;i++) { <li class="@(Phase == i ? "current" : "")"><b>@(i+1)</b><span>@stageNames[i]</span></li> }
+        </ol><div class="vl-insight"><i class="bi bi-sun"></i><small>Utiliza una iluminación cómoda, conserva el zoom del navegador y mantén la distancia elegida.</small></div></aside>
+        <main class="vl-main">
+            <div class="vl-segments" style="margin-bottom:12px"><button disabled="@(Phase != 0)" class="@(!near ? "active" : "")" @onclick="() => near = false">Visión lejana</button><button disabled="@(Phase != 0)" class="@(near ? "active" : "")" @onclick="() => near = true">Visión cercana · 40 cm</button></div>
+            <div class="vl-chart" tabindex="0" @onkeydown="Keyboard" aria-label="Área del ejercicio visual">
+            @if(Phase == 0) {
+                <h2>Calibra tu pantalla</h2><p>Ajusta esta referencia al ancho de una tarjeta estándar (85,6 mm).</p>
+                <div class="vl-calibration-card" style="@($"width:{cardPixels}px")"><i class="bi bi-credit-card"></i><span>85,6 mm</span></div>
+                <label for="calibration" style="width:100%;margin-top:20px">Ancho de referencia: @cardPixels px</label><input id="calibration" type="range" min="160" max="500" step="1" @bind="cardPixels" @bind:event="oninput" />
+                <label class="vl-switch"><input type="checkbox" @bind="calibrated" /> He comparado el tamaño con una tarjeta física.</label>
+                <button class="vl-primary" disabled="@(!calibrated)" @onclick="() => Phase = 1">Continuar <i class="bi bi-arrow-right"></i></button>
+            } else if(Phase == 1) {
+                <i class="bi bi-eye" style="font-size:48px;color:#08734e"></i><h2>Prepara el ejercicio</h2><p>Primero ambos ojos, después el derecho y finalmente el izquierdo.</p>
+                <p>@(near ? "Sitúate a 40 cm de la pantalla." : $"Sitúate a {distance} m de la pantalla.")</p>
+                <p>Responde con los botones o las flechas del teclado. Se evalúan cinco respuestas por nivel; un solo error no determina el resultado.</p>
+                <button class="vl-primary" @onclick="Start">Comenzar con ambos ojos <i class="bi bi-arrow-right"></i></button>
+            } else if(Phase == 2) {
+                <small>@EyeName · Nivel @(level+1) de @levels.Length · Respuesta @(attempt+1) / 5</small>
+                <div class="vl-test-progress" style="width:100%"><span style="@($"width:{(level*100/levels.Length)}%")"></span></div>
+                @if(waitingEye) { <h2>Prepara el siguiente ojo</h2><p>@EyeInstruction</p><button class="vl-primary" @onclick="() => waitingEye = false">Estoy listo</button> }
+                else if(Pixels < 5) { <h2>Límite de resolución</h2><p>Esta pantalla no permite representar el siguiente nivel con suficiente detalle. Conservaremos el último nivel superado.</p><button class="vl-primary" @onclick="NextEye">Continuar</button> }
+                else {
+                    <div style="padding:26px 0"><DirectionalOptotype Pixels="Pixels" Direction="@(letterMode ? 0 : direction)" Letter="@(letterMode ? letters[direction] : "E")" /></div>
+                    @if(near) { <p style="@($"font-size:{(Pixels*.8).ToString("0.0",CultureInfo.InvariantCulture)}px")">Los detalles pequeños requieren mayor enfoque.</p><small>Lectura complementaria; responde al optotipo.</small> }
+                    <p>@(letterMode ? "¿Qué letra ves?" : "¿Hacia dónde apunta la abertura de la E?")</p><div class="vl-test-options">
+                    @for(int i=0;i<(letterMode ? letters.Length : 4);i++) { var choice=i; <button aria-label="@(letterMode ? letters[i] : directionNames[i])" @onclick="() => Answer(choice)">@(letterMode ? letters[i] : arrows[i])</button> }
+                    <button @onclick="() => Answer(-1)">No distingo</button></div>
+                }
+            } else {
+                <i class="bi bi-check-circle" style="font-size:40px;color:#08734e"></i><h2>Tu recorrido visual</h2><p>Resultados orientativos · @(near ? "Visión cercana a 40 cm" : $"Visión lejana a {distance} m")</p>
+                <div class="vl-test-result-grid">@for(int i=0;i<3;i++) { <div><small>@eyeNames[i]</small><strong>@Result(i)</strong><small>@DecimalResult(i)</small></div> }</div>
+                <p>Estos resultados describen el ejercicio en esta pantalla; no constituyen un diagnóstico ni una medición clínica certificada.</p>
+                <a class="vl-primary" href="/vision-simulator">Explorar cómo funciona la refracción <i class="bi bi-arrow-right"></i></a><button class="vl-secondary" style="margin-top:12px" @onclick="Reset">Repetir calibración y test</button>
+            }
+            </div>
+        </main>
+        <aside class="vl-panel"><section><h2>Instrucciones</h2><p>@(Phase < 2 ? "Calibra antes de comenzar. Mantén la pantalla a la altura de los ojos." : EyeInstruction)</p><p>Cubre un ojo suavemente, sin presionarlo. Si utilizas tu corrección habitual, mantenla durante todo el ejercicio.</p></section>
+        @if(!near) { <section><label>Distancia a la pantalla<select @bind="distance" disabled="@(Phase > 1)">@for(int d=1;d<=6;d++) { <option value="@d">@d m</option> }</select></label></section> }
+        <section><h2>Tipo de ejercicio</h2><label><select @bind="letterMode" disabled="@(Phase > 1)"><option value="true">Letras</option><option value="false">E direccional</option></select></label><p>Identifica la letra o la dirección de la abertura.</p><small>El tamaño se ajusta a la calibración y a la distancia. Evita cambiar de pantalla, zoom u orientación durante el test.</small></section>
+        </aside>
+    </div>
+    <footer class="vl-footnote"><span><i class="bi bi-info-circle"></i> Esta herramienta ofrece una estimación orientativa y educativa. Los resultados pueden variar según la pantalla, distancia, iluminación y calibración. No sustituye una evaluación realizada por un profesional de la salud visual.</span></footer>
+</div>
+@code {
+    private int Phase,cardPixels=300,distance=3,eye,level,attempt,correct,direction;
+    private bool near,calibrated,waitingEye,letterMode=true;
+    private readonly string[] letters=["E","F","P","T","O","Z"];
+    private readonly int[] levels=[200,100,70,50,40,30,20];
+    private readonly int[] passed=[-1,-1,-1];
+    private readonly string[] stageNames=["Calibración de pantalla","Preparación","Realizar el test","Resultados"];
+    private readonly string[] eyeNames=["Ambos ojos","Ojo derecho","Ojo izquierdo"];
+    private readonly string[] arrows=["→","↓","←","↑"];
+    private readonly string[] directionNames=["Derecha","Abajo","Izquierda","Arriba"];
+    private string EyeName=>eyeNames[Math.Min(eye,2)];
+    private string EyeInstruction=>eye switch {1=>"Cubre el ojo izquierdo sin presionarlo.",2=>"Cubre el ojo derecho sin presionarlo.",_=>"Mantén ambos ojos abiertos."};
+    // A 5x5 directional E subtends five arcminutes at the 20/20 level.
+    private double Pixels=>Math.Tan(5*Math.PI/(180*60))*(near?400:distance*1000)*(cardPixels/85.6)*(levels[level]/20.0);
+    private void Start(){Phase=2;eye=level=attempt=correct=0;Array.Fill(passed,-1);Pick();}
+    private void Pick()=>direction=Random.Shared.Next(letterMode ? letters.Length : 4);
+    private void Answer(int value) {
+        if(Phase!=2||waitingEye||Pixels<5)return;
+        if(value==direction)correct++;
+        attempt++;
+        if(attempt<5){Pick();return;}
+        if(correct>=4){passed[eye]=level;level++;if(level<levels.Length){attempt=correct=0;Pick();return;}}
+        NextEye();
+    }
+    private void NextEye() {
+        eye++;
+        if(eye==3){Phase=3;return;}
+        level=attempt=correct=0;waitingEye=true;Pick();
+    }
+    private void Keyboard(KeyboardEventArgs e){var choice=letterMode ? Array.IndexOf(letters,e.Key.ToUpperInvariant()) : e.Key switch{"ArrowRight"=>0,"ArrowDown"=>1,"ArrowLeft"=>2,"ArrowUp"=>3,_=>-2};if(choice>=0)Answer(choice);}
+    private string Result(int i)=>passed[i]<0?"No estimado":$"20/{levels[passed[i]]}";
+    private string DecimalResult(int i)=>passed[i]<0?"Primer nivel no superado":$"{(20.0/levels[passed[i]]).ToString("0.00",CultureInfo.InvariantCulture)} · aproximado";
+    private void Reset(){Phase=0;calibrated=false;}
+}

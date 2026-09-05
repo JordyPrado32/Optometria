@@ -1,0 +1,37 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<div class="vl-panel vl-tryon">
+    <button class="vl-primary vl-full" @onclick="() => open = !open"><i class="bi bi-camera"></i> @(open ? "Cerrar probador" : "Probar en mi rostro")</button>
+    <small><i class="bi bi-shield-check"></i> Procesamiento local. La imagen no se almacena ni se envía.</small>
+    @if(open) {
+        <label class="vl-switch"><input type="checkbox" @bind="consent" @bind:after="ConsentChanged" /> Permitir cámara durante esta prueba</label>
+        <button class="vl-secondary" disabled="@(!consent || active)" @onclick="Start">Activar cámara</button>
+        <div class="vl-tryon-video"><video @ref="video" autoplay muted playsinline></video><div class="vl-face-frame @Shape" style="@($"--frame:{Color};left:{x}%;top:{y}%;width:{width}px")"><b></b><b></b></div></div>
+        <label>Posición horizontal <input aria-label="Posición horizontal de la montura" type="range" min="15" max="85" @bind="x" @bind:event="oninput" /></label>
+        <label>Altura <input aria-label="Altura de la montura" type="range" min="15" max="85" @bind="y" @bind:event="oninput" /></label>
+        <label>Escala visual <input aria-label="Anchura visual de la montura" type="range" min="80" max="280" @bind="width" @bind:event="oninput" /></label>
+        <small>Encaja la guía sobre tus ojos. Esta escala no mide la distancia pupilar.</small>
+        @if(message is not null) { <p role="status">@message</p> }
+    }
+</div>
+@code {
+    [Parameter] public string Color { get; set; } = "#c7a15e";
+    [Parameter] public string Shape { get; set; } = "aviator";
+    private bool open, consent, active, starting, disposed;
+    private int x = 50,y = 43,width = 180;
+    private string? message;
+    private ElementReference video;
+    private IJSObjectReference? module, camera;
+    protected override async Task OnAfterRenderAsync(bool first) { if (!open && active) await Stop(); }
+    private async Task ConsentChanged() { if(!consent) await Stop(); }
+    private async Task Start() {
+        if(!consent || starting || active || disposed) return;
+        starting = true;
+        try { module ??= await JS.InvokeAsync<IJSObjectReference>("import","./visual-lab.js"); camera = await module.InvokeAsync<IJSObjectReference>("startCamera",video); if(disposed || !open || !consent) { await Stop(); return; } active = true; message = "Cámara activa. Ajusta la guía para probar la forma."; }
+        catch(JSDisconnectedException) { }
+        catch(JSException) { message = "No se pudo abrir la cámara. Revisa los permisos del navegador."; }
+        finally { starting = false; }
+    }
+    private async Task Stop() { if(camera is not null) { await camera.InvokeVoidAsync("dispose"); await camera.DisposeAsync(); camera = null; } active = false; }
+    public async ValueTask DisposeAsync() { disposed = true; try { await Stop(); if(module is not null) await module.DisposeAsync(); } catch(JSDisconnectedException) { } }
+}

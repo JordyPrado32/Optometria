@@ -1,0 +1,18 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.FileProviders;
+using OptometriaApp.Data;
+using VisualLabPreview;
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "obj", "preview-keys"))).UseEphemeralDataProtectionProvider();
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddDbContextFactory<OpticaDbContext>(o => o.UseSqlServer("Server=127.0.0.1;Database=VisualLabPreview;Integrated Security=true;Connect Timeout=1;TrustServerCertificate=true"));
+var app = builder.Build();
+app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "../../OptometriaApp/wwwroot"))) });
+app.UseAntiforgery();
+app.MapGet("/vision-simulator", () => Results.Redirect("/"));
+app.MapGet("/visual-acuity-test", () => Results.Redirect("/?test=true"));
+app.MapRazorComponents<Preview>().AddInteractiveServerRenderMode();
+app.Run();

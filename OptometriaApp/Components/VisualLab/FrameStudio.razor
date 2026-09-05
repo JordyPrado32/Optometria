@@ -1,0 +1,41 @@
+@using System.Globalization
+<div class="vl-workspace">
+    <aside class="vl-panel">
+        <section><h2>Estilo del armazón</h2><div class="vl-frame-shapes">@foreach(var f in shapes) { <button class="@(shape == f.Id ? "selected" : "")" @onclick="() => shape = f.Id"><span class="vl-mini-frame @f.Id"><b></b><b></b></span>@f.Label</button> }</div></section>
+        <section><h2>Medidas <small>(mm)</small></h2><div class="vl-measures"><label>Calibre<input type="number" min="44" max="62" @bind="caliber" /></label><label>Puente<input type="number" min="14" max="24" @bind="bridge" /></label><label>Varilla<input type="number" min="125" max="155" @bind="temple" /></label></div></section>
+        <section><h2>Color y material</h2><div class="vl-swatches">@foreach(var c in colors) { <button style="@($"--swatch:{c.Hex}")" class="@(color == c.Hex ? "selected" : "")" aria-label="@c.Label" title="@c.Label" aria-pressed="@(color == c.Hex)" @onclick="() => color = c.Hex"></button> }<select aria-label="Material de la montura" @bind="material"><option value="metal">Metal</option><option value="acetate">Acetato</option></select></div></section>
+        <section><h2>Tratamientos de lunas</h2><div class="vl-treatment-grid">@foreach(var t in treatments) { <button title="@t.Description" class="@(treatment == t.Id ? "selected" : "")" @onclick="() => treatment = t.Id"><i class="bi @t.Icon"></i>@t.Label</button> }</div>
+        @if (treatment == "photochromic") { <label for="frame-sun">Exposición al sol <output>@((int)(sun * 100))%</output></label><input id="frame-sun" type="range" min="0" max="1" step=".05" @bind="sun" @bind:event="oninput" /><div class="vl-range-ends"><span>Interior</span><span>Exterior</span></div> }
+        </section>
+        <section><label class="vl-switch"><input type="checkbox" @bind="compare" /> Comparar tratamiento</label>@if(compare) { <div class="vl-mini-comparison"><BeforeAfterComparator Source="/images/visual-lab/landscape.png" BeforeStyle="filter:brightness(1.18) contrast(.9)" AfterStyle="@TreatmentFilter" BeforeLabel="Sin tratamiento" AfterLabel="@TreatmentName" BeforeCaption="" AfterCaption="" /></div> }</section>
+        <FrameCatalog />
+    </aside>
+    <main class="vl-main"><LabViewport @ref="viewport" Kind="frames" Settings="Settings" Description="@($"Montura {shape}, material {material}, tratamiento {TreatmentName}.")">
+        <Top><span class="vl-stage-kicker">ESTUDIO DE MONTURAS <b>360°</b></span><div class="vl-stage-bar">@foreach(var v in views) { <button class="@(view == v.Id ? "on" : "")" @onclick="() => view = v.Id">@v.Label</button> }<button @onclick="() => bright = !bright" title="Cambiar iluminación"><i class="bi bi-brightness-high"></i></button></div></Top>
+        <Bottom><div class="vl-product-caption"><span>COLECCIÓN DIGITAL</span><h3>@shapes.First(x => x.Id == shape).Label</h3><small>@(material == "metal" ? "Metal" : "Acetato") · @caliber–@bridge–@temple mm · @TreatmentName</small></div></Bottom>
+    </LabViewport>
+    <div class="vl-studio-bottom"><VirtualTryOn Color="@color" Shape="@shape" /><div class="vl-panel vl-treatment-info"><i class="bi bi-layers"></i><div><h2>@TreatmentName</h2><p>@treatments.First(x => x.Id == treatment).Description</p><small>Acabado ilustrativo; consulta la ficha del producto.</small></div></div></div>
+    @if(Guided) { <div class="vl-guidance"><span>ESTUDIO</span><p>Elige una forma, gira la montura y compara el acabado de las lunas.</p></div> }
+    </main>
+</div>
+@code {
+    [Parameter] public bool Guided { get; set; }
+    [Parameter] public bool ReducedMotion { get; set; }
+    private LabViewport? viewport;
+    private string shape = "aviator", treatment = "antireflective", color = "#c7a15e", material = "metal", view = "threequarter";
+    private double caliber = 52, bridge = 18, temple = 140, sun = .6;
+    private bool compare, bright;
+    private readonly (string Id,string Label)[] shapes = [("aviator","Aviador"),("wayfarer","Wayfarer"),("round","Redondo")];
+    private readonly (string Hex,string Label)[] colors = [("#c7a15e","Dorado"),("#22272a","Negro"),("#694630","Carey"),("#963f42","Burdeos"),("#9aabb1","Plata")];
+    private readonly (string Id,string Label)[] views = [("front","Frente"),("threequarter","¾"),("profile","Perfil")];
+    private readonly (string Id,string Label,string Icon,string Description)[] treatments = [
+        ("clear","Transparente","bi-circle","Transparencia neutra para comparar acabados."),
+        ("bluecut","Blue Cut","bi-moon","El filtro puede modificar el tono y el reflejo residual."),
+        ("antireflective","Antirreflejo","bi-brilliance","Reduce reflejos en las superficies de la lente."),
+        ("photochromic","Fotocromático","bi-sun","Ilustra el cambio de tintado según exposición; la respuesta real depende del producto y del entorno."),
+        ("polarized","Polarizado","bi-circle-half","Reduce determinados reflejos de superficies como agua o carretera."),
+        ("mirror","Espejado","bi-disc","Acabado reflectante con aspecto de espejo.")];
+    private string TreatmentName => treatments.First(x => x.Id == treatment).Label;
+    private string TreatmentFilter => treatment switch { "bluecut" => "filter:sepia(.18)", "photochromic" => FormattableString.Invariant($"filter:brightness({1-sun*.55})"), "polarized" or "mirror" => "filter:brightness(.8) contrast(1.15)", _ => "" };
+    private object Settings => new { shape, treatment, color, material, caliber = Math.Clamp(caliber,44,62), bridge = Math.Clamp(bridge,14,24), temple = Math.Clamp(temple,125,155), sun, view, bright, reduced = ReducedMotion };
+}
