@@ -12,6 +12,13 @@
 
 <PageTitle>Historia clinica</PageTitle>
 
+@if (canViewModule && selectedEncounterSummary is not null)
+{
+    <ClinicalEditControl EncounterId="@selectedEncounterSummary.EncounterId" />
+    <label for="clinical-edit-reason">Motivo obligatorio de la edición</label>
+    <textarea id="clinical-edit-reason" class="form-control" maxlength="1000" @bind="editReason"></textarea>
+}
+
 @if (isLoading)
 {
     <section class="management-shell">
@@ -917,6 +924,8 @@ else
     private bool isLoading = true;
     private bool canViewModule;
     private int currentUserId;
+    private string editReason = "";
+    private bool savingHistory;
     private int currentRoleId;
     private int activeWizardStep = 1;
     private bool shouldInitializeSignaturePad;
@@ -949,6 +958,7 @@ else
 
     private async Task LoadAsync(bool preserveStatus = false)
     {
+        editReason = "";
         isLoading = true;
         errorMessage = null;
         validationMessages.Clear();
@@ -1145,6 +1155,16 @@ else
 
     private async Task SaveAsync(ClinicalHistorySaveMode mode)
     {
+        if (savingHistory) return;
+        savingHistory = true;
+        try { await SaveCoreAsync(mode); }
+        catch (DbUpdateException) { errorMessage = "No se pudo guardar la edición. Recarga la historia y vuelve a intentarlo."; }
+        catch (Microsoft.Data.SqlClient.SqlException) { errorMessage = "No se pudo confirmar el guardado. Recarga la historia para comprobar su estado antes de reintentar."; }
+        finally { savingHistory = false; }
+    }
+
+    private async Task SaveCoreAsync(ClinicalHistorySaveMode mode)
+    {
         errorMessage = null;
         validationMessages.Clear();
 
@@ -1165,6 +1185,8 @@ else
                 OpeningSnapshot = openingSnapshot,
                 Editor = editor,
                 ActorUserId = currentUserId,
+                EditReason = editReason,
+                ExpectedUpdatedAt = selectedEncounterSummary?.UpdatedAt,
                 BillingDraftService = BillingDraftService,
                 SelectedEncounterId = EncounterId,
                 HasLegacyDataPendingMigration = hasLegacyDataPendingMigration,
@@ -1183,6 +1205,7 @@ else
         }
 
         statusMessage = result.StatusMessage;
+        editReason = "";
         EncounterId = result.EncounterId;
         var currentStep = mode == ClinicalHistorySaveMode.Finalize ? WizardSteps.Count : activeWizardStep;
 

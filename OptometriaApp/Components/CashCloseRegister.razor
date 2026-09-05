@@ -1,0 +1,98 @@
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@using OptometriaApp.Services
+@inject IDbContextFactory<OpticaDbContext> Factory
+@inject AuthenticationStateProvider Auth
+@inject CashCloseService CashService
+
+<section class="management-card">
+    <h2>Registrar arqueo de caja</h2>
+    <p>Caja general: incluye todos los cajeros y los movimientos pendientes desde el último cierre. Los filtros del reporte no afectan este registro.</p>
+    @if (!string.IsNullOrEmpty(message)) { <p role="status" class="alert alert-info">@message</p> }
+    @if (allowed)
+    {
+        @if (previousId == 0)
+        {
+            <p class="alert alert-warning">Primer arqueo: los importes incluyen todos los cobros históricos registrados. Cuenta el efectivo disponible y explica la diferencia inicial en la observación.</p>
+        }
+        <dl>
+            <dt>Base del cierre anterior</dt><dd>@preview.OpeningCash.ToString("N2")</dd>
+            @foreach (var item in JsonSerializer.Deserialize<Dictionary<string, decimal>>(preview.PaymentsJson)!)
+            { <dt>@item.Key</dt><dd>@item.Value.ToString("N2")</dd> }
+            <dt>Total cobrado</dt><dd>@preview.Collected.ToString("N2")</dd>
+            <dt>Efectivo esperado</dt><dd>@preview.ExpectedCash.ToString("N2")</dd>
+        </dl>
+        <div class="clinical-grid-2">
+            <div><label for="cash-count">Efectivo contado</label><input id="cash-count" class="form-control" type="number" min="0" step="0.01" @bind="input.CountedCash" /></div>
+            <div><label for="cash-bank">Retiro para bancos</label><input id="cash-bank" class="form-control" type="number" min="0" step="0.01" @bind="input.BankWithdrawal" /></div>
+            <div><label for="cash-other">Otros retiros</label><input id="cash-other" class="form-control" type="number" min="0" step="0.01" @bind="input.OtherWithdrawal" /></div>
+            <div><label for="cash-reference">Banco destino / referencia</label><input id="cash-reference" class="form-control" maxlength="200" @bind="input.BankReference" /></div>
+        </div>
+        <label for="cash-observation">Observación (explica los retiros y cualquier diferencia)</label>
+        <textarea id="cash-observation" class="form-control" maxlength="1000" @bind="input.Observation"></textarea>
+        <p><strong>Queda en caja para vueltos: @((input.CountedCash - input.BankWithdrawal - input.OtherWithdrawal).ToString("N2"))</strong></p>
+        <p>Diferencia contado − esperado: @((input.CountedCash - preview.ExpectedCash).ToString("N2"))</p>
+        <button type="button" class="btn btn-outline-primary" disabled="@busy" @onclick="RefreshAsync">Actualizar importes</button>
+        <button type="button" class="btn btn-primary" disabled="@busy" @onclick="SaveAsync">Guardar cierre definitivo</button>
+        <h3>Cierres registrados</h3>
+        @foreach (var close in history)
+        {
+            <details class="management-card">
+                <summary>#@close.Id · @close.ClosedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · Total @close.Collected.ToString("N2") · Queda @close.RetainedCash.ToString("N2")</summary>
+                <p>Responsable: usuario #@close.UserId. Base: @close.OpeningCash.ToString("N2"). Esperado: @close.ExpectedCash.ToString("N2"). Contado: @close.CountedCash.ToString("N2"). Diferencia: @((close.CountedCash - close.ExpectedCash).ToString("N2")).</p>
+                @foreach (var payment in JsonSerializer.Deserialize<Dictionary<string, decimal>>(close.PaymentsJson)!)
+                { <p>@payment.Key: @payment.Value.ToString("N2")</p> }
+                <p>Enviado a bancos: @close.BankWithdrawal.ToString("N2") · @close.BankReference. Otros retiros: @close.OtherWithdrawal.ToString("N2").</p>
+                <p>@close.Observation</p>
+            </details>
+        }
+    }
+</section>
+
+@code {
+    private CashClose preview = new(), input = new() { OperationId = Guid.NewGuid() };
+    private List<CashClose> history = [];
+    private int userId, previousId;
+    private bool busy, allowed;
+    private string message = "";
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Auth.GetAuthenticationStateAsync();
+        userId = int.TryParse(state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
+        await RefreshAsync();
+    }
+    private async Task RefreshAsync()
+    {
+        busy = true;
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            allowed = await CashCloseService.CanAccessAsync(db, userId);
+            if (!allowed) { message = "No tienes permiso para registrar arqueos."; return; }
+            preview = await CashCloseService.CalculateAsync(db);
+            history = await db.CashCloses.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync();
+            previousId = history.FirstOrDefault()?.Id ?? 0;
+        }
+        catch (Exception) { message = "No se pudo cargar el arqueo. Verifica la conexión y la actualización de la base de datos."; allowed = false; }
+        finally { busy = false; }
+    }
+    private async Task SaveAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            input.PaymentsJson = preview.PaymentsJson;
+            input.ExpectedCash = preview.ExpectedCash;
+            await CashService.CloseAsync(userId, input, previousId);
+            input = new CashClose { OperationId = Guid.NewGuid() };
+            message = "Cierre registrado. El saldo retenido será la base del próximo arqueo.";
+            await RefreshAsync();
+        }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception) { message = "No se pudo confirmar el cierre. Actualiza y vuelve a intentarlo."; }
+        finally { busy = false; }
+    }
+}

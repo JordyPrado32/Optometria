@@ -1,0 +1,70 @@
+@using Microsoft.EntityFrameworkCore
+@using OptometriaApp.Data
+@using OptometriaApp.Models
+@inject IDbContextFactory<OpticaDbContext> Factory
+@inject AuthenticationStateProvider Auth
+
+<section class="management-card">
+    <h2>Control de modificaciones</h2>
+    <p>Después de 24 horas desde la apertura, el médico requiere autorización de un administrador para cada edición. Toda edición exige un motivo.</p>
+    @if (isAdmin)
+    {
+        <label for="edit-doctor">Médico autorizado</label>
+        <select id="edit-doctor" class="form-select" @bind="doctorId">
+            <option value="0">Selecciona un médico</option>
+            @foreach (var doctor in doctors) { <option value="@doctor.id_usuario">@doctor.nombres @doctor.apellidos</option> }
+        </select>
+        <label for="grant-reason">Motivo de autorización</label>
+        <textarea id="grant-reason" class="form-control" maxlength="1000" @bind="reason"></textarea>
+        <button type="button" class="btn btn-outline-primary" disabled="@busy" @onclick="GrantAsync">Autorizar una edición</button>
+    }
+    @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
+    <p>Autorizaciones pendientes para ti: @pending</p>
+    <details>
+        <summary>Historial de modificaciones (@audits.Count)</summary>
+        @foreach (var audit in audits)
+        {
+            <p>@audit.EditedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · Usuario #@audit.UserId · @audit.Reason @(audit.AuthorizationId.HasValue ? $" · Autorización #{audit.AuthorizationId}" : "")</p>
+        }
+    </details>
+</section>
+
+@code {
+    [Parameter] public int EncounterId { get; set; }
+    private int userId, doctorId, pending;
+    private bool isAdmin, busy;
+    private string reason = "", message = "";
+    private List<tbl_usuario> doctors = [];
+    private List<ClinicalEditAudit> audits = [];
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await Auth.GetAuthenticationStateAsync();
+        userId = int.TryParse(state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
+        await using var db = await Factory.CreateDbContextAsync();
+        isAdmin = await db.tbl_usuarios.AnyAsync(x => x.id_usuario == userId && x.id_rol == 1 && x.activo == true && x.bloqueado != true);
+        if (isAdmin) doctors = await db.tbl_usuarios.Where(x => x.activo == true && x.bloqueado != true && db.tbl_medico.Any(m => m.id_usuario == x.id_usuario && m.activo == true && m.puede_gestionar_historia_clinica == true)).ToListAsync();
+        pending = await db.ClinicalEditAuthorizations.CountAsync(x => x.EncounterId == EncounterId && x.DoctorId == userId && x.UsedAt == null);
+        audits = await db.ClinicalEditAudits.AsNoTracking().Where(x => x.EncounterId == EncounterId).OrderByDescending(x => x.Id).ToListAsync();
+    }
+    private async Task GrantAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            if (!await db.tbl_usuarios.AnyAsync(x => x.id_usuario == userId && x.id_rol == 1 && x.activo == true && x.bloqueado != true)) throw new InvalidOperationException("Solo un administrador puede autorizar.");
+            if (!await db.tbl_medico.AnyAsync(x => x.id_usuario == doctorId && x.activo == true && x.puede_gestionar_historia_clinica == true) || string.IsNullOrWhiteSpace(reason) || reason.Length > 1000) throw new InvalidOperationException("Selecciona un médico e indica el motivo.");
+            if (!await db.tbl_historia_clinica_optometria_eventos.AnyAsync(x => x.id_historia_evento == EncounterId && x.activo)) throw new InvalidOperationException("Encuentro no disponible.");
+            if (await db.ClinicalEditAuthorizations.AnyAsync(x => x.EncounterId == EncounterId && x.DoctorId == doctorId && x.UsedAt == null)) throw new InvalidOperationException("Ya existe una autorización pendiente para este médico.");
+            db.ClinicalEditAuthorizations.Add(new ClinicalEditAuthorization { EncounterId = EncounterId, DoctorId = doctorId, AdminId = userId, GrantedAt = DateTime.UtcNow, Reason = reason.Trim() });
+            await db.SaveChangesAsync();
+            message = "Autorización registrada para una edición.";
+            reason = "";
+            await OnParametersSetAsync();
+        }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (DbUpdateException) { message = "No se pudo registrar la autorización. Recarga e intenta nuevamente."; }
+        finally { busy = false; }
+    }
+}

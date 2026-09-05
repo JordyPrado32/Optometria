@@ -7,6 +7,9 @@ namespace OptometriaApp.Services;
 
 public sealed class ClinicalHistoryService
 {
+    public static bool RequiresEditAuthorization(DateTime openedAt, DateTime now, bool isAdmin)
+        => !isAdmin && now >= openedAt.AddHours(24);
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ClinicalHistoryLoadResult> LoadPatientHistoryAsync(
@@ -86,7 +89,41 @@ public sealed class ClinicalHistoryService
             };
         }
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+
+        var actor = await dbContext.tbl_usuarios.SingleOrDefaultAsync(x => x.id_usuario == request.ActorUserId && x.activo == true && x.bloqueado != true, cancellationToken);
+        if (actor is null || (actor.id_rol != 1 && !await dbContext.tbl_rol_menu_permisos.AnyAsync(p => p.id_rol == actor.id_rol && p.puede_ver &&
+            (request.SelectedEncounterId.HasValue ? p.puede_editar : p.puede_crear) && dbContext.tbl_menu_apps.Any(m => m.id_menu == p.id_menu && m.activo && m.ruta == "/doctor/historia-clinica"), cancellationToken)))
+            return new ClinicalHistorySaveResult { ValidationErrors = ["No tienes permiso para guardar esta historia clínica."] };
+        if (actor.id_rol != 1 && !await dbContext.tbl_medico.AnyAsync(x => x.id_usuario == actor.id_usuario && x.activo == true && x.puede_gestionar_historia_clinica == true, cancellationToken))
+            return new ClinicalHistorySaveResult { ValidationErrors = ["Se requiere un perfil médico activo con permiso para gestionar historias."] };
+
+        tbl_historia_clinica_optometria_evento? original = null;
+        ClinicalEditAuthorization? authorization = null;
+        if (request.SelectedEncounterId.HasValue)
+        {
+            original = await dbContext.tbl_historia_clinica_optometria_eventos.SingleOrDefaultAsync(x => x.id_historia_evento == request.SelectedEncounterId && x.id_paciente == request.Patient.id_paciente && x.activo, cancellationToken);
+            if (original is null)
+                return new ClinicalHistorySaveResult { ValidationErrors = ["El encuentro no pertenece al paciente o ya no está disponible."] };
+            if (string.IsNullOrWhiteSpace(request.EditReason) || request.EditReason.Length > 1000)
+                return new ClinicalHistorySaveResult { ValidationErrors = ["Debes indicar por qué editas el registro (máximo 1000 caracteres)."] };
+            if (RequiresEditAuthorization(original.fecha_evento, DateTime.Now, actor.id_rol == 1))
+            {
+                authorization = await dbContext.ClinicalEditAuthorizations.FirstOrDefaultAsync(x => x.EncounterId == original.id_historia_evento && x.DoctorId == actor.id_usuario && x.UsedAt == null && dbContext.tbl_usuarios.Any(u => u.id_usuario == x.AdminId && u.id_rol == 1 && u.activo == true && u.bloqueado != true), cancellationToken);
+                if (authorization is null)
+                    return new ClinicalHistorySaveResult { ValidationErrors = ["Han transcurrido 24 horas. Un administrador debe autorizar esta edición."] };
+                authorization.UsedAt = DateTime.UtcNow;
+            }
+            if (request.ExpectedUpdatedAt != original.fecha_ultima_actualizacion)
+                return new ClinicalHistorySaveResult { ValidationErrors = ["El registro cambió. Recarga la historia antes de editar."] };
+            dbContext.ClinicalEditAudits.Add(new ClinicalEditAudit
+            {
+                EncounterId = original.id_historia_evento, UserId = actor.id_usuario,
+                AuthorizationId = authorization?.Id, EditedAt = DateTime.UtcNow,
+                Reason = request.EditReason.Trim(), BeforeJson = original.payload_json ?? "{}",
+                AfterJson = Serialize(request.Editor)
+            });
+        }
 
         var history = await dbContext.tbl_historia_clinica_optometrias
             .FirstOrDefaultAsync(
@@ -148,7 +185,7 @@ public sealed class ClinicalHistoryService
             dbContext.tbl_consulta.Add(consultation);
         }
 
-        consultation.fecha_consulta = DateTime.Now;
+        if (original is null) consultation.fecha_consulta = DateTime.Now;
         consultation.motivo_consulta = NormalizeOptional(request.Editor.MotivoConsulta);
         consultation.historia_clinica = NormalizeOptional(request.Editor.NumeroHistoria);
         consultation.antecedentes_personales = NormalizeOptional(request.Editor.Antecedentes.PersonalesGenerales);
@@ -1101,6 +1138,8 @@ public sealed class ClinicalHistoryLoadResult
 
 public sealed class ClinicalHistorySaveRequest
 {
+    public string EditReason { get; init; } = "";
+    public DateTime? ExpectedUpdatedAt { get; init; }
     public required tbl_paciente Patient { get; init; }
     public required OpeningSnapshot OpeningSnapshot { get; init; }
     public required ClinicalHistoryEditorModel Editor { get; init; }

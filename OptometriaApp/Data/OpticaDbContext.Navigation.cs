@@ -27,6 +27,7 @@ public partial class OpticaDbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        ConfigureCashAndClinical(modelBuilder);
         ConfigureCompletionEntities(modelBuilder);
         ConfigureSecurityEntities(modelBuilder);
         ConfigureNavigationEntities(modelBuilder);

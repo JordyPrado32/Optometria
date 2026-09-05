@@ -87,6 +87,7 @@ builder.Services.AddHttpClient<SriElectronicDocumentClient>(client =>
 });
 builder.Services.AddScoped<ElectronicBillingDocumentService>();
 builder.Services.AddScoped<ClinicalHistoryService>();
+builder.Services.AddScoped<CashCloseService>();
 builder.Services.AddScoped<ClinicCompletionService>();
 builder.Services.AddScoped<AccountStatementService>();
 builder.Services.AddScoped<LabMessagingService>();
@@ -123,6 +124,14 @@ await using (var completionScope = app.Services.CreateAsyncScope())
     await completionDb.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
 }
 await EnsureRoleSecurityMatrixAsync(app);
+await using (var cashScope = app.Services.CreateAsyncScope())
+{
+    var db = cashScope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+    await using var script = typeof(CashCloseService).Assembly.GetManifestResourceStream("OptometriaApp.Sql.011_cash_clinical_control.sql")
+        ?? throw new InvalidOperationException("Falta el script de caja y control clínico.");
+    using var reader = new StreamReader(script);
+    await db.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
+}
 
 if (!app.Environment.IsDevelopment())
 {
