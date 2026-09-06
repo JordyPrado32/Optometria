@@ -46,6 +46,11 @@
     private Dictionary<string, string> zoneStates = [];
     private string notes = string.Empty;
 
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     protected override void OnParametersSet()
     {
         var state = string.IsNullOrWhiteSpace(Value)
@@ -53,14 +58,20 @@
             : Deserialize(Value);
 
         notes = state.Notes ?? string.Empty;
+        var zonesDict = state.Zones != null 
+            ? new Dictionary<string, string>(state.Zones, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         zoneStates = zones.Keys.ToDictionary(
             key => key,
-            key => state.Zones.TryGetValue(key, out var zoneState) ? zoneState : "Normal");
+            key => zonesDict.TryGetValue(key, out var zoneState) && !string.IsNullOrWhiteSpace(zoneState) ? zoneState : "Normal",
+            StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task ToggleZoneAsync(string zone)
     {
-        zoneStates[zone] = zoneStates[zone] switch
+        var current = zoneStates.TryGetValue(zone, out var val) ? val : "Normal";
+        zoneStates[zone] = current switch
         {
             "Normal" => "Observacion",
             "Observacion" => "Alerta",
@@ -79,7 +90,7 @@
     private async Task ClearAsync()
     {
         notes = string.Empty;
-        zoneStates = zones.Keys.ToDictionary(key => key, _ => "Normal");
+        zoneStates = zones.Keys.ToDictionary(key => key, _ => "Normal", StringComparer.OrdinalIgnoreCase);
         await EmitAsync();
     }
 
@@ -88,7 +99,7 @@
         var payload = JsonSerializer.Serialize(new EyeGraphicState
         {
             Notes = notes,
-            Zones = zoneStates
+            Zones = new Dictionary<string, string>(zoneStates, StringComparer.OrdinalIgnoreCase)
         });
 
         await ValueChanged.InvokeAsync(payload);
@@ -107,7 +118,7 @@
     {
         try
         {
-            return JsonSerializer.Deserialize<EyeGraphicState>(value) ?? new EyeGraphicState();
+            return JsonSerializer.Deserialize<EyeGraphicState>(value, JsonOptions) ?? new EyeGraphicState();
         }
         catch
         {
@@ -118,7 +129,7 @@
     private sealed class EyeGraphicState
     {
         public string? Notes { get; set; } = string.Empty;
-        public Dictionary<string, string> Zones { get; set; } = [];
+        public Dictionary<string, string> Zones { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }
 

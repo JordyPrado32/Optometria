@@ -505,6 +505,7 @@ public sealed class BillingDraftService
             product.descripcion = description;
             product.tipo_item = "Producto";
             product.naturaleza_item = "Servicio";
+            ProductInventoryRules.NormalizeInventoryFields(product);
             return product;
         }
 
@@ -523,6 +524,7 @@ public sealed class BillingDraftService
             fecha_creacion = DateTime.Now,
             usuario_creacion = "SYSTEM_BILLING"
         };
+        ProductInventoryRules.NormalizeInventoryFields(product);
 
         dbContext.tbl_productos.Add(product);
         await dbContext.SaveChangesAsync();

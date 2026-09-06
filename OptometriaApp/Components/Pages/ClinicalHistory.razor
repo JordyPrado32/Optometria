@@ -66,45 +66,97 @@ else
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {
-            <div class="alert alert-success" role="alert">@statusMessage</div>
-        }
-
-        @if (!string.IsNullOrWhiteSpace(errorMessage))
-        {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
-        }
-
-        @if (validationMessages.Count > 0)
-        {
-            <div class="alert alert-warning" role="alert">
-                <strong>Antes de continuar revisa lo siguiente:</strong>
-                <ul style="margin: 0.6rem 0 0; padding-left: 1.2rem;">
-                    @foreach (var validationMessage in validationMessages)
-                    {
-                        <li>@validationMessage</li>
-                    }
-                </ul>
+            <div class="alert alert-success d-flex align-items-center justify-content-between py-2 px-3 mb-3 shadow-sm border-0 rounded-3" role="alert">
+                <div><i class="bi bi-check-circle-fill me-2"></i>@statusMessage</div>
+                <button type="button" class="btn-close" aria-label="Close" @onclick="() => statusMessage = null"></button>
             </div>
-            <div class="clinical-guide-grid" style="margin-top: 1rem;">
-                <div class="clinical-guide-card">
-                    <span class="eyebrow">1. Inicio</span>
-                    <strong>Selecciona paciente</strong>
-                    <p>Empieza arriba. Al elegir el paciente, el sistema completa los datos base protegidos.</p>
+        }
+
+        @if (showClosedSuccessModal)
+        {
+            <div class="custom-modal-overlay" style="z-index: 10000;" @onclick="CloseClosedSuccessModal">
+                <div class="custom-modal-card status-modal-card" style="max-width: 520px; border-radius: 1.25rem; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,0.35);" @onclick:stopPropagation="true">
+                    <header class="custom-modal-header success-header" style="padding: 1.2rem 1.6rem; border-bottom: 1px solid rgba(78, 147, 122, 0.2);">
+                        <div class="status-modal-header-copy">
+                            <span class="status-modal-badge" style="color: #276749;"><i class="bi bi-shield-check me-1"></i> Proceso completado</span>
+                            <h2 style="font-size: 1.25rem; font-weight: 800; color: #1e4620;">Historial Clínico Cerrado</h2>
+                        </div>
+                        <button type="button" class="btn-close-modal" @onclick="CloseClosedSuccessModal">×</button>
+                    </header>
+                    <div class="custom-modal-body status-modal-body" style="padding: 2rem 1.8rem; text-align: center;">
+                        <div style="width: 72px; height: 72px; border-radius: 50%; background: #ebfbee; color: #2b8a3e; display: flex; align-items: center; justify-content: center; font-size: 2.2rem; margin: 0 auto 1rem; border: 2px solid #b2f2bb;">
+                            <i class="bi bi-check2-circle"></i>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 700; color: #212529; margin-bottom: 0.5rem;">¡Historial cerrado exitosamente!</h3>
+                        <p class="text-muted small mb-0" style="font-size: 0.92rem; line-height: 1.5;">
+                            La evolución clínica del paciente <strong>@GetPatientFullName()</strong> ha sido finalizada y guardada de forma segura con su firma digital y sincronización de servicios.
+                        </p>
+                    </div>
+                    <footer class="custom-modal-footer" style="padding: 1rem 1.6rem; background: #f8faf9; border-top: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; gap: 0.75rem;">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="CloseClosedSuccessModal">
+                            Permanecer aquí
+                        </button>
+                        <button type="button" class="btn btn-success px-4 fw-bold" @onclick="NavigateToAppointments">
+                            <i class="bi bi-calendar-check me-1"></i> Ir a Citas
+                        </button>
+                    </footer>
                 </div>
-                <div class="clinical-guide-card">
-                    <span class="eyebrow">2. Consulta</span>
-                    <strong>Llena anamnesis y examen</strong>
-                    <p>Resume lo que cuenta el paciente y completa los hallazgos tecnicos.</p>
-                </div>
-                <div class="clinical-guide-card">
-                    <span class="eyebrow">3. Cierre</span>
-                    <strong>Firma y guarda</strong>
-                    <p>Al final registra consentimiento, dibuja la firma si aplica y guarda la historia.</p>
-                </div>
-                <div class="clinical-guide-card clinical-guide-card--accent">
-                    <span class="eyebrow">Progreso</span>
-                    <strong>@(editor is null ? 0 : ClinicalHistoryService.GetCompletionPercent(editor))% completado</strong>
-                    <p>@GetCompletionHint()</p>
+            </div>
+        }
+
+        @if (showValidationModal && (validationMessages.Count > 0 || !string.IsNullOrWhiteSpace(errorMessage)))
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background: rgba(26, 21, 18, 0.62); z-index: 10000;" role="dialog" @onclick="CloseValidationModal">
+                <div class="modal-dialog modal-dialog-centered" role="document" @onclick:stopPropagation="true">
+                    <div class="modal-content border-0 shadow-lg" style="border-radius: 1.25rem; overflow: hidden;">
+                        <div class="modal-header @(validationMessages.Count > 0 ? "bg-warning-subtle text-dark" : "bg-danger-subtle text-danger") border-0 py-3 px-4">
+                            <h5 class="modal-title fw-bold d-flex align-items-center gap-2 mb-0">
+                                @if (validationMessages.Count > 0)
+                                {
+                                    <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
+                                    <span>Requisitos pendientes</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-x-circle-fill text-danger fs-4"></i>
+                                    <span>Atención</span>
+                                }
+                            </h5>
+                            <button type="button" class="btn-close" aria-label="Close" @onclick="CloseValidationModal"></button>
+                        </div>
+                        <div class="modal-body p-4">
+                            @if (!string.IsNullOrWhiteSpace(errorMessage))
+                            {
+                                <div class="alert alert-danger py-2 px-3 mb-3 small border-0 shadow-sm">
+                                    <strong><i class="bi bi-shield-exclamation me-1"></i> @errorMessage</strong>
+                                </div>
+                            }
+                            @if (validationMessages.Count > 0)
+                            {
+                                <p class="text-muted small mb-2">Para poder cerrar y guardar la historia clínica de forma segura, completa los siguientes puntos:</p>
+                                <ul class="list-group list-group-flush border rounded mb-0">
+                                    @foreach (var msg in validationMessages)
+                                    {
+                                        <li class="list-group-item d-flex align-items-center gap-2 py-2 px-3 small">
+                                            <i class="bi bi-arrow-right-circle-fill text-warning flex-shrink-0"></i>
+                                            <span>@msg</span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                        <div class="modal-footer border-0 bg-light px-4 py-3 d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseValidationModal">
+                                Entendido / Cerrar
+                            </button>
+                            @if (validationMessages.Count > 0)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="GoToValidationStep">
+                                    <i class="bi bi-pencil-square me-1"></i> Ir al paso pendiente
+                                </button>
+                            }
+                        </div>
+                    </div>
                 </div>
             </div>
         }
@@ -139,97 +191,148 @@ else
 
         @if (patient is not null && editor is not null && openingSnapshot is not null)
         {
-            <section class="management-card clinical-card">
-                <div class="management-card-header">
-                    <h2>Resumen del paciente</h2>
-                    <span>@GetProgressLabel()</span>
-                </div>
-                <div class="clinical-header-grid" style="margin-top: 1rem;">
-                    <div class="clinical-highlight">
-                        <span class="eyebrow">Paciente</span>
-                        <strong>@($"{openingSnapshot.Nombres} {openingSnapshot.Apellidos}")</strong>
-                        <p>@openingSnapshot.Cedula</p>
+            <div class="clinical-kpi-row">
+                <div class="clinical-kpi-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-icon-badge"><i class="bi bi-person-fill"></i></span>
+                        <span class="kpi-label">Paciente</span>
                     </div>
-                    <div class="clinical-highlight">
-                        <span class="eyebrow">Historia</span>
-                        <strong>@(string.IsNullOrWhiteSpace(editor.NumeroHistoria) ? "Pendiente" : editor.NumeroHistoria)</strong>
-                        <p>@(history?.fecha_apertura?.ToString("yyyy-MM-dd HH:mm") ?? "Sin apertura previa")</p>
-                    </div>
-                    <div class="clinical-highlight">
-                        <span class="eyebrow">Encuentro activo</span>
-                        <strong>@(selectedEncounterSummary?.Status ?? (hasLegacyDataPendingMigration ? "Migracion pendiente" : "Nuevo borrador"))</strong>
-                        <p>@GetEncounterDateLabel()</p>
-                    </div>
-                    <div class="clinical-highlight">
-                        <span class="eyebrow">Progreso</span>
-                        <strong>@ClinicalHistoryService.GetCompletionPercent(editor)% completado</strong>
-                        <p>@GetCompletionHint()</p>
+                    <div class="kpi-card-body">
+                        <h3 class="kpi-title text-truncate">@GetPatientFullName()</h3>
+                        <div class="kpi-meta">
+                            <span><i class="bi bi-card-text"></i> @GetPatientCedula()</span>
+                            @if (!string.IsNullOrWhiteSpace(GetPatientAgeDisplay()))
+                            {
+                                <span><i class="bi bi-calendar3"></i> @GetPatientAgeDisplay()</span>
+                            }
+                        </div>
+                        <div class="kpi-subtext text-truncate mt-1">
+                            <span class="badge bg-light text-dark border">HC: @(string.IsNullOrWhiteSpace(editor.NumeroHistoria) ? "Por asignar" : editor.NumeroHistoria)</span>
+                            <span class="text-muted small ms-1">@(history?.fecha_apertura?.ToString("yyyy-MM-dd") ?? "Apertura hoy")</span>
+                        </div>
                     </div>
                 </div>
-            </section>
 
-            <section class="management-card clinical-card">
-                <div class="management-card-header">
-                    <h2>Evoluciones del paciente</h2>
-                    <span>@encounterSummaries.Count registradas</span>
-                </div>
-                <p class="clinical-helper-text">Cada atencion se guarda como una evolucion independiente. Puedes reabrir un borrador, revisar encuentros cerrados o iniciar una nueva evolucion sin perder la trazabilidad anterior.</p>
-                <ClinicalHistoryEncounterList Encounters="encounterSummaries" SelectedEncounterId="EncounterId" LegacyLabel="legacyEncounterLabel" OnSelect="SelectEncounterAsync" />
-            </section>
-
-            <section class="management-card clinical-card">
-                <div class="management-card-header">
-                    <h2>Examenes y estudios</h2>
-                    <span>@examTimeline.Count registrados</span>
-                </div>
-                <p class="clinical-helper-text">Aqui se consolidan los examenes hechos dentro de la consulta y tambien los registrados desde el modulo separado, incluso si fueron en fechas distintas.</p>
-                @if (examTimeline.Count == 0)
-                {
-                    <p style="margin-top: 1rem;">Aun no hay examenes longitudinales registrados para este paciente.</p>
-                }
-                else
-                {
-                    <div class="management-list clinical-list-spaced">
-                        @foreach (var exam in examTimeline)
-                        {
-                            <article class="management-list-item">
-                                <strong>@exam.ExamType</strong>
-                                <span>@exam.EventDate.ToString("yyyy-MM-dd")</span>
-                                <span>@exam.SourceModule</span>
-                                <span>@exam.ResultSummary</span>
-                                @if (exam.IsAlarm)
+                <div class="clinical-kpi-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-icon-badge"><i class="bi bi-journal-medical"></i></span>
+                        <span class="kpi-label">Evolución Activa</span>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div class="d-flex align-items-center gap-1 mb-1">
+                            <select class="form-select form-select-sm" value="@(EncounterId?.ToString() ?? "new")" @onchange="OnEncounterSelectChanged">
+                                <option value="new">+ Nueva Evolución (Borrador)</option>
+                                @foreach (var enc in encounterSummaries)
                                 {
-                                    <span class="clinical-badge clinical-badge--danger">Alarma</span>
+                                    <option value="@enc.EncounterId">#@enc.EncounterId - @enc.EventDate.ToString("yyyy-MM-dd HH:mm") (@enc.Status)</option>
                                 }
-                                @if (exam.RequestedFollowUp)
-                                {
-                                    <span class="clinical-badge clinical-badge--warning">Requiere control</span>
-                                }
-                            </article>
-                        }
+                            </select>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="clinical-badge @(selectedEncounterSummary?.Status == "Cerrada" ? "clinical-badge--success" : "clinical-badge--warning")">
+                                @(selectedEncounterSummary?.Status ?? "Nuevo borrador")
+                            </span>
+                            <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" style="font-size:0.8rem;" @onclick="StartNewEncounterAsync">
+                                <i class="bi bi-plus-circle"></i> Nueva
+                            </button>
+                        </div>
                     </div>
-                }
-            </section>
+                </div>
 
-            @if (alertSummaries.Count > 0)
+                <div class="clinical-kpi-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-icon-badge"><i class="bi bi-speedometer2"></i></span>
+                        <span class="kpi-label">Progreso</span>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div class="d-flex align-items-baseline justify-content-between mb-1">
+                            <h3 class="kpi-title mb-0">@ClinicalHistoryService.GetCompletionPercent(editor)%</h3>
+                            <span class="small text-muted">Completado</span>
+                        </div>
+                        <div class="progress" style="height: 6px; border-radius: 4px; background: rgba(127,105,81,0.12);">
+                            <div class="progress-bar" role="progressbar" style="width: @(ClinicalHistoryService.GetCompletionPercent(editor))%; background: #5da181;" aria-valuenow="@ClinicalHistoryService.GetCompletionPercent(editor)" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <p class="kpi-hint text-truncate mb-0 mt-1" title="@GetCompletionHint()">@GetCompletionHint()</p>
+                    </div>
+                </div>
+
+                <div class="clinical-kpi-card">
+                    <div class="kpi-card-header">
+                        <span class="kpi-icon-badge"><i class="bi bi-shield-exclamation"></i></span>
+                        <span class="kpi-label">Alertas & Exámenes</span>
+                    </div>
+                    <div class="kpi-card-body">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="clinical-badge @(alertSummaries.Count > 0 ? "clinical-badge--danger" : "clinical-badge--neutral")">
+                                @alertSummaries.Count Alertas
+                            </span>
+                            <span class="clinical-badge clinical-badge--neutral">
+                                @examTimeline.Count Exámenes
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mt-1">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.75rem;" @onclick="ToggleHistoryDetails">
+                                <i class="bi bi-clock-history me-1"></i>@(showHistoryDetails ? "Ocultar panel" : "Ver historial")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (showHistoryDetails)
             {
-                <section class="management-card clinical-card">
-                    <div class="management-card-header">
-                        <h2>Alertas clinicas activas</h2>
-                        <span>@alertSummaries.Count detectadas</span>
+                <div class="clinical-drawer-panel">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card h-100 p-3 shadow-sm border-0" style="background:#fff;">
+                                <h6 class="fw-bold"><i class="bi bi-journal-text me-1"></i> Evoluciones (@encounterSummaries.Count)</h6>
+                                <ClinicalHistoryEncounterList Encounters="encounterSummaries" SelectedEncounterId="EncounterId" LegacyLabel="legacyEncounterLabel" OnSelect="SelectEncounterAsync" />
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100 p-3 shadow-sm border-0" style="background:#fff;">
+                                <h6 class="fw-bold"><i class="bi bi-clipboard2-pulse me-1"></i> Exámenes (@examTimeline.Count)</h6>
+                                @if (examTimeline.Count == 0)
+                                {
+                                    <p class="text-muted small">Sin exámenes previos registrados.</p>
+                                }
+                                else
+                                {
+                                    <div class="overflow-auto" style="max-height: 220px;">
+                                        @foreach (var exam in examTimeline)
+                                        {
+                                            <div class="border-bottom py-1 small">
+                                                <strong>@exam.ExamType</strong> (@exam.EventDate.ToString("yyyy-MM-dd"))
+                                                <div class="text-muted">@exam.ResultSummary</div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100 p-3 shadow-sm border-0" style="background:#fff;">
+                                <h6 class="fw-bold"><i class="bi bi-exclamation-octagon me-1"></i> Alertas (@alertSummaries.Count)</h6>
+                                @if (alertSummaries.Count == 0)
+                                {
+                                    <p class="text-muted small">Sin alertas clínicas activas.</p>
+                                }
+                                else
+                                {
+                                    <div class="overflow-auto" style="max-height: 220px;">
+                                        @foreach (var alert in alertSummaries)
+                                        {
+                                            <div class="border-bottom py-1 small text-danger">
+                                                <strong>@alert.Title</strong> - @alert.Category
+                                                <div class="text-muted small">@alert.Notes</div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     </div>
-                    <div class="management-list clinical-list-spaced" style="margin-top: 1rem;">
-                        @foreach (var alert in alertSummaries.Take(8))
-                        {
-                            <article class="management-list-item">
-                                <strong>@alert.Title</strong>
-                                <span>@alert.Category</span>
-                                <span>@alert.EventDate.ToString("yyyy-MM-dd")</span>
-                                <span>@(string.IsNullOrWhiteSpace(alert.Notes) ? "Sin nota adicional" : alert.Notes)</span>
-                            </article>
-                        }
-                    </div>
-                </section>
+                </div>
             }
 
             <section class="management-card clinical-card clinical-wizard-shell">
@@ -288,16 +391,16 @@ else
                         <span>Se conserva para trazabilidad</span>
                     </div>
                     <div class="clinical-grid-4" style="margin-top: 1rem;">
-                        <div><label class="form-label">Apellidos</label><input class="form-control" value="@openingSnapshot.Apellidos" readonly /></div>
-                        <div><label class="form-label">Nombres</label><input class="form-control" value="@openingSnapshot.Nombres" readonly /></div>
-                        <div><label class="form-label">CI</label><input class="form-control" value="@openingSnapshot.Cedula" readonly /></div>
-                        <div><label class="form-label">Genero</label><input class="form-control" value="@openingSnapshot.Genero" readonly /></div>
-                        <div><label class="form-label">Fecha nacimiento</label><input class="form-control" value="@openingSnapshot.FechaNacimiento" readonly /></div>
-                        <div><label class="form-label">Edad</label><input class="form-control" value="@openingSnapshot.Edad" readonly /></div>
-                        <div><label class="form-label">Ocupacion</label><input class="form-control" value="@openingSnapshot.Ocupacion" readonly /></div>
-                        <div><label class="form-label">Email</label><input class="form-control" value="@openingSnapshot.Email" readonly /></div>
-                        <div class="clinical-span-2"><label class="form-label">Direccion</label><input class="form-control" value="@openingSnapshot.Direccion" readonly /></div>
-                        <div><label class="form-label">Telefono</label><input class="form-control" value="@openingSnapshot.Telefono" readonly /></div>
+                        <div><label class="form-label">Apellidos</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Apellidos, patient?.apellidos))" readonly /></div>
+                        <div><label class="form-label">Nombres</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Nombres, patient?.nombres))" readonly /></div>
+                        <div><label class="form-label">CI</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Cedula, patient?.cedula))" readonly /></div>
+                        <div><label class="form-label">Genero</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Genero, patient?.genero))" readonly /></div>
+                        <div><label class="form-label">Fecha nacimiento</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.FechaNacimiento, patient?.fecha_nacimiento?.ToString("yyyy-MM-dd")))" readonly /></div>
+                        <div><label class="form-label">Edad</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Edad, patient?.edad?.ToString()))" readonly /></div>
+                        <div><label class="form-label">Ocupacion</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Ocupacion, patient?.ocupacion))" readonly /></div>
+                        <div><label class="form-label">Email</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Email, patient?.email))" readonly /></div>
+                        <div class="clinical-span-2"><label class="form-label">Direccion</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Direccion, patient?.direccion))" readonly /></div>
+                        <div><label class="form-label">Telefono</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Telefono, patient?.telefono))" readonly /></div>
                     </div>
                 </section>
             }
@@ -695,18 +798,18 @@ else
             {
                 <section class="management-card clinical-card">
                     <div class="management-card-header">
-                        <h2>Diagnostico y conducta</h2>
-                        <span>Cierre clinico del encuentro</span>
+                        <h2>Diagnóstico y conducta</h2>
+                        <span>Cierre clínico del encuentro</span>
                     </div>
                     <div class="clinical-grid-4" style="margin-top: 1rem;">
-                        <div class="clinical-span-3"><label class="form-label">Diagnostico OD</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOd" /></div>
+                        <div class="clinical-span-3"><label class="form-label">Diagnóstico OD</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOd" /></div>
                         <div><label class="form-label">CIE10</label><input class="form-control" @bind="editor.Diagnostico.Cie10" /></div>
-                        <div class="clinical-span-2"><label class="form-label">Diagnostico OI</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOi" /></div>
+                        <div class="clinical-span-2"><label class="form-label">Diagnóstico OI</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoOi" /></div>
                         <div class="clinical-span-2"><label class="form-label">Motor</label><input class="form-control" @bind="editor.Diagnostico.DiagnosticoMotor" /></div>
-                        <div class="clinical-span-4"><label class="form-label">Patologico presuntivo</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.PatologicoPresuntivo"></textarea></div>
-                        <div class="clinical-span-4"><label class="form-label">Tratamiento / disposicion / conducta</label><textarea class="form-control" rows="4" @bind="editor.Diagnostico.TratamientoConducta"></textarea></div>
-                        <div class="clinical-span-4"><label class="form-label">Examenes indicados para facturacion</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.ExamenesIndicados"></textarea></div>
-                        <div class="clinical-span-4"><label class="form-label">Medicamentos recetados para facturacion</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.MedicamentosRecetados"></textarea></div>
+                        <div class="clinical-span-4"><label class="form-label">Patológico presuntivo</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.PatologicoPresuntivo"></textarea></div>
+                        <div class="clinical-span-4"><label class="form-label">Tratamiento / disposición / conducta</label><textarea class="form-control" rows="4" @bind="editor.Diagnostico.TratamientoConducta"></textarea></div>
+                        <div class="clinical-span-4"><label class="form-label">Exámenes indicados para facturación</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.ExamenesIndicados"></textarea></div>
+                        <div class="clinical-span-4"><label class="form-label">Medicamentos recetados para facturación</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.MedicamentosRecetados"></textarea></div>
                         <div class="clinical-span-4" style="padding: 1rem; border: 1px solid rgba(127,105,81,0.12); border-radius: 1rem; background: rgba(255,255,255,0.68);">
                             <div class="management-card-header" style="margin-bottom: 0.75rem;">
                                 <h2>Receta medica estructurada</h2>
@@ -844,7 +947,22 @@ else
                             <input type="checkbox" class="form-check-input" style="margin-left:0.2rem;" @bind="editor.Consentimiento.Autorizado" />
                         </div>
                         <div class="clinical-span-4">
-                            <label class="form-label">Firma dibujada</label>
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label mb-0">Firma digital del paciente</label>
+                                @if (!string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaDibujada) && editor.Consentimiento.FirmaDibujada.Length > 50)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Firma digital registrada
+                                    </span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaDibujada) && editor.Consentimiento.FirmaDibujada.Length > 50)
+                            {
+                                <div class="mb-2 p-2 bg-white rounded border d-flex align-items-center gap-3">
+                                    <img src="@(editor.Consentimiento.FirmaDibujada.StartsWith("data:image") ? editor.Consentimiento.FirmaDibujada : $"data:image/png;base64,{editor.Consentimiento.FirmaDibujada}")" style="max-height: 44px; border: 1px solid #ddd; border-radius: 4px; background: #fff; padding: 2px;" alt="Firma registrada" />
+                                    <small class="text-muted">Firma guardada en el encuentro. Puedes volver a dibujar abajo si deseas actualizarla.</small>
+                                </div>
+                            }
                             <div class="clinical-signature-shell">
                                 <canvas id="@SignatureCanvasId" class="clinical-signature-pad"></canvas>
                                 <div class="workspace-actions clinical-signature-actions">
@@ -855,6 +973,8 @@ else
                     </div>
                 </section>
             }
+
+
 
             <section class="management-card clinical-card clinical-wizard-footer">
                 <div class="clinical-wizard-footer-copy">
@@ -873,7 +993,9 @@ else
                     <button type="button" class="btn btn-outline-primary" @onclick="SaveDraftAsync">Guardar borrador</button>
                     @if (activeWizardStep == WizardSteps.Count)
                     {
-                        <button type="button" class="btn btn-primary" @onclick="FinalizeAsync">Cerrar y guardar historia</button>
+                        <button type="button" class="btn btn-primary" @onclick="FinalizeAsync">
+                            <i class="bi bi-check-circle-fill me-1"></i> Cerrar y guardar historia
+                        </button>
                     }
                 </div>
             </section>
@@ -891,23 +1013,23 @@ else
     private readonly List<tbl_paciente> availablePatients = [];
     private readonly List<tbl_producto> prescriptionProducts = [];
     private readonly List<string> validationMessages = [];
-    private static readonly string[] MainComplaintOptions = ["Vision borrosa", "Ardor ocular", "Ojo rojo", "Dolor ocular", "Cefalea", "Diplopia", "Fotofobia", "Control visual", "Adaptacion de lentes", "Otro (especificar)"];
-    private static readonly string[] OnsetOptions = ["Sudito", "Gradual", "Intermitente", "Recurrente", "Post-trauma"];
-    private static readonly string[] DurationUnitOptions = ["horas", "dias", "semanas", "meses", "anios"];
+    private static readonly string[] MainComplaintOptions = ["Visión borrosa", "Ardor ocular", "Ojo rojo", "Dolor ocular", "Cefalea", "Diplopía", "Fotofobia", "Control visual", "Adaptación de lentes", "Otro (especificar)"];
+    private static readonly string[] OnsetOptions = ["Súbito", "Gradual", "Intermitente", "Recurrente", "Post-trauma"];
+    private static readonly string[] DurationUnitOptions = ["horas", "días", "semanas", "meses", "años"];
     private static readonly string[] LateralityOptions = ["OD", "OI", "AO", "Alternante"];
     private static readonly string[] IntensityOptions = ["Leve", "Moderada", "Severa", "10/10"];
-    private static readonly string[] SymptomOptions = ["Vision borrosa", "Prurito", "Lagrimeo", "Cefalea", "Fotofobia", "Diplopia", "Cuerpo extrano", "Secrecion", "Moscas volantes", "Destellos"];
-    private static readonly string[] RedFlagOptions = ["Dolor intenso", "Perdida subita de vision", "Trauma", "Destellos nuevos", "Moscas volantes nuevas", "Diplopia aguda", "Ojo rojo severo", "Cefalea intensa"];
+    private static readonly string[] SymptomOptions = ["Visión borrosa", "Prurito", "Lagrimeo", "Cefalea", "Fotofobia", "Diplopía", "Cuerpo extraño", "Secreción", "Moscas volantes", "Destellos"];
+    private static readonly string[] RedFlagOptions = ["Dolor intenso", "Pérdida súbita de visión", "Trauma", "Destellos nuevos", "Moscas volantes nuevas", "Diplopía aguda", "Ojo rojo severo", "Cefalea intensa"];
     private static readonly string[] PrescriptionTypeOptions = ["Medicamento", "Examen", "Insumo"];
-    private static readonly string[] ClinicalExamTypeOptions = ["Tonometria", "Campimetria", "Topografia corneal", "Retinografia", "OCT", "Paquimetria", "Biometria", "Prueba de color", "Test lagrimal", "Otro"];
+    private static readonly string[] ClinicalExamTypeOptions = ["Tonometría", "Campimetría", "Topografía corneal", "Retinografía", "OCT", "Paquimetría", "Biometría", "Prueba de color", "Test lagrimal", "Otro"];
     private static readonly string[] FollowUpPriorityOptions = ["Control", "Preferente", "Urgente"];
     private static readonly IReadOnlyList<ClinicalHistoryStepNavigation.ClinicalStepDefinition> WizardSteps = new[]
     {
         new ClinicalHistoryStepNavigation.ClinicalStepDefinition(1, "Apertura", "Historia maestra y control del paciente."),
-        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(2, "Consulta inicial", "Motivo, anamnesis, antecedentes y vision."),
-        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(3, "Hallazgos", "Biomicroscopia, oftalmoscopia y refraccion."),
-        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(4, "Diagnostico", "Conclusion clinica y conducta."),
-        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(5, "Consentimiento", "Autorizacion, firma y cierre.")
+        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(2, "Consulta inicial", "Motivo, anamnesis, antecedentes y visión."),
+        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(3, "Hallazgos", "Biomicroscopía, oftalmoscopía y refracción."),
+        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(4, "Diagnóstico", "Conclusión clínica y conducta."),
+        new ClinicalHistoryStepNavigation.ClinicalStepDefinition(5, "Consentimiento", "Autorización, firma y cierre.")
     };
 
     private tbl_paciente? patient;
@@ -925,12 +1047,29 @@ else
     private bool canViewModule;
     private int currentUserId;
     private string editReason = "";
+    private bool showHistoryDetails;
+    private void ToggleHistoryDetails() => showHistoryDetails = !showHistoryDetails;
     private bool savingHistory;
     private int currentRoleId;
     private int activeWizardStep = 1;
     private bool shouldInitializeSignaturePad;
     private string? statusMessage;
     private string? errorMessage;
+    private bool showValidationModal;
+    private void CloseValidationModal() => showValidationModal = false;
+    private async Task GoToValidationStep()
+    {
+        showValidationModal = false;
+        var step = InferStepFromValidation(validationMessages);
+        await GoToWizardStepAsync(step);
+    }
+    private bool showClosedSuccessModal;
+    private void CloseClosedSuccessModal() => showClosedSuccessModal = false;
+    private void NavigateToAppointments()
+    {
+        showClosedSuccessModal = false;
+        NavigationManager.NavigateTo(GetAppointmentPrefillUrl());
+    }
     private string patientSearchTerm = string.Empty;
     private string SignatureCanvasId => "clinical-signature-pad";
     private IEnumerable<tbl_producto> AvailablePrescriptionProducts => prescriptionProducts.OrderBy(x => x.nombre_producto).ThenBy(x => x.codigo_producto);
@@ -940,6 +1079,19 @@ else
                 GetPatientOptionLabel(x).Contains(patientSearchTerm, StringComparison.OrdinalIgnoreCase))
             .Take(200);
 
+    private async Task OnEncounterSelectChanged(ChangeEventArgs args)
+    {
+        var raw = args.Value?.ToString();
+        if (raw == "new")
+        {
+            await StartNewEncounterAsync();
+        }
+        else if (int.TryParse(raw, out var encId) && encId > 0)
+        {
+            await SelectEncounterAsync(encId);
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
@@ -947,13 +1099,12 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!shouldInitializeSignaturePad || editor is null)
+        if (activeWizardStep == WizardSteps.Count && editor is not null && shouldInitializeSignaturePad)
         {
-            return;
+            shouldInitializeSignaturePad = false;
+            await Task.Delay(50);
+            await JSRuntime.InvokeVoidAsync("optometriaClinicalSignature.init", SignatureCanvasId, editor.Consentimiento.FirmaDibujada);
         }
-
-        shouldInitializeSignaturePad = false;
-        await JSRuntime.InvokeVoidAsync("optometriaClinicalSignature.init", SignatureCanvasId, editor.Consentimiento.FirmaDibujada);
     }
 
     private async Task LoadAsync(bool preserveStatus = false)
@@ -1034,6 +1185,33 @@ else
         selectedEncounterSummary = loadResult.SelectedEncounter;
         hasLegacyDataPendingMigration = loadResult.HasLegacyDataPendingMigration;
         legacyEncounterLabel = loadResult.LegacyEncounterLabel;
+
+        if (editor is not null && patient is not null)
+        {
+            if (string.IsNullOrWhiteSpace(editor.NombreExaminador))
+            {
+                var currentUser = await dbContext.tbl_usuarios.AsNoTracking().FirstOrDefaultAsync(x => x.id_usuario == currentUserId);
+                if (currentUser is not null)
+                {
+                    var fullName = $"{currentUser.nombres} {currentUser.apellidos}".Trim();
+                    editor.NombreExaminador = !string.IsNullOrWhiteSpace(fullName) ? fullName : currentUser.usuario;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(editor.Consentimiento.Nombre))
+            {
+                editor.Consentimiento.Nombre = $"{patient.nombres} {patient.apellidos}".Trim();
+            }
+            if (string.IsNullOrWhiteSpace(editor.Consentimiento.Cedula))
+            {
+                editor.Consentimiento.Cedula = patient.cedula;
+            }
+            if (string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaReferencia))
+            {
+                editor.Consentimiento.FirmaReferencia = $"{patient.nombres} {patient.apellidos}".Trim();
+            }
+            editor.Consentimiento.Autorizado = true;
+        }
+
         activeWizardStep = 1;
         shouldInitializeSignaturePad = false;
         isLoading = false;
@@ -1126,11 +1304,13 @@ else
             {
                 validationMessages.Clear();
                 validationMessages.AddRange(errors);
+                showValidationModal = true;
                 return;
             }
         }
 
         validationMessages.Clear();
+        showValidationModal = false;
         activeWizardStep = Math.Min(Math.Max(step, 1), WizardSteps.Count);
 
         if (activeWizardStep == WizardSteps.Count)
@@ -1157,24 +1337,49 @@ else
     {
         if (savingHistory) return;
         savingHistory = true;
-        try { await SaveCoreAsync(mode); }
-        catch (DbUpdateException) { errorMessage = "No se pudo guardar la edición. Recarga la historia y vuelve a intentarlo."; }
-        catch (Microsoft.Data.SqlClient.SqlException) { errorMessage = "No se pudo confirmar el guardado. Recarga la historia para comprobar su estado antes de reintentar."; }
-        finally { savingHistory = false; }
+        try 
+        { 
+            await SaveCoreAsync(mode); 
+        }
+        catch (DbUpdateException ex) 
+        { 
+            errorMessage = $"No se pudo guardar la edición: {ex.InnerException?.Message ?? ex.Message}"; 
+            showValidationModal = true;
+        }
+        catch (Exception ex) 
+        { 
+            errorMessage = $"Error al guardar la historia clínica: {ex.Message}"; 
+            showValidationModal = true;
+        }
+        finally 
+        { 
+            savingHistory = false; 
+        }
     }
 
     private async Task SaveCoreAsync(ClinicalHistorySaveMode mode)
     {
         errorMessage = null;
         validationMessages.Clear();
+        showValidationModal = false;
 
         if (patient is null || editor is null || openingSnapshot is null)
         {
             errorMessage = "No existe un paciente valido para guardar la historia clinica.";
+            showValidationModal = true;
             return;
         }
 
-        editor.Consentimiento.FirmaDibujada = await CaptureSignatureAsync();
+        var signatureData = await CaptureSignatureAsync();
+        if (!string.IsNullOrWhiteSpace(signatureData))
+        {
+            editor.Consentimiento.FirmaDibujada = signatureData;
+        }
+
+        if (string.IsNullOrWhiteSpace(editReason))
+        {
+            editReason = "Actualización de historia clínica";
+        }
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var result = await ClinicalHistoryService.SaveAsync(
@@ -1201,6 +1406,7 @@ else
             {
                 shouldInitializeSignaturePad = true;
             }
+            showValidationModal = true;
             return;
         }
 
@@ -1225,6 +1431,11 @@ else
         {
             statusMessage += " Se actualizaron los servicios pendientes de facturacion.";
         }
+
+        if (mode == ClinicalHistorySaveMode.Finalize)
+        {
+            showClosedSuccessModal = true;
+        }
     }
 
     private async Task<string> CaptureSignatureAsync()
@@ -1241,7 +1452,12 @@ else
 
         try
         {
-            return await JSRuntime.InvokeAsync<string>("optometriaClinicalSignature.getDataUrl", SignatureCanvasId);
+            var captured = await JSRuntime.InvokeAsync<string>("optometriaClinicalSignature.getDataUrl", SignatureCanvasId);
+            if (!string.IsNullOrWhiteSpace(captured) && captured.Length > 50)
+            {
+                return captured;
+            }
+            return editor.Consentimiento.FirmaDibujada;
         }
         catch
         {
@@ -1534,9 +1750,140 @@ else
 
     private static string FormatDateInput(DateTime? value)
         => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private static string GetSnapshotValue(string? snapshotVal, string? fallbackVal)
+        => !string.IsNullOrWhiteSpace(snapshotVal) ? snapshotVal : (fallbackVal ?? string.Empty);
+
+    private string GetPatientFullName()
+    {
+        var snapName = $"{openingSnapshot?.Nombres} {openingSnapshot?.Apellidos}".Trim();
+        if (!string.IsNullOrWhiteSpace(snapName)) return snapName;
+        return patient is null ? "Paciente" : $"{patient.nombres} {patient.apellidos}".Trim();
+    }
+
+    private string GetPatientCedula()
+        => !string.IsNullOrWhiteSpace(openingSnapshot?.Cedula) ? openingSnapshot.Cedula : (patient?.cedula ?? string.Empty);
+
+    private string GetPatientAgeDisplay()
+    {
+        var age = openingSnapshot?.Edad;
+        if (string.IsNullOrWhiteSpace(age) && patient?.edad.HasValue == true)
+        {
+            age = patient.edad.Value.ToString();
+        }
+        return string.IsNullOrWhiteSpace(age) ? string.Empty : $"{age} años";
+    }
 }
 
 <style>
+    .clinical-kpi-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .clinical-kpi-card {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.15);
+        border-radius: 0.85rem;
+        padding: 0.85rem 1rem;
+        box-shadow: 0 4px 14px rgba(90, 67, 44, 0.05);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 110px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .clinical-kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(90, 67, 44, 0.09);
+        border-color: rgba(176, 124, 71, 0.35);
+    }
+
+    .kpi-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .kpi-icon-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        background: rgba(176, 124, 71, 0.12);
+        color: #8c5c2f;
+        font-size: 0.9rem;
+    }
+
+    .kpi-label {
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--color-taupe);
+    }
+
+    .kpi-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .kpi-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--color-ink);
+        margin: 0;
+        line-height: 1.25;
+    }
+
+    .kpi-meta {
+        font-size: 0.82rem;
+        color: var(--color-taupe);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .kpi-subtext {
+        font-size: 0.8rem;
+        color: var(--color-taupe);
+    }
+
+    .kpi-hint {
+        font-size: 0.75rem;
+        color: var(--color-taupe);
+    }
+
+    .clinical-drawer-panel {
+        background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(249, 244, 237, 0.96));
+        border: 1px solid rgba(176, 124, 71, 0.2);
+        border-radius: 0.85rem;
+        padding: 1rem;
+        margin-top: 0.5rem;
+        margin-bottom: 0.75rem;
+        box-shadow: inset 0 2px 6px rgba(0,0,0,0.03);
+    }
+
+    @@media (max-width: 992px) {
+        .clinical-kpi-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 576px) {
+        .clinical-kpi-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .clinical-card {
         margin-top: 1.25rem;
         border: 1px solid rgba(127, 105, 81, 0.12);
@@ -1876,23 +2223,26 @@ else
 
     .clinical-signature-shell {
         border: 1px dashed rgba(127, 105, 81, 0.35);
-        border-radius: 1rem;
-        padding: 0.9rem;
+        border-radius: 0.85rem;
+        padding: 0.65rem 0.85rem;
         background: linear-gradient(180deg, rgba(255, 253, 250, 0.98), rgba(251, 246, 239, 0.96));
+        max-width: 480px;
     }
 
     .clinical-signature-pad {
         width: 100%;
-        min-height: 210px;
+        height: 120px;
+        min-height: 120px;
+        max-height: 125px;
         display: block;
-        border-radius: 0.85rem;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 248, 242, 0.98));
-        border: 1px solid rgba(127, 105, 81, 0.18);
+        border-radius: 0.65rem;
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.2);
         touch-action: none;
     }
 
     .clinical-signature-actions {
-        margin-top: 0.75rem;
+        margin-top: 0.5rem;
         justify-content: flex-end;
     }
 

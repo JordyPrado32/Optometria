@@ -30,9 +30,9 @@ public sealed class ClinicalHistoryService
                 .ThenByDescending(x => x.id_historia_evento)
                 .ToListAsync();
 
-        var openingSnapshot = history is null
-            ? BuildOpeningSnapshot(patient)
-            : Deserialize<OpeningSnapshot>(history.datos_apertura_json) ?? BuildOpeningSnapshot(patient);
+        var openingSnapshot = EnsureSnapshot(
+            history is null ? null : Deserialize<OpeningSnapshot>(history.datos_apertura_json),
+            patient);
 
         var selectedEvent = selectedEncounterId.HasValue
             ? events.FirstOrDefault(x => x.id_historia_evento == selectedEncounterId.Value)
@@ -80,6 +80,16 @@ public sealed class ClinicalHistoryService
     {
         ApplyStructuredAnamnesisDefaults(request.Editor);
 
+        if (string.IsNullOrWhiteSpace(request.Editor.NombreExaminador))
+        {
+            var actorUser = await dbContext.tbl_usuarios.AsNoTracking().FirstOrDefaultAsync(x => x.id_usuario == request.ActorUserId, cancellationToken);
+            if (actorUser is not null)
+            {
+                var fullName = $"{actorUser.nombres} {actorUser.apellidos}".Trim();
+                request.Editor.NombreExaminador = !string.IsNullOrWhiteSpace(fullName) ? fullName : actorUser.usuario;
+            }
+        }
+
         var validationErrors = ValidateForMode(request.Editor, request.Mode);
         if (validationErrors.Count > 0)
         {
@@ -105,8 +115,11 @@ public sealed class ClinicalHistoryService
             original = await dbContext.tbl_historia_clinica_optometria_eventos.SingleOrDefaultAsync(x => x.id_historia_evento == request.SelectedEncounterId && x.id_paciente == request.Patient.id_paciente && x.activo, cancellationToken);
             if (original is null)
                 return new ClinicalHistorySaveResult { ValidationErrors = ["El encuentro no pertenece al paciente o ya no está disponible."] };
-            if (string.IsNullOrWhiteSpace(request.EditReason) || request.EditReason.Length > 1000)
-                return new ClinicalHistorySaveResult { ValidationErrors = ["Debes indicar por qué editas el registro (máximo 1000 caracteres)."] };
+            
+            var effectiveReason = string.IsNullOrWhiteSpace(request.EditReason) ? "Actualización de historia clínica" : request.EditReason.Trim();
+            if (effectiveReason.Length > 1000)
+                return new ClinicalHistorySaveResult { ValidationErrors = ["El motivo de edición debe tener máximo 1000 caracteres."] };
+
             if (RequiresEditAuthorization(original.fecha_evento, DateTime.Now, actor.id_rol == 1))
             {
                 authorization = await dbContext.ClinicalEditAuthorizations.FirstOrDefaultAsync(x => x.EncounterId == original.id_historia_evento && x.DoctorId == actor.id_usuario && x.UsedAt == null && dbContext.tbl_usuarios.Any(u => u.id_usuario == x.AdminId && u.id_rol == 1 && u.activo == true && u.bloqueado != true), cancellationToken);
@@ -120,7 +133,7 @@ public sealed class ClinicalHistoryService
             {
                 EncounterId = original.id_historia_evento, UserId = actor.id_usuario,
                 AuthorizationId = authorization?.Id, EditedAt = DateTime.UtcNow,
-                Reason = request.EditReason.Trim(), BeforeJson = original.payload_json ?? "{}",
+                Reason = effectiveReason, BeforeJson = original.payload_json ?? "{}",
                 AfterJson = Serialize(request.Editor)
             });
         }
@@ -137,11 +150,11 @@ public sealed class ClinicalHistoryService
                 id_paciente = request.Patient.id_paciente,
                 id_optometra_apertura = request.ActorUserId,
                 fecha_apertura = DateTime.Now,
+                usa_lentes = request.Editor.UsaLentes,
                 activo = true
             };
 
             dbContext.tbl_historia_clinica_optometrias.Add(history);
-            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         history.id_optometra_ultima_actualizacion = request.ActorUserId;
@@ -152,7 +165,7 @@ public sealed class ClinicalHistoryService
         history.lugar_nacimiento = NormalizeOptional(request.Editor.LugarNacimiento);
         history.procedencia = NormalizeOptional(request.Editor.Procedencia);
         history.ultimo_control = NormalizeOptional(request.Editor.UltimoControl);
-        history.datos_apertura_json = Serialize(request.OpeningSnapshot);
+        history.datos_apertura_json = Serialize(EnsureSnapshot(request.OpeningSnapshot, request.Patient));
         history.motivo_consulta = NormalizeOptional(request.Editor.MotivoConsulta);
         history.anamnesis = NormalizeOptional(request.Editor.Anamnesis);
         history.antecedentes_json = Serialize(request.Editor.Antecedentes);
@@ -476,13 +489,20 @@ public sealed class ClinicalHistoryService
 
         if (!editor.Consentimiento.Autorizado)
         {
-            errors.Add("Debes registrar la autorizacion del consentimiento.");
+            if (!string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaReferencia) || !string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaDibujada))
+            {
+                editor.Consentimiento.Autorizado = true;
+            }
+            else
+            {
+                errors.Add("Debes marcar la casilla de autorizacion o registrar la firma del consentimiento.");
+            }
         }
 
         if (string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaReferencia) &&
             string.IsNullOrWhiteSpace(editor.Consentimiento.FirmaDibujada))
         {
-            errors.Add("Debes registrar la firma o una referencia valida.");
+            errors.Add("Debes dibujar la firma en el recuadro o escribir el nombre en 'Firma / referencia'.");
         }
 
         return errors;
@@ -539,7 +559,7 @@ public sealed class ClinicalHistoryService
         var temporal = string.Join(", ", new[]
         {
             string.IsNullOrWhiteSpace(section.Inicio) ? null : $"inicio {section.Inicio.Trim().ToLowerInvariant()}",
-            string.IsNullOrWhiteSpace(section.DuracionValor) ? null : $"duracion {section.DuracionValor.Trim()} {section.DuracionUnidad.Trim().ToLowerInvariant()}",
+            string.IsNullOrWhiteSpace(section.DuracionValor) ? null : $"duración {section.DuracionValor.Trim()} {section.DuracionUnidad.Trim().ToLowerInvariant().Replace("anios", "años")}",
             string.IsNullOrWhiteSpace(section.Lateralidad) ? null : $"lateralidad {section.Lateralidad.Trim().ToLowerInvariant()}"
         }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
@@ -586,55 +606,25 @@ public sealed class ClinicalHistoryService
         var errors = new List<string>();
         var section = editor.AnamnesisGuiada;
 
-        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta) || editor.MotivoConsulta.Trim().Length < 8)
+        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta) && string.IsNullOrWhiteSpace(section.MotivoPrincipal))
         {
-            errors.Add("El motivo de consulta debe ser especifico y tener al menos 8 caracteres.");
+            errors.Add("Ingresa el motivo de consulta o selecciona el motivo principal en la anamnesis.");
         }
 
-        if (string.IsNullOrWhiteSpace(section.MotivoPrincipal))
+        if (string.IsNullOrWhiteSpace(editor.MotivoConsulta) && !string.IsNullOrWhiteSpace(section.MotivoPrincipal))
         {
-            errors.Add("Selecciona un motivo principal en la anamnesis guiada.");
-        }
-
-        if (string.IsNullOrWhiteSpace(section.Inicio))
-        {
-            errors.Add("Selecciona como inicio el cuadro actual.");
-        }
-
-        if (string.IsNullOrWhiteSpace(section.Lateralidad))
-        {
-            errors.Add("Selecciona la lateralidad del motivo principal.");
-        }
-
-        if (string.IsNullOrWhiteSpace(section.Intensidad))
-        {
-            errors.Add("Selecciona la intensidad percibida del cuadro.");
-        }
-
-        if (section.Sintomas.Count == 0)
-        {
-            errors.Add("Selecciona al menos un sintoma frecuente.");
-        }
-
-        if (!int.TryParse(section.DuracionValor, out var duration) || duration <= 0 || duration > 3650)
-        {
-            errors.Add("La duracion debe ser un numero real entre 1 y 3650.");
+            editor.MotivoConsulta = section.MotivoPrincipal;
         }
 
         if (section.MotivoPrincipal.Equals("Otro (especificar)", StringComparison.OrdinalIgnoreCase) &&
             string.IsNullOrWhiteSpace(section.NotasAdicionales))
         {
-            errors.Add("Si eliges otro motivo principal, debes especificarlo en notas adicionales.");
+            errors.Add("Si eliges 'Otro (especificar)' en motivo principal, debes detallarlo en notas adicionales.");
         }
 
-        if (ContainsAmbiguousText(editor.MotivoConsulta))
+        if (!string.IsNullOrWhiteSpace(section.DuracionValor) && (!int.TryParse(section.DuracionValor, out var duration) || duration <= 0 || duration > 3650))
         {
-            errors.Add("Evita motivos ambiguos como 'molestia' o 'revision'. Describe el problema principal.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(editor.Anamnesis) && editor.Anamnesis.Trim().Length < 12 && !HasStructuredAnamnesis(section))
-        {
-            errors.Add("La anamnesis libre es demasiado corta. Completa el formato guiado o amplia la descripcion.");
+            errors.Add("La duracion debe ser un numero entre 1 y 3650.");
         }
 
         return errors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -684,6 +674,28 @@ public sealed class ClinicalHistoryService
             Direccion = patient.direccion ?? string.Empty,
             Telefono = patient.telefono ?? string.Empty
         };
+    }
+
+    public static OpeningSnapshot EnsureSnapshot(OpeningSnapshot? snapshot, tbl_paciente patient)
+    {
+        var fallback = BuildOpeningSnapshot(patient);
+        if (snapshot is null)
+        {
+            return fallback;
+        }
+
+        if (string.IsNullOrWhiteSpace(snapshot.Nombres)) snapshot.Nombres = fallback.Nombres;
+        if (string.IsNullOrWhiteSpace(snapshot.Apellidos)) snapshot.Apellidos = fallback.Apellidos;
+        if (string.IsNullOrWhiteSpace(snapshot.Cedula)) snapshot.Cedula = fallback.Cedula;
+        if (string.IsNullOrWhiteSpace(snapshot.FechaNacimiento)) snapshot.FechaNacimiento = fallback.FechaNacimiento;
+        if (string.IsNullOrWhiteSpace(snapshot.Edad)) snapshot.Edad = fallback.Edad;
+        if (string.IsNullOrWhiteSpace(snapshot.Genero)) snapshot.Genero = fallback.Genero;
+        if (string.IsNullOrWhiteSpace(snapshot.Ocupacion)) snapshot.Ocupacion = fallback.Ocupacion;
+        if (string.IsNullOrWhiteSpace(snapshot.Email)) snapshot.Email = fallback.Email;
+        if (string.IsNullOrWhiteSpace(snapshot.Direccion)) snapshot.Direccion = fallback.Direccion;
+        if (string.IsNullOrWhiteSpace(snapshot.Telefono)) snapshot.Telefono = fallback.Telefono;
+
+        return snapshot;
     }
 
     private static ClinicalHistoryEditorModel? BuildLegacyEditor(tbl_historia_clinica_optometria? history, tbl_paciente patient)
@@ -1285,7 +1297,7 @@ public sealed class AnamnesisGuidedSection
     public string MotivoPrincipal { get; set; } = string.Empty;
     public string Inicio { get; set; } = string.Empty;
     public string DuracionValor { get; set; } = string.Empty;
-    public string DuracionUnidad { get; set; } = "dias";
+    public string DuracionUnidad { get; set; } = "días";
     public string Lateralidad { get; set; } = string.Empty;
     public string Intensidad { get; set; } = string.Empty;
     public string Desencadenantes { get; set; } = string.Empty;

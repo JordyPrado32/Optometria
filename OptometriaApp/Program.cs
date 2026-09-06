@@ -100,7 +100,23 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddHostedService<AppointmentReminderService>();
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DetailedErrors = true;
+    });
+
+builder.Services.AddServerSideBlazor(options =>
+{
+    options.DetailedErrors = true;
+}).AddHubOptions(options =>
+{
+    options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB
+});
+
+builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
+{
+    options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB
+});
 
 var app = builder.Build();
 
@@ -4475,7 +4491,7 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
                 AND ISNULL(stock_minimo, 0) = 0
                 AND ISNULL(stock_maximo, 0) = 0
                 AND ISNULL(punto_reorden, 0) = 0
-                AND ISNULL(cantidad_empaque, 0) = 0
+                AND ISNULL(cantidad_empaque, 0) IN (0, 1)
                 AND ISNULL(requiere_lote, 0) = 0
                 AND ISNULL(requiere_fecha_vencimiento, 0) = 0
                 AND ISNULL(dias_vencimiento, 0) = 0
@@ -4877,6 +4893,14 @@ static async Task EnsureClinicalHistorySchemaAsync(WebApplication app)
                 CONSTRAINT FK_tbl_historia_clinica_optometria_optometra_apertura FOREIGN KEY (id_optometra_apertura) REFERENCES dbo.tbl_usuario(id_usuario),
                 CONSTRAINT FK_tbl_historia_clinica_optometria_optometra_actualiza FOREIGN KEY (id_optometra_ultima_actualizacion) REFERENCES dbo.tbl_usuario(id_usuario)
             );
+        END;
+
+        IF OBJECT_ID('dbo.tbl_historia_clinica_optometria', 'U') IS NOT NULL
+        BEGIN
+            IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.tbl_historia_clinica_optometria') AND name = 'usa_lentes' AND is_nullable = 0)
+            BEGIN
+                ALTER TABLE dbo.tbl_historia_clinica_optometria ALTER COLUMN usa_lentes BIT NULL;
+            END;
         END;
 
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_historia_clinica_optometria_optometra' AND object_id = OBJECT_ID('dbo.tbl_historia_clinica_optometria'))

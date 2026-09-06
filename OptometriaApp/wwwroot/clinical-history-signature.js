@@ -13,32 +13,43 @@ window.optometriaClinicalSignature = (() => {
     function resizeCanvas(canvas) {
         const ratio = Math.max(window.devicePixelRatio || 1, 1);
         const rect = canvas.getBoundingClientRect();
-        const width = Math.max(Math.floor(rect.width), 1);
-        const height = Math.max(Math.floor(rect.height), 1);
+        const width = Math.max(Math.floor(rect.width) || canvas.clientWidth || 360, 200);
+        const height = Math.max(Math.floor(rect.height) || canvas.clientHeight || 120, 90);
         canvas.width = width * ratio;
         canvas.height = height * ratio;
         const context = canvas.getContext("2d");
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
-        context.lineWidth = 2;
+        context.lineWidth = 2.2;
         context.lineCap = "round";
         context.lineJoin = "round";
-        context.strokeStyle = "#2c241d";
-        context.fillStyle = "#fffdf8";
+        context.strokeStyle = "#1a1512";
+        context.fillStyle = "#ffffff";
         context.fillRect(0, 0, width, height);
         return context;
     }
 
     function drawImageOnCanvas(canvas, dataUrl) {
-        const context = resizeCanvas(canvas);
-        if (!dataUrl) {
+        if (!dataUrl || dataUrl.length < 50) {
             return;
         }
 
+        let fullDataUrl = dataUrl;
+        if (!fullDataUrl.startsWith("data:image")) {
+            fullDataUrl = "data:image/png;base64," + fullDataUrl;
+        }
+
+        const context = resizeCanvas(canvas);
         const image = new Image();
         image.onload = () => {
-            context.drawImage(image, 0, 0, canvas.clientWidth, canvas.clientHeight);
+            const w = canvas.clientWidth || Math.floor(canvas.width / (window.devicePixelRatio || 1)) || 360;
+            const h = canvas.clientHeight || Math.floor(canvas.height / (window.devicePixelRatio || 1)) || 120;
+            context.drawImage(image, 0, 0, w, h);
+            const pad = pads.get(canvas.id);
+            if (pad) {
+                pad.hasInk = true;
+            }
         };
-        image.src = dataUrl;
+        image.src = fullDataUrl;
     }
 
     function init(canvasId, initialDataUrl) {
@@ -47,65 +58,53 @@ window.optometriaClinicalSignature = (() => {
             return false;
         }
 
-        if (pads.has(canvasId)) {
-            if (initialDataUrl) {
-                drawImageOnCanvas(canvas, initialDataUrl);
-                pads.get(canvasId).hasInk = true;
-            }
-            return true;
-        }
-
         const context = resizeCanvas(canvas);
         let drawing = false;
-        const pad = { hasInk: Boolean(initialDataUrl) };
+        const pad = {
+            canvas: canvas,
+            hasInk: Boolean(initialDataUrl && initialDataUrl.length > 50)
+        };
 
         const start = (event) => {
             drawing = true;
             const point = getPoint(event, canvas);
             context.beginPath();
             context.moveTo(point.x, point.y);
-            event.preventDefault();
+            if (event.cancelable) event.preventDefault();
         };
 
         const move = (event) => {
-            if (!drawing) {
-                return;
-            }
-
+            if (!drawing) return;
             const point = getPoint(event, canvas);
             context.lineTo(point.x, point.y);
             context.stroke();
             pad.hasInk = true;
-            event.preventDefault();
+            if (event.cancelable) event.preventDefault();
         };
 
         const end = (event) => {
-            if (!drawing) {
-                return;
-            }
-
+            if (!drawing) return;
             drawing = false;
             context.closePath();
-            event.preventDefault();
+            pad.hasInk = true;
+            if (event.cancelable) event.preventDefault();
         };
 
-        canvas.addEventListener("mousedown", start);
-        canvas.addEventListener("mousemove", move);
-        canvas.addEventListener("mouseup", end);
-        canvas.addEventListener("mouseleave", end);
-        canvas.addEventListener("touchstart", start, { passive: false });
-        canvas.addEventListener("touchmove", move, { passive: false });
-        canvas.addEventListener("touchend", end, { passive: false });
-        canvas.addEventListener("touchcancel", end, { passive: false });
-
-        window.addEventListener("resize", () => {
-            const dataUrl = canvas.toDataURL("image/png");
-            drawImageOnCanvas(canvas, dataUrl);
-        });
+        canvas.onmousedown = start;
+        canvas.onmousemove = move;
+        canvas.onmouseup = end;
+        canvas.onmouseleave = end;
+        canvas.ontouchstart = start;
+        canvas.ontouchmove = move;
+        canvas.ontouchend = end;
+        canvas.ontouchcancel = end;
 
         pads.set(canvasId, pad);
-        if (initialDataUrl) {
-            drawImageOnCanvas(canvas, initialDataUrl);
+
+        if (initialDataUrl && initialDataUrl.length > 50) {
+            setTimeout(() => {
+                drawImageOnCanvas(canvas, initialDataUrl);
+            }, 25);
         }
 
         return true;
@@ -113,10 +112,7 @@ window.optometriaClinicalSignature = (() => {
 
     function clear(canvasId) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas) {
-            return;
-        }
-
+        if (!canvas) return;
         resizeCanvas(canvas);
         const pad = pads.get(canvasId);
         if (pad) {
@@ -126,15 +122,11 @@ window.optometriaClinicalSignature = (() => {
 
     function getDataUrl(canvasId) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas) {
-            return "";
-        }
-
+        if (!canvas) return "";
         const pad = pads.get(canvasId);
         if (!pad || !pad.hasInk) {
             return "";
         }
-
         return canvas.toDataURL("image/png");
     }
 

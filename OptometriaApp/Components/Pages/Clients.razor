@@ -1096,6 +1096,7 @@ else
                 fecha_ultima_actualizacion = DateTime.Now,
                 numero_historia = string.IsNullOrWhiteSpace(patient.codigo_paciente) ? $"HC-{patient.id_paciente:D5}" : patient.codigo_paciente,
                 datos_apertura_json = "{}",
+                usa_lentes = false,
                 activo = true
             });
         }

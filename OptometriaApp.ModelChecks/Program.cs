@@ -58,23 +58,7 @@ static void MustReject(Action action, string message)
     throw new InvalidOperationException(message);
 }
 
-if (args.Contains("--serve"))
-{
-    var html = MedicalCertificateDocument.Build(new MedicalCertificate
-    {
-        Id = 1, Number = Guid.Parse("11111111-2222-3333-4444-555555555555"), CreatedAt = new DateTime(2026, 9, 3, 15, 30, 0),
-        ConsultationDate = new DateTime(2026, 9, 3), PatientName = "Paciente de prueba", PatientIdentification = "DATOS FICTICIOS",
-        DoctorName = "Profesional de prueba", License = "DEMO",
-        Statement = "DOCUMENTO DE PRUEBA SIN VALIDEZ CLÍNICA.\nEsta muestra permite comprobar legibilidad, márgenes e impresión del formato. No representa una atención real."
-    });
-    var builder = WebApplication.CreateBuilder();
-    builder.Logging.ClearProviders();
-    var app = builder.Build();
-    app.MapGet("/", () => Results.Content(html, "text/html; charset=utf-8"));
-    await app.RunAsync("http://127.0.0.1:8765");
-}
-
 static void Check(bool condition, string message)
 {
-    if (!condition) throw new InvalidOperationException(message);
+    if (!condition) throw new InvalidOperationException($"Check failed: {message}");
 }
