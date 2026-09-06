@@ -1139,12 +1139,63 @@ else
             return;
         }
 
+        var isFullAdmin = authState.User.IsInRole("Administrador") || authState.User.IsInRole("Admin");
+        var doctorProfile = await dbContext.tbl_medico.AsNoTracking().FirstOrDefaultAsync(m => m.id_usuario == currentUserId);
+        var isDoctorOnly = (doctorProfile is not null || authState.User.IsInRole("Doctor") || authState.User.IsInRole("Médico") || authState.User.IsInRole("Medico")) && !isFullAdmin;
+
+        List<int>? assignedPatientIds = null;
+        if (isDoctorOnly)
+        {
+            var doctorId = doctorProfile?.id_medico ?? 0;
+            var citaPatientIds = await dbContext.tbl_citas
+                .AsNoTracking()
+                .Where(c => (doctorId > 0 && c.id_medico == doctorId) || c.id_medicoNavigation.id_usuario == currentUserId)
+                .Select(c => c.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var historyPatientIds = await dbContext.tbl_historia_clinica_optometrias
+                .AsNoTracking()
+                .Where(h => h.id_optometra_apertura == currentUserId || h.id_optometra_ultima_actualizacion == currentUserId)
+                .Select(h => h.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var eventoPatientIds = await dbContext.tbl_historia_clinica_optometria_eventos
+                .AsNoTracking()
+                .Where(h => h.id_optometra == currentUserId)
+                .Select(h => h.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var consultaPatientIds = await dbContext.tbl_consulta
+                .AsNoTracking()
+                .Where(c => c.id_optometra == currentUserId)
+                .Select(c => c.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            assignedPatientIds = citaPatientIds.Union(historyPatientIds).Union(eventoPatientIds).Union(consultaPatientIds).Distinct().ToList();
+        }
+
         availablePatients.Clear();
-        availablePatients.AddRange(await dbContext.tbl_pacientes
-            .AsNoTracking()
-            .OrderBy(x => x.apellidos)
-            .ThenBy(x => x.nombres)
-            .ToListAsync());
+        if (assignedPatientIds is not null)
+        {
+            availablePatients.AddRange(await dbContext.tbl_pacientes
+                .AsNoTracking()
+                .Where(x => assignedPatientIds.Contains(x.id_paciente))
+                .OrderBy(x => x.apellidos)
+                .ThenBy(x => x.nombres)
+                .ToListAsync());
+        }
+        else
+        {
+            availablePatients.AddRange(await dbContext.tbl_pacientes
+                .AsNoTracking()
+                .OrderBy(x => x.apellidos)
+                .ThenBy(x => x.nombres)
+                .ToListAsync());
+        }
 
         prescriptionProducts.Clear();
         prescriptionProducts.AddRange(await dbContext.tbl_productos
@@ -1156,6 +1207,14 @@ else
         if (!PatientId.HasValue || PatientId.Value <= 0)
         {
             ResetPatientContext();
+            isLoading = false;
+            return;
+        }
+
+        if (assignedPatientIds is not null && !assignedPatientIds.Contains(PatientId.Value))
+        {
+            ResetPatientContext();
+            errorMessage = "No tienes acceso a la historia clínica de este paciente porque no tiene citas ni consultas asignadas a tu nombre.";
             isLoading = false;
             return;
         }

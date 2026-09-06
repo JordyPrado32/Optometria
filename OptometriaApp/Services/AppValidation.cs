@@ -107,6 +107,12 @@ public static partial class AppValidation
         return !string.IsNullOrWhiteSpace(value) && DigitsRegex().IsMatch(value.Trim());
     }
 
+    public static bool IsValidPhoneNumber(string? value)
+    {
+        var digits = OnlyDigits(value);
+        return digits.Length is >= 7 and <= 15;
+    }
+
     public static bool IsValidEmail(string? value)
     {
         return !string.IsNullOrWhiteSpace(value) && EmailRegex().IsMatch(value.Trim());

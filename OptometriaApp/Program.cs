@@ -131,23 +131,9 @@ await EnsureProcurementSchemaAsync(app);
 await EnsureAppointmentSchemaAsync(app);
 await EnsureNotificationSchemaAsync(app);
 await EnsureClinicalHistorySchemaAsync(app);
-await using (var completionScope = app.Services.CreateAsyncScope())
-{
-    var completionDb = completionScope.ServiceProvider.GetRequiredService<OpticaDbContext>();
-    await using var script = typeof(ClinicCompletionService).Assembly.GetManifestResourceStream("OptometriaApp.Sql.010_clinic_completion.sql")
-        ?? throw new InvalidOperationException("Falta el script de actualizacion clinica.");
-    using var reader = new StreamReader(script);
-    await completionDb.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
-}
+await EnsureClinicCompletionSchemaAsync(app);
 await EnsureRoleSecurityMatrixAsync(app);
-await using (var cashScope = app.Services.CreateAsyncScope())
-{
-    var db = cashScope.ServiceProvider.GetRequiredService<OpticaDbContext>();
-    await using var script = typeof(CashCloseService).Assembly.GetManifestResourceStream("OptometriaApp.Sql.011_cash_clinical_control.sql")
-        ?? throw new InvalidOperationException("Falta el script de caja y control clínico.");
-    using var reader = new StreamReader(script);
-    await db.Database.ExecuteSqlRawAsync(await reader.ReadToEndAsync());
-}
+await EnsureCashClinicalControlSchemaAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -3226,7 +3212,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error al actualizar las rutas del menÃº y permisos: {ex.Message}");
+        Console.WriteLine($"Error al actualizar las rutas del menú y permisos: {ex.Message}");
     }
 }
 
@@ -4991,6 +4977,104 @@ static async Task EnsureClinicalHistorySchemaAsync(WebApplication app)
             CREATE NONCLUSTERED INDEX IX_tbl_receta_medica_paciente_fecha ON dbo.tbl_receta_medica(id_paciente, fecha_emision DESC);
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_tbl_receta_medica_detalle_receta' AND object_id = OBJECT_ID('dbo.tbl_receta_medica_detalle'))
             CREATE NONCLUSTERED INDEX IX_tbl_receta_medica_detalle_receta ON dbo.tbl_receta_medica_detalle(id_receta);
+        """);
+}
+
+static async Task EnsureClinicCompletionSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.PurchasePayments', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.PurchasePayments (
+                Id int IDENTITY PRIMARY KEY,
+                LiquidationId int NOT NULL REFERENCES dbo.tbl_liquidacion_compra(id_liquidacion_compra),
+                UserId int NOT NULL REFERENCES dbo.tbl_usuario(id_usuario),
+                OperationId uniqueidentifier NOT NULL UNIQUE,
+                Amount decimal(18,2) NOT NULL CHECK (Amount <> 0),
+                CreatedAt datetime2 NOT NULL,
+                Method nvarchar(30) NOT NULL,
+                Reference nvarchar(300) NOT NULL,
+                ReversesId int NULL REFERENCES dbo.PurchasePayments(Id),
+                CONSTRAINT CK_PurchasePayment_Sign CHECK ((ReversesId IS NULL AND Amount > 0) OR (ReversesId IS NOT NULL AND Amount < 0))
+            );
+            CREATE UNIQUE INDEX UX_PurchasePayments_Reversal ON dbo.PurchasePayments(ReversesId) WHERE ReversesId IS NOT NULL;
+            CREATE INDEX IX_PurchasePayments_Liquidation ON dbo.PurchasePayments(LiquidationId);
+            INSERT dbo.PurchasePayments (LiquidationId, UserId, OperationId, Amount, CreatedAt, Method, Reference)
+            SELECT id_liquidacion_compra, id_usuario_registro, NEWID(), saldo_pagado, SYSUTCDATETIME(), N'Saldo inicial', N'Saldo anterior a la introduccion del historial de abonos'
+            FROM dbo.tbl_liquidacion_compra WHERE saldo_pagado > 0;
+        END;
+
+        IF OBJECT_ID('dbo.MedicalCertificates', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.MedicalCertificates (
+                Id int IDENTITY PRIMARY KEY,
+                ConsultationId int NOT NULL REFERENCES dbo.tbl_consulta(id_consulta),
+                UserId int NOT NULL REFERENCES dbo.tbl_usuario(id_usuario),
+                Number uniqueidentifier NOT NULL UNIQUE,
+                CreatedAt datetime2 NOT NULL,
+                PatientName nvarchar(300) NOT NULL,
+                PatientIdentification nvarchar(50) NOT NULL,
+                DoctorName nvarchar(300) NOT NULL,
+                License nvarchar(100) NOT NULL,
+                ConsultationDate datetime2 NOT NULL,
+                Statement nvarchar(2000) NOT NULL,
+                RevocationReason nvarchar(300) NULL
+            );
+            CREATE INDEX IX_MedicalCertificates_Consultation ON dbo.MedicalCertificates(ConsultationId);
+        END;
+        """);
+}
+
+static async Task EnsureCashClinicalControlSchemaAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        IF OBJECT_ID('dbo.CashCloses', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.CashCloses (
+                Id int IDENTITY PRIMARY KEY, OperationId uniqueidentifier NOT NULL UNIQUE,
+                ClosedAt datetime2 NOT NULL, UserId int NOT NULL REFERENCES dbo.tbl_usuario(id_usuario),
+                LastSaleId int NOT NULL, LastPaymentId int NOT NULL,
+                OpeningCash decimal(18,2) NOT NULL, Collected decimal(18,2) NOT NULL,
+                ExpectedCash decimal(18,2) NOT NULL, CountedCash decimal(18,2) NOT NULL,
+                BankWithdrawal decimal(18,2) NOT NULL, OtherWithdrawal decimal(18,2) NOT NULL,
+                RetainedCash decimal(18,2) NOT NULL,
+                BankReference nvarchar(200) NOT NULL, Observation nvarchar(1000) NOT NULL,
+                PaymentsJson nvarchar(max) NOT NULL, SalePaymentsJson nvarchar(max) NOT NULL,
+                CONSTRAINT CK_CashClose_Balance CHECK (CountedCash >= 0 AND BankWithdrawal >= 0 AND OtherWithdrawal >= 0 AND RetainedCash >= 0 AND CountedCash = BankWithdrawal + OtherWithdrawal + RetainedCash)
+            );
+        END;
+
+        IF OBJECT_ID('dbo.ClinicalEditAuthorizations', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.ClinicalEditAuthorizations (
+                Id int IDENTITY PRIMARY KEY,
+                EncounterId int NOT NULL REFERENCES dbo.tbl_historia_clinica_optometria_evento(id_historia_evento),
+                DoctorId int NOT NULL REFERENCES dbo.tbl_usuario(id_usuario),
+                AdminId int NOT NULL REFERENCES dbo.tbl_usuario(id_usuario),
+                GrantedAt datetime2 NOT NULL, UsedAt datetime2 NULL, Reason nvarchar(1000) NOT NULL
+            );
+            CREATE UNIQUE INDEX UX_ClinicalAuthorization_Pending ON dbo.ClinicalEditAuthorizations(EncounterId, DoctorId) WHERE UsedAt IS NULL;
+        END;
+
+        IF OBJECT_ID('dbo.ClinicalEditAudits', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.ClinicalEditAudits (
+                Id int IDENTITY PRIMARY KEY,
+                EncounterId int NOT NULL REFERENCES dbo.tbl_historia_clinica_optometria_evento(id_historia_evento),
+                UserId int NOT NULL REFERENCES dbo.tbl_usuario(id_usuario),
+                AuthorizationId int NULL REFERENCES dbo.ClinicalEditAuthorizations(Id),
+                EditedAt datetime2 NOT NULL, Reason nvarchar(1000) NOT NULL,
+                BeforeJson nvarchar(max) NOT NULL, AfterJson nvarchar(max) NOT NULL
+            );
+        END;
         """);
 }
 

@@ -840,9 +840,9 @@ else
 
         if (!string.IsNullOrWhiteSpace(editor.Whatsapp))
         {
-            if (!AppValidation.IsDigitsOnly(editor.Whatsapp) || editor.Whatsapp.Length != 10)
+            if (!AppValidation.IsValidPhoneNumber(editor.Whatsapp))
             {
-                errorMessage = "El teléfono debe tener exactamente 10 dígitos y solo números.";
+                errorMessage = "El teléfono debe tener entre 7 y 15 dígitos y solo números.";
                 return false;
             }
         }

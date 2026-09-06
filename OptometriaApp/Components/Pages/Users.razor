@@ -1228,9 +1228,9 @@ else
 
         if (!string.IsNullOrWhiteSpace(editor.Telefono))
         {
-            if (!AppValidation.IsDigitsOnly(editor.Telefono) || editor.Telefono.Length != 10)
+            if (!AppValidation.IsValidPhoneNumber(editor.Telefono))
             {
-                errorMessage = "El número de teléfono debe tener exactamente 10 dígitos y solo números.";
+                errorMessage = "El número de teléfono debe tener entre 7 y 15 dígitos y solo números.";
                 return false;
             }
         }

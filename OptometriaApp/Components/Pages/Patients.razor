@@ -267,8 +267,8 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="patientPhone">Teléfono / Celular</label>
-                        <input id="patientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" placeholder="10 dígitos" />
+                        <label class="form-label" for="patientPhone">Teléfono (Convencional / Celular)</label>
+                        <input id="patientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="15" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" placeholder="7 a 15 dígitos" />
                     </div>
 
                     <div>
@@ -1143,9 +1143,9 @@ else
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(editor.Telefono) && (!AppValidation.IsDigitsOnly(editor.Telefono) || editor.Telefono.Length != 10))
+        if (!string.IsNullOrWhiteSpace(editor.Telefono) && !AppValidation.IsValidPhoneNumber(editor.Telefono))
         {
-            errorMessage = "El número de celular debe tener exactamente 10 dígitos y solo números.";
+            errorMessage = "El teléfono debe tener entre 7 y 15 dígitos numéricos.";
             return false;
         }
 

@@ -220,6 +220,7 @@ public sealed class ClinicalHistoryService
         await dbContext.SaveChangesAsync(cancellationToken);
 
         await SyncPrescriptionAsync(dbContext, consultation, request, cancellationToken);
+        await SyncRxLenteAsync(dbContext, consultation, request.Editor, cancellationToken);
 
         var encounter = request.SelectedEncounterId.HasValue
             ? await dbContext.tbl_historia_clinica_optometria_eventos
@@ -997,6 +998,124 @@ public sealed class ClinicalHistoryService
         }
 
         return items;
+    }
+
+    private static async Task SyncRxLenteAsync(
+        OpticaDbContext dbContext,
+        tbl_consulta consultation,
+        ClinicalHistoryEditorModel editor,
+        CancellationToken cancellationToken)
+    {
+        var refText = !string.IsNullOrWhiteSpace(editor.Refraction.PruebaAmbulatoriaRxFinal)
+            ? editor.Refraction.PruebaAmbulatoriaRxFinal
+            : (!string.IsNullOrWhiteSpace(editor.Refraction.SubjetivoAfinacionBalance)
+                ? editor.Refraction.SubjetivoAfinacionBalance
+                : editor.Refraction.RxEstaticaDinamica);
+
+        var (odEsf, odCil, odEje, odAdd, odDp) = ParseEyeMeasurements(editor.Lentes.Od, refText, "OD");
+        var (oiEsf, oiCil, oiEje, oiAdd, oiDp) = ParseEyeMeasurements(editor.Lentes.Oi, refText, "OI");
+
+        if (!odEsf.HasValue && !odCil.HasValue && !oiEsf.HasValue && !oiCil.HasValue &&
+            string.IsNullOrWhiteSpace(editor.Lentes.Od) && string.IsNullOrWhiteSpace(editor.Lentes.Oi) &&
+            string.IsNullOrWhiteSpace(refText))
+        {
+            return;
+        }
+
+        var rxLente = await dbContext.tbl_rx_lentes
+            .FirstOrDefaultAsync(x => x.id_consulta == consultation.id_consulta, cancellationToken);
+
+        if (rxLente is null)
+        {
+            rxLente = new tbl_rx_lente
+            {
+                id_consulta = consultation.id_consulta
+            };
+            dbContext.tbl_rx_lentes.Add(rxLente);
+        }
+
+        rxLente.od_esfera = odEsf;
+        rxLente.od_cilindro = odCil;
+        rxLente.od_eje = odEje;
+        rxLente.od_addicion = odAdd ?? ParseOptDecimal(editor.Lentes.Addicion);
+        rxLente.od_dp = odDp ?? ParseOptDecimal(editor.Lentes.DistPupilar);
+
+        rxLente.oi_esfera = oiEsf;
+        rxLente.oi_cilindro = oiCil;
+        rxLente.oi_eje = oiEje;
+        rxLente.oi_addicion = oiAdd ?? ParseOptDecimal(editor.Lentes.Addicion);
+        rxLente.oi_dp = oiDp ?? ParseOptDecimal(editor.Lentes.DistPupilar);
+
+        rxLente.diseno_lente = NormalizeOptional(editor.Lentes.TipoLente);
+        rxLente.material = NormalizeOptional(editor.Lentes.Material);
+        rxLente.tratamiento = NormalizeOptional(editor.Lentes.Filtro);
+        rxLente.observaciones = NormalizeOptional(editor.Lentes.Observaciones ?? editor.Refraction.Observaciones);
+    }
+
+    public static (decimal? Esfera, decimal? Cilindro, decimal? Eje, decimal? Add, decimal? Dp) ParseEyeMeasurements(string? primaryText, string? blockText, string eyeLabel)
+    {
+        if (!string.IsNullOrWhiteSpace(primaryText))
+        {
+            var parsed = ParseSingleEye(primaryText);
+            if (parsed.Esfera.HasValue || parsed.Cilindro.HasValue) return parsed;
+        }
+
+        if (!string.IsNullOrWhiteSpace(blockText))
+        {
+            var eyeRegex = new System.Text.RegularExpressions.Regex($@"{eyeLabel}\s*[:=\-]?\s*([^\r\n;]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var match = eyeRegex.Match(blockText);
+            if (match.Success)
+            {
+                var parsed = ParseSingleEye(match.Groups[1].Value);
+                if (parsed.Esfera.HasValue || parsed.Cilindro.HasValue) return parsed;
+            }
+        }
+
+        return (null, null, null, null, null);
+    }
+
+    public static (decimal? Esfera, decimal? Cilindro, decimal? Eje, decimal? Add, decimal? Dp) ParseSingleEye(string clean)
+    {
+        decimal? esf = null, cil = null, eje = null, add = null, dp = null;
+
+        var esfMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(?:esf|esfera|sph|s)\s*[:=]?\s*([+-]?\d+(?:[\.,]\d+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (esfMatch.Success) esf = ParseOptDecimal(esfMatch.Groups[1].Value);
+
+        var cilMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(?:cil|cilindro|cyl|c)\s*[:=]?\s*([+-]?\d+(?:[\.,]\d+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (cilMatch.Success) cil = ParseOptDecimal(cilMatch.Groups[1].Value);
+
+        var ejeMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(?:eje|axis|x|@|°)\s*[:=]?\s*(\d{1,3})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (ejeMatch.Success) eje = ParseOptDecimal(ejeMatch.Groups[1].Value);
+
+        var addMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(?:add|adición|adicion)\s*[:=]?\s*([+-]?\d+(?:[\.,]\d+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (addMatch.Success) add = ParseOptDecimal(addMatch.Groups[1].Value);
+
+        var dpMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(?:dp|dnp|distancia)\s*[:=]?\s*(\d{2}(?:[\.,]\d+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (dpMatch.Success) dp = ParseOptDecimal(dpMatch.Groups[1].Value);
+
+        if (!esf.HasValue)
+        {
+            var matches = System.Text.RegularExpressions.Regex.Matches(clean, @"([+-]?\d+(?:[\.,]\d+)?)");
+            if (matches.Count > 0)
+            {
+                esf = ParseOptDecimal(matches[0].Groups[1].Value);
+                if (matches.Count > 1) cil = ParseOptDecimal(matches[1].Groups[1].Value);
+                if (matches.Count > 2 && !eje.HasValue)
+                {
+                    var val = ParseOptDecimal(matches[2].Groups[1].Value);
+                    if (val.HasValue && val.Value >= 0 && val.Value <= 180) eje = val;
+                }
+            }
+        }
+
+        return (esf, cil, eje, add, dp);
+    }
+
+    public static decimal? ParseOptDecimal(string? val)
+    {
+        if (string.IsNullOrWhiteSpace(val)) return null;
+        var clean = val.Trim().Replace(',', '.');
+        return decimal.TryParse(clean, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
     }
 
     private static void ApplyStructuredAnamnesisDefaults(ClinicalHistoryEditorModel editor)

@@ -2,6 +2,8 @@
 @attribute [Authorize(Policy = "FullAccess")]
 @rendermode InteractiveServer
 @using OptometriaApp.Services
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
@@ -158,22 +160,36 @@ else
 @if (showForm && editor is not null)
 {
     <div class="custom-modal-overlay">
-        <div class="custom-modal-card form-modal-card">
+        <div class="custom-modal-card form-modal-card" style="max-width: 900px; width: 95%;">
             <header class="custom-modal-header rose-header">
                 <h2>@(isCreating ? "Nueva orden de compra" : "Editar orden de compra")</h2>
                 <button type="button" class="btn-close-modal" @onclick="CloseForm">×</button>
             </header>
             <div class="custom-modal-body">
+                @if (!string.IsNullOrWhiteSpace(modalErrorMessage))
+                {
+                    <div class="alert alert-danger" style="margin-bottom: 1rem; border-radius: 8px; font-weight: 500;">
+                        <i class="bi bi-exclamation-triangle-fill" style="margin-right: 6px;"></i> @modalErrorMessage
+                    </div>
+                }
                 <p class="required-fields-note">Los campos marcados con * son obligatorios.</p>
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label">Numero <span class="field-required">*</span></label>
-                        <input class="form-control" @bind="editor.NumeroOrden" maxlength="20" />
+                        <label class="form-label">Número de orden <span class="field-required">*</span></label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input class="form-control" @bind="editor.NumeroOrden" maxlength="20" placeholder="Ej: OC-20260906-001" />
+                            @if (isCreating)
+                            {
+                                <button type="button" class="btn btn-outline-primary btn-sm" title="Generar número secuencial" @onclick="RegenerateOrderNumberAsync">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                            }
+                        </div>
                     </div>
                     <div>
                         <label class="form-label">Proveedor <span class="field-required">*</span></label>
                         <select class="form-select" @bind="editor.IdProveedor">
-                            <option value="0">Selecciona</option>
+                            <option value="0">-- Selecciona Proveedor --</option>
                             @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
                             {
                                 <option value="@supplier.id_proveedor">@supplier.nombre</option>
@@ -182,11 +198,11 @@ else
                     </div>
                     <div>
                         <label class="form-label">Fecha requerida <span class="field-required">*</span> <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
-                        <input type="date" class="form-control" @bind="editor.FechaRequerida" min="@TodayDateIso" />
+                        <input type="date" class="form-control" @bind="editor.FechaRequerida" />
                     </div>
                     <div>
-                        <label class="form-label">Recepcion esperada <span class="field-required">*</span> <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
-                        <input type="date" class="form-control" @bind="editor.FechaRecepcionEsperada" min="@TodayDateIso" />
+                        <label class="form-label">Recepción esperada <span class="field-required">*</span> <span style="font-size: 0.8rem; color: var(--color-taupe); font-weight: normal;">(dd/mm/aaaa)</span></label>
+                        <input type="date" class="form-control" @bind="editor.FechaRecepcionEsperada" />
                     </div>
                     <div>
                         <label class="form-label">Estado <span class="field-required">*</span></label>
@@ -197,11 +213,15 @@ else
                             }
                         </select>
                     </div>
-                    <details class="additional-details">
-                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
+                    <div>
+                        <label class="form-label">Moneda</label>
+                        <input class="form-control" @bind="editor.Moneda" maxlength="3" />
+                    </div>
+                    <details class="additional-details" style="grid-column: 1 / -1;">
+                        <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales (Condición de pago, crédito, etc.)</span></summary>
                         <div class="additional-details-body">
                             <div>
-                                <label class="form-label">Condicion pago</label>
+                                <label class="form-label">Condición de pago</label>
                                 <select class="form-select" @bind="editor.CondicionPago">
                                     @foreach (var option in paymentOptions)
                                     {
@@ -210,76 +230,100 @@ else
                                 </select>
                             </div>
                             <div>
-                                <label class="form-label">Dias credito</label>
+                                <label class="form-label">Días crédito</label>
                                 <input type="number" class="form-control" @bind="editor.DiasCredito" min="0" />
-                            </div>
-                            <div>
-                                <label class="form-label">Moneda</label>
-                                <input class="form-control" @bind="editor.Moneda" maxlength="3" />
                             </div>
                             <div>
                                 <label class="form-label">Referencia externa</label>
                                 <input class="form-control" @bind="editor.ReferenciaExterna" maxlength="100" />
                             </div>
                             <div class="patient-form-span">
-                                <label class="form-label">Observaciones</label>
-                                <textarea class="form-control" rows="3" @bind="editor.Observaciones"></textarea>
+                                <label class="form-label">Observaciones generales</label>
+                                <textarea class="form-control" rows="2" @bind="editor.Observaciones"></textarea>
                             </div>
                         </div>
                     </details>
                 </div>
 
-                <div class="management-card" style="margin-top:1rem; padding:1rem;">
-                    <div class="management-card-header">
-                        <h2>Lineas</h2>
-                        <button type="button" class="btn btn-outline-primary" @onclick="AddLine">Agregar linea</button>
+                <div class="management-card" style="margin-top:1.2rem; padding:1rem; border: 1px solid rgba(127,105,81,0.15); border-radius: 12px; background: rgba(248, 246, 242, 0.4);">
+                    <div class="management-card-header" style="margin-bottom: 0.8rem;">
+                        <h2 style="font-size: 1.1rem; margin:0;"><i class="bi bi-box-seam"></i> Productos / Líneas del Pedido</h2>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AddLine">
+                            <i class="bi bi-plus-circle"></i> Agregar producto
+                        </button>
                     </div>
-                    <div style="display:grid; gap:0.8rem; margin-top:1rem;">
+                    <div style="display:grid; gap:0.8rem;">
                         @for (var i = 0; i < editor.Lines.Count; i++)
                         {
                             var line = editor.Lines[i];
-                            <div class="management-form-grid" style="padding:0.8rem; border:1px solid rgba(127,105,81,0.1); border-radius:12px;">
-                                <div>
-                                    <label class="form-label">Producto <span class="field-required">*</span></label>
-                                    <select class="form-select" @bind="line.IdProducto">
-                                        <option value="0">Selecciona</option>
-                                        @foreach (var product in products.OrderBy(p => p.nombre_producto))
-                                        {
-                                            <option value="@product.id_producto">@product.nombre_producto</option>
-                                        }
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="form-label">Cantidad <span class="field-required">*</span></label>
-                                    <input type="number" class="form-control" @bind="line.CantidadSolicitada" min="1" />
-                                </div>
-                                <div>
-                                    <label class="form-label">Precio unitario <span class="field-required">*</span></label>
-                                    <input type="number" step="0.01" class="form-control" @bind="line.PrecioUnitario" min="0" />
-                                </div>
-                                <details class="additional-details">
-                                    <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
-                                    <div class="additional-details-body">
-                                        <div>
-                                            <label class="form-label">Descuento %</label>
-                                            <input type="number" step="0.01" class="form-control" @bind="line.DescuentoLinea" min="0" />
-                                        </div>
-                                        <div>
-                                            <label class="form-label">Observaciones linea</label>
-                                            <input class="form-control" @bind="line.Observaciones" maxlength="500" />
+                            var lineIndex = i;
+                            var lineTotal = line.CantidadSolicitada * line.PrecioUnitario * (1m - (line.DescuentoLinea / 100m));
+                            <div style="padding:0.9rem; border:1px solid rgba(127,105,81,0.18); border-radius:10px; background: #fff;">
+                                <div style="display: grid; grid-template-columns: 3fr 1fr 1.2fr 1fr 1.2fr auto; gap: 0.6rem; align-items: end;">
+                                    <div>
+                                        <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem;">Producto <span class="field-required">*</span></label>
+                                        <select class="form-select form-select-sm" value="@line.IdProducto" @onchange="(e) => OnLineProductChanged(line, e)">
+                                            <option value="0">-- Selecciona producto --</option>
+                                            @foreach (var product in products.OrderBy(p => p.nombre_producto))
+                                            {
+                                                <option value="@product.id_producto">@product.nombre_producto (@(product.codigo_producto))</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem;">Cant. <span class="field-required">*</span></label>
+                                        <input type="number" class="form-control form-control-sm" @bind="line.CantidadSolicitada" @bind:event="oninput" min="1" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem;">P. Unit ($) <span class="field-required">*</span></label>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" @bind="line.PrecioUnitario" @bind:event="oninput" min="0" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem;">Desc %</label>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" @bind="line.DescuentoLinea" @bind:event="oninput" min="0" max="100" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem;">Total Línea</label>
+                                        <div style="font-weight: 600; font-size: 0.95rem; padding: 0.35rem 0; color: var(--color-brown-dark, #4b3621);">
+                                            $ @lineTotal.ToString("0.00")
                                         </div>
                                     </div>
-                                </details>
-                                <div>
-                                    <button type="button" class="btn btn-outline-primary" @onclick="() => RemoveLine(i)">Quitar</button>
+                                    <div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" title="Quitar línea" @onclick="() => RemoveLine(lineIndex)" disabled="@(editor.Lines.Count <= 1)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         }
                     </div>
+
+                    <!-- Resumen de totales -->
+                    <div style="display: flex; justify-content: flex-end; margin-top: 1rem; padding-top: 0.8rem; border-top: 1px dashed rgba(127,105,81,0.25);">
+                        <div style="text-align: right; min-width: 250px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.3rem;">
+                                <span>Subtotal:</span>
+                                <strong>$ @TotalSubtotal.ToString("0.00")</strong>
+                            </div>
+                            @if (TotalDescuento > 0)
+                            {
+                                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.3rem; color: #b02a37;">
+                                    <span>Descuento:</span>
+                                    <strong>-$ @TotalDescuento.ToString("0.00")</strong>
+                                </div>
+                            }
+                            <div style="display: flex; justify-content: space-between; font-size: 1.1rem; font-weight: 700; color: var(--color-coffee, #5c3a21); border-top: 1px solid rgba(127,105,81,0.2); padding-top: 0.4rem;">
+                                <span>Total Orden:</span>
+                                <span>$ @TotalGeneral.ToString("0.00")</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <footer class="custom-modal-footer">
-                <button type="button" class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync">
+                    <i class="bi bi-check2-circle"></i> Guardar Orden
+                </button>
                 <button type="button" class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button>
             </footer>
         </div>
@@ -331,6 +375,7 @@ else
     private bool isLoading = true, canView, isCreating, showForm, showAudit, showAlert, alertIsError;
     private int currentUserId, currentRoleId;
     private string searchTerm = string.Empty, stateFilter = string.Empty, supplierFilter = string.Empty, alertMessage = string.Empty, alertTitle = string.Empty, dateFromFilter = string.Empty, dateToFilter = string.Empty;
+    private string? modalErrorMessage;
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private List<tbl_orden_compra> FilteredOrders => orders.Where(MatchesFilters).ToList();
@@ -339,6 +384,10 @@ else
     private int EffectiveOrderPage => Math.Min(orderPage, Math.Max(1, (int)Math.Ceiling(FilteredOrders.Count / (double)TablePageSize)));
     private IEnumerable<tbl_orden_compra> PagedOrders => FilteredOrders.Skip((EffectiveOrderPage - 1) * TablePageSize).Take(TablePageSize);
     private void SetOrderPage(int page) => orderPage = page;
+
+    private decimal TotalSubtotal => editor?.Lines.Sum(l => l.CantidadSolicitada * l.PrecioUnitario) ?? 0m;
+    private decimal TotalDescuento => editor?.Lines.Sum(l => (l.CantidadSolicitada * l.PrecioUnitario) * (l.DescuentoLinea / 100m)) ?? 0m;
+    private decimal TotalGeneral => TotalSubtotal - TotalDescuento;
 
     protected override async Task OnInitializedAsync()
     {
@@ -351,6 +400,7 @@ else
     private async Task LoadAsync(int? preserveId = null)
     {
         await using var db = await DbContextFactory.CreateDbContextAsync();
+        await EnsureCurrentUserIdAsync(db);
         permissions = await GetPermissionsAsync(db);
         canView = permissions.CanView;
         if (!canView) { isLoading = false; return; }
@@ -359,14 +409,14 @@ else
         suppliers.AddRange(await db.tbl_proveedors.AsNoTracking().OrderBy(x => x.nombre).ToListAsync());
         products.Clear();
         products.AddRange(await ProductInventoryRules.FilterGoods(db.tbl_productos.AsNoTracking())
-            .Where(x => x.activo == true)
+            .Where(x => x.activo != false)
             .OrderBy(x => x.nombre_producto)
             .ToListAsync());
         orders.Clear();
         orders.AddRange(await db.tbl_orden_compra.AsNoTracking()
             .Include(x => x.id_proveedorNavigation)
             .Include(x => x.tbl_detalle_orden_compra)
-            .Where(x => x.id_usuario_solicita == currentUserId)
+            .Where(x => currentUserId == 0 || x.id_usuario_solicita == currentUserId)
             .OrderByDescending(x => x.fecha_orden)
             .ToListAsync());
 
@@ -378,13 +428,76 @@ else
         isLoading = false;
     }
 
-    private void PrepareNew()
+    private async Task EnsureCurrentUserIdAsync(OpticaDbContext db)
+    {
+        if (currentUserId > 0) return;
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (int.TryParse(auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) && uid > 0)
+        {
+            currentUserId = uid;
+            return;
+        }
+        var userName = auth.User.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(userName))
+        {
+            var user = await db.tbl_usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.usuario == userName || u.email == userName);
+            if (user != null)
+            {
+                currentUserId = user.id_usuario;
+            }
+        }
+    }
+
+    private async Task<string> GenerateNextOrderNumberAsync(OpticaDbContext db)
+    {
+        var todayPrefix = $"OC-{DateTime.Today:yyyyMMdd}-";
+        var existingNumbers = await db.tbl_orden_compra.AsNoTracking()
+            .Where(x => x.numero_orden.StartsWith(todayPrefix))
+            .Select(x => x.numero_orden)
+            .ToListAsync();
+
+        var maxSeq = 0;
+        foreach (var num in existingNumbers)
+        {
+            if (num.Length > todayPrefix.Length)
+            {
+                var suffix = num.Substring(todayPrefix.Length);
+                if (int.TryParse(suffix, out var seq) && seq > maxSeq)
+                {
+                    maxSeq = seq;
+                }
+            }
+        }
+
+        if (maxSeq > 0)
+        {
+            return $"{todayPrefix}{(maxSeq + 1):D3}";
+        }
+
+        var totalOrders = await db.tbl_orden_compra.CountAsync();
+        return $"{todayPrefix}{(totalOrders + 1):D3}";
+    }
+
+    private async Task RegenerateOrderNumberAsync()
+    {
+        if (editor is not null)
+        {
+            await using var db = await DbContextFactory.CreateDbContextAsync();
+            editor.NumeroOrden = await GenerateNextOrderNumberAsync(db);
+        }
+    }
+
+    private async Task PrepareNew()
     {
         isCreating = true;
+        modalErrorMessage = null;
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var nextNumber = await GenerateNextOrderNumberAsync(db);
         editor = new PurchaseOrderEditor
         {
+            NumeroOrden = nextNumber,
             FechaRequerida = DateOnly.FromDateTime(DateTime.Today),
-            FechaRecepcionEsperada = DateOnly.FromDateTime(DateTime.Today),
+            FechaRecepcionEsperada = DateOnly.FromDateTime(DateTime.Today.AddDays(3)),
             CondicionPago = "Contado",
             Moneda = "USD",
             EstadoOrden = "Pendiente"
@@ -395,10 +508,13 @@ else
 
     private async Task PrepareEdit(tbl_orden_compra order)
     {
+        modalErrorMessage = null;
         await using var db = await DbContextFactory.CreateDbContextAsync();
         var entity = await db.tbl_orden_compra.AsNoTracking()
             .Include(x => x.tbl_detalle_orden_compra)
-            .FirstAsync(x => x.id_orden_compra == order.id_orden_compra && x.id_usuario_solicita == currentUserId);
+            .FirstOrDefaultAsync(x => x.id_orden_compra == order.id_orden_compra);
+
+        if (entity == null) return;
 
         isCreating = false;
         editor = new PurchaseOrderEditor
@@ -406,8 +522,8 @@ else
             Id = entity.id_orden_compra,
             NumeroOrden = entity.numero_orden,
             IdProveedor = entity.id_proveedor,
-            FechaRequerida = entity.fecha_requerida,
-            FechaRecepcionEsperada = entity.fecha_recepcion_esperada,
+            FechaRequerida = entity.fecha_requerida ?? DateOnly.FromDateTime(entity.fecha_orden ?? DateTime.Today),
+            FechaRecepcionEsperada = entity.fecha_recepcion_esperada ?? DateOnly.FromDateTime((entity.fecha_orden ?? DateTime.Today).AddDays(3)),
             CondicionPago = entity.condicion_pago ?? "Contado",
             DiasCredito = entity.dias_credito ?? 0,
             Moneda = entity.moneda ?? "USD",
@@ -424,6 +540,12 @@ else
                 Observaciones = d.observaciones ?? string.Empty
             }).ToList()
         };
+
+        if (editor.Lines.Count == 0)
+        {
+            editor.Lines.Add(new PurchaseOrderLineEditor());
+        }
+
         showForm = true;
     }
 
@@ -431,35 +553,77 @@ else
 
     private void RemoveLine(int index)
     {
-        if (editor is not null && index >= 0 && index < editor.Lines.Count)
+        if (editor is not null && index >= 0 && index < editor.Lines.Count && editor.Lines.Count > 1)
         {
             editor.Lines.RemoveAt(index);
         }
     }
 
+    private void OnLineProductChanged(PurchaseOrderLineEditor line, ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var pid))
+        {
+            line.IdProducto = pid;
+            var prod = products.FirstOrDefault(p => p.id_producto == pid);
+            if (prod != null)
+            {
+                if (prod.precio_costo.HasValue && prod.precio_costo.Value > 0)
+                {
+                    line.PrecioUnitario = prod.precio_costo.Value;
+                }
+                else if (prod.precio_venta > 0)
+                {
+                    line.PrecioUnitario = prod.precio_venta;
+                }
+            }
+        }
+    }
+
     private async Task SaveAsync()
     {
-        if (editor is null ||
-            string.IsNullOrWhiteSpace(editor.NumeroOrden) ||
-            editor.IdProveedor <= 0 ||
-            string.IsNullOrWhiteSpace(editor.EstadoOrden) ||
-            !editor.FechaRequerida.HasValue ||
-            !editor.FechaRecepcionEsperada.HasValue ||
-            editor.Lines.Count == 0 ||
-            editor.Lines.Any(x => x.IdProducto <= 0 || x.CantidadSolicitada <= 0 || x.PrecioUnitario < 0))
-        {
-            ShowAlert("No se pudo guardar la orden de compra.", "Completa proveedor, fechas, estado y al menos una linea valida con producto, cantidad y precio.", true);
-            return;
-        }
-
-        if (!AppValidation.IsNotPast(editor.FechaRequerida) || !AppValidation.IsNotPast(editor.FechaRecepcionEsperada))
-        {
-            ShowAlert("No se pudo guardar la orden de compra.", "Las fechas requeridas no pueden ser anteriores a hoy.", true);
-            return;
-        }
+        modalErrorMessage = null;
+        if (editor is null) return;
 
         await using var db = await DbContextFactory.CreateDbContextAsync();
-        var selectedProductIds = editor.Lines.Select(x => x.IdProducto).Where(x => x > 0).Distinct().ToList();
+        await EnsureCurrentUserIdAsync(db);
+
+        if (string.IsNullOrWhiteSpace(editor.NumeroOrden))
+        {
+            editor.NumeroOrden = await GenerateNextOrderNumberAsync(db);
+        }
+
+        if (editor.IdProveedor <= 0)
+        {
+            modalErrorMessage = "Por favor selecciona un proveedor.";
+            return;
+        }
+
+        if (!editor.FechaRequerida.HasValue || !editor.FechaRecepcionEsperada.HasValue)
+        {
+            modalErrorMessage = "Debes ingresar las fechas requerida y de recepción esperada.";
+            return;
+        }
+
+        if (editor.FechaRecepcionEsperada.Value < editor.FechaRequerida.Value)
+        {
+            modalErrorMessage = "La fecha de recepción esperada no puede ser anterior a la fecha requerida.";
+            return;
+        }
+
+        var validLines = editor.Lines.Where(x => x.IdProducto > 0 && x.CantidadSolicitada > 0).ToList();
+        if (validLines.Count == 0)
+        {
+            modalErrorMessage = "Debes agregar al menos una línea con producto seleccionado y cantidad mayor a 0.";
+            return;
+        }
+
+        if (validLines.Any(x => x.PrecioUnitario < 0))
+        {
+            modalErrorMessage = "El precio unitario de los productos no puede ser negativo.";
+            return;
+        }
+
+        var selectedProductIds = validLines.Select(x => x.IdProducto).Distinct().ToList();
         var allowedProducts = await ProductInventoryRules.FilterGoods(db.tbl_productos.AsNoTracking())
             .Where(x => selectedProductIds.Contains(x.id_producto))
             .Select(x => x.id_producto)
@@ -468,89 +632,108 @@ else
         var invalidProductIds = selectedProductIds.Except(allowedProducts).ToList();
         if (invalidProductIds.Count > 0)
         {
-            ShowAlert("No se pudo guardar la orden de compra.", "La orden de compra solo admite bienes inventariables. Quita los servicios seleccionados.", true);
+            modalErrorMessage = "La orden de compra solo admite bienes inventariables. Por favor quita los servicios seleccionados.";
             return;
         }
 
-        var duplicate = await db.tbl_orden_compra.AnyAsync(x => x.id_orden_compra != editor.Id && x.numero_orden == editor.NumeroOrden);
+        var duplicate = await db.tbl_orden_compra.AnyAsync(x => x.id_orden_compra != editor.Id && x.numero_orden == editor.NumeroOrden.Trim());
         if (duplicate)
         {
-            ShowAlert("No se pudo guardar la orden de compra.", "Ya existe una orden de compra con ese numero.", true);
+            modalErrorMessage = $"Ya existe una orden de compra con el número '{editor.NumeroOrden}'. Puedes presionar el botón de refrescar para generar otro número.";
             return;
         }
 
-        tbl_orden_compra entity;
-        if (isCreating)
+        try
         {
-            entity = new tbl_orden_compra
+            tbl_orden_compra entity;
+            if (isCreating)
             {
-                id_usuario_solicita = currentUserId,
-                fecha_orden = DateTime.Now,
-                fecha_creacion = DateTime.Now,
-                activo = true
-            };
-            db.tbl_orden_compra.Add(entity);
-        }
-        else
-        {
-            entity = await db.tbl_orden_compra.Include(x => x.tbl_detalle_orden_compra)
-                .FirstAsync(x => x.id_orden_compra == editor.Id && x.id_usuario_solicita == currentUserId);
-            db.tbl_detalle_orden_compra.RemoveRange(entity.tbl_detalle_orden_compra);
-        }
-
-        entity.numero_orden = editor.NumeroOrden.Trim();
-        entity.id_proveedor = editor.IdProveedor;
-        entity.fecha_requerida = editor.FechaRequerida;
-        entity.fecha_recepcion_esperada = editor.FechaRecepcionEsperada;
-        entity.condicion_pago = editor.CondicionPago;
-        entity.dias_credito = editor.DiasCredito;
-        entity.moneda = string.IsNullOrWhiteSpace(editor.Moneda) ? "USD" : editor.Moneda.Trim().ToUpperInvariant();
-        entity.estado_orden = editor.EstadoOrden;
-        entity.referencia_externa = NullIfBlank(editor.ReferenciaExterna);
-        entity.observaciones = NullIfBlank(editor.Observaciones);
-        entity.fecha_actualizacion = DateTime.Now;
-
-        var subtotal = 0m;
-        foreach (var line in editor.Lines)
-        {
-            var total = line.CantidadSolicitada * line.PrecioUnitario;
-            var discount = total * (line.DescuentoLinea / 100m);
-            subtotal += total - discount;
-            entity.tbl_detalle_orden_compra.Add(new tbl_detalle_orden_compra
+                entity = new tbl_orden_compra
+                {
+                    id_usuario_solicita = currentUserId > 0 ? currentUserId : 1,
+                    fecha_orden = DateTime.Now,
+                    fecha_creacion = DateTime.Now,
+                    activo = true
+                };
+                db.tbl_orden_compra.Add(entity);
+            }
+            else
             {
-                id_producto = line.IdProducto,
-                cantidad_solicitada = line.CantidadSolicitada,
-                cantidad_recibida = 0,
-                cantidad_rechazada = 0,
-                cantidad_pendiente = line.CantidadSolicitada,
-                precio_unitario = line.PrecioUnitario,
-                precio_total_linea = total - discount,
-                descuento_linea = line.DescuentoLinea,
-                estado_linea = "Pendiente",
-                observaciones = NullIfBlank(line.Observaciones)
-            });
-        }
+                entity = await db.tbl_orden_compra.Include(x => x.tbl_detalle_orden_compra)
+                    .FirstOrDefaultAsync(x => x.id_orden_compra == editor.Id);
+                
+                if (entity == null)
+                {
+                    modalErrorMessage = "No se encontró la orden de compra a modificar.";
+                    return;
+                }
 
-        entity.subtotal = subtotal;
-        entity.total = subtotal;
-        await db.SaveChangesAsync();
-        WriteAudit(db, isCreating ? "Crear orden compra" : "Editar orden compra", $"OrdenCompraId={entity.id_orden_compra}; Numero={entity.numero_orden}; Total={entity.total}");
-        await db.SaveChangesAsync();
-        CloseForm();
-        ShowAlert(
-            isCreating ? "Orden de compra creada" : "Orden de compra actualizada",
-            isCreating
-                ? $"La orden {entity.numero_orden} se creo correctamente."
-                : $"La orden {entity.numero_orden} se actualizo correctamente.",
-            false);
-        await LoadAsync(entity.id_orden_compra);
+                db.tbl_detalle_orden_compra.RemoveRange(entity.tbl_detalle_orden_compra);
+            }
+
+            entity.numero_orden = editor.NumeroOrden.Trim();
+            entity.id_proveedor = editor.IdProveedor;
+            entity.fecha_requerida = editor.FechaRequerida;
+            entity.fecha_recepcion_esperada = editor.FechaRecepcionEsperada;
+            entity.condicion_pago = editor.CondicionPago;
+            entity.dias_credito = editor.DiasCredito;
+            entity.moneda = string.IsNullOrWhiteSpace(editor.Moneda) ? "USD" : editor.Moneda.Trim().ToUpperInvariant();
+            entity.estado_orden = editor.EstadoOrden;
+            entity.referencia_externa = NullIfBlank(editor.ReferenciaExterna);
+            entity.observaciones = NullIfBlank(editor.Observaciones);
+            entity.fecha_actualizacion = DateTime.Now;
+
+            var subtotal = 0m;
+            foreach (var line in validLines)
+            {
+                var total = line.CantidadSolicitada * line.PrecioUnitario;
+                var discount = total * (line.DescuentoLinea / 100m);
+                subtotal += total - discount;
+                entity.tbl_detalle_orden_compra.Add(new tbl_detalle_orden_compra
+                {
+                    id_producto = line.IdProducto,
+                    cantidad_solicitada = line.CantidadSolicitada,
+                    cantidad_recibida = 0,
+                    cantidad_rechazada = 0,
+                    cantidad_pendiente = line.CantidadSolicitada,
+                    precio_unitario = line.PrecioUnitario,
+                    precio_total_linea = total - discount,
+                    descuento_linea = line.DescuentoLinea,
+                    estado_linea = "Pendiente",
+                    observaciones = NullIfBlank(line.Observaciones)
+                });
+            }
+
+            entity.subtotal = subtotal;
+            entity.total = subtotal;
+            await db.SaveChangesAsync();
+
+            WriteAudit(db, isCreating ? "Crear orden compra" : "Editar orden compra", $"OrdenCompraId={entity.id_orden_compra}; Numero={entity.numero_orden}; Total={entity.total}");
+            await db.SaveChangesAsync();
+
+            CloseForm();
+            ShowAlert(
+                isCreating ? "Orden de compra creada" : "Orden de compra actualizada",
+                isCreating
+                    ? $"La orden {entity.numero_orden} se guardó correctamente por un total de ${entity.total:0.00}."
+                    : $"La orden {entity.numero_orden} se actualizó correctamente.",
+                false);
+            await LoadAsync(entity.id_orden_compra);
+        }
+        catch (Exception ex)
+        {
+            modalErrorMessage = $"Error al guardar en base de datos: {ex.InnerException?.Message ?? ex.Message}";
+        }
     }
 
     private async Task DeleteAsync(tbl_orden_compra order)
     {
         await using var db = await DbContextFactory.CreateDbContextAsync();
         var entity = await db.tbl_orden_compra.Include(x => x.tbl_recepcion_compra).Include(x => x.tbl_liquidacion_compra)
-            .FirstAsync(x => x.id_orden_compra == order.id_orden_compra && x.id_usuario_solicita == currentUserId);
+            .FirstOrDefaultAsync(x => x.id_orden_compra == order.id_orden_compra);
+
+        if (entity == null) return;
+
         if (entity.tbl_recepcion_compra.Count > 0 || entity.tbl_liquidacion_compra.Count > 0)
         {
             ShowAlert("No se pudo eliminar la orden de compra.", "No puedes eliminar una orden que ya tiene recepciones o liquidaciones asociadas.", true);
@@ -559,7 +742,7 @@ else
         WriteAudit(db, "Eliminar orden compra", $"OrdenCompraId={entity.id_orden_compra}; Numero={entity.numero_orden}");
         db.tbl_orden_compra.Remove(entity);
         await db.SaveChangesAsync();
-        ShowAlert("Orden de compra eliminada", $"La orden {entity.numero_orden} se elimino correctamente.", false);
+        ShowAlert("Orden de compra eliminada", $"La orden {entity.numero_orden} se eliminó correctamente.", false);
         await LoadAsync();
     }
 
@@ -662,7 +845,7 @@ else
     }
 
     private void WriteAudit(OpticaDbContext db, string action, string detail) => db.tbl_log_auditoria.Add(new tbl_log_auditoria { id_usuario = currentUserId > 0 ? currentUserId : null, accion = action, modulo = "OrdenesCompra", fecha = DateTime.Now, detalle = detail });
-    private void CloseForm() { showForm = false; editor = null; }
+    private void CloseForm() { showForm = false; editor = null; modalErrorMessage = null; }
     private void ShowAlert(string title, string message, bool isError)
     {
         alertTitle = title;

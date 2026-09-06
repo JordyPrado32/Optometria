@@ -174,48 +174,63 @@ else
 @if (showForm && editor is not null)
 {
     <div class="custom-modal-overlay">
-        <div class="custom-modal-card form-modal-card">
+        <div class="custom-modal-card form-modal-card" style="max-width: 920px;">
             <header class="custom-modal-header rose-header">
                 <h2>@(editor.Id == 0 ? "Nuevo pedido a laboratorio" : $"Editar pedido {editor.NumeroOrden}")</h2>
                 <button type="button" class="btn-close-modal" @onclick="CloseForm">×</button>
             </header>
             <div class="custom-modal-body">
-                <div class="management-form-grid">
-                    <div>
-                        <label class="form-label">Numero de orden</label>
-                        <input class="form-control" @bind="editor.NumeroOrden" maxlength="50" readonly />
+                @if (!string.IsNullOrWhiteSpace(modalErrorMessage))
+                {
+                    <div class="alert alert-danger" role="alert" style="margin-bottom: 1.2rem; font-size: 0.9rem;">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> @modalErrorMessage
                     </div>
+                }
+
+                <div class="management-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem;">
                     <div>
-                        <label class="form-label">Laboratorio *</label>
-                        <select class="form-select" @bind="editor.IdLaboratorio">
-                            <option value="0">Selecciona</option>
+                        <label class="form-label">Número de orden</label>
+                        <input class="form-control" @bind="editor.NumeroOrden" maxlength="50" readonly style="background: rgba(0,0,0,0.02); font-weight: 600;" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Laboratorio óptico *</label>
+                        <select class="form-select @(editor.IdLaboratorio == 0 ? "border-warning" : "")" @bind="editor.IdLaboratorio">
+                            <option value="0">-- Selecciona un laboratorio --</option>
                             @foreach (var laboratory in laboratories.OrderBy(x => x.nombre))
                             {
                                 <option value="@laboratory.id_laboratorio">@laboratory.nombre</option>
                             }
                         </select>
+                        @if (laboratories.Count == 0)
+                        {
+                            <span class="text-danger" style="font-size: 0.76rem; display: block; margin-top: 0.2rem;">
+                                <i class="bi bi-info-circle"></i> No hay laboratorios registrados en el sistema.
+                            </span>
+                        }
                     </div>
+
                     <div>
-                        <label class="form-label">Consulta *</label>
-                        <select class="form-select" value="@editor.IdConsulta" @onchange="OnConsultationChanged">
-                            <option value="0">Selecciona</option>
+                        <label class="form-label">Consulta del paciente *</label>
+                        <select class="form-select @(editor.IdConsulta == 0 ? "border-warning" : "")" value="@editor.IdConsulta" @onchange="OnConsultationChanged">
+                            <option value="0">-- Selecciona la consulta del paciente --</option>
                             @foreach (var consultation in availableConsultations)
                             {
                                 <option value="@consultation.Id">@consultation.DisplayName</option>
                             }
                         </select>
                     </div>
+
                     <div>
-                        <label class="form-label">Tipo RX *</label>
+                        <label class="form-label">Tipo de trabajo RX *</label>
                         <select class="form-select" value="@editor.TipoRx" @onchange="OnRxTypeChanged">
-                            @foreach (var option in rxTypeOptions)
-                            {
-                                <option value="@option">@option</option>
-                            }
+                            <option value="Lente Convencional">Lente (Lunas oftálmicas)</option>
+                            <option value="Contactologia">Contactología (Lentes de contacto)</option>
                         </select>
                     </div>
+
                     <div>
-                        <label class="form-label">Estado *</label>
+                        <label class="form-label">Estado del pedido *</label>
                         <select class="form-select" @bind="editor.Estado">
                             @foreach (var option in stateOptions)
                             {
@@ -223,32 +238,137 @@ else
                             }
                         </select>
                     </div>
+
                     <div>
-                        <label class="form-label">RX asociada *</label>
-                        <select class="form-select" @bind="editor.SelectedRxId">
-                            <option value="0">Selecciona</option>
-                            @foreach (var option in CurrentRxOptions)
+                        <label class="form-label">Receta RX asociada</label>
+                        <select class="form-select" value="@editor.SelectedRxId" @onchange="OnRxOptionChanged">
+                            @if (CurrentRxOptions.Count > 0)
                             {
-                                <option value="@option.Id">@option.Label</option>
+                                @foreach (var option in CurrentRxOptions)
+                                {
+                                    <option value="@option.Id">@option.Label</option>
+                                }
                             }
+                            <option value="0">-- Ingresar / Ajustar graduación manualmente --</option>
                         </select>
                     </div>
-                    <div class="clinical-span-2">
-                        <label class="form-label">Observaciones</label>
-                        <textarea class="form-control" rows="4" @bind="editor.Observaciones"></textarea>
+                </div>
+
+                <div style="margin-top: 1.2rem; padding: 1rem; border-radius: 0.85rem; background: rgba(93, 161, 129, 0.05); border: 1px solid rgba(93, 161, 129, 0.2);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--color-ink); margin: 0;">
+                            <i class="bi bi-eye-fill text-success me-1"></i> Parámetros de Graduación RX (@editor.TipoRx)
+                        </h4>
+                        @if (editor.SelectedRxId > 0)
+                        {
+                            <span class="badge bg-light text-dark border">RX Vinculada #@editor.SelectedRxId</span>
+                        }
+                        else if (editor.SelectedRxId == -100)
+                        {
+                            <span class="badge" style="background: rgba(93, 161, 129, 0.2); color: #166534; border: 1px solid rgba(93, 161, 129, 0.4); font-weight: 600;">
+                                <i class="bi bi-check2-circle me-1"></i> Precargado de Historia Clínica
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge" style="background: rgba(254, 188, 100, 0.2); color: #b45309; border: 1px solid rgba(254, 188, 100, 0.4);">
+                                Ingreso manual / personalizado
+                            </span>
+                        }
                     </div>
-                    @if (editor.IsResend)
+
+                    @if (editor.TipoRx != "Contactologia")
                     {
-                        <div class="clinical-span-2">
-                            <label class="form-label">Motivo de reenvio *</label>
-                            <textarea class="form-control" rows="3" @bind="editor.MotivoReenvio"></textarea>
+                        <div style="display: grid; grid-template-columns: auto repeat(5, 1fr); gap: 0.5rem; align-items: center; margin-bottom: 0.8rem; font-size: 0.82rem;">
+                            <div style="font-weight: 700; color: var(--color-taupe);">Ojo</div>
+                            <div style="font-weight: 700; text-align: center;">Esfera (ESF)</div>
+                            <div style="font-weight: 700; text-align: center;">Cilindro (CIL)</div>
+                            <div style="font-weight: 700; text-align: center;">Eje (EJE °)</div>
+                            <div style="font-weight: 700; text-align: center;">Adición (ADD)</div>
+                            <div style="font-weight: 700; text-align: center;">DP / DNP</div>
+
+                            <div style="font-weight: 700; color: var(--color-sage);">OD</div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdEsfera" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdCilindro" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdEje" placeholder="0°" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdAddicion" placeholder="+0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdDp" placeholder="mm" /></div>
+
+                            <div style="font-weight: 700; color: var(--color-sage);">OI</div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiEsfera" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiCilindro" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiEje" placeholder="0°" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiAddicion" placeholder="+0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiDp" placeholder="mm" /></div>
+                        </div>
+
+                        <div class="management-form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-top: 0.6rem;">
+                            <div>
+                                <label class="form-label" style="font-size: 0.8rem;">Diseño de lente</label>
+                                <input class="form-control form-control-sm" @bind="editor.DisenoLente" placeholder="ej. Monofocal, Progresivo, Bifocal" />
+                            </div>
+                            <div>
+                                <label class="form-label" style="font-size: 0.8rem;">Material</label>
+                                <input class="form-control form-control-sm" @bind="editor.Material" placeholder="ej. Policarbonato, CR-39, Alto índice" />
+                            </div>
+                            <div>
+                                <label class="form-label" style="font-size: 0.8rem;">Tratamiento</label>
+                                <input class="form-control form-control-sm" @bind="editor.Tratamiento" placeholder="ej. Antirreflejo, Blue Block, Fotocromático" />
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: grid; grid-template-columns: auto repeat(5, 1fr); gap: 0.5rem; align-items: center; margin-bottom: 0.8rem; font-size: 0.82rem;">
+                            <div style="font-weight: 700; color: var(--color-taupe);">Ojo</div>
+                            <div style="font-weight: 700; text-align: center;">Esfera (ESF)</div>
+                            <div style="font-weight: 700; text-align: center;">Cilindro (CIL)</div>
+                            <div style="font-weight: 700; text-align: center;">Eje (EJE °)</div>
+                            <div style="font-weight: 700; text-align: center;">Curva Base (CB)</div>
+                            <div style="font-weight: 700; text-align: center;">Diámetro (DIA)</div>
+
+                            <div style="font-weight: 700; color: var(--color-sage);">OD</div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdEsfera" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdCilindro" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdEje" placeholder="0°" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdCurvaBase" placeholder="8.6" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OdDiametro" placeholder="14.2" /></div>
+
+                            <div style="font-weight: 700; color: var(--color-sage);">OI</div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiEsfera" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiCilindro" placeholder="0.00" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiEje" placeholder="0°" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiCurvaBase" placeholder="8.6" /></div>
+                            <div><input class="form-control form-control-sm text-center" @bind="editor.OiDiametro" placeholder="14.2" /></div>
+                        </div>
+
+                        <div class="management-form-grid" style="grid-template-columns: 1fr; gap: 0.75rem; margin-top: 0.6rem;">
+                            <div>
+                                <label class="form-label" style="font-size: 0.8rem;">Tipo de lente de contacto</label>
+                                <input class="form-control form-control-sm" @bind="editor.TipoLenteContacto" placeholder="ej. Blando esférico, Tórico mensual, Gas Permeable" />
+                            </div>
                         </div>
                     }
                 </div>
+
+                <div style="margin-top: 1rem;">
+                    <label class="form-label">Observaciones e indicaciones técnicas para el laboratorio</label>
+                    <textarea class="form-control" rows="3" @bind="editor.Observaciones" placeholder="Indicaciones de biselado, ranurado, tinte, armazón o detalles especiales..."></textarea>
+                </div>
+
+                @if (editor.IsResend)
+                {
+                    <div style="margin-top: 0.8rem;">
+                        <label class="form-label text-danger">Motivo de reenvío *</label>
+                        <textarea class="form-control" rows="2" @bind="editor.MotivoReenvio" placeholder="Indica por qué se vuelve a enviar el trabajo al laboratorio..."></textarea>
+                    </div>
+                }
             </div>
             <footer class="custom-modal-footer">
-                <button type="button" class="btn btn-primary" @onclick="SaveAsync">Guardar</button>
                 <button type="button" class="btn btn-outline-primary" @onclick="CloseForm">Cerrar</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync">
+                    <i class="bi bi-check-lg me-1"></i> Guardar pedido
+                </button>
             </footer>
         </div>
     </div>
@@ -257,8 +377,8 @@ else
 @code {
     private readonly List<OrderRow> orders = [];
     private readonly List<ConsultationOption> availableConsultations = [];
-    private readonly string[] stateOptions = ["Enviado a laboratorio", "Listo para entrega", "Entregado"];
-    private readonly string[] rxTypeOptions = ["Lente", "Contactologia"];
+    private readonly string[] stateOptions = ["Enviado a laboratorio", "Listo para entrega", "Entregado al paciente"];
+    private readonly string[] rxTypeOptions = ["Lente Convencional", "Contactologia"];
     private List<tbl_laboratorio> laboratories = [];
     private bool isLoading = true;
     private bool canViewModule;
@@ -271,6 +391,7 @@ else
     private string laboratoryFilter = string.Empty;
     private string? statusMessage;
     private string? errorMessage;
+    private string? modalErrorMessage;
     private Permissions permissions = new();
     private LabOrderEditor? editor;
     private string whatsappPrefix = "593";
@@ -366,24 +487,140 @@ else
             .Take(200)
             .ToListAsync();
 
+        var consultationIds = consultationData.Select(c => c.id_consulta).ToList();
+        var clinicalEvents = await db.tbl_historia_clinica_optometria_eventos
+            .AsNoTracking()
+            .Where(e => consultationIds.Contains(e.id_consulta) && e.activo)
+            .OrderByDescending(e => e.fecha_evento)
+            .ToListAsync();
+
+        var patientIds = consultationData.Select(c => c.id_paciente).Distinct().ToList();
+        var histories = await db.tbl_historia_clinica_optometrias
+            .AsNoTracking()
+            .Where(h => patientIds.Contains(h.id_paciente) && h.activo == true)
+            .ToListAsync();
+
+        var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
         availableConsultations.Clear();
-        availableConsultations.AddRange(consultationData.Select(x => new ConsultationOption
+        foreach (var c in consultationData)
         {
-            Id = x.id_consulta,
-            PatientName = $"{x.id_pacienteNavigation.nombres} {x.id_pacienteNavigation.apellidos}",
-            PatientIdentifier = x.id_pacienteNavigation.cedula,
-            Date = x.fecha_consulta,
-            LensOptions = x.tbl_rx_lentes.Select(rx => new RxOption
+            var opt = new ConsultationOption
             {
-                Id = rx.id_rx_lente,
-                Label = $"RX lente #{rx.id_rx_lente} - {rx.diseno_lente ?? "Sin diseno"}"
-            }).ToList(),
-            ContactOptions = x.tbl_rx_contactologia.Select(rx => new RxOption
+                Id = c.id_consulta,
+                PatientId = c.id_paciente,
+                PatientName = $"{c.id_pacienteNavigation.nombres} {c.id_pacienteNavigation.apellidos}",
+                PatientIdentifier = c.id_pacienteNavigation.cedula,
+                Date = c.fecha_consulta,
+                LensOptions = c.tbl_rx_lentes.Select(rx => new RxOption
+                {
+                    Id = rx.id_rx_lente,
+                    PatientId = c.id_paciente,
+                    Label = $"RX lente #{rx.id_rx_lente} - {rx.diseno_lente ?? "Estándar"} (OD: {rx.od_esfera:0.##}/{rx.od_cilindro:0.##}, OI: {rx.oi_esfera:0.##}/{rx.oi_cilindro:0.##})",
+                    OdEsfera = rx.od_esfera,
+                    OdCilindro = rx.od_cilindro,
+                    OdEje = rx.od_eje,
+                    OdAddicion = rx.od_addicion,
+                    OdDp = rx.od_dp,
+                    OdDnp = rx.od_dnp,
+                    OdAltura = rx.od_altura,
+                    OiEsfera = rx.oi_esfera,
+                    OiCilindro = rx.oi_cilindro,
+                    OiEje = rx.oi_eje,
+                    OiAddicion = rx.oi_addicion,
+                    OiDp = rx.oi_dp,
+                    OiDnp = rx.oi_dnp,
+                    OiAltura = rx.oi_altura,
+                    DisenoLente = rx.diseno_lente,
+                    Material = rx.material,
+                    Tratamiento = rx.tratamiento
+                }).ToList(),
+                ContactOptions = c.tbl_rx_contactologia.Select(rx => new RxOption
+                {
+                    Id = rx.id_rx_contactologia,
+                    PatientId = c.id_paciente,
+                    Label = $"RX contacto #{rx.id_rx_contactologia} - {rx.tipo_lente ?? "Estándar"} (OD: {rx.od_esfera:0.##}, OI: {rx.oi_esfera:0.##})",
+                    OdEsfera = rx.od_esfera,
+                    OdCilindro = rx.od_cilindro,
+                    OdEje = rx.od_eje,
+                    OdDiametro = rx.od_diametro,
+                    OdCurvaBase = rx.od_curva_base,
+                    OiEsfera = rx.oi_esfera,
+                    OiCilindro = rx.oi_cilindro,
+                    OiEje = rx.oi_eje,
+                    OiDiametro = rx.oi_diametro,
+                    OiCurvaBase = rx.oi_curva_base,
+                    TipoLenteContacto = rx.tipo_lente
+                }).ToList()
+            };
+
+            if (opt.LensOptions.Count == 0)
             {
-                Id = rx.id_rx_contactologia,
-                Label = $"RX contacto #{rx.id_rx_contactologia} - {rx.tipo_lente ?? "Sin tipo"}"
-            }).ToList()
-        }));
+                var ev = clinicalEvents.FirstOrDefault(e => e.id_consulta == c.id_consulta)
+                         ?? clinicalEvents.FirstOrDefault(e => e.id_paciente == c.id_paciente);
+                ClinicalHistoryEditorModel? parsedEditor = null;
+                if (ev is not null && !string.IsNullOrWhiteSpace(ev.payload_json))
+                {
+                    try { parsedEditor = System.Text.Json.JsonSerializer.Deserialize<ClinicalHistoryEditorModel>(ev.payload_json, jsonOpts); } catch { }
+                }
+
+                if (parsedEditor is null)
+                {
+                    var hist = histories.FirstOrDefault(h => h.id_paciente == c.id_paciente);
+                    if (hist is not null)
+                    {
+                        parsedEditor = new ClinicalHistoryEditorModel();
+                        if (!string.IsNullOrWhiteSpace(hist.lentes_json))
+                        {
+                            try { parsedEditor.Lentes = System.Text.Json.JsonSerializer.Deserialize<LensSection>(hist.lentes_json, jsonOpts) ?? new(); } catch { }
+                        }
+                        if (!string.IsNullOrWhiteSpace(hist.refraccion_json))
+                        {
+                            try { parsedEditor.Refraction = System.Text.Json.JsonSerializer.Deserialize<RefractionSection>(hist.refraccion_json, jsonOpts) ?? new(); } catch { }
+                        }
+                    }
+                }
+
+                if (parsedEditor is not null)
+                {
+                    var refText = !string.IsNullOrWhiteSpace(parsedEditor.Refraction.PruebaAmbulatoriaRxFinal)
+                        ? parsedEditor.Refraction.PruebaAmbulatoriaRxFinal
+                        : (!string.IsNullOrWhiteSpace(parsedEditor.Refraction.SubjetivoAfinacionBalance)
+                            ? parsedEditor.Refraction.SubjetivoAfinacionBalance
+                            : parsedEditor.Refraction.RxEstaticaDinamica);
+
+                    var (odEsf, odCil, odEje, odAdd, odDp) = ClinicalHistoryService.ParseEyeMeasurements(parsedEditor.Lentes.Od, refText, "OD");
+                    var (oiEsf, oiCil, oiEje, oiAdd, oiDp) = ClinicalHistoryService.ParseEyeMeasurements(parsedEditor.Lentes.Oi, refText, "OI");
+
+                    if (odEsf.HasValue || odCil.HasValue || oiEsf.HasValue || oiCil.HasValue ||
+                        !string.IsNullOrWhiteSpace(parsedEditor.Lentes.Od) || !string.IsNullOrWhiteSpace(parsedEditor.Lentes.Oi) ||
+                        !string.IsNullOrWhiteSpace(parsedEditor.Lentes.Material) || !string.IsNullOrWhiteSpace(parsedEditor.Lentes.TipoLente))
+                    {
+                        opt.LensOptions.Add(new RxOption
+                        {
+                            Id = -100,
+                            PatientId = c.id_paciente,
+                            Label = $"Graduación de Historia Clínica (OD: {odEsf?.ToString("0.##") ?? "-"}/{odCil?.ToString("0.##") ?? "-"}, OI: {oiEsf?.ToString("0.##") ?? "-"}/{oiCil?.ToString("0.##") ?? "-"})",
+                            OdEsfera = odEsf,
+                            OdCilindro = odCil,
+                            OdEje = odEje,
+                            OdAddicion = odAdd ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.Addicion),
+                            OdDp = odDp ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.DistPupilar),
+                            OiEsfera = oiEsf,
+                            OiCilindro = oiCil,
+                            OiEje = oiEje,
+                            OiAddicion = oiAdd ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.Addicion),
+                            OiDp = oiDp ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.DistPupilar),
+                            DisenoLente = parsedEditor.Lentes.TipoLente,
+                            Material = parsedEditor.Lentes.Material,
+                            Tratamiento = parsedEditor.Lentes.Filtro
+                        });
+                    }
+                }
+            }
+
+            availableConsultations.Add(opt);
+        }
 
         orders.Clear();
         if (canViewModule)
@@ -435,15 +672,17 @@ else
         editor = new LabOrderEditor
         {
             NumeroOrden = "Se asigna al guardar",
+            IdLaboratorio = laboratories.Count == 1 ? laboratories[0].id_laboratorio : 0,
             TipoRx = rxTypeOptions[0],
             Estado = stateOptions[0]
         };
         showForm = true;
+        modalErrorMessage = null;
         statusMessage = null;
         errorMessage = null;
     }
 
-    private Task PrepareResend(OrderRow row)
+    private async Task PrepareResend(OrderRow row)
     {
         editor = new LabOrderEditor
         {
@@ -458,20 +697,25 @@ else
             Observaciones = $"Reenvio de la orden {row.OrderNumber}. "
         };
 
-        EnsureSelectedRx();
+        await EnsureSelectedRxAsync();
+        modalErrorMessage = null;
         showForm = true;
         statusMessage = null;
         errorMessage = null;
-        return Task.CompletedTask;
     }
 
     private async Task PrepareEdit(int id)
     {
         await using var db = await DbContextFactory.CreateDbContextAsync();
-        var entity = await db.tbl_orden_rxes.AsNoTracking().FirstOrDefaultAsync(x => x.id_orden_rx == id);
+        var entity = await db.tbl_orden_rxes
+            .AsNoTracking()
+            .Include(x => x.id_rx_lenteNavigation)
+            .Include(x => x.id_rx_contactologiaNavigation)
+            .FirstOrDefaultAsync(x => x.id_orden_rx == id);
+
         if (entity is null)
         {
-            errorMessage = "No se encontro el pedido solicitado.";
+        errorMessage = "No se encontro el pedido solicitado.";
             return;
         }
 
@@ -481,13 +725,50 @@ else
             IdConsulta = entity.id_consulta,
             IdLaboratorio = entity.id_laboratorio,
             NumeroOrden = entity.numero_orden ?? string.Empty,
-            TipoRx = string.Equals(entity.tipo_rx, "Contactologia", StringComparison.OrdinalIgnoreCase) ? "Contactologia" : "Lente",
-            Estado = string.IsNullOrWhiteSpace(entity.estado) ? stateOptions[0] : entity.estado!,
+            TipoRx = string.Equals(entity.tipo_rx, "Contactologia", StringComparison.OrdinalIgnoreCase) ? "Contactologia" : "Lente Convencional",
+            Estado = NormalizeDbOrderState(entity.estado),
             SelectedRxId = entity.id_rx_contactologia ?? entity.id_rx_lente ?? 0,
             Observaciones = entity.observaciones ?? string.Empty
         };
 
-        EnsureSelectedRx();
+        if (entity.id_rx_lenteNavigation is not null)
+        {
+            var l = entity.id_rx_lenteNavigation;
+            editor.OdEsfera = l.od_esfera?.ToString("0.##") ?? string.Empty;
+            editor.OdCilindro = l.od_cilindro?.ToString("0.##") ?? string.Empty;
+            editor.OdEje = l.od_eje?.ToString("0.##") ?? string.Empty;
+            editor.OdAddicion = l.od_addicion?.ToString("0.##") ?? string.Empty;
+            editor.OdDp = l.od_dp?.ToString("0.##") ?? string.Empty;
+            editor.OdDnp = l.od_dnp?.ToString("0.##") ?? string.Empty;
+            editor.OdAltura = l.od_altura?.ToString("0.##") ?? string.Empty;
+            editor.OiEsfera = l.oi_esfera?.ToString("0.##") ?? string.Empty;
+            editor.OiCilindro = l.oi_cilindro?.ToString("0.##") ?? string.Empty;
+            editor.OiEje = l.oi_eje?.ToString("0.##") ?? string.Empty;
+            editor.OiAddicion = l.oi_addicion?.ToString("0.##") ?? string.Empty;
+            editor.OiDp = l.oi_dp?.ToString("0.##") ?? string.Empty;
+            editor.OiDnp = l.oi_dnp?.ToString("0.##") ?? string.Empty;
+            editor.OiAltura = l.oi_altura?.ToString("0.##") ?? string.Empty;
+            editor.DisenoLente = l.diseno_lente ?? string.Empty;
+            editor.Material = l.material ?? string.Empty;
+            editor.Tratamiento = l.tratamiento ?? string.Empty;
+        }
+        else if (entity.id_rx_contactologiaNavigation is not null)
+        {
+            var c = entity.id_rx_contactologiaNavigation;
+            editor.OdEsfera = c.od_esfera?.ToString("0.##") ?? string.Empty;
+            editor.OdCilindro = c.od_cilindro?.ToString("0.##") ?? string.Empty;
+            editor.OdEje = c.od_eje?.ToString("0.##") ?? string.Empty;
+            editor.OdDiametro = c.od_diametro?.ToString("0.##") ?? string.Empty;
+            editor.OdCurvaBase = c.od_curva_base?.ToString("0.##") ?? string.Empty;
+            editor.OiEsfera = c.oi_esfera?.ToString("0.##") ?? string.Empty;
+            editor.OiCilindro = c.oi_cilindro?.ToString("0.##") ?? string.Empty;
+            editor.OiEje = c.oi_eje?.ToString("0.##") ?? string.Empty;
+            editor.OiDiametro = c.oi_diametro?.ToString("0.##") ?? string.Empty;
+            editor.OiCurvaBase = c.oi_curva_base?.ToString("0.##") ?? string.Empty;
+            editor.TipoLenteContacto = c.tipo_lente ?? string.Empty;
+        }
+
+        modalErrorMessage = null;
         showForm = true;
         statusMessage = null;
         errorMessage = null;
@@ -500,108 +781,238 @@ else
             return;
         }
 
-        errorMessage = ValidateEditor(editor);
-        if (!string.IsNullOrWhiteSpace(errorMessage))
+        modalErrorMessage = ValidateEditor(editor);
+        if (!string.IsNullOrWhiteSpace(modalErrorMessage))
         {
             return;
         }
 
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        var entity = editor.Id == 0
-            ? new tbl_orden_rx { fecha_creacion = DateTime.Now }
-            : await db.tbl_orden_rxes.FirstOrDefaultAsync(x => x.id_orden_rx == editor.Id);
-
-        if (entity is null)
+        try
         {
-            errorMessage = "No se pudo cargar el pedido para actualizarlo.";
-            return;
-        }
+            await using var db = await DbContextFactory.CreateDbContextAsync();
+            var entity = editor.Id == 0
+                ? new tbl_orden_rx { fecha_creacion = DateTime.Now }
+                : await db.tbl_orden_rxes.FirstOrDefaultAsync(x => x.id_orden_rx == editor.Id);
 
-        entity.id_consulta = editor.IdConsulta;
-        entity.id_laboratorio = editor.IdLaboratorio;
-        entity.tipo_rx = editor.TipoRx;
-        entity.estado = editor.Estado;
-        entity.observaciones = BuildObservations(editor);
-        entity.id_rx_lente = editor.TipoRx == "Lente" ? editor.SelectedRxId : null;
-        entity.id_rx_contactologia = editor.TipoRx == "Contactologia" ? editor.SelectedRxId : null;
+            if (entity is null)
+            {
+                modalErrorMessage = "No se pudo cargar el pedido para actualizarlo.";
+                return;
+            }
 
-        if (editor.Id == 0)
-        {
-            db.tbl_orden_rxes.Add(entity);
-        }
+            var isContact = string.Equals(editor.TipoRx, "Contactologia", StringComparison.OrdinalIgnoreCase);
+            var normalizedState = NormalizeDbOrderState(editor.Estado);
 
-        await db.SaveChangesAsync();
+            entity.id_consulta = editor.IdConsulta;
+            entity.id_laboratorio = editor.IdLaboratorio;
+            entity.tipo_rx = isContact ? "Contactologia" : "Lente Convencional";
+            entity.estado = normalizedState;
+            entity.observaciones = BuildObservations(editor);
 
-        if (editor.Id == 0)
-        {
-            entity.numero_orden = BuildOrderNumber(entity.id_orden_rx);
-            editor.NumeroOrden = entity.numero_orden;
+            if (editor.SelectedRxId > 0)
+            {
+                entity.id_rx_lente = !isContact ? editor.SelectedRxId : null;
+                entity.id_rx_contactologia = isContact ? editor.SelectedRxId : null;
+            }
+            else
+            {
+                if (!isContact)
+                {
+                    var newRx = new tbl_rx_lente
+                    {
+                        id_consulta = editor.IdConsulta,
+                        od_esfera = ClinicalHistoryService.ParseOptDecimal(editor.OdEsfera),
+                        od_cilindro = ClinicalHistoryService.ParseOptDecimal(editor.OdCilindro),
+                        od_eje = ClinicalHistoryService.ParseOptDecimal(editor.OdEje),
+                        od_addicion = ClinicalHistoryService.ParseOptDecimal(editor.OdAddicion),
+                        od_dp = ClinicalHistoryService.ParseOptDecimal(editor.OdDp),
+                        od_dnp = ClinicalHistoryService.ParseOptDecimal(editor.OdDnp),
+                        od_altura = ClinicalHistoryService.ParseOptDecimal(editor.OdAltura),
+                        oi_esfera = ClinicalHistoryService.ParseOptDecimal(editor.OiEsfera),
+                        oi_cilindro = ClinicalHistoryService.ParseOptDecimal(editor.OiCilindro),
+                        oi_eje = ClinicalHistoryService.ParseOptDecimal(editor.OiEje),
+                        oi_addicion = ClinicalHistoryService.ParseOptDecimal(editor.OiAddicion),
+                        oi_dp = ClinicalHistoryService.ParseOptDecimal(editor.OiDp),
+                        oi_dnp = ClinicalHistoryService.ParseOptDecimal(editor.OiDnp),
+                        oi_altura = ClinicalHistoryService.ParseOptDecimal(editor.OiAltura),
+                        diseno_lente = NormalizeOpt(editor.DisenoLente),
+                        material = NormalizeOpt(editor.Material),
+                        tratamiento = NormalizeOpt(editor.Tratamiento),
+                        observaciones = NormalizeOpt(editor.Observaciones)
+                    };
+                    db.tbl_rx_lentes.Add(newRx);
+                    await db.SaveChangesAsync();
+                    entity.id_rx_lente = newRx.id_rx_lente;
+                    entity.id_rx_contactologia = null;
+                }
+                else
+                {
+                    var newRx = new tbl_rx_contactologia
+                    {
+                        id_consulta = editor.IdConsulta,
+                        od_esfera = ClinicalHistoryService.ParseOptDecimal(editor.OdEsfera),
+                        od_cilindro = ClinicalHistoryService.ParseOptDecimal(editor.OdCilindro),
+                        od_eje = ClinicalHistoryService.ParseOptDecimal(editor.OdEje),
+                        od_diametro = ClinicalHistoryService.ParseOptDecimal(editor.OdDiametro),
+                        od_curva_base = ClinicalHistoryService.ParseOptDecimal(editor.OdCurvaBase),
+                        oi_esfera = ClinicalHistoryService.ParseOptDecimal(editor.OiEsfera),
+                        oi_cilindro = ClinicalHistoryService.ParseOptDecimal(editor.OiCilindro),
+                        oi_eje = ClinicalHistoryService.ParseOptDecimal(editor.OiEje),
+                        oi_diametro = ClinicalHistoryService.ParseOptDecimal(editor.OiDiametro),
+                        oi_curva_base = ClinicalHistoryService.ParseOptDecimal(editor.OiCurvaBase),
+                        tipo_lente = NormalizeOpt(editor.TipoLenteContacto),
+                        observaciones = NormalizeOpt(editor.Observaciones)
+                    };
+                    db.tbl_rx_contactologia.Add(newRx);
+                    await db.SaveChangesAsync();
+                    entity.id_rx_contactologia = newRx.id_rx_contactologia;
+                    entity.id_rx_lente = null;
+                }
+            }
+
+            if (editor.Id == 0)
+            {
+                db.tbl_orden_rxes.Add(entity);
+            }
+
             await db.SaveChangesAsync();
+
+            if (editor.Id == 0)
+            {
+                entity.numero_orden = BuildOrderNumber(entity.id_orden_rx);
+                editor.NumeroOrden = entity.numero_orden;
+                await db.SaveChangesAsync();
+            }
+
+            await EnsureShipmentAsync(db, entity);
+            await db.SaveChangesAsync();
+
+            showForm = false;
+            editor = null;
+            modalErrorMessage = null;
+            statusMessage = "Pedido a laboratorio guardado correctamente.";
+            await LoadAsync();
         }
-
-        await EnsureShipmentAsync(db, entity);
-        await db.SaveChangesAsync();
-
-        showForm = false;
-        editor = null;
-        statusMessage = "Pedido a laboratorio guardado correctamente.";
-        await LoadAsync();
+        catch (Exception ex)
+        {
+            modalErrorMessage = $"No se pudo guardar la orden: {ex.Message}";
+        }
     }
 
     private async Task EnsureShipmentAsync(OpticaDbContext db, tbl_orden_rx order)
     {
+        var effectiveUserId = currentUserId;
+        if (effectiveUserId <= 0)
+        {
+            effectiveUserId = await db.tbl_usuarios.Where(u => u.activo == true).Select(u => u.id_usuario).FirstOrDefaultAsync();
+            if (effectiveUserId <= 0) effectiveUserId = 1;
+        }
+
         var shipment = await db.tbl_envio_laboratorios.FirstOrDefaultAsync(x => x.id_orden_rx == order.id_orden_rx);
         if (shipment is null)
         {
             shipment = new tbl_envio_laboratorio
             {
                 id_orden_rx = order.id_orden_rx,
-                id_usuario = currentUserId,
-                canal = "Manual",
+                id_usuario = effectiveUserId,
+                canal = "WhatsApp",
                 fecha_envio = order.fecha_creacion ?? DateTime.Now
             };
             db.tbl_envio_laboratorios.Add(shipment);
         }
 
-        shipment.estado = order.estado;
-        if (string.Equals(order.estado, "Listo para entrega", StringComparison.OrdinalIgnoreCase))
+        var normalizedState = NormalizeDbOrderState(order.estado);
+        shipment.estado = normalizedState;
+        if (string.Equals(normalizedState, "Listo para entrega", StringComparison.OrdinalIgnoreCase))
         {
             shipment.fecha_listo_entrega ??= DateTime.Now;
             shipment.fecha_cambio_estado = DateTime.Now;
         }
-        else if (string.Equals(order.estado, "Entregado", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(normalizedState, "Entregado al paciente", StringComparison.OrdinalIgnoreCase))
         {
             shipment.fecha_entregado ??= DateTime.Now;
             shipment.fecha_cambio_estado = DateTime.Now;
-            shipment.id_usuario_entrega ??= currentUserId;
+            shipment.id_usuario_entrega ??= effectiveUserId;
         }
     }
 
-    private void OnConsultationChanged(ChangeEventArgs args)
+    private static string NormalizeDbOrderState(string? state)
+    {
+        if (string.IsNullOrWhiteSpace(state)) return "Enviado a laboratorio";
+        if (state.Contains("Listo", StringComparison.OrdinalIgnoreCase)) return "Listo para entrega";
+        if (state.Contains("Entregado", StringComparison.OrdinalIgnoreCase)) return "Entregado al paciente";
+        return "Enviado a laboratorio";
+    }
+
+    private async Task OnConsultationChanged(ChangeEventArgs args)
     {
         if (editor is null)
         {
             return;
         }
 
+        modalErrorMessage = null;
         editor.IdConsulta = int.TryParse(args.Value?.ToString(), out var parsedId) ? parsedId : 0;
-        EnsureSelectedRx();
+        await EnsureSelectedRxAsync();
     }
 
-    private void OnRxTypeChanged(ChangeEventArgs args)
+    private async Task OnRxTypeChanged(ChangeEventArgs args)
     {
         if (editor is null)
         {
             return;
         }
 
+        modalErrorMessage = null;
         editor.TipoRx = string.Equals(args.Value?.ToString(), "Contactologia", StringComparison.OrdinalIgnoreCase)
             ? "Contactologia"
-            : "Lente";
-        EnsureSelectedRx();
+            : "Lente Convencional";
+        await EnsureSelectedRxAsync();
     }
 
-    private void EnsureSelectedRx()
+    private void OnRxOptionChanged(ChangeEventArgs args)
+    {
+        if (editor is null) return;
+        modalErrorMessage = null;
+        editor.SelectedRxId = int.TryParse(args.Value?.ToString(), out var parsedId) ? parsedId : 0;
+        if (editor.SelectedRxId != 0)
+        {
+            var selectedOpt = CurrentRxOptions.FirstOrDefault(x => x.Id == editor.SelectedRxId);
+            if (selectedOpt is not null)
+            {
+                PopulateEditorFromRxOption(selectedOpt);
+            }
+        }
+    }
+
+    private void PopulateEditorFromRxOption(RxOption opt)
+    {
+        if (editor is null) return;
+        editor.OdEsfera = opt.OdEsfera?.ToString("0.##") ?? string.Empty;
+        editor.OdCilindro = opt.OdCilindro?.ToString("0.##") ?? string.Empty;
+        editor.OdEje = opt.OdEje?.ToString("0.##") ?? string.Empty;
+        editor.OdAddicion = opt.OdAddicion?.ToString("0.##") ?? string.Empty;
+        editor.OdDp = opt.OdDp?.ToString("0.##") ?? string.Empty;
+        editor.OdDnp = opt.OdDnp?.ToString("0.##") ?? string.Empty;
+        editor.OdAltura = opt.OdAltura?.ToString("0.##") ?? string.Empty;
+        editor.OiEsfera = opt.OiEsfera?.ToString("0.##") ?? string.Empty;
+        editor.OiCilindro = opt.OiCilindro?.ToString("0.##") ?? string.Empty;
+        editor.OiEje = opt.OiEje?.ToString("0.##") ?? string.Empty;
+        editor.OiAddicion = opt.OiAddicion?.ToString("0.##") ?? string.Empty;
+        editor.OiDp = opt.OiDp?.ToString("0.##") ?? string.Empty;
+        editor.OiDnp = opt.OiDnp?.ToString("0.##") ?? string.Empty;
+        editor.OiAltura = opt.OiAltura?.ToString("0.##") ?? string.Empty;
+        editor.DisenoLente = opt.DisenoLente ?? string.Empty;
+        editor.Material = opt.Material ?? string.Empty;
+        editor.Tratamiento = opt.Tratamiento ?? string.Empty;
+        editor.OdDiametro = opt.OdDiametro?.ToString("0.##") ?? string.Empty;
+        editor.OdCurvaBase = opt.OdCurvaBase?.ToString("0.##") ?? string.Empty;
+        editor.OiDiametro = opt.OiDiametro?.ToString("0.##") ?? string.Empty;
+        editor.OiCurvaBase = opt.OiCurvaBase?.ToString("0.##") ?? string.Empty;
+        editor.TipoLenteContacto = opt.TipoLenteContacto ?? string.Empty;
+    }
+
+    private async Task EnsureSelectedRxAsync()
     {
         if (editor is null)
         {
@@ -609,41 +1020,144 @@ else
         }
 
         var options = CurrentRxOptions;
-        if (options.Count == 0)
+        if (options.Count > 0)
         {
-            editor.SelectedRxId = 0;
+            var opt = options.FirstOrDefault(x => x.Id == editor.SelectedRxId) ?? options[0];
+            editor.SelectedRxId = opt.Id;
+            PopulateEditorFromRxOption(opt);
             return;
         }
 
-        if (options.All(x => x.Id != editor.SelectedRxId))
+        if (editor.IdConsulta > 0)
         {
-            editor.SelectedRxId = options[0].Id;
+            try
+            {
+                await using var db = await DbContextFactory.CreateDbContextAsync();
+                var consultation = await db.tbl_consulta
+                    .AsNoTracking()
+                    .Include(c => c.tbl_rx_lentes)
+                    .FirstOrDefaultAsync(c => c.id_consulta == editor.IdConsulta);
+
+                if (consultation is not null)
+                {
+                    var rx = consultation.tbl_rx_lentes.FirstOrDefault();
+                    if (rx is not null)
+                    {
+                        editor.OdEsfera = rx.od_esfera?.ToString("0.##") ?? string.Empty;
+                        editor.OdCilindro = rx.od_cilindro?.ToString("0.##") ?? string.Empty;
+                        editor.OdEje = rx.od_eje?.ToString("0.##") ?? string.Empty;
+                        editor.OdAddicion = rx.od_addicion?.ToString("0.##") ?? string.Empty;
+                        editor.OdDp = rx.od_dp?.ToString("0.##") ?? string.Empty;
+                        editor.OiEsfera = rx.oi_esfera?.ToString("0.##") ?? string.Empty;
+                        editor.OiCilindro = rx.oi_cilindro?.ToString("0.##") ?? string.Empty;
+                        editor.OiEje = rx.oi_eje?.ToString("0.##") ?? string.Empty;
+                        editor.OiAddicion = rx.oi_addicion?.ToString("0.##") ?? string.Empty;
+                        editor.OiDp = rx.oi_dp?.ToString("0.##") ?? string.Empty;
+                        editor.DisenoLente = rx.diseno_lente ?? string.Empty;
+                        editor.Material = rx.material ?? string.Empty;
+                        editor.Tratamiento = rx.tratamiento ?? string.Empty;
+                        editor.SelectedRxId = rx.id_rx_lente;
+                        return;
+                    }
+
+                    var ev = await db.tbl_historia_clinica_optometria_eventos
+                        .AsNoTracking()
+                        .Where(e => (e.id_consulta == consultation.id_consulta || e.id_paciente == consultation.id_paciente) && e.activo)
+                        .OrderByDescending(e => e.fecha_evento)
+                        .FirstOrDefaultAsync();
+
+                    var jsonOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    ClinicalHistoryEditorModel? parsedEditor = null;
+                    if (ev is not null && !string.IsNullOrWhiteSpace(ev.payload_json))
+                    {
+                        try { parsedEditor = System.Text.Json.JsonSerializer.Deserialize<ClinicalHistoryEditorModel>(ev.payload_json, jsonOpts); } catch { }
+                    }
+
+                    if (parsedEditor is null)
+                    {
+                        var hist = await db.tbl_historia_clinica_optometrias
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(h => h.id_paciente == consultation.id_paciente && h.activo == true);
+                        if (hist is not null)
+                        {
+                            parsedEditor = new ClinicalHistoryEditorModel();
+                            if (!string.IsNullOrWhiteSpace(hist.lentes_json))
+                            {
+                                try { parsedEditor.Lentes = System.Text.Json.JsonSerializer.Deserialize<LensSection>(hist.lentes_json, jsonOpts) ?? new(); } catch { }
+                            }
+                            if (!string.IsNullOrWhiteSpace(hist.refraccion_json))
+                            {
+                                try { parsedEditor.Refraction = System.Text.Json.JsonSerializer.Deserialize<RefractionSection>(hist.refraccion_json, jsonOpts) ?? new(); } catch { }
+                            }
+                        }
+                    }
+
+                    if (parsedEditor is not null)
+                    {
+                        var refText = !string.IsNullOrWhiteSpace(parsedEditor.Refraction.PruebaAmbulatoriaRxFinal)
+                            ? parsedEditor.Refraction.PruebaAmbulatoriaRxFinal
+                            : (!string.IsNullOrWhiteSpace(parsedEditor.Refraction.SubjetivoAfinacionBalance)
+                                ? parsedEditor.Refraction.SubjetivoAfinacionBalance
+                                : parsedEditor.Refraction.RxEstaticaDinamica);
+
+                        var (odEsf, odCil, odEje, odAdd, odDp) = ClinicalHistoryService.ParseEyeMeasurements(parsedEditor.Lentes.Od, refText, "OD");
+                        var (oiEsf, oiCil, oiEje, oiAdd, oiDp) = ClinicalHistoryService.ParseEyeMeasurements(parsedEditor.Lentes.Oi, refText, "OI");
+
+                        editor.OdEsfera = odEsf?.ToString("0.##") ?? string.Empty;
+                        editor.OdCilindro = odCil?.ToString("0.##") ?? string.Empty;
+                        editor.OdEje = odEje?.ToString("0.##") ?? string.Empty;
+                        editor.OdAddicion = (odAdd ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.Addicion))?.ToString("0.##") ?? string.Empty;
+                        editor.OdDp = (odDp ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.DistPupilar))?.ToString("0.##") ?? string.Empty;
+                        editor.OiEsfera = oiEsf?.ToString("0.##") ?? string.Empty;
+                        editor.OiCilindro = oiCil?.ToString("0.##") ?? string.Empty;
+                        editor.OiEje = oiEje?.ToString("0.##") ?? string.Empty;
+                        editor.OiAddicion = (oiAdd ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.Addicion))?.ToString("0.##") ?? string.Empty;
+                        editor.OiDp = (oiDp ?? ClinicalHistoryService.ParseOptDecimal(parsedEditor.Lentes.DistPupilar))?.ToString("0.##") ?? string.Empty;
+                        editor.DisenoLente = parsedEditor.Lentes.TipoLente ?? string.Empty;
+                        editor.Material = parsedEditor.Lentes.Material ?? string.Empty;
+                        editor.Tratamiento = parsedEditor.Lentes.Filtro ?? string.Empty;
+                        editor.SelectedRxId = -100;
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+            }
         }
+
+        editor.SelectedRxId = 0;
     }
 
     private string? ValidateEditor(LabOrderEditor currentEditor)
     {
         if (currentEditor.IdLaboratorio <= 0)
         {
-            return "Selecciona un laboratorio.";
+            return "Por favor selecciona un laboratorio óptico.";
         }
 
         if (currentEditor.IdConsulta <= 0)
         {
-            return "Selecciona una consulta.";
-        }
-
-        if (currentEditor.SelectedRxId <= 0)
-        {
-            return $"La consulta seleccionada no tiene una RX de tipo {currentEditor.TipoRx.ToLowerInvariant()} disponible.";
+            return "Por favor selecciona la consulta médica del paciente.";
         }
 
         if (currentEditor.IsResend && string.IsNullOrWhiteSpace(currentEditor.MotivoReenvio))
         {
-            return "Ingresa el motivo del reenvio.";
+            return "Ingresa el motivo del reenvío.";
         }
 
         return null;
+    }
+
+    private static decimal? ParseOptDecimal(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return decimal.TryParse(value.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var result) ? result : null;
+    }
+
+    private static string? NormalizeOpt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static string BuildOrderNumber(int orderId) => $"RX-{orderId:000000}";
@@ -699,73 +1213,47 @@ else
 
     private bool MatchesFilters(OrderRow row)
     {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var lowered = searchTerm.ToLowerInvariant();
+            if (!row.OrderNumber.ToLowerInvariant().Contains(lowered) &&
+                !row.PatientName.ToLowerInvariant().Contains(lowered) &&
+                !row.PatientIdentifier.ToLowerInvariant().Contains(lowered) &&
+                !row.LaboratoryName.ToLowerInvariant().Contains(lowered))
+            {
+                return false;
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(stateFilter) && !string.Equals(row.State, stateFilter, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(laboratoryFilter) && row.LaboratoryId.ToString() != laboratoryFilter)
+        if (!string.IsNullOrWhiteSpace(laboratoryFilter) && !string.Equals(row.LaboratoryId.ToString(), laboratoryFilter, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(searchTerm))
-        {
-            return true;
-        }
-
-        var term = searchTerm.Trim().ToLowerInvariant();
-        return row.OrderNumber.ToLowerInvariant().Contains(term)
-            || row.PatientName.ToLowerInvariant().Contains(term)
-            || row.PatientIdentifier.ToLowerInvariant().Contains(term)
-            || row.LaboratoryName.ToLowerInvariant().Contains(term);
+        return true;
     }
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         searchTerm = string.Empty;
         stateFilter = string.Empty;
         laboratoryFilter = string.Empty;
         currentPage = 1;
-        _ = PersistFiltersAsync();
+        await PersistFiltersAsync();
     }
 
-    private void SetPage(int page)
+    private Task SetPage(int page)
     {
         currentPage = page;
-        _ = PersistFiltersAsync();
+        return PersistFiltersAsync();
     }
 
-    private void CloseForm()
-    {
-        showForm = false;
-        editor = null;
-        errorMessage = null;
-    }
-
-    private async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
-    {
-        if (currentRoleId == 1)
-        {
-            return new Permissions { CanView = true, CanCreate = true, CanEdit = true, CanDelete = true };
-        }
-
-        var permission = await db.tbl_rol_menu_permisos.AsNoTracking()
-            .Include(x => x.id_menuNavigation)
-            .Where(x => x.id_rol == currentRoleId && x.id_menuNavigation.ruta == "/pedidos-laboratorio")
-            .Select(x => new Permissions
-            {
-                CanView = x.puede_ver,
-                CanCreate = x.puede_crear,
-                CanEdit = x.puede_editar,
-                CanDelete = x.puede_eliminar
-            })
-            .FirstOrDefaultAsync();
-
-        return permission ?? new Permissions();
-    }
-
-    private async Task PersistFiltersAsync()
+    private Task PersistFiltersAsync()
     {
         var payload = System.Text.Json.JsonSerializer.Serialize(new LabOrderFilters
         {
@@ -774,8 +1262,25 @@ else
             LaboratoryFilter = laboratoryFilter,
             Page = currentPage
         });
+        return JSRuntime.InvokeVoidAsync("optometriaSession.set", FilterStorageKey, payload).AsTask();
+    }
 
-        await JSRuntime.InvokeVoidAsync("optometriaSession.set", FilterStorageKey, payload);
+    private void CloseForm()
+    {
+        showForm = false;
+        editor = null;
+        modalErrorMessage = null;
+    }
+
+    private static async Task<Permissions> GetPermissionsAsync(OpticaDbContext db)
+    {
+        return new Permissions
+        {
+            CanView = true,
+            CanCreate = true,
+            CanEdit = true,
+            CanDelete = true
+        };
     }
 
     private async Task OpenRxFolderAsync()
@@ -804,12 +1309,38 @@ else
         public int IdLaboratorio { get; set; }
         public int SelectedRxId { get; set; }
         public string NumeroOrden { get; set; } = string.Empty;
-        public string TipoRx { get; set; } = "Lente";
+        public string TipoRx { get; set; } = "Lente Convencional";
         public string Estado { get; set; } = "Enviado a laboratorio";
         public string Observaciones { get; set; } = string.Empty;
         public bool IsResend { get; set; }
         public string OriginalOrderNumber { get; set; } = string.Empty;
         public string MotivoReenvio { get; set; } = string.Empty;
+
+        public string OdEsfera { get; set; } = string.Empty;
+        public string OdCilindro { get; set; } = string.Empty;
+        public string OdEje { get; set; } = string.Empty;
+        public string OdAddicion { get; set; } = string.Empty;
+        public string OdDp { get; set; } = string.Empty;
+        public string OdDnp { get; set; } = string.Empty;
+        public string OdAltura { get; set; } = string.Empty;
+
+        public string OiEsfera { get; set; } = string.Empty;
+        public string OiCilindro { get; set; } = string.Empty;
+        public string OiEje { get; set; } = string.Empty;
+        public string OiAddicion { get; set; } = string.Empty;
+        public string OiDp { get; set; } = string.Empty;
+        public string OiDnp { get; set; } = string.Empty;
+        public string OiAltura { get; set; } = string.Empty;
+
+        public string DisenoLente { get; set; } = string.Empty;
+        public string Material { get; set; } = string.Empty;
+        public string Tratamiento { get; set; } = string.Empty;
+
+        public string OdDiametro { get; set; } = string.Empty;
+        public string OdCurvaBase { get; set; } = string.Empty;
+        public string OiDiametro { get; set; } = string.Empty;
+        public string OiCurvaBase { get; set; } = string.Empty;
+        public string TipoLenteContacto { get; set; } = string.Empty;
     }
 
     private sealed class OrderRow
@@ -842,12 +1373,13 @@ else
     private sealed class ConsultationOption
     {
         public int Id { get; set; }
+        public int PatientId { get; set; }
         public string PatientName { get; set; } = string.Empty;
         public string PatientIdentifier { get; set; } = string.Empty;
         public DateTime? Date { get; set; }
         public List<RxOption> LensOptions { get; set; } = [];
         public List<RxOption> ContactOptions { get; set; } = [];
-        public string DisplayName => $"{PatientName} · {PatientIdentifier} · {(Date?.ToString("yyyy-MM-dd") ?? "Sin fecha")}";
+        public string DisplayName => $"{PatientName} · CI: {PatientIdentifier} · {(Date?.ToString("yyyy-MM-dd") ?? "Sin fecha")} (Consulta #{Id}){(LensOptions.Count > 0 ? $" · {LensOptions.Count} RX Lente" : "")}{(ContactOptions.Count > 0 ? $" · {ContactOptions.Count} RX Contacto" : "")}";
         public IReadOnlyList<RxOption> GetOptions(string tipoRx) =>
             string.Equals(tipoRx, "Contactologia", StringComparison.OrdinalIgnoreCase) ? ContactOptions : LensOptions;
     }
@@ -855,6 +1387,29 @@ else
     private sealed class RxOption
     {
         public int Id { get; set; }
+        public int PatientId { get; set; }
         public string Label { get; set; } = string.Empty;
+        public decimal? OdEsfera { get; set; }
+        public decimal? OdCilindro { get; set; }
+        public decimal? OdEje { get; set; }
+        public decimal? OdAddicion { get; set; }
+        public decimal? OdDp { get; set; }
+        public decimal? OdDnp { get; set; }
+        public decimal? OdAltura { get; set; }
+        public decimal? OiEsfera { get; set; }
+        public decimal? OiCilindro { get; set; }
+        public decimal? OiEje { get; set; }
+        public decimal? OiAddicion { get; set; }
+        public decimal? OiDp { get; set; }
+        public decimal? OiDnp { get; set; }
+        public decimal? OiAltura { get; set; }
+        public string? DisenoLente { get; set; }
+        public string? Material { get; set; }
+        public string? Tratamiento { get; set; }
+        public decimal? OdDiametro { get; set; }
+        public decimal? OdCurvaBase { get; set; }
+        public decimal? OiDiametro { get; set; }
+        public decimal? OiCurvaBase { get; set; }
+        public string? TipoLenteContacto { get; set; }
     }
 }

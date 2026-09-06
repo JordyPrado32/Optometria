@@ -461,11 +461,48 @@ else
             return;
         }
 
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var isFullAdmin = authState.User.IsInRole("Administrador") || authState.User.IsInRole("Admin");
+        var doctorProfile = await dbContext.tbl_medico.AsNoTracking().FirstOrDefaultAsync(m => m.id_usuario == currentUserId);
+        var isDoctorOnly = (doctorProfile is not null || authState.User.IsInRole("Doctor") || authState.User.IsInRole("Médico") || authState.User.IsInRole("Medico")) && !isFullAdmin;
+
         List<tbl_paciente> loadedPatients;
-        if (IsEntryMode)
+        if (isDoctorOnly)
         {
+            var doctorId = doctorProfile?.id_medico ?? 0;
+            var citaPatientIds = await dbContext.tbl_citas
+                .AsNoTracking()
+                .Where(c => (doctorId > 0 && c.id_medico == doctorId) || c.id_medicoNavigation.id_usuario == currentUserId)
+                .Select(c => c.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var historyPatientIds = await dbContext.tbl_historia_clinica_optometrias
+                .AsNoTracking()
+                .Where(h => h.id_optometra_apertura == currentUserId || h.id_optometra_ultima_actualizacion == currentUserId)
+                .Select(h => h.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var eventoPatientIds = await dbContext.tbl_historia_clinica_optometria_eventos
+                .AsNoTracking()
+                .Where(h => h.id_optometra == currentUserId)
+                .Select(h => h.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var consultaPatientIds = await dbContext.tbl_consulta
+                .AsNoTracking()
+                .Where(c => c.id_optometra == currentUserId)
+                .Select(c => c.id_paciente)
+                .Distinct()
+                .ToListAsync();
+
+            var assignedPatientIds = citaPatientIds.Union(historyPatientIds).Union(eventoPatientIds).Union(consultaPatientIds).Distinct().ToList();
+
             loadedPatients = await dbContext.tbl_pacientes
                 .AsNoTracking()
+                .Where(p => assignedPatientIds.Contains(p.id_paciente))
                 .Include(p => p.id_usuario_registroNavigation)
                 .Include(p => p.tbl_consulta)
                 .ToListAsync();
@@ -474,9 +511,8 @@ else
         {
             loadedPatients = await dbContext.tbl_pacientes
                 .AsNoTracking()
-                .Where(p => p.tbl_consulta.Any(c => c.id_optometra == currentUserId))
                 .Include(p => p.id_usuario_registroNavigation)
-                .Include(p => p.tbl_consulta.Where(c => c.id_optometra == currentUserId))
+                .Include(p => p.tbl_consulta)
                 .ToListAsync();
         }
 

@@ -260,94 +260,195 @@ else
                                 <span style="font-size: 0.8rem; color: var(--color-taupe);">Credenciales y estado de acceso del médico a la plataforma</span>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 0.4rem; align-items: center;">
-                            <span class="badge" style="background: @(editor.LinkedUserActive ? "rgba(93, 161, 129, 0.18)" : "rgba(210, 74, 74, 0.15)"); color: @(editor.LinkedUserActive ? "#2b8a3e" : "#c92a2a"); font-size: 0.78rem; padding: 0.35rem 0.7rem; border-radius: 2rem;">
-                                <i class="bi @(editor.LinkedUserActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i> @(editor.LinkedUserActive ? "Usuario Activo" : "Usuario Inactivo")
-                            </span>
-                            @if (editor.LinkedUserBlocked)
-                            {
-                                <span class="badge" style="background: rgba(210, 74, 74, 0.15); color: #c92a2a; font-size: 0.78rem; padding: 0.35rem 0.7rem; border-radius: 2rem;">
-                                    <i class="bi bi-lock-fill me-1"></i> Bloqueado
-                                </span>
-                            }
-                        </div>
-                    </div>
-
-                    @if (isCreatingNewDoctor && !selfManagedMode)
-                    {
-                        <div style="margin-bottom: 0.85rem;">
-                            <label class="form-label" for="doctorUser" style="font-weight: 600;">Seleccionar usuario para vincular al médico *</label>
-                            <select id="doctorUser" class="form-select" value="@editor.IdUsuario" @onchange="OnEditorUserChanged" disabled="@(!permissions.CanCreate)">
-                                <option value="0">-- Selecciona un usuario con rol médico --</option>
-                                @foreach (var user in eligibleUsers.OrderBy(u => u.apellidos).ThenBy(u => u.nombres))
-                                {
-                                    <option value="@user.id_usuario">@($"{GetFullName(user)} (@{user.usuario}) - {user.email ?? "Sin correo"}")</option>
-                                }
-                            </select>
-                        </div>
-                    }
-
-                    <div class="management-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-top: 0.5rem;">
-                        <div>
-                            <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Nombre de usuario</label>
-                            <div class="input-group">
-                                <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-person-fill"></i></span>
-                                <input class="form-control" value="@editor.LinkedUserName" readonly style="background: #ffffff; font-weight: 600;" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Correo electrónico de acceso</label>
-                            <div class="input-group">
-                                <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-envelope-fill"></i></span>
-                                <input class="form-control" value="@editor.LinkedUserEmail" @onchange="args => editor.LinkedUserEmail = args.Value?.ToString() ?? string.Empty" readonly="@(!CanModifyEditor)" style="background: #ffffff;" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Rol asignado</label>
-                            <div class="input-group">
-                                <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-award-fill"></i></span>
-                                <input class="form-control" value="@editor.LinkedRoleName" readonly style="background: #ffffff;" />
-                            </div>
-                        </div>
-
-                        @if (editor.LinkedUserLastPasswordChange.HasValue)
+                        @if (!isCreatingNewDoctor || !editor.CreateNewAccount)
                         {
-                            <div>
-                                <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Último cambio de clave</label>
-                                <div class="input-group">
-                                    <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-calendar2-check"></i></span>
-                                    <input class="form-control" value="@editor.LinkedUserLastPasswordChange.Value.ToString("yyyy-MM-dd")" readonly style="background: #ffffff;" />
-                                </div>
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                <span class="badge" style="background: @(editor.LinkedUserActive ? "rgba(93, 161, 129, 0.18)" : "rgba(210, 74, 74, 0.15)"); color: @(editor.LinkedUserActive ? "#2b8a3e" : "#c92a2a"); font-size: 0.78rem; padding: 0.35rem 0.7rem; border-radius: 2rem;">
+                                    <i class="bi @(editor.LinkedUserActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i> @(editor.LinkedUserActive ? "Usuario Activo" : "Usuario Inactivo")
+                                </span>
+                                @if (editor.LinkedUserBlocked)
+                                {
+                                    <span class="badge" style="background: rgba(210, 74, 74, 0.15); color: #c92a2a; font-size: 0.78rem; padding: 0.35rem 0.7rem; border-radius: 2rem;">
+                                        <i class="bi bi-lock-fill me-1"></i> Bloqueado
+                                    </span>
+                                }
                             </div>
                         }
                     </div>
 
-                    @if (CanModifyEditor)
+                    @if (isCreatingNewDoctor && !selfManagedMode)
                     {
-                        <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px dashed rgba(127,105,81,0.2);">
-                            <div class="form-check form-switch" style="margin-bottom: 0.6rem;">
-                                <input id="changeDoctorPasswordSwitch" class="form-check-input" type="checkbox" @bind="editor.ChangePassword" />
-                                <label class="form-check-label fw-bold" for="changeDoctorPasswordSwitch" style="color: var(--color-ink); font-size: 0.88rem;">
-                                    <i class="bi bi-key-fill text-warning me-1"></i> Asignar / Cambiar contraseña de inicio de sesión
-                                </label>
+                        @if (eligibleUsers.Count > 0)
+                        {
+                            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; background: #ffffff; padding: 0.6rem 0.9rem; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.15); flex-wrap: wrap;">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="doctorAccountMode" id="modeNewAccount" checked="@(editor.CreateNewAccount)" @onchange="() => OnAccountModeChanged(true)">
+                                    <label class="form-check-label fw-bold" for="modeNewAccount" style="cursor: pointer; font-size: 0.88rem; color: var(--color-ink);">
+                                        <i class="bi bi-person-plus-fill text-success me-1"></i> Crear nueva cuenta de usuario médico
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="doctorAccountMode" id="modeLinkAccount" checked="@(!editor.CreateNewAccount)" @onchange="() => OnAccountModeChanged(false)">
+                                    <label class="form-check-label fw-bold" for="modeLinkAccount" style="cursor: pointer; font-size: 0.88rem; color: var(--color-ink);">
+                                        <i class="bi bi-link-45deg text-primary me-1"></i> Vincular usuario existente (@eligibleUsers.Count disponible@(eligibleUsers.Count > 1 ? "s" : ""))
+                                    </label>
+                                </div>
+                            </div>
+                        }
+
+                        @if (editor.CreateNewAccount)
+                        {
+                            <div class="management-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem;">
+                                <div>
+                                    <label class="form-label" for="newDoctorNombres" style="font-size: 0.84rem; font-weight: 600;">Nombres *</label>
+                                    <input id="newDoctorNombres" class="form-control" @bind="editor.NewUserNombres" placeholder="Ej. Juan Carlos" maxlength="100" />
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorApellidos" style="font-size: 0.84rem; font-weight: 600;">Apellidos *</label>
+                                    <input id="newDoctorApellidos" class="form-control" @bind="editor.NewUserApellidos" placeholder="Ej. Pérez Gómez" maxlength="100" />
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorUsuario" style="font-size: 0.84rem; font-weight: 600;">Usuario de acceso *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" style="background: rgba(0,0,0,0.03);">@@</span>
+                                        <input id="newDoctorUsuario" class="form-control" @bind="editor.NewUserUsuario" placeholder="ej. jperez" maxlength="50" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorEmail" style="font-size: 0.84rem; font-weight: 600;">Correo electrónico *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-envelope-fill"></i></span>
+                                        <input id="newDoctorEmail" type="email" class="form-control" @bind="editor.NewUserEmail" placeholder="medico@optica.com" maxlength="100" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorTelefono" style="font-size: 0.84rem;">Teléfono celular</label>
+                                    <input id="newDoctorTelefono" class="form-control" @bind="editor.NewUserTelefono" placeholder="10 dígitos" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorRol" style="font-size: 0.84rem; font-weight: 600;">Rol del médico *</label>
+                                    <select id="newDoctorRol" class="form-select" @bind="editor.NewUserIdRol">
+                                        <option value="0">-- Selecciona un rol --</option>
+                                        @foreach (var role in availableMedicalRoles)
+                                        {
+                                            <option value="@role.id_rol">@role.nombre</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorPassword" style="font-size: 0.84rem; font-weight: 600;">Contraseña inicial *</label>
+                                    <input id="newDoctorPassword" type="password" class="form-control" @bind="editor.NewUserPassword" placeholder="Mínimo 6 caracteres" />
+                                </div>
+                                <div>
+                                    <label class="form-label" for="newDoctorConfirmPassword" style="font-size: 0.84rem; font-weight: 600;">Confirmar contraseña *</label>
+                                    <input id="newDoctorConfirmPassword" type="password" class="form-control" @bind="editor.NewUserConfirmPassword" placeholder="Repite la contraseña" />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="margin-bottom: 0.85rem;">
+                                <label class="form-label" for="doctorUser" style="font-weight: 600;">Seleccionar usuario para vincular al médico *</label>
+                                <select id="doctorUser" class="form-select" value="@editor.IdUsuario" @onchange="OnEditorUserChanged" disabled="@(!permissions.CanCreate)">
+                                    <option value="0">-- Selecciona un usuario con rol médico --</option>
+                                    @foreach (var user in eligibleUsers.OrderBy(u => u.apellidos).ThenBy(u => u.nombres))
+                                    {
+                                        <option value="@user.id_usuario">@($"{GetFullName(user)} (@{user.usuario}) - {user.email ?? "Sin correo"}")</option>
+                                    }
+                                </select>
                             </div>
 
-                            @if (editor.ChangePassword)
-                            {
-                                <div class="management-form-grid" style="grid-template-columns: 1fr 1fr; gap: 0.85rem; background: #ffffff; padding: 0.85rem; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.15);">
-                                    <div>
-                                        <label class="form-label" for="doctorNewPassword" style="font-size: 0.84rem;">Nueva contraseña *</label>
-                                        <input id="doctorNewPassword" type="password" class="form-control form-control-sm" @bind="editor.NewPassword" placeholder="Mínimo 6 caracteres" />
+                            <div class="management-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-top: 0.5rem;">
+                                <div>
+                                    <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Nombre de usuario</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-person-fill"></i></span>
+                                        <input class="form-control" value="@editor.LinkedUserName" readonly style="background: #ffffff; font-weight: 600;" />
                                     </div>
-                                    <div>
-                                        <label class="form-label" for="doctorConfirmPassword" style="font-size: 0.84rem;">Confirmar nueva contraseña *</label>
-                                        <input id="doctorConfirmPassword" type="password" class="form-control form-control-sm" @bind="editor.ConfirmPassword" placeholder="Repite la contraseña" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Correo electrónico de acceso</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-envelope-fill"></i></span>
+                                        <input class="form-control" value="@editor.LinkedUserEmail" readonly style="background: #ffffff;" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Rol asignado</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-award-fill"></i></span>
+                                        <input class="form-control" value="@editor.LinkedRoleName" readonly style="background: #ffffff;" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="management-form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.85rem; margin-top: 0.5rem;">
+                            <div>
+                                <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Nombre de usuario</label>
+                                <div class="input-group">
+                                    <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-person-fill"></i></span>
+                                    <input class="form-control" value="@editor.LinkedUserName" readonly style="background: #ffffff; font-weight: 600;" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Correo electrónico de acceso</label>
+                                <div class="input-group">
+                                    <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-envelope-fill"></i></span>
+                                    <input class="form-control" value="@editor.LinkedUserEmail" @onchange="args => editor.LinkedUserEmail = args.Value?.ToString() ?? string.Empty" readonly="@(!CanModifyEditor)" style="background: #ffffff;" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Rol asignado</label>
+                                <div class="input-group">
+                                    <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-award-fill"></i></span>
+                                    <input class="form-control" value="@editor.LinkedRoleName" readonly style="background: #ffffff;" />
+                                </div>
+                            </div>
+
+                            @if (editor.LinkedUserLastPasswordChange.HasValue)
+                            {
+                                <div>
+                                    <label class="form-label" style="font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--color-taupe);">Último cambio de clave</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" style="background: rgba(0,0,0,0.03);"><i class="bi bi-calendar2-check"></i></span>
+                                        <input class="form-control" value="@editor.LinkedUserLastPasswordChange.Value.ToString("yyyy-MM-dd")" readonly style="background: #ffffff;" />
                                     </div>
                                 </div>
                             }
                         </div>
+
+                        @if (CanModifyEditor)
+                        {
+                            <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px dashed rgba(127,105,81,0.2);">
+                                <div class="form-check form-switch" style="margin-bottom: 0.6rem;">
+                                    <input id="changeDoctorPasswordSwitch" class="form-check-input" type="checkbox" @bind="editor.ChangePassword" />
+                                    <label class="form-check-label fw-bold" for="changeDoctorPasswordSwitch" style="color: var(--color-ink); font-size: 0.88rem;">
+                                        <i class="bi bi-key-fill text-warning me-1"></i> Asignar / Cambiar contraseña de inicio de sesión
+                                    </label>
+                                </div>
+
+                                @if (editor.ChangePassword)
+                                {
+                                    <div class="management-form-grid" style="grid-template-columns: 1fr 1fr; gap: 0.85rem; background: #ffffff; padding: 0.85rem; border-radius: 0.75rem; border: 1px solid rgba(127,105,81,0.15);">
+                                        <div>
+                                            <label class="form-label" for="doctorNewPassword" style="font-size: 0.84rem;">Nueva contraseña *</label>
+                                            <input id="doctorNewPassword" type="password" class="form-control form-control-sm" @bind="editor.NewPassword" placeholder="Mínimo 6 caracteres" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="doctorConfirmPassword" style="font-size: 0.84rem;">Confirmar nueva contraseña *</label>
+                                            <input id="doctorConfirmPassword" type="password" class="form-control form-control-sm" @bind="editor.ConfirmPassword" placeholder="Repite la contraseña" />
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
                     }
                 </div>
 
@@ -437,7 +538,7 @@ else
                                 <label class="form-label d-block">Puede gestionar agenda</label>
                                 <div class="form-check form-switch">
                                     <input id="doctorCanManageAgenda" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarAgenda" disabled="@(!CanModifyEditor)" />
-                                    <label class="form-check-label" for="doctorCanManageAgenda">@((editor.PuedeGestionarAgenda ? "SÃ­" : "No"))</label>
+                                    <label class="form-check-label" for="doctorCanManageAgenda">@((editor.PuedeGestionarAgenda ? "Sí" : "No"))</label>
                                 </div>
                             </div>
 
@@ -445,23 +546,23 @@ else
                                 <label class="form-label d-block">Puede gestionar disponibilidad</label>
                                 <div class="form-check form-switch">
                                     <input id="doctorCanManageAvailability" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarDisponibilidad" disabled="@(!CanModifyEditor)" />
-                                    <label class="form-check-label" for="doctorCanManageAvailability">@((editor.PuedeGestionarDisponibilidad ? "SÃ­" : "No"))</label>
+                                    <label class="form-check-label" for="doctorCanManageAvailability">@((editor.PuedeGestionarDisponibilidad ? "Sí" : "No"))</label>
                                 </div>
                             </div>
 
                             <div>
-                                <label class="form-label d-block">Puede gestionar historia clinica</label>
+                                <label class="form-label d-block">Puede gestionar historia clínica</label>
                                 <div class="form-check form-switch">
                                     <input id="doctorCanManageHistory" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarHistoriaClinica" disabled="@(!CanModifyEditor)" />
-                                    <label class="form-check-label" for="doctorCanManageHistory">@((editor.PuedeGestionarHistoriaClinica ? "SÃ­" : "No"))</label>
+                                    <label class="form-check-label" for="doctorCanManageHistory">@((editor.PuedeGestionarHistoriaClinica ? "Sí" : "No"))</label>
                                 </div>
                             </div>
 
                             <div>
-                                <label class="form-label d-block">Puede apoyar facturacion</label>
+                                <label class="form-label d-block">Puede apoyar facturación</label>
                                 <div class="form-check form-switch">
                                     <input id="doctorCanManageBilling" class="form-check-input" type="checkbox" @bind="editor.PuedeGestionarFacturacion" disabled="@(!CanModifyEditor)" />
-                                    <label class="form-check-label" for="doctorCanManageBilling">@((editor.PuedeGestionarFacturacion ? "SÃ­" : "No"))</label>
+                                    <label class="form-check-label" for="doctorCanManageBilling">@((editor.PuedeGestionarFacturacion ? "Sí" : "No"))</label>
                                 </div>
                             </div>
 
@@ -576,6 +677,7 @@ else
 @code {
     private readonly List<tbl_usuario> medicalUsers = [];
     private readonly List<tbl_usuario> eligibleUsers = [];
+    private readonly List<tbl_rol> availableMedicalRoles = [];
     private readonly List<tbl_log_auditoria> auditEntries = [];
     private ModulePermissions permissions = new();
     private DoctorEditorModel? editor;
@@ -601,13 +703,13 @@ else
     private string? errorMessage;
 
     private bool selfManagedMode => isMedicalRoleUser && !isAdmin;
-    private bool CanCreateDoctorProfile => permissions.CanCreate && eligibleUsers.Any();
+    private bool CanCreateDoctorProfile => permissions.CanCreate;
     private bool CanModifyEditor => editor is not null && (isCreatingNewDoctor ? permissions.CanCreate : permissions.CanEdit);
-    private string HeroTitle => selfManagedMode ? "Completa y mantiene tu ficha medica" : "Gestion de medicos";
+    private string HeroTitle => selfManagedMode ? "Completa y mantiene tu ficha médica" : "Gestión de médicos";
     private string HeroDescription => selfManagedMode
-        ? "Desde aqui completas tu perfil profesional para quedar visible en citas, horarios y agenda del paciente."
-        : "Administra medicos, valida que cada usuario con rol medico tenga su ficha profesional y controla si queda visible para agendamiento.";
-    private string EditorTitle => isCreatingNewDoctor ? "Nueva ficha medica" : "Detalle del medico";
+        ? "Desde aquí completas tu perfil profesional para quedar visible en citas, horarios y agenda del paciente."
+        : "Administra médicos, crea nuevas cuentas profesionales y controla su disponibilidad para agendamiento.";
+    private string EditorTitle => isCreatingNewDoctor ? "Nueva ficha médica" : "Detalle del médico";
     private tbl_usuario? CurrentSelfUser => medicalUsers.FirstOrDefault(u => u.id_usuario == currentUserId);
 
     private List<tbl_usuario> FilteredUsers => medicalUsers
@@ -644,6 +746,7 @@ else
 
         medicalUsers.Clear();
         eligibleUsers.Clear();
+        availableMedicalRoles.Clear();
         auditEntries.Clear();
 
         if (!canViewDoctors)
@@ -651,6 +754,14 @@ else
             isLoading = false;
             return;
         }
+
+        var rolesList = await dbContext.tbl_rols
+            .AsNoTracking()
+            .OrderBy(r => r.nombre)
+            .ToListAsync();
+
+        var medicalRoles = rolesList.Where(r => IsMedicalRoleName(r.nombre)).ToList();
+        availableMedicalRoles.AddRange(medicalRoles.Count > 0 ? medicalRoles : rolesList);
 
         var loadedUsers = await dbContext.tbl_usuarios
             .AsNoTracking()
@@ -682,18 +793,66 @@ else
         selectedUser = null;
         auditEntries.Clear();
 
-        var initialUser = selfManagedMode
-            ? eligibleUsers.FirstOrDefault(u => u.id_usuario == currentUserId)
-            : eligibleUsers.FirstOrDefault();
-
-        if (initialUser is null)
+        if (selfManagedMode)
         {
-            ShowAlert("No hay usuarios con rol medico pendientes de completar ficha.", true);
-            return;
+            var initialUser = eligibleUsers.FirstOrDefault(u => u.id_usuario == currentUserId);
+            if (initialUser is null)
+            {
+                ShowAlert("No tienes una cuenta médica pendiente de completar ficha.", true);
+                return;
+            }
+            editor = BuildNewEditor(initialUser);
+        }
+        else
+        {
+            var defaultRole = availableMedicalRoles.FirstOrDefault(r => IsMedicalRoleName(r.nombre))
+                ?? availableMedicalRoles.FirstOrDefault();
+
+            if (eligibleUsers.Count > 0)
+            {
+                var initialUser = eligibleUsers.First();
+                editor = BuildNewEditor(initialUser);
+                editor.CreateNewAccount = false;
+                editor.NewUserIdRol = defaultRole?.id_rol ?? initialUser.id_rol;
+            }
+            else
+            {
+                editor = new DoctorEditorModel
+                {
+                    CreateNewAccount = true,
+                    NewUserIdRol = defaultRole?.id_rol ?? 0,
+                    AceptarCitasTelefonicas = true,
+                    AceptarCitasPresenciales = true,
+                    PuedeGestionarAgenda = true,
+                    PuedeGestionarDisponibilidad = true,
+                    PuedeGestionarHistoriaClinica = true,
+                    DuracionConsultaMinutos = "30",
+                    Activo = true
+                };
+            }
         }
 
-        editor = BuildNewEditor(initialUser);
         showFormModal = true;
+    }
+
+    private void OnAccountModeChanged(bool createNew)
+    {
+        if (editor is null) return;
+        editor.CreateNewAccount = createNew;
+        if (!createNew && eligibleUsers.Count > 0)
+        {
+            var targetUser = eligibleUsers.FirstOrDefault(u => u.id_usuario == editor.IdUsuario) ?? eligibleUsers.First();
+            editor.IdUsuario = targetUser.id_usuario;
+            editor.LinkedUserName = targetUser.usuario;
+            editor.LinkedUserFullName = GetFullName(targetUser);
+            editor.LinkedRoleName = targetUser.id_rolNavigation?.nombre ?? "Sin rol";
+            editor.LinkedUserEmail = targetUser.email ?? string.Empty;
+            editor.LinkedUserPhone = targetUser.telefono ?? string.Empty;
+            editor.LinkedUserActive = targetUser.activo == true;
+            editor.LinkedUserBlocked = targetUser.bloqueado == true;
+            editor.LinkedUserLastPasswordChange = targetUser.ultimo_cambio_password;
+            editor.LinkedUserCreationDate = targetUser.fecha_creacion;
+        }
     }
 
     private void PrepareEditDoctor(tbl_usuario user)
@@ -702,7 +861,7 @@ else
 
         if (!CanManageUser(user))
         {
-            ShowAlert("No tienes permiso para gestionar este medico.", true);
+            ShowAlert("No tienes permiso para gestionar este médico.", true);
             return;
         }
 
@@ -736,8 +895,91 @@ else
         }
 
         var currentEditor = editor!;
-
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+        var now = DateTime.Now;
+
+        if (isCreatingNewDoctor && currentEditor.CreateNewAccount && !selfManagedMode)
+        {
+            if (!permissions.CanCreate)
+            {
+                ShowAlert("Tu rol no tiene permiso para crear usuarios o médicos.", true);
+                return;
+            }
+
+            var normalizedUserName = currentEditor.NewUserUsuario.Trim().ToLowerInvariant();
+            var normalizedEmail = currentEditor.NewUserEmail.Trim().ToLowerInvariant();
+
+            if (await dbContext.tbl_usuarios.AnyAsync(u => u.usuario.ToLower() == normalizedUserName))
+            {
+                ShowAlert("El nombre de usuario ya está registrado en el sistema.", true);
+                return;
+            }
+
+            if (await dbContext.tbl_usuarios.AnyAsync(u => u.email != null && u.email.ToLower() == normalizedEmail))
+            {
+                ShowAlert("El correo electrónico ya está registrado en el sistema.", true);
+                return;
+            }
+
+            if (await dbContext.tbl_medico.AnyAsync(m => m.numero_licencia.ToLower() == currentEditor.NumeroLicencia.Trim().ToLower()))
+            {
+                ShowAlert("Ya existe un médico registrado con ese número de licencia.", true);
+                return;
+            }
+
+            var newUser = new tbl_usuario
+            {
+                id_rol = currentEditor.NewUserIdRol,
+                nombres = currentEditor.NewUserNombres.Trim(),
+                apellidos = currentEditor.NewUserApellidos.Trim(),
+                usuario = currentEditor.NewUserUsuario.Trim(),
+                email = currentEditor.NewUserEmail.Trim(),
+                telefono = NormalizeOptional(currentEditor.NewUserTelefono),
+                activo = true,
+                bloqueado = false,
+                intentos_fallidos = 0,
+                fecha_creacion = now,
+                ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Today)
+            };
+
+            newUser.password_hash = PasswordHasher.HashPassword(newUser, currentEditor.NewUserPassword.Trim());
+            dbContext.tbl_usuarios.Add(newUser);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.tbl_usuario_seguridad.Add(new tbl_usuario_seguridad
+            {
+                id_usuario = newUser.id_usuario,
+                two_factor_enabled = false,
+                must_change_password = false,
+                created_at = now,
+                updated_at = now
+            });
+
+            var doctorEntity = new tbl_medico
+            {
+                id_usuario = newUser.id_usuario,
+                fecha_creacion = now,
+                usuario_creacion = currentUserName
+            };
+
+            ApplyEditorToDoctorEntity(doctorEntity, currentEditor, now);
+            dbContext.tbl_medico.Add(doctorEntity);
+            await dbContext.SaveChangesAsync();
+
+            WriteAudit(
+                dbContext,
+                "Crear médico",
+                $"MedicoId={doctorEntity.id_medico}; UsuarioId={newUser.id_usuario}; Usuario={newUser.usuario}; Licencia={doctorEntity.numero_licencia}; Especialidad={doctorEntity.especialidad ?? "Sin especialidad"}");
+
+            await dbContext.SaveChangesAsync();
+
+            ShowAlert("El médico y su cuenta de usuario fueron creados exitosamente.", false);
+            isCreatingNewDoctor = false;
+            showFormModal = false;
+            await LoadAsync(newUser.id_usuario);
+            return;
+        }
+
         var userEntity = await dbContext.tbl_usuarios
             .Include(u => u.id_rolNavigation)
             .Include(u => u.tbl_medico)
@@ -745,19 +987,19 @@ else
 
         if (userEntity is null)
         {
-            ShowAlert("No se encontro el usuario seleccionado.", true);
+            ShowAlert("No se encontró el usuario seleccionado.", true);
             return;
         }
 
         if (!CanManageUser(userEntity))
         {
-            ShowAlert("No tienes permiso para gestionar este medico.", true);
+            ShowAlert("No tienes permiso para gestionar este médico.", true);
             return;
         }
 
         if (!IsMedicalRoleName(userEntity.id_rolNavigation?.nombre))
         {
-            ShowAlert("El usuario seleccionado no tiene un rol medico asignado.", true);
+            ShowAlert("El usuario seleccionado no tiene un rol médico asignado.", true);
             return;
         }
 
@@ -765,48 +1007,82 @@ else
                 m.id_medico != currentEditor.IdMedico &&
                 m.numero_licencia.ToLower() == currentEditor.NumeroLicencia.Trim().ToLower()))
         {
-            ShowAlert("Ya existe un medico registrado con ese numero de licencia.", true);
+            ShowAlert("Ya existe un médico registrado con ese número de licencia.", true);
             return;
         }
 
-        var now = DateTime.Now;
-        tbl_medico doctorEntity;
+        tbl_medico targetDoctor;
 
         if (isCreatingNewDoctor)
         {
             if (!permissions.CanCreate)
             {
-                ShowAlert("Tu rol no tiene permiso para crear fichas medicas.", true);
+                ShowAlert("Tu rol no tiene permiso para crear fichas médicas.", true);
                 return;
             }
 
             if (userEntity.tbl_medico is not null)
             {
-                ShowAlert("El usuario ya tiene una ficha medica asociada.", true);
+                ShowAlert("El usuario ya tiene una ficha médica asociada.", true);
                 return;
             }
 
-            doctorEntity = new tbl_medico
+            targetDoctor = new tbl_medico
             {
                 id_usuario = userEntity.id_usuario,
                 fecha_creacion = now,
                 usuario_creacion = currentUserName
             };
 
-            dbContext.tbl_medico.Add(doctorEntity);
+            dbContext.tbl_medico.Add(targetDoctor);
         }
         else
         {
             if (!permissions.CanEdit)
             {
-                ShowAlert("Tu rol no tiene permiso para editar fichas medicas.", true);
+                ShowAlert("Tu rol no tiene permiso para editar fichas médicas.", true);
                 return;
             }
 
-            doctorEntity = userEntity.tbl_medico
-                ?? throw new InvalidOperationException("No se encontro la ficha medica seleccionada.");
+            targetDoctor = userEntity.tbl_medico
+                ?? throw new InvalidOperationException("No se encontró la ficha médica seleccionada.");
         }
 
+        ApplyEditorToDoctorEntity(targetDoctor, currentEditor, now);
+
+        if (currentEditor.ChangePassword && !string.IsNullOrWhiteSpace(currentEditor.NewPassword))
+        {
+            userEntity.password_hash = PasswordHasher.HashPassword(userEntity, currentEditor.NewPassword.Trim());
+            userEntity.ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Today);
+            userEntity.intentos_fallidos = 0;
+            userEntity.bloqueado = false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentEditor.LinkedUserEmail) && currentEditor.LinkedUserEmail.Trim() != (userEntity.email ?? string.Empty))
+        {
+            userEntity.email = currentEditor.LinkedUserEmail.Trim();
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        WriteAudit(
+            dbContext,
+            isCreatingNewDoctor ? "Crear ficha médica" : "Editar ficha médica",
+            $"MedicoId={targetDoctor.id_medico}; UsuarioId={userEntity.id_usuario}; Licencia={targetDoctor.numero_licencia}; Especialidad={targetDoctor.especialidad ?? "Sin especialidad"}; Activo={(targetDoctor.activo == true ? "Si" : "No")}{(currentEditor.ChangePassword ? "; ClaveActualizada=Si" : "")}");
+
+        await dbContext.SaveChangesAsync();
+
+        ShowAlert(
+            isCreatingNewDoctor ? "La ficha médica se creó correctamente." : "La ficha médica se guardó correctamente.",
+            false);
+
+        isCreatingNewDoctor = false;
+        showFormModal = false;
+        await LoadAsync(userEntity.id_usuario);
+    }
+
+    private void ApplyEditorToDoctorEntity(tbl_medico doctorEntity, DoctorEditorModel currentEditor, DateTime now)
+    {
         doctorEntity.numero_licencia = currentEditor.NumeroLicencia.Trim();
         doctorEntity.especialidad = NormalizeOptional(currentEditor.Especialidad);
         doctorEntity.cedula_profesional = NormalizeOptional(currentEditor.CedulaProfesional);
@@ -829,36 +1105,6 @@ else
         doctorEntity.activo = selfManagedMode ? true : currentEditor.Activo;
         doctorEntity.fecha_actualizacion = now;
         doctorEntity.usuario_actualizacion = currentUserName;
-
-        if (currentEditor.ChangePassword && !string.IsNullOrWhiteSpace(currentEditor.NewPassword))
-        {
-            userEntity.password_hash = PasswordHasher.HashPassword(userEntity, currentEditor.NewPassword.Trim());
-            userEntity.ultimo_cambio_password = DateOnly.FromDateTime(DateTime.Today);
-            userEntity.intentos_fallidos = 0;
-            userEntity.bloqueado = false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(currentEditor.LinkedUserEmail) && currentEditor.LinkedUserEmail.Trim() != (userEntity.email ?? string.Empty))
-        {
-            userEntity.email = currentEditor.LinkedUserEmail.Trim();
-        }
-
-        await dbContext.SaveChangesAsync();
-
-        WriteAudit(
-            dbContext,
-            isCreatingNewDoctor ? "Crear ficha medica" : "Editar ficha medica",
-            $"MedicoId={doctorEntity.id_medico}; UsuarioId={userEntity.id_usuario}; Licencia={doctorEntity.numero_licencia}; Especialidad={doctorEntity.especialidad ?? "Sin especialidad"}; Activo={(doctorEntity.activo == true ? "Si" : "No")}{(currentEditor.ChangePassword ? "; ClaveActualizada=Si" : "")}");
-
-        await dbContext.SaveChangesAsync();
-
-        ShowAlert(
-            isCreatingNewDoctor ? "La ficha medica se creo correctamente." : "La ficha medica se guardo correctamente.",
-            false);
-
-        isCreatingNewDoctor = false;
-        showFormModal = false;
-        await LoadAsync(userEntity.id_usuario);
     }
 
     private async Task SaveDoctorWithHandlingAsync()
@@ -877,7 +1123,7 @@ else
     {
         if (!CanToggleDoctorProfile(user))
         {
-            ShowAlert("No tienes permiso para activar o inactivar esta ficha medica.", true);
+            ShowAlert("No tienes permiso para activar o inactivar esta ficha médica.", true);
             return;
         }
 
@@ -888,7 +1134,7 @@ else
 
         if (userEntity?.tbl_medico is null)
         {
-            ShowAlert("No se encontro la ficha medica seleccionada.", true);
+            ShowAlert("No se encontró la ficha médica seleccionada.", true);
             return;
         }
 
@@ -898,13 +1144,13 @@ else
 
         WriteAudit(
             dbContext,
-            userEntity.tbl_medico.activo == true ? "Activar ficha medica" : "Inactivar ficha medica",
+            userEntity.tbl_medico.activo == true ? "Activar ficha médica" : "Inactivar ficha médica",
             $"MedicoId={userEntity.tbl_medico.id_medico}; UsuarioId={userEntity.id_usuario}; Activo={(userEntity.tbl_medico.activo == true ? "Si" : "No")}");
 
         await dbContext.SaveChangesAsync();
 
         ShowAlert(
-            userEntity.tbl_medico.activo == true ? "La ficha medica fue activada correctamente." : "La ficha medica fue inactivada correctamente.",
+            userEntity.tbl_medico.activo == true ? "La ficha médica fue activada correctamente." : "La ficha médica fue inactivada correctamente.",
             false);
 
         await LoadAsync(userEntity.id_usuario);
@@ -1059,7 +1305,7 @@ else
     {
         if (editor is null)
         {
-            errorMessage = "No hay un medico seleccionado.";
+            errorMessage = "No hay un médico seleccionado.";
             return false;
         }
 
@@ -1073,21 +1319,121 @@ else
         editor.Certificaciones = editor.Certificaciones.Trim();
         editor.Observaciones = editor.Observaciones.Trim();
 
-        if (editor.IdUsuario <= 0)
+        if (isCreatingNewDoctor && editor.CreateNewAccount && !selfManagedMode)
         {
-            errorMessage = "Selecciona un usuario con rol medico.";
-            return false;
+            if (string.IsNullOrWhiteSpace(editor.NewUserNombres))
+            {
+                errorMessage = "Los nombres del usuario son obligatorios.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(editor.NewUserApellidos))
+            {
+                errorMessage = "Los apellidos del usuario son obligatorios.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(editor.NewUserUsuario))
+            {
+                errorMessage = "El nombre de usuario para iniciar sesión es obligatorio.";
+                return false;
+            }
+
+            if (editor.NewUserUsuario.Trim().Length < 3)
+            {
+                errorMessage = "El nombre de usuario debe tener al menos 3 caracteres.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(editor.NewUserEmail))
+            {
+                errorMessage = "El correo electrónico es obligatorio.";
+                return false;
+            }
+
+            try
+            {
+                var mail = new System.Net.Mail.MailAddress(editor.NewUserEmail.Trim());
+            }
+            catch
+            {
+                errorMessage = "El formato del correo electrónico no es válido.";
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(editor.NewUserTelefono))
+            {
+                editor.NewUserTelefono = editor.NewUserTelefono.Trim();
+                if (!AppValidation.IsValidPhoneNumber(editor.NewUserTelefono))
+                {
+                    errorMessage = "El teléfono del usuario debe tener entre 7 y 15 dígitos numéricos.";
+                    return false;
+                }
+            }
+
+            if (editor.NewUserIdRol <= 0)
+            {
+                errorMessage = "Selecciona un rol médico para el usuario.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(editor.NewUserPassword))
+            {
+                errorMessage = "La contraseña inicial del usuario es obligatoria.";
+                return false;
+            }
+
+            if (editor.NewUserPassword.Length < 6)
+            {
+                errorMessage = "La contraseña debe tener al menos 6 caracteres.";
+                return false;
+            }
+
+            if (editor.NewUserPassword != editor.NewUserConfirmPassword)
+            {
+                errorMessage = "Las contraseñas no coinciden.";
+                return false;
+            }
+        }
+        else
+        {
+            if (editor.IdUsuario <= 0)
+            {
+                errorMessage = "Selecciona un usuario con rol médico.";
+                return false;
+            }
+
+            if (editor.ChangePassword)
+            {
+                if (string.IsNullOrWhiteSpace(editor.NewPassword))
+                {
+                    errorMessage = "Ingresa la nueva contraseña de inicio de sesión.";
+                    return false;
+                }
+
+                if (editor.NewPassword.Length < 6)
+                {
+                    errorMessage = "La contraseña debe tener al menos 6 caracteres.";
+                    return false;
+                }
+
+                if (editor.NewPassword != editor.ConfirmPassword)
+                {
+                    errorMessage = "Las contraseñas no coinciden.";
+                    return false;
+                }
+            }
         }
 
         if (string.IsNullOrWhiteSpace(editor.NumeroLicencia))
         {
-            errorMessage = "El numero de licencia es obligatorio.";
+            errorMessage = "El número de licencia es obligatorio.";
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(editor.Especialidad))
         {
-            errorMessage = "La especialidad es obligatoria para mostrar correctamente al medico en agenda.";
+            errorMessage = "La especialidad es obligatoria para mostrar correctamente al médico en agenda.";
             return false;
         }
 
@@ -1097,9 +1443,9 @@ else
             return false;
         }
 
-        if (!AppValidation.IsDigitsOnly(editor.TelefonoConsultorio) || editor.TelefonoConsultorio.Length != 10)
+        if (!string.IsNullOrWhiteSpace(editor.TelefonoConsultorio) && !AppValidation.IsValidPhoneNumber(editor.TelefonoConsultorio))
         {
-            errorMessage = "El teléfono del consultorio debe tener exactamente 10 dígitos y solo números.";
+            errorMessage = "El teléfono del consultorio debe tener entre 7 y 15 dígitos y solo números.";
             return false;
         }
 
@@ -1127,7 +1473,7 @@ else
 
         if (!AppValidation.TryParseDecimal(editor.PrecioConsultaBase, out var basePrice) || basePrice < 0)
         {
-            errorMessage = "El precio base no es valido.";
+            errorMessage = "El precio base no es válido.";
             return false;
         }
 
@@ -1136,27 +1482,6 @@ else
             if (!decimal.TryParse(editor.DescuentoPorcentaje, out var discount) || discount < 0 || discount > 100)
             {
                 errorMessage = "El descuento debe estar entre 0 y 100.";
-                return false;
-            }
-        }
-
-        if (editor.ChangePassword)
-        {
-            if (string.IsNullOrWhiteSpace(editor.NewPassword))
-            {
-                errorMessage = "Ingresa la nueva contraseña de inicio de sesión.";
-                return false;
-            }
-
-            if (editor.NewPassword.Length < 6)
-            {
-                errorMessage = "La contraseña debe tener al menos 6 caracteres.";
-                return false;
-            }
-
-            if (editor.NewPassword != editor.ConfirmPassword)
-            {
-                errorMessage = "Las contraseñas no coinciden.";
                 return false;
             }
         }
@@ -1220,6 +1545,7 @@ else
         return new DoctorEditorModel
         {
             IdUsuario = user.id_usuario,
+            CreateNewAccount = false,
             LinkedUserName = user.usuario,
             LinkedUserFullName = GetFullName(user),
             LinkedRoleName = user.id_rolNavigation?.nombre ?? "Sin rol",
@@ -1250,6 +1576,7 @@ else
         {
             IdMedico = user.tbl_medico.id_medico,
             IdUsuario = user.id_usuario,
+            CreateNewAccount = false,
             LinkedUserName = user.usuario,
             LinkedUserFullName = GetFullName(user),
             LinkedRoleName = user.id_rolNavigation?.nombre ?? "Sin rol",
@@ -1333,6 +1660,15 @@ else
     {
         public int IdMedico { get; set; }
         public int IdUsuario { get; set; }
+        public bool CreateNewAccount { get; set; } = true;
+        public string NewUserNombres { get; set; } = string.Empty;
+        public string NewUserApellidos { get; set; } = string.Empty;
+        public string NewUserUsuario { get; set; } = string.Empty;
+        public string NewUserEmail { get; set; } = string.Empty;
+        public string NewUserTelefono { get; set; } = string.Empty;
+        public int NewUserIdRol { get; set; }
+        public string NewUserPassword { get; set; } = string.Empty;
+        public string NewUserConfirmPassword { get; set; } = string.Empty;
         public string LinkedUserName { get; set; } = string.Empty;
         public string LinkedUserFullName { get; set; } = string.Empty;
         public string LinkedRoleName { get; set; } = string.Empty;

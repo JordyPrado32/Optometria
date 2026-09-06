@@ -288,7 +288,7 @@ public partial class OpticaDbContext
         modelBuilder.Entity<tbl_lote_producto>(entity =>
         {
             entity.HasKey(e => e.id_lote).HasName("PK_tbl_lote_producto");
-            entity.ToTable("tbl_lote_producto");
+            entity.ToTable("tbl_lote_producto", tb => tb.UseSqlOutputClause(false));
             entity.HasIndex(e => e.fecha_vencimiento, "IX_lote_vencimiento");
             entity.HasIndex(e => e.estado_lote, "IX_lote_estado");
             entity.HasIndex(e => e.id_producto, "IX_lote_producto");
@@ -366,7 +366,7 @@ public partial class OpticaDbContext
         modelBuilder.Entity<tbl_detalle_orden_compra>(entity =>
         {
             entity.HasKey(e => e.id_detalle_orden_compra).HasName("PK_tbl_detalle_orden_compra");
-            entity.ToTable("tbl_detalle_orden_compra");
+            entity.ToTable("tbl_detalle_orden_compra", tb => tb.UseSqlOutputClause(false));
             entity.HasIndex(e => e.id_orden_compra, "IX_detalle_orden");
             entity.HasIndex(e => e.id_producto, "IX_detalle_producto");
             entity.Property(e => e.precio_unitario).HasColumnType("decimal(15, 2)");
