@@ -66,7 +66,7 @@
         <div class="reports-inline-filters">
             <div class="reports-filter-item">
                 <label>Días de mora mínimos</label>
-                <select class="form-select" @bind="filters.MinOverdueDays">
+                <select class="form-select" @bind="filters.MinOverdueDays" @bind:after="LoadReportAsync">
                     <option value="0">Sin umbral (Todos)</option>
                     <option value="15">> 15 días</option>
                     <option value="30">> 30 días (Crítico)</option>
@@ -77,7 +77,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Estado de cuenta</label>
-                <select class="form-select" @bind="filters.Status">
+                <select class="form-select" @bind="filters.Status" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos los estados</option>
                     <option value="Vencida">Vencidas</option>
                     <option value="Pendiente">Pendientes al día</option>
@@ -86,7 +86,7 @@
             </div>
             <div class="reports-filter-item" style="flex: 2 1 240px;">
                 <label>Buscar cliente / factura</label>
-                <input type="text" class="form-control" placeholder="Nombre, cédula o comprobante..." @bind="filters.SearchTerm" @bind:event="oninput" />
+                <input type="text" class="form-control" placeholder="Nombre, cédula o comprobante..." @bind="filters.SearchTerm" @bind:event="oninput" @bind:after="LoadReportAsync" />
             </div>
             <div class="reports-filter-actions">
                 <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
@@ -207,7 +207,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Cliente", "Telefono", "Email", "Documento", "Fecha Emision", "Fecha Vencimiento", "Dias Mora", "Monto Total", "Abonado", "Saldo", "Estado" };
+        var headers = new[] { "Cliente", "Teléfono", "Email", "Nº Comprobante / Ref", "Fecha Emisión", "Fecha Vencimiento", "Días de Mora", "Monto Total", "Abonado", "Saldo Pendiente", "Estado" };
         var rows = data.Rows.Select(r => new[]
         {
             r.ClientName,
@@ -216,16 +216,16 @@
             r.DocumentNumber,
             r.IssueDate.ToString("yyyy-MM-dd"),
             r.DueDate.ToString("yyyy-MM-dd"),
-            r.DaysOverdue.ToString(),
-            r.TotalAmount.ToString("F2"),
-            r.PaidAmount.ToString("F2"),
-            r.Balance.ToString("F2"),
+            $"{r.DaysOverdue} días",
+            $"${r.TotalAmount:N2}",
+            $"${r.PaidAmount:N2}",
+            $"${r.Balance:N2}",
             r.Status
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Clientes con Deuda y Mora", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Cuentas por Cobrar, Saldos y Mora", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "CuentasPorCobrar", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-deudas-mora-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-deudas-mora-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -238,21 +238,42 @@
             ["Clientes en Mora Critica"] = $"{data.CriticalOverdueCount}"
         };
 
-        var headers = new[] { "Cliente", "Documento", "Vencimiento", "Mora", "Total", "Saldo", "Estado" };
+        var headers = new[] { "Cliente", "Teléfono", "Documento", "Vencimiento", "Días Mora", "Monto Total", "Monto Pagado", "Saldo Pendiente", "Estado" };
         var rows = data.Rows.Select(r => new[]
         {
             r.ClientName,
+            r.Phone,
             r.DocumentNumber,
             r.DueDate.ToString("yyyy-MM-dd"),
-            $"{r.DaysOverdue}d",
-            $"${r.TotalAmount:F2}",
-            $"${r.Balance:F2}",
+            $"{r.DaysOverdue} d",
+            $"${r.TotalAmount:N2}",
+            $"${r.PaidAmount:N2}",
+            $"${r.Balance:N2}",
             r.Status
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Reporte de Clientes con Deuda y Mora", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Cuentas por Cobrar, Saldos y Mora", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "CuentasPorCobrar", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-deudas-mora-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

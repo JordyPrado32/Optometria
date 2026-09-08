@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Tipo Movimiento</label>
-                <select class="form-select" @bind="filters.MovementType">
+                <select class="form-select" @bind="filters.MovementType" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos</option>
                     <option value="Entrada">Entrada (Compra/Ingreso)</option>
                     <option value="Salida">Salida (Venta/Egreso)</option>
@@ -84,7 +84,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Categoría</label>
-                <select class="form-select" @bind="filters.CategoryId">
+                <select class="form-select" @bind="filters.CategoryId" @bind:after="LoadReportAsync">
                     <option value="0">Todas las categorías</option>
                     @foreach (var c in categories)
                     {
@@ -194,14 +194,22 @@
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -220,7 +228,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha", "Producto", "Categoria", "Tipo Movimiento", "Referencia", "Cantidad", "Costo Unit", "Costo Total", "Stock Anterior", "Stock Nuevo", "Usuario", "Motivo" };
+        var headers = new[] { "Fecha y Hora", "Nombre de Producto", "Categoría", "Tipo de Movimiento", "Comprobante / Ref", "Cantidad", "Costo Unitario", "Costo Total", "Stock Anterior", "Stock Nuevo", "Usuario Responsable", "Motivo / Observación" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd HH:mm"),
@@ -229,17 +237,17 @@
             r.MovementType,
             r.DocumentReference,
             r.Quantity.ToString(),
-            r.UnitCost.ToString("F2"),
-            r.TotalCost.ToString("F2"),
+            $"${r.UnitCost:N2}",
+            $"${r.TotalCost:N2}",
             r.PreviousStock.ToString(),
             r.NewStock.ToString(),
             r.User,
             r.Reason
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Movimientos de Inventario", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Movimientos de Inventario (Kardex)", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "MovimientosInventario", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-kardex-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-kardex-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -254,21 +262,43 @@
             ["Valor Absoluto Movido"] = $"${data.TotalMovementsValue:N2}"
         };
 
-        var headers = new[] { "Fecha", "Producto", "Tipo", "Ref", "Cant", "Stock Ant", "Stock Nuevo" };
+        var headers = new[] { "Fecha y Hora", "Categoría", "Producto / Ítem", "Tipo Movimiento", "Referencia / Doc.", "Cantidad", "Stock Anterior", "Nuevo Stock", "Usuario Responsable", "Motivo / Observación" };
         var rows = data.Rows.Select(r => new[]
         {
-            r.Date.ToString("yyyy-MM-dd"),
+            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.Category,
             r.ProductName,
             r.MovementType,
             r.DocumentReference,
-            r.Quantity.ToString(),
+            (r.MovementType == "Ingreso" ? "+" : (r.MovementType == "Egreso" ? "-" : "")) + r.Quantity.ToString(),
             r.PreviousStock.ToString(),
-            r.NewStock.ToString()
+            r.NewStock.ToString(),
+            r.User,
+            r.Reason
         }).ToList();
 
         var bytes = ReportsService.GeneratePdfBytes("Reporte de Movimientos de Inventario (Kardex)", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "MovimientosInventario", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-kardex-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

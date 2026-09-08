@@ -7,46 +7,203 @@
 @inject AuthenticationStateProvider Auth
 @inject CashCloseService CashService
 
-<section class="management-card">
-    <h2>Registrar arqueo de caja</h2>
-    <p>Caja general: incluye todos los cajeros y los movimientos pendientes desde el último cierre. Los filtros del reporte no afectan este registro.</p>
-    @if (!string.IsNullOrEmpty(message)) { <p role="status" class="alert alert-info">@message</p> }
+<style>
+    .cash-stat-row {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0.6rem;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .cash-stat-card {
+        flex: 1 1 0px;
+        min-width: 125px;
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.2);
+        border-radius: 8px;
+        padding: 0.4rem 0.75rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .cash-stat-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .cash-stat-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cash-stat-value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.2;
+        margin-top: 2px;
+        white-space: nowrap;
+    }
+</style>
+
+<section class="management-card mb-4" style="border-radius: 12px; padding: 1.25rem;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <h2 class="mb-1" style="font-size: 1.25rem; font-weight: 700; color: var(--color-ink); margin: 0;">
+                <i class="bi bi-journal-check me-2" style="color: var(--color-sage);"></i>Registrar arqueo de caja
+            </h2>
+            <p class="text-muted mb-0" style="font-size: 0.825rem;">
+                Caja general: incluye todos los cajeros y movimientos pendientes desde el último cierre. Los filtros del reporte no afectan este registro.
+            </p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div role="status" class="alert alert-info py-2 px-3 mb-2 small">@message</div>
+    }
+
     @if (allowed)
     {
         @if (previousId == 0)
         {
-            <p class="alert alert-warning">Primer arqueo: los importes incluyen todos los cobros históricos registrados. Cuenta el efectivo disponible y explica la diferencia inicial en la observación.</p>
+            <div class="alert alert-warning py-2 px-3 mb-3 small" style="font-size: 0.825rem; border-radius: 8px;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                <strong>Primer arqueo:</strong> Los importes incluyen todos los cobros históricos. Cuenta el efectivo disponible y explica la diferencia en la observación.
+            </div>
         }
-        <dl>
-            <dt>Base del cierre anterior</dt><dd>@preview.OpeningCash.ToString("N2")</dd>
-            @foreach (var item in JsonSerializer.Deserialize<Dictionary<string, decimal>>(preview.PaymentsJson)!)
-            { <dt>@item.Key</dt><dd>@item.Value.ToString("N2")</dd> }
-            <dt>Total cobrado</dt><dd>@preview.Collected.ToString("N2")</dd>
-            <dt>Efectivo esperado</dt><dd>@preview.ExpectedCash.ToString("N2")</dd>
-        </dl>
-        <div class="clinical-grid-2">
-            <div><label for="cash-count">Efectivo contado</label><input id="cash-count" class="form-control" type="number" min="0" step="0.01" @bind="input.CountedCash" /></div>
-            <div><label for="cash-bank">Retiro para bancos</label><input id="cash-bank" class="form-control" type="number" min="0" step="0.01" @bind="input.BankWithdrawal" /></div>
-            <div><label for="cash-other">Otros retiros</label><input id="cash-other" class="form-control" type="number" min="0" step="0.01" @bind="input.OtherWithdrawal" /></div>
-            <div><label for="cash-reference">Banco destino / referencia</label><input id="cash-reference" class="form-control" maxlength="200" @bind="input.BankReference" /></div>
+
+        <!-- 1. ESTADÍSTICAS EN UNA SOLA LÍNEA (Cuadros de baja altura) -->
+        <div class="cash-stat-row mb-3">
+            <div class="cash-stat-card">
+                <span class="cash-stat-label">Base cierre anterior</span>
+                <span class="cash-stat-value">$@preview.OpeningCash.ToString("N2")</span>
+            </div>
+
+            @foreach (var item in Payments)
+            {
+                <div class="cash-stat-card">
+                    <span class="cash-stat-label">@item.Key</span>
+                    <span class="cash-stat-value">$@item.Value.ToString("N2")</span>
+                </div>
+            }
+
+            <div class="cash-stat-card" style="border-color: rgba(40, 167, 69, 0.3); background-color: rgba(40, 167, 69, 0.03);">
+                <span class="cash-stat-label" style="color: #28a745;">Total cobrado</span>
+                <span class="cash-stat-value" style="color: #28a745;">+$@preview.Collected.ToString("N2")</span>
+            </div>
+
+            <div class="cash-stat-card" style="border-color: rgba(2, 117, 216, 0.3); background-color: rgba(2, 117, 216, 0.03);">
+                <span class="cash-stat-label" style="color: #0275d8;">Efectivo esperado</span>
+                <span class="cash-stat-value" style="color: #0275d8;">$@preview.ExpectedCash.ToString("N2")</span>
+            </div>
+
+            <div class="cash-stat-card" style="border-color: rgba(240, 173, 78, 0.3); background-color: rgba(240, 173, 78, 0.03);">
+                <span class="cash-stat-label" style="color: #d97706;">Queda en vueltos</span>
+                <span class="cash-stat-value" style="color: #d97706;">$@RemainingForChange.ToString("N2")</span>
+            </div>
+
+            <div class="cash-stat-card" style="border-color: @(Diff >= 0 ? "rgba(40, 167, 69, 0.3)" : "rgba(217, 83, 79, 0.3)"); background-color: @(Diff >= 0 ? "rgba(40, 167, 69, 0.03)" : "rgba(217, 83, 79, 0.03)");">
+                <span class="cash-stat-label" style="color: @(Diff >= 0 ? "#28a745" : "#d9534f");">Diferencia</span>
+                <span class="cash-stat-value" style="color: @(Diff >= 0 ? "#28a745" : "#d9534f");">
+                    @(Diff >= 0 ? "+" : "")$@Diff.ToString("N2")
+                </span>
+            </div>
         </div>
-        <label for="cash-observation">Observación (explica los retiros y cualquier diferencia)</label>
-        <textarea id="cash-observation" class="form-control" maxlength="1000" @bind="input.Observation"></textarea>
-        <p><strong>Queda en caja para vueltos: @((input.CountedCash - input.BankWithdrawal - input.OtherWithdrawal).ToString("N2"))</strong></p>
-        <p>Diferencia contado − esperado: @((input.CountedCash - preview.ExpectedCash).ToString("N2"))</p>
-        <button type="button" class="btn btn-outline-primary" disabled="@busy" @onclick="RefreshAsync">Actualizar importes</button>
-        <button type="button" class="btn btn-primary" disabled="@busy" @onclick="SaveAsync">Guardar cierre definitivo</button>
-        <h3>Cierres registrados</h3>
-        @foreach (var close in history)
+
+        <!-- 2. FORMULARIO EN DOS LÍNEAS -->
+        <div class="cash-form-grid">
+            <!-- LÍNEA 1: 4 Campos de Entrada -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-3">
+                    <label for="cash-count" class="form-label mb-1" style="font-size: 0.8rem; font-weight: 600;">Efectivo contado</label>
+                    <input id="cash-count" class="form-control form-control-sm" type="number" min="0" step="0.01" @bind="input.CountedCash" @bind:event="oninput" placeholder="0.00" />
+                </div>
+                <div class="col-md-3">
+                    <label for="cash-bank" class="form-label mb-1" style="font-size: 0.8rem; font-weight: 600;">Retiro para bancos</label>
+                    <input id="cash-bank" class="form-control form-control-sm" type="number" min="0" step="0.01" @bind="input.BankWithdrawal" @bind:event="oninput" placeholder="0.00" />
+                </div>
+                <div class="col-md-3">
+                    <label for="cash-other" class="form-label mb-1" style="font-size: 0.8rem; font-weight: 600;">Otros retiros</label>
+                    <input id="cash-other" class="form-control form-control-sm" type="number" min="0" step="0.01" @bind="input.OtherWithdrawal" @bind:event="oninput" placeholder="0.00" />
+                </div>
+                <div class="col-md-3">
+                    <label for="cash-reference" class="form-label mb-1" style="font-size: 0.8rem; font-weight: 600;">Banco destino / ref.</label>
+                    <input id="cash-reference" class="form-control form-control-sm" maxlength="200" @bind="input.BankReference" placeholder="Ref. bancaria..." />
+                </div>
+            </div>
+
+            <!-- LÍNEA 2: Observación + Botones de Acción -->
+            <div class="row g-2 align-items-end">
+                <div class="col-md-7">
+                    <label for="cash-observation" class="form-label mb-1" style="font-size: 0.8rem; font-weight: 600;">Observación (explica los retiros y cualquier diferencia)</label>
+                    <input id="cash-observation" class="form-control form-control-sm" maxlength="1000" @bind="input.Observation" placeholder="Ingresa detalles u observaciones del arqueo..." />
+                </div>
+                <div class="col-md-5 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary flex-fill" disabled="@busy" @onclick="RefreshAsync">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary flex-fill" disabled="@busy" @onclick="SaveAsync">
+                        <i class="bi bi-check-circle-fill me-1"></i> Guardar Cierre
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. HISTORIAL DE CIERRES REGISTRADOS -->
+        @if (history.Count > 0)
         {
-            <details class="management-card">
-                <summary>#@close.Id · @close.ClosedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · Total @close.Collected.ToString("N2") · Queda @close.RetainedCash.ToString("N2")</summary>
-                <p>Responsable: usuario #@close.UserId. Base: @close.OpeningCash.ToString("N2"). Esperado: @close.ExpectedCash.ToString("N2"). Contado: @close.CountedCash.ToString("N2"). Diferencia: @((close.CountedCash - close.ExpectedCash).ToString("N2")).</p>
-                @foreach (var payment in JsonSerializer.Deserialize<Dictionary<string, decimal>>(close.PaymentsJson)!)
-                { <p>@payment.Key: @payment.Value.ToString("N2")</p> }
-                <p>Enviado a bancos: @close.BankWithdrawal.ToString("N2") · @close.BankReference. Otros retiros: @close.OtherWithdrawal.ToString("N2").</p>
-                <p>@close.Observation</p>
-            </details>
+            <div class="mt-3 pt-2 border-top">
+                <h3 style="font-size: 0.9rem; font-weight: 700; color: #475569; margin-bottom: 0.5rem;">Cierres registrados anteriormente</h3>
+                @foreach (var close in history)
+                {
+                    <details class="cash-history-card mb-2">
+                        <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; padding: 0.4rem 0.6rem; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            #@close.Id · @close.ClosedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · Total $@close.Collected.ToString("N2") · Queda $@close.RetainedCash.ToString("N2")
+                        </summary>
+                        <div class="p-2" style="font-size: 0.82rem; background: #ffffff; border-radius: 0 0 6px 6px;">
+                            @{
+                                var respUser = userMap.GetValueOrDefault(close.UserId);
+                                var respName = respUser != null
+                                    ? $"{respUser.nombres} {respUser.apellidos}".Trim()
+                                    : $"Usuario #{close.UserId}";
+                                var respCedula = respUser != null && !string.IsNullOrWhiteSpace(respUser.usuario)
+                                    ? $" ({respUser.usuario})"
+                                    : "";
+                            }
+                            <p class="mb-1"><strong>Responsable:</strong> @respName@respCedula | <strong>Base:</strong> $@close.OpeningCash.ToString("N2") | <strong>Esperado:</strong> $@close.ExpectedCash.ToString("N2") | <strong>Contado:</strong> $@close.CountedCash.ToString("N2") | <strong>Diferencia:</strong> $@((close.CountedCash - close.ExpectedCash).ToString("N2"))</p>
+                            @if (!string.IsNullOrEmpty(close.PaymentsJson))
+                            {
+                                try
+                                {
+                                    var histPayments = JsonSerializer.Deserialize<Dictionary<string, decimal>>(close.PaymentsJson);
+                                    if (histPayments != null && histPayments.Count > 0)
+                                    {
+                                        <p class="mb-1 text-muted">@string.Join(" · ", histPayments.Select(p => $"{p.Key}: ${p.Value:N2}"))</p>
+                                    }
+                                }
+                                catch { }
+                            }
+                            <p class="mb-1"><strong>Retiros:</strong> Bancos $@close.BankWithdrawal.ToString("N2") (@(string.IsNullOrEmpty(close.BankReference) ? "Sin ref" : close.BankReference)) | Otros $@close.OtherWithdrawal.ToString("N2")</p>
+                            @if (!string.IsNullOrWhiteSpace(close.Observation))
+                            {
+                                <p class="mb-0 text-muted"><em>Obs: @close.Observation</em></p>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
         }
     }
 </section>
@@ -57,12 +214,34 @@
     private int userId, previousId;
     private bool busy, allowed;
     private string message = "";
+
+    private decimal RemainingForChange => input.CountedCash - input.BankWithdrawal - input.OtherWithdrawal;
+    private decimal Diff => input.CountedCash - preview.ExpectedCash;
+    private Dictionary<string, decimal> Payments
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(preview.PaymentsJson)) return new();
+            try
+            {
+                return JsonSerializer.Deserialize<Dictionary<string, decimal>>(preview.PaymentsJson) ?? new();
+            }
+            catch
+            {
+                return new();
+            }
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var state = await Auth.GetAuthenticationStateAsync();
         userId = int.TryParse(state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
         await RefreshAsync();
     }
+
+    private Dictionary<int, tbl_usuario> userMap = new();
+
     private async Task RefreshAsync()
     {
         busy = true;
@@ -74,10 +253,17 @@
             preview = await CashCloseService.CalculateAsync(db);
             history = await db.CashCloses.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync();
             previousId = history.FirstOrDefault()?.Id ?? 0;
+
+            var userIds = history.Select(x => x.UserId).Distinct().ToList();
+            if (userIds.Count > 0)
+            {
+                userMap = await db.tbl_usuarios.AsNoTracking().Where(u => userIds.Contains(u.id_usuario)).ToDictionaryAsync(u => u.id_usuario);
+            }
         }
         catch (Exception) { message = "No se pudo cargar el arqueo. Verifica la conexión y la actualización de la base de datos."; allowed = false; }
         finally { busy = false; }
     }
+
     private async Task SaveAsync()
     {
         if (busy) return;

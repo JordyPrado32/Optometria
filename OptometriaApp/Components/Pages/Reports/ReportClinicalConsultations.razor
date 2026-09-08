@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Optometrista / Especialista</label>
-                <select class="form-select" @bind="filters.OptometristId">
+                <select class="form-select" @bind="filters.OptometristId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los especialistas</option>
                     @foreach (var d in optometrists)
                     {
@@ -84,7 +84,7 @@
             </div>
             <div class="reports-filter-item" style="flex: 2 1 240px;">
                 <label>Buscar paciente o diagnóstico</label>
-                <input type="text" class="form-control" placeholder="Nombre, cédula, miopía, etc..." @bind="filters.SearchTerm" @bind:event="oninput" />
+                <input type="text" class="form-control" placeholder="Nombre, cédula, miopía, etc..." @bind="filters.SearchTerm" @bind:event="oninput" @bind:after="LoadReportAsync" />
             </div>
             <div class="reports-filter-actions">
                 <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
@@ -134,8 +134,43 @@
                                 <td>@(row.PatientAge != "-" ? $"{row.PatientAge} años" : "-")</td>
                                 <td>@row.OptometristName</td>
                                 <td><span class="badge bg-primary">@row.Diagnosis</span></td>
-                                <td><small>@row.Treatment</small></td>
-                                <td><small style="color:#666;">@row.Observations</small></td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(row.Treatment))
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                    else if (row.Treatment.Length <= 55)
+                                    {
+                                        <small>@row.Treatment</small>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex flex-column align-items-start gap-1">
+                                            <small style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; color: #334155;">
+                                                @row.Treatment
+                                            </small>
+                                            <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" style="font-size: 0.78rem; font-weight: 600; color: #0275d8;" @onclick="() => OpenTreatmentModal(row)">
+                                                <i class="bi bi-eye-fill me-1"></i> Ver tratamiento completo
+                                            </button>
+                                        </div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(row.Observations))
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                    else if (row.Observations.Length <= 40)
+                                    {
+                                        <small style="color:#666;">@row.Observations</small>
+                                    }
+                                    else
+                                    {
+                                        <small style="max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; color:#666;" title="@row.Observations">
+                                            @row.Observations
+                                        </small>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -154,6 +189,68 @@
     </section>
 </section>
 
+@if (showTreatmentModal && selectedTreatmentRow != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.55); z-index: 1055;" @onclick="CloseTreatmentModal">
+        <div class="modal-dialog modal-dialog-centered modal-lg" @onclick:stopPropagation="true">
+            <div class="modal-content" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); overflow: hidden;">
+                <div class="modal-header" style="background-color: var(--color-sand, #f4f0e4); border-bottom: 1px solid rgba(127,105,81,0.2); padding: 1rem 1.25rem;">
+                    <h5 class="modal-title" style="font-weight: 700; color: var(--color-ink, #3c342e); font-size: 1.1rem; margin: 0;">
+                        <i class="bi bi-file-earmark-medical me-2" style="color: var(--color-sage, #5da181);"></i>
+                        Tratamiento y Prescripción - @selectedTreatmentRow.PatientName
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseTreatmentModal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto; padding: 1.25rem;">
+                    <div class="row g-2 mb-3 pb-2 border-bottom">
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Fecha de Consulta:</small>
+                            <strong>@selectedTreatmentRow.Date.ToString("yyyy-MM-dd HH:mm")</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Identificación / Cédula:</small>
+                            <strong>@selectedTreatmentRow.PatientCedula</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Optometrista:</small>
+                            <strong>@selectedTreatmentRow.OptometristName</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">Diagnóstico Principal:</small>
+                        <span class="badge bg-primary" style="font-size: 0.9rem; padding: 0.4em 0.8em;">@selectedTreatmentRow.Diagnosis</span>
+                    </div>
+
+                    <div class="p-3 mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <h6 style="font-weight: 700; color: #1e293b;" class="mb-2">
+                            <i class="bi bi-prescription2 me-1 text-primary"></i> Detalle de Tratamiento / Prescripción:
+                        </h6>
+                        <div style="white-space: pre-wrap; font-size: 0.92rem; line-height: 1.6; color: #334155;">
+                            @selectedTreatmentRow.Treatment
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(selectedTreatmentRow.Observations))
+                    {
+                        <div class="p-3" style="background: #fff8f6; border: 1px solid #fee2e2; border-radius: 8px;">
+                            <h6 style="font-weight: 700; color: #991b1b;" class="mb-2">
+                                <i class="bi bi-chat-left-text me-1"></i> Observaciones Adicionales:
+                            </h6>
+                            <div style="white-space: pre-wrap; font-size: 0.9rem; color: #7f1d1d;">
+                                @selectedTreatmentRow.Observations
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #eee; padding: 0.75rem 1.25rem;">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="CloseTreatmentModal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private ClinicalConsultationsReportFilters filters = new();
     private ClinicalConsultationsReportResult data = new();
@@ -162,6 +259,21 @@
     private int currentPage = 1;
     private const int PageSize = 10;
     private int? currentUserId;
+
+    private ClinicalConsultationReportRow? selectedTreatmentRow;
+    private bool showTreatmentModal = false;
+
+    private void OpenTreatmentModal(ClinicalConsultationReportRow row)
+    {
+        selectedTreatmentRow = row;
+        showTreatmentModal = true;
+    }
+
+    private void CloseTreatmentModal()
+    {
+        showTreatmentModal = false;
+        selectedTreatmentRow = null;
+    }
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(data.Rows.Count / (double)PageSize));
     private IEnumerable<ClinicalConsultationReportRow> PagedRows => data.Rows.Skip((currentPage - 1) * PageSize).Take(PageSize);
@@ -178,14 +290,22 @@
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -204,22 +324,22 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha", "Paciente", "Cedula", "Edad", "Optometrista", "Diagnostico", "Tratamiento", "Observaciones" };
+        var headers = new[] { "Fecha y Hora", "Paciente", "Cédula / Identificación", "Edad Paciente", "Optometrista / Especialista", "Diagnóstico Principal", "Tratamiento / Prescripción Completa", "Observaciones Adicionales" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd HH:mm"),
             r.PatientName,
             r.PatientCedula,
-            r.PatientAge,
+            r.PatientAge != "-" ? $"{r.PatientAge} años" : "-",
             r.OptometristName,
             r.Diagnosis,
             r.Treatment,
             r.Observations
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Consultas Optometricas", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Evaluaciones Clínicas y Consultas Optométricas", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "ConsultasOptometria", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-consultas-optometria-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-consultas-optometria-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -232,20 +352,41 @@
             ["Tratamientos/Recetas"] = $"{data.TreatmentsCount}"
         };
 
-        var headers = new[] { "Fecha", "Paciente", "Cedula", "Optometrista", "Diagnostico", "Tratamiento" };
+        var headers = new[] { "Fecha", "Paciente", "Cédula", "Edad", "Optometrista / Especialista", "Diagnóstico", "Tratamiento / Receta", "Observaciones" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd"),
             r.PatientName,
             r.PatientCedula,
+            $"{r.PatientAge} años",
             r.OptometristName,
             r.Diagnosis,
-            r.Treatment
+            r.Treatment,
+            r.Observations
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Reporte de Consultas Optometricas y Diagnosticos", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Evaluaciones Clínicas y Consultas Optométricas", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "ConsultasOptometria", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-consultas-optometria-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

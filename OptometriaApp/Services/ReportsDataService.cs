@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using OptometriaApp.Data;
@@ -125,6 +126,25 @@ public sealed class ReportsDataService
     }
     #endregion
 
+    public async Task<List<tbl_usuario>> GetCashierUsersAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var validRoles = new[] { "administrador", "admin", "recepcionista", "cajero", "recepcion" };
+
+        var rawUsers = await db.tbl_usuarios
+            .AsNoTracking()
+            .Include(u => u.id_rolNavigation)
+            .Where(u => (u.activo ?? true) && u.id_rolNavigation != null && validRoles.Contains(u.id_rolNavigation.nombre.ToLower()))
+            .OrderBy(u => u.nombres)
+            .ThenBy(u => u.apellidos)
+            .ToListAsync(ct);
+
+        return rawUsers
+            .GroupBy(u => (u.nombres + " " + u.apellidos).Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+    }
+
     #region 2. Ingresos, Egresos y Flujo de Caja
     public async Task<CashFlowReportResult> GetCashFlowReportAsync(CashFlowReportFilters filters, CancellationToken ct = default)
     {
@@ -140,6 +160,10 @@ public sealed class ReportsDataService
         if (filters.UserId > 0)
         {
             salesQuery = salesQuery.Where(v => v.id_usuario == filters.UserId);
+        }
+        else if (filters.UserId == -1)
+        {
+            salesQuery = salesQuery.Where(v => v.id_usuario == 0 || v.id_usuarioNavigation == null);
         }
 
         var sales = await salesQuery.ToListAsync(ct);
@@ -169,7 +193,9 @@ public sealed class ReportsDataService
                 Description = $"Venta de productos/servicios - {s.forma_pago ?? "Efectivo"}",
                 PaymentMethod = s.forma_pago ?? "Efectivo",
                 Amount = s.total ?? 0m,
-                ResponsibleUser = s.id_usuarioNavigation?.usuario ?? "Sistema"
+                ResponsibleUser = s.id_usuarioNavigation != null
+                    ? $"{s.id_usuarioNavigation.nombres} {s.id_usuarioNavigation.apellidos}".Trim() + (!string.IsNullOrWhiteSpace(s.id_usuarioNavigation.usuario) ? $" ({s.id_usuarioNavigation.usuario})" : "")
+                    : "Ventas Tienda Online / Sistema"
             });
         }
 
@@ -240,6 +266,10 @@ public sealed class ReportsDataService
         {
             salesQuery = salesQuery.Where(v => v.id_usuario == userId);
         }
+        else if (userId == -1)
+        {
+            salesQuery = salesQuery.Where(v => v.id_usuario == 0 || v.id_usuarioNavigation == null);
+        }
 
         var sales = await salesQuery.ToListAsync(ct);
 
@@ -271,7 +301,9 @@ public sealed class ReportsDataService
                 GrossAmount = total,
                 NetAmount = isCancelled ? 0 : total,
                 IsCancelled = isCancelled,
-                Cashier = v.id_usuarioNavigation?.usuario ?? "Cajero"
+                Cashier = v.id_usuarioNavigation != null
+                    ? $"{v.id_usuarioNavigation.nombres} {v.id_usuarioNavigation.apellidos}".Trim() + (!string.IsNullOrWhiteSpace(v.id_usuarioNavigation.usuario) ? $" ({v.id_usuarioNavigation.usuario})" : "")
+                    : "Ventas Tienda Online / Sistema"
             });
         }
 
@@ -356,6 +388,10 @@ public sealed class ReportsDataService
         if (filters.UserId > 0)
         {
             query = query.Where(v => v.id_usuario == filters.UserId);
+        }
+        else if (filters.UserId == -1)
+        {
+            query = query.Where(v => v.id_usuario == 0 || v.id_usuarioNavigation == null);
         }
 
         var sales = await query.ToListAsync(ct);
@@ -894,72 +930,448 @@ public sealed class ReportsDataService
     }
     #endregion
 
-    #region Export Utilities (CSV & PDF)
+    #region Export Utilities (Excel & PDF)
     public byte[] GenerateCsvBytes(string reportTitle, string[] headers, List<string[]> rows)
     {
-        var sb = new StringBuilder();
-        sb.Append('\uFEFF');
-        sb.AppendLine($"\"{reportTitle}\"");
-        sb.AppendLine($"\"Fecha de Generación: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\"");
-        sb.AppendLine();
-
-        sb.AppendLine(string.Join(";", headers.Select(EscapeCsv)));
-        foreach (var row in rows)
-        {
-            sb.AppendLine(string.Join(";", row.Select(EscapeCsv)));
-        }
-
-        return Encoding.UTF8.GetBytes(sb.ToString());
+        return GenerateExcelBytes(reportTitle, headers, rows);
     }
 
-    private static string EscapeCsv(string value)
+    public byte[] GenerateExcelBytes(string reportTitle, string[] headers, List<string[]> rows)
     {
-        if (string.IsNullOrEmpty(value)) return "\"\"";
-        return $"\"{value.Replace("\"", "\"\"")}\"";
+        var columnCount = Math.Max(1, headers.Length);
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html>");
+        sb.AppendLine("<html>");
+        sb.AppendLine("<head>");
+        sb.AppendLine("<meta charset=\"utf-8\">");
+        sb.AppendLine("<style>");
+        sb.AppendLine("body { font-family: Arial, sans-serif; color: #3c342e; background: #ffffff; }");
+        sb.AppendLine("table { border-collapse: collapse; width: 100%; margin-top: 5px; }");
+        sb.AppendLine("th { background: #5DA181; color: #ffffff; font-weight: 700; border: 1px solid #4b8d70; padding: 10px; text-align: center; }");
+        sb.AppendLine("td { border: 1px solid #d9cec0; padding: 8px; font-size: 13px; mso-number-format:'\\@'; text-align: left; }");
+        sb.AppendLine("tr:nth-child(even) td { background: #F4F0E4; }");
+        sb.AppendLine("tr:nth-child(odd) td { background: #ffffff; }");
+        sb.AppendLine(".title { background: #7F6951; color: #ffffff; font-size: 18px; font-weight: 700; text-align: center; border: 1px solid #7F6951; padding: 12px; }");
+        sb.AppendLine(".subtitle { background: #FEBC64; color: #3c342e; font-size: 13px; font-weight: 700; text-align: center; border: 1px solid #e3a84e; padding: 8px; }");
+        sb.AppendLine(".numeric { text-align: right; }");
+        sb.AppendLine("</style>");
+        sb.AppendLine("</head>");
+        sb.AppendLine("<body>");
+        sb.AppendLine("<table>");
+
+        sb.Append("<tr><td class=\"title\" colspan=\"").Append(columnCount).Append("\">")
+          .Append(WebUtility.HtmlEncode(reportTitle)).AppendLine("</td></tr>");
+        sb.Append("<tr><td class=\"subtitle\" colspan=\"").Append(columnCount).Append("\">Generado el ")
+          .Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm")).AppendLine("</td></tr>");
+
+        if (headers.Length > 0)
+        {
+            sb.AppendLine("<tr>");
+            foreach (var header in headers)
+            {
+                sb.Append("<th>").Append(WebUtility.HtmlEncode(header)).AppendLine("</th>");
+            }
+            sb.AppendLine("</tr>");
+        }
+
+        foreach (var row in rows)
+        {
+            sb.AppendLine("<tr>");
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var val = i < row.Length ? row[i] : "";
+                var cleanVal = val.Replace("$", "").Replace("+", "").Trim();
+                var isNumeric = decimal.TryParse(cleanVal, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _);
+                var alignClass = (isNumeric && !val.StartsWith("0") && val.Length < 15) ? " class=\"numeric\"" : "";
+                sb.Append("<td").Append(alignClass).Append(">").Append(WebUtility.HtmlEncode(val)).AppendLine("</td>");
+            }
+            sb.AppendLine("</tr>");
+        }
+
+        sb.AppendLine("</table>");
+        sb.AppendLine("</body>");
+        sb.AppendLine("</html>");
+
+        return Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+    }
+
+    public string GeneratePdfHtml(string reportTitle, Dictionary<string, string> summaryKpis, string[] headers, List<string[]> rows, bool isLandscape = true)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html>");
+        sb.AppendLine("<html>");
+        sb.AppendLine("<head>");
+        sb.AppendLine("<meta charset=\"utf-8\">");
+        sb.AppendLine($"<title>{WebUtility.HtmlEncode(reportTitle)}</title>");
+        sb.AppendLine("<style>");
+        sb.AppendLine($"@page {{ size: A4 {(isLandscape ? "landscape" : "portrait")}; margin: 10mm 10mm 10mm 10mm; }}");
+        sb.AppendLine("@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } }");
+        sb.AppendLine("body { font-family: 'Segoe UI', Arial, sans-serif; color: #3c342e; background: #ffffff; margin: 0; padding: 15px; }");
+        sb.AppendLine(".print-btn { background: #5DA181; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-bottom: 15px; }");
+        sb.AppendLine(".report-header { background: #7F6951; color: #ffffff; padding: 12px 18px; border-radius: 8px 8px 0 0; text-align: center; }");
+        sb.AppendLine(".report-header h1 { margin: 0; font-size: 20px; font-weight: 700; }");
+        sb.AppendLine(".report-subheader { background: #FEBC64; color: #3c342e; padding: 6px 15px; font-size: 12px; font-weight: 700; text-align: center; border-radius: 0 0 8px 8px; margin-bottom: 15px; }");
+        sb.AppendLine(".kpi-container { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }");
+        sb.AppendLine(".kpi-box { flex: 1; min-width: 120px; border: 1px solid rgba(127,105,81,0.25); background: #fdfbf7; border-radius: 6px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }");
+        sb.AppendLine(".kpi-title { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #7F6951; letter-spacing: 0.5px; }");
+        sb.AppendLine(".kpi-val { font-size: 14px; font-weight: 700; color: #1e293b; margin-top: 2px; }");
+        sb.AppendLine("table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; }");
+        sb.AppendLine("th { background: #5DA181; color: #ffffff; font-weight: 700; border: 1px solid #4b8d70; padding: 8px 10px; text-align: left; }");
+        sb.AppendLine("td { border: 1px solid #d9cec0; padding: 6px 10px; text-align: left; word-break: break-word; }");
+        sb.AppendLine("tr:nth-child(even) td { background: #F4F0E4; }");
+        sb.AppendLine("tr:nth-child(odd) td { background: #ffffff; }");
+        sb.AppendLine(".numeric { text-align: right; }");
+        sb.AppendLine(".footer { margin-top: 20px; font-size: 10px; color: #888888; text-align: right; border-top: 1px solid #eee; padding-top: 8px; }");
+        sb.AppendLine("</style>");
+        sb.AppendLine("</head>");
+        sb.AppendLine("<body>");
+
+        sb.AppendLine("<div class=\"no-print\" style=\"text-align: right;\"><button class=\"print-btn\" onclick=\"window.print();\">🖨️ Imprimir / Guardar como PDF</button></div>");
+
+        sb.AppendLine("<div class=\"report-header\">");
+        sb.AppendLine($"<h1>{WebUtility.HtmlEncode(reportTitle)}</h1>");
+        sb.AppendLine("</div>");
+        sb.AppendLine("<div class=\"report-subheader\">");
+        sb.AppendLine($"ÓPTICA - SISTEMA DE GESTIÓN INTEGRAL &nbsp;|&nbsp; Emitido el {DateTime.Now:yyyy-MM-dd HH:mm}");
+        sb.AppendLine("</div>");
+
+        if (summaryKpis != null && summaryKpis.Count > 0)
+        {
+            sb.AppendLine("<div class=\"kpi-container\">");
+            foreach (var kvp in summaryKpis)
+            {
+                sb.AppendLine("<div class=\"kpi-box\">");
+                sb.AppendLine($"<div class=\"kpi-title\">{WebUtility.HtmlEncode(kvp.Key)}</div>");
+                sb.AppendLine($"<div class=\"kpi-val\">{WebUtility.HtmlEncode(kvp.Value)}</div>");
+                sb.AppendLine("</div>");
+            }
+            sb.AppendLine("</div>");
+        }
+
+        sb.AppendLine("<table>");
+        if (headers.Length > 0)
+        {
+            sb.AppendLine("<thead><tr>");
+            foreach (var header in headers)
+            {
+                sb.AppendLine($"<th>{WebUtility.HtmlEncode(header)}</th>");
+            }
+            sb.AppendLine("</tr></thead>");
+        }
+
+        sb.AppendLine("<tbody>");
+        foreach (var row in rows)
+        {
+            sb.AppendLine("<tr>");
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var val = i < row.Length ? row[i] : "";
+                var cleanVal = val.Replace("$", "").Replace("+", "").Trim();
+                var isNumeric = decimal.TryParse(cleanVal, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _);
+                var alignClass = (isNumeric && !val.StartsWith("0") && val.Length < 15) ? " class=\"numeric\"" : "";
+                sb.AppendLine($"<td{alignClass}>{WebUtility.HtmlEncode(val)}</td>");
+            }
+            sb.AppendLine("</tr>");
+        }
+        sb.AppendLine("</tbody>");
+        sb.AppendLine("</table>");
+
+        sb.AppendLine($"<div class=\"footer\">Reporte generado automáticamente por Optometria App &nbsp;|&nbsp; Total registros: {rows.Count}</div>");
+
+        sb.AppendLine("<script>");
+        sb.AppendLine("function autoPrint() { setTimeout(function() { window.print(); }, 400); }");
+        sb.AppendLine("if (document.readyState === 'complete') { autoPrint(); } else { window.addEventListener('load', autoPrint); }");
+        sb.AppendLine("</script>");
+
+        sb.AppendLine("</body>");
+        sb.AppendLine("</html>");
+
+        return sb.ToString();
     }
 
     public byte[] GeneratePdfBytes(string reportTitle, Dictionary<string, string> summaryKpis, string[] headers, List<string[]> rows)
     {
-        var lines = new List<string>
-        {
-            "OPTICA - SISTEMA DE GESTION INTEGRAL",
-            reportTitle.ToUpperInvariant(),
-            $"Fecha y hora de emision: {DateTime.Now:yyyy-MM-dd HH:mm}",
-            "----------------------------------------------------------------------------------"
-        };
-
-        if (summaryKpis != null && summaryKpis.Count > 0)
-        {
-            lines.Add("RESUMEN GENERAL DEL REPORTE:");
-            foreach (var kvp in summaryKpis)
-            {
-                lines.Add($"  * {kvp.Key}: {kvp.Value}");
-            }
-            lines.Add("----------------------------------------------------------------------------------");
-        }
-
-        lines.Add("DETALLE DEL REPORTE:");
-        lines.Add(string.Join(" | ", headers));
-        lines.Add("----------------------------------------------------------------------------------");
-
-        var maxRows = Math.Min(rows.Count, 120);
-        for (int i = 0; i < maxRows; i++)
-        {
-            var r = rows[i];
-            lines.Add(string.Join(" | ", r));
-        }
-
-        if (rows.Count > 120)
-        {
-            lines.Add($"... y {rows.Count - 120} registros adicionales no mostrados en la vista previa impresa.");
-        }
-
-        lines.Add("----------------------------------------------------------------------------------");
-        lines.Add("Fin del informe oficial - Optometria App");
-
-        return SimplePdfGenerator.Build(reportTitle, lines);
+        return PdfReportBuilder.Build(reportTitle, summaryKpis, headers, rows, isLandscape: true);
     }
     #endregion
+}
+
+internal static class PdfReportBuilder
+{
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    public static byte[] Build(string reportTitle, Dictionary<string, string>? summaryKpis, string[] headers, List<string[]> rows, bool isLandscape = true)
+    {
+        var pageWidth = isLandscape ? 792f : 612f;
+        var pageHeight = isLandscape ? 612f : 792f;
+        var marginX = 36f;
+        var marginTop = pageHeight - 36f;
+        var marginBottom = 36f;
+        var usableWidth = pageWidth - (marginX * 2f);
+
+        int colCount = Math.Max(1, headers.Length);
+        float[] colWidths = new float[colCount];
+        float totalWeight = 0;
+        for (int i = 0; i < colCount; i++)
+        {
+            var headerLen = i < headers.Length ? headers[i].Length : 5;
+            float maxLen = headerLen;
+            for (int r = 0; r < Math.Min(rows.Count, 60); r++)
+            {
+                if (i < rows[r].Length && rows[r][i] != null)
+                {
+                    maxLen = Math.Max(maxLen, rows[r][i].Length);
+                }
+            }
+            float weight = Math.Clamp(maxLen, 8, 30);
+            colWidths[i] = weight;
+            totalWeight += weight;
+        }
+        for (int i = 0; i < colCount; i++)
+        {
+            colWidths[i] = (colWidths[i] / totalWeight) * usableWidth;
+        }
+
+        var pageStreamBuilders = new List<StringBuilder>();
+        var currentPageSb = new StringBuilder();
+        int currentPageNumber = 1;
+        float currentY = marginTop;
+
+        void StartNewPage(bool isContinuation = false)
+        {
+            if (currentPageSb.Length > 0)
+            {
+                pageStreamBuilders.Add(currentPageSb);
+                currentPageSb = new StringBuilder();
+                currentPageNumber++;
+            }
+            currentY = marginTop;
+
+            // Draw Header Banner on top of page
+            float headerHeight = isContinuation ? 20f : 24f;
+            float headerY = currentY - headerHeight;
+            // Banner background #7F6951
+            currentPageSb.AppendLine(string.Format(Inv, "0.498 0.412 0.318 rg {0:0.##} {1:0.##} {2:0.##} {3:0.##} re f", marginX, headerY, usableWidth, headerHeight));
+            // Title Text in white
+            currentPageSb.AppendLine("BT\n1 1 1 rg");
+            currentPageSb.AppendLine(string.Format(Inv, "/F2 {0} Tf 1 0 0 1 {1:0.##} {2:0.##} Tm ({3}) Tj\nET", isContinuation ? 10 : 12, marginX + 8f, headerY + (isContinuation ? 5.5f : 7f), EscapePdf(isContinuation ? $"{reportTitle} (Continuación)" : reportTitle)));
+            currentY = headerY;
+
+            // Subtitle Banner #FEBC64
+            float subHeight = 15f;
+            float subY = currentY - subHeight;
+            currentPageSb.AppendLine(string.Format(Inv, "0.996 0.737 0.392 rg {0:0.##} {1:0.##} {2:0.##} {3:0.##} re f", marginX, subY, usableWidth, subHeight));
+            currentPageSb.AppendLine("BT\n0.173 0.141 0.118 rg /F2 7.5 Tf");
+            currentPageSb.AppendLine(string.Format(Inv, "1 0 0 1 {0:0.##} {1:0.##} Tm (OPTICA - SISTEMA DE GESTION INTEGRAL  |  Emitido el {2:yyyy-MM-dd HH:mm}) Tj\nET", marginX + 8f, subY + 4f, DateTime.Now));
+            currentY = subY - 10f;
+
+            if (!isContinuation && summaryKpis != null && summaryKpis.Count > 0)
+            {
+                var kpiList = summaryKpis.ToList();
+                int cardsPerRow = isLandscape ? Math.Min(kpiList.Count, 5) : Math.Min(kpiList.Count, 4);
+                cardsPerRow = Math.Max(1, cardsPerRow);
+                float cardGap = 6f;
+                float cardW = (usableWidth - (cardsPerRow - 1) * cardGap) / cardsPerRow;
+                float cardH = 26f;
+
+                int kpiRows = (int)Math.Ceiling((double)kpiList.Count / cardsPerRow);
+                for (int r = 0; r < kpiRows; r++)
+                {
+                    float rowY = currentY - cardH;
+                    for (int c = 0; c < cardsPerRow; c++)
+                    {
+                        int idx = r * cardsPerRow + c;
+                        if (idx >= kpiList.Count) break;
+
+                        float cardX = marginX + c * (cardW + cardGap);
+                        // Card background #FDFBF7 and border #D9CEC0
+                        currentPageSb.AppendLine(string.Format(Inv, "0.992 0.984 0.969 rg 0.851 0.808 0.753 RG 0.75 w {0:0.##} {1:0.##} {2:0.##} {3:0.##} re B", cardX, rowY, cardW, cardH));
+                        // Accent left border #7F6951
+                        currentPageSb.AppendLine(string.Format(Inv, "0.498 0.412 0.318 rg {0:0.##} {1:0.##} 3 {2:0.##} re f", cardX, rowY, cardH));
+
+                        // KPI label
+                        var kpiKey = kpiList[idx].Key.ToUpper();
+                        var maxKeyChars = (int)(cardW / 4.5f);
+                        if (kpiKey.Length > maxKeyChars && maxKeyChars > 3) kpiKey = kpiKey.Substring(0, maxKeyChars - 2) + "..";
+                        currentPageSb.AppendLine(string.Format(Inv, "BT\n0.498 0.412 0.318 rg /F2 6.5 Tf 1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj\nET", cardX + 6f, rowY + 15f, EscapePdf(kpiKey)));
+
+                        // KPI value
+                        var kpiVal = kpiList[idx].Value;
+                        var maxValChars = (int)(cardW / 5.2f);
+                        if (kpiVal.Length > maxValChars && maxValChars > 3) kpiVal = kpiVal.Substring(0, maxValChars - 2) + "..";
+                        currentPageSb.AppendLine(string.Format(Inv, "BT\n0.118 0.161 0.231 rg /F2 9 Tf 1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj\nET", cardX + 6f, rowY + 5f, EscapePdf(kpiVal)));
+                    }
+                    currentY = rowY - cardGap;
+                }
+                currentY -= 4f;
+            }
+
+            DrawTableHeader();
+        }
+
+        void DrawTableHeader()
+        {
+            float headerH = 18f;
+            float rowY = currentY - headerH;
+
+            // Table Header Background #5DA181 and border #4B8D70
+            currentPageSb.AppendLine(string.Format(Inv, "0.365 0.631 0.506 rg 0.294 0.553 0.439 RG 0.75 w {0:0.##} {1:0.##} {2:0.##} {3:0.##} re B", marginX, rowY, usableWidth, headerH));
+
+            // Vertical column dividers
+            currentPageSb.AppendLine("0.294 0.553 0.439 RG 0.5 w");
+            float curDividerX = marginX;
+            for (int i = 0; i < colCount - 1; i++)
+            {
+                curDividerX += colWidths[i];
+                currentPageSb.AppendLine(string.Format(Inv, "{0:0.##} {1:0.##} m {0:0.##} {2:0.##} l S", curDividerX, rowY, currentY));
+            }
+
+            // Header Texts
+            currentPageSb.AppendLine("BT\n1 1 1 rg /F2 7.5 Tf");
+            float curTextX = marginX;
+            for (int i = 0; i < colCount; i++)
+            {
+                var hText = i < headers.Length ? headers[i] : "";
+                var maxChars = (int)(colWidths[i] / 4.6f);
+                if (hText.Length > maxChars && maxChars > 3) hText = hText.Substring(0, maxChars - 2) + "..";
+                currentPageSb.AppendLine(string.Format(Inv, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj", curTextX + 4f, rowY + 5.5f, EscapePdf(hText)));
+                curTextX += colWidths[i];
+            }
+            currentPageSb.AppendLine("ET");
+
+            currentY = rowY;
+        }
+
+        StartNewPage(isContinuation: false);
+
+        float rowH = 15f;
+        if (rows.Count == 0)
+        {
+            float emptyY = currentY - 22f;
+            currentPageSb.AppendLine(string.Format(Inv, "1 1 1 rg 0.851 0.808 0.753 RG 0.5 w {0:0.##} {1:0.##} {2:0.##} 22 re B", marginX, emptyY, usableWidth));
+            currentPageSb.AppendLine(string.Format(Inv, "BT\n0.498 0.412 0.318 rg /F1 8 Tf 1 0 0 1 {0:0.##} {1:0.##} Tm (No se encontraron registros para los filtros seleccionados.) Tj\nET", marginX + 12f, emptyY + 7.5f));
+            currentY = emptyY;
+        }
+        else
+        {
+            for (int r = 0; r < rows.Count; r++)
+            {
+                if (currentY - rowH < marginBottom + 24f)
+                {
+                    StartNewPage(isContinuation: true);
+                }
+
+                float rowY = currentY - rowH;
+                var row = rows[r];
+
+                // Zebra row background #F4F0E4 (even) / #FFFFFF (odd) + border #D9CEC0
+                string fillRgb = (r % 2 == 0) ? "0.957 0.941 0.894" : "1 1 1";
+                currentPageSb.AppendLine(string.Format(Inv, "{0} rg 0.851 0.808 0.753 RG 0.5 w {1:0.##} {2:0.##} {3:0.##} {4:0.##} re B", fillRgb, marginX, rowY, usableWidth, rowH));
+
+                // Vertical column dividers
+                currentPageSb.AppendLine("0.851 0.808 0.753 RG 0.5 w");
+                float curDividerX = marginX;
+                for (int i = 0; i < colCount - 1; i++)
+                {
+                    curDividerX += colWidths[i];
+                    currentPageSb.AppendLine(string.Format(Inv, "{0:0.##} {1:0.##} m {0:0.##} {2:0.##} l S", curDividerX, rowY, currentY));
+                }
+
+                // Row Cell Texts
+                currentPageSb.AppendLine("BT\n0.173 0.141 0.118 rg /F1 7.5 Tf");
+                float curCellX = marginX;
+                for (int i = 0; i < colCount; i++)
+                {
+                    var cellVal = i < row.Length ? (row[i] ?? "") : "";
+                    var maxChars = (int)(colWidths[i] / 4.4f);
+                    if (cellVal.Length > maxChars && maxChars > 3) cellVal = cellVal.Substring(0, maxChars - 2) + "..";
+
+                    var cleanVal = cellVal.Replace("$", "").Replace("+", "").Trim();
+                    var isNumeric = decimal.TryParse(cleanVal, NumberStyles.Any, Inv, out _);
+
+                    float textX = curCellX + 4f;
+                    if (isNumeric && !cellVal.StartsWith("0") && cellVal.Length < 15)
+                    {
+                        float approxTextWidth = cellVal.Length * 4.2f;
+                        textX = Math.Max(curCellX + 4f, curCellX + colWidths[i] - approxTextWidth - 4f);
+                    }
+
+                    currentPageSb.AppendLine(string.Format(Inv, "1 0 0 1 {0:0.##} {1:0.##} Tm ({2}) Tj", textX, rowY + 4.5f, EscapePdf(cellVal)));
+                    curCellX += colWidths[i];
+                }
+                currentPageSb.AppendLine("ET");
+
+                currentY = rowY;
+            }
+        }
+
+        pageStreamBuilders.Add(currentPageSb);
+
+        int totalPages = pageStreamBuilders.Count;
+        for (int p = 0; p < totalPages; p++)
+        {
+            var sb = pageStreamBuilders[p];
+            // Footer bottom line
+            sb.AppendLine(string.Format(Inv, "0.851 0.808 0.753 RG 0.5 w {0:0.##} 24 m {1:0.##} 24 l S", marginX, marginX + usableWidth));
+            sb.AppendLine(string.Format(Inv, "BT\n0.498 0.412 0.318 rg /F1 7 Tf 1 0 0 1 {0:0.##} 14 Tm (Pagina {1} de {2}  |  Total registros: {3}  |  Optica - Gestion Integral) Tj\nET", marginX, p + 1, totalPages, rows.Count));
+        }
+
+        var encoding = Encoding.Latin1;
+        var objects = new List<string>
+        {
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            string.Empty,
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"
+        };
+
+        var pageObjectIds = new List<int>();
+        for (int p = 0; p < totalPages; p++)
+        {
+            var pageId = objects.Count + 1;
+            var contentId = pageId + 1;
+            pageObjectIds.Add(pageId);
+
+            objects.Add(string.Format(Inv, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {0:0.##} {1:0.##}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {2} 0 R >>", pageWidth, pageHeight, contentId));
+            var streamContent = pageStreamBuilders[p].ToString();
+            var streamBytes = encoding.GetBytes(streamContent);
+            objects.Add(string.Format(Inv, "<< /Length {0} >>\nstream\n{1}\nendstream", streamBytes.Length, streamContent));
+        }
+
+        objects[1] = string.Format(Inv, "<< /Type /Pages /Count {0} /Kids [{1}] >>", totalPages, string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R")));
+
+        var pdfBuilder = new StringBuilder();
+        pdfBuilder.Append("%PDF-1.4\n");
+        var offsets = new List<int> { 0 };
+
+        for (int i = 0; i < objects.Count; i++)
+        {
+            offsets.Add(encoding.GetByteCount(pdfBuilder.ToString()));
+            pdfBuilder.Append(string.Format(Inv, "{0} 0 obj\n{1}\nendobj\n", i + 1, objects[i]));
+        }
+
+        var xrefPos = encoding.GetByteCount(pdfBuilder.ToString());
+        pdfBuilder.Append(string.Format(Inv, "xref\n0 {0}\n", objects.Count + 1));
+        pdfBuilder.Append("0000000000 65535 f \n");
+        foreach (var off in offsets.Skip(1))
+        {
+            pdfBuilder.Append(string.Format(Inv, "{0:D10} 00000 n \n", off));
+        }
+        pdfBuilder.Append(string.Format(Inv, "trailer << /Size {0} /Root 1 0 R >>\nstartxref\n{1}\n%%EOF\n", objects.Count + 1, xrefPos));
+
+        return encoding.GetBytes(pdfBuilder.ToString());
+    }
+
+    private static string EscapePdf(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value
+            .Replace("\r", " ")
+            .Replace("\n", " ")
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("(", "\\(", StringComparison.Ordinal)
+            .Replace(")", "\\)", StringComparison.Ordinal);
+    }
 }
 
 #region Models & DTOs

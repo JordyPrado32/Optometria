@@ -7,6 +7,9 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject ReportsDataService ReportsService
+@inject PurchaseOrderDocumentService DocumentService
 
 <PageTitle>Ordenes de compra</PageTitle>
 
@@ -138,6 +141,9 @@ else
                                             <a class="btn btn-outline-primary" href="@GetOrderXmlUrl(order.id_orden_compra)" target="_blank" rel="noopener noreferrer">
                                                 <i class="bi bi-filetype-xml"></i> XML
                                             </a>
+                                            <button class="btn btn-outline-primary" @onclick="() => DownloadOrderPdfAsync(order)" title="Descargar PDF de esta orden">
+                                                <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+                                            </button>
                                             @if (permissions.CanDelete)
                                             {
                                                 <button class="btn btn-outline-primary" @onclick="() => DeleteAsync(order)">
@@ -797,9 +803,47 @@ else
         NavigationManager.NavigateTo(exportUrl, forceLoad: true);
     }
 
-    private void ExportOrdersPdf()
+    private async Task ExportOrdersPdf()
     {
-        NavigationManager.NavigateTo("/exports/purchase-orders.pdf", forceLoad: true);
+        var headers = new[] { "N° Orden", "Proveedor", "Fecha", "Estado", "Condición Pago", "Total", "N° Líneas" };
+        var rows = FilteredOrders.Select(o => new[]
+        {
+            o.numero_orden,
+            o.id_proveedorNavigation?.nombre ?? "",
+            o.fecha_orden?.ToString("yyyy-MM-dd") ?? "",
+            o.estado_orden ?? "",
+            o.condicion_pago ?? "",
+            $"${(o.total ?? 0m):N2}",
+            o.tbl_detalle_orden_compra.Count.ToString()
+        }).ToList();
+
+        var kpis = new Dictionary<string, string>
+        {
+            ["Total Órdenes"] = FilteredOrders.Count.ToString(),
+            ["Monto Total"] = $"${FilteredOrders.Sum(o => o.total ?? 0m):N2}",
+            ["Pendientes"] = FilteredOrders.Count(o => o.estado_orden == "Pendiente").ToString(),
+            ["Aprobadas"] = FilteredOrders.Count(o => o.estado_orden == "Aprobada" || o.estado_orden == "Recibida").ToString()
+        };
+
+        var bytes = ReportsService.GeneratePdfBytes("Listado de Órdenes de Compra", kpis, headers, rows);
+        await DownloadFileAsync($"ordenes-compra-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task DownloadOrderPdfAsync(tbl_orden_compra order)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var doc = await DocumentService.BuildAsync(db, order.id_orden_compra, currentUserId);
+        if (doc is not null && doc.PdfContent.Length > 0)
+        {
+            await DownloadFileAsync($"orden-compra-{order.numero_orden}.pdf", "application/pdf", doc.PdfContent);
+        }
+    }
+
+    private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        var dataUrl = $"data:{mimeType};base64,{base64}";
+        await JSRuntime.InvokeVoidAsync("eval", $"(function(){{ const a = document.createElement('a'); a.href = '{dataUrl}'; a.download = '{fileName}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
     }
 
     private bool MatchesFilters(tbl_orden_compra order)

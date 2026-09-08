@@ -72,8 +72,9 @@
             </div>
             <div class="reports-filter-item" style="flex: 1 1 240px;">
                 <label>Cajero / Usuario</label>
-                <select class="form-select" @bind="selectedUserId">
+                <select class="form-select" @bind="selectedUserId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los cajeros</option>
+                    <option value="-1">Ventas Tienda Online / Sistema</option>
                     @foreach (var u in users)
                     {
                         <option value="@u.id_usuario">@($"{u.nombres} {u.apellidos}")</option>
@@ -237,15 +238,18 @@
         var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
 
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        users = await db.tbl_usuarios.AsNoTracking().Where(u => u.activo ?? true).OrderBy(u => u.nombres).ToListAsync();
+        users = await ReportsService.GetCashierUsersAsync();
 
         await LoadReportAsync();
     }
 
-    private void OnDateChanged(ChangeEventArgs e)
+    private async Task OnDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) cutoffDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            cutoffDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -264,22 +268,23 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Hora", "Concepto", "Documento", "Metodo Pago", "Cajero", "Importe Bruto", "Importe Neto", "Estado" };
+        var headers = new[] { "Fecha de Corte", "Hora", "Concepto", "Comprobante / Ref", "Forma de Pago", "Cajero / Responsable", "Monto Bruto", "Monto Neto", "Estado" };
         var rows = data.Items.Select(r => new[]
         {
+            cutoffDate.ToString("yyyy-MM-dd"),
             r.Time.ToString("HH:mm:ss"),
             r.Concept,
             r.DocumentNumber,
             r.PaymentMethod,
             r.Cashier,
-            r.GrossAmount.ToString("F2"),
-            r.NetAmount.ToString("F2"),
+            $"${r.GrossAmount:N2}",
+            $"${r.NetAmount:N2}",
             r.IsCancelled ? "Anulada" : "Efectiva"
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes($"Cierre de Caja Diario - {cutoffDate:yyyy-MM-dd}", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes($"Cierre de Caja Diario ({cutoffDate:yyyy-MM-dd})", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "CierreCaja", "Excel", $"Fecha={cutoffDate}; Registros={rows.Count}");
-        await DownloadFileAsync($"cierre-caja-{cutoffDate:yyyyMMdd}-{DateTime.Now:HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"cierre-caja-{cutoffDate:yyyyMMdd}-{DateTime.Now:HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -290,25 +295,47 @@
             ["Total Efectivo"] = $"${data.TotalCash:N2}",
             ["Total Transferencias"] = $"${data.TotalTransfer:N2}",
             ["Total Tarjetas"] = $"${data.TotalCard:N2}",
-            ["Ventas a Credito"] = $"${data.TotalCredit:N2}",
+            ["Ventas a Crédito"] = $"${data.TotalCredit:N2}",
             ["Total Anulaciones"] = $"${data.TotalCancelled:N2}",
             ["Total Neto Recaudado"] = $"${data.TotalNetCollected:N2}"
         };
 
-        var headers = new[] { "Hora", "Concepto", "Documento", "Metodo", "Cajero", "Neto" };
+        var headers = new[] { "Fecha de Corte", "Hora", "Concepto", "Comprobante / Ref", "Forma de Pago", "Cajero / Responsable", "Monto Bruto", "Monto Neto", "Estado" };
         var rows = data.Items.Select(r => new[]
         {
-            r.Time.ToString("HH:mm"),
+            cutoffDate.ToString("yyyy-MM-dd"),
+            r.Time.ToString("HH:mm:ss"),
             r.Concept,
             r.DocumentNumber,
             r.PaymentMethod,
             r.Cashier,
-            $"${r.NetAmount:F2}"
+            $"${r.GrossAmount:N2}",
+            $"${r.NetAmount:N2}",
+            r.IsCancelled ? "Anulada" : "Efectiva"
         }).ToList();
 
         var bytes = ReportsService.GeneratePdfBytes($"Cierre de Caja Diario ({cutoffDate:yyyy-MM-dd})", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "CierreCaja", "PDF", $"Fecha={cutoffDate}; Registros={rows.Count}");
         await DownloadFileAsync($"cierre-caja-{cutoffDate:yyyyMMdd}-{DateTime.Now:HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

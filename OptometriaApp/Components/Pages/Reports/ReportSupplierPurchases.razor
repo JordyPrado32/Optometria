@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Proveedor</label>
-                <select class="form-select" @bind="filters.SupplierId">
+                <select class="form-select" @bind="filters.SupplierId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los proveedores</option>
                     @foreach (var s in suppliers)
                     {
@@ -84,7 +84,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Estado Orden</label>
-                <select class="form-select" @bind="filters.State">
+                <select class="form-select" @bind="filters.State" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos</option>
                     <option value="Emitida">Emitida</option>
                     <option value="Aprobada">Aprobada</option>
@@ -193,14 +193,22 @@
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -219,7 +227,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha", "No. Orden", "Proveedor", "RUC", "Productos", "Comprador", "Subtotal", "IVA", "Total", "Estado" };
+        var headers = new[] { "Fecha y Hora", "Nº Orden de Compra", "Proveedor", "RUC Proveedor", "Detalle de Productos", "Usuario Comprador", "Subtotal", "IVA", "Total", "Estado" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd HH:mm"),
@@ -228,15 +236,15 @@
             r.SupplierRuc,
             r.ItemsDetails,
             r.BuyerUser,
-            r.Subtotal.ToString("F2"),
-            r.Tax.ToString("F2"),
-            r.Total.ToString("F2"),
+            $"${r.Subtotal:N2}",
+            $"${r.Tax:N2}",
+            $"${r.Total:N2}",
             r.State
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Compras a Proveedores", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Compras a Proveedores", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "ComprasProveedores", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-compras-proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-compras-proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -250,20 +258,41 @@
             ["Total de Ordenes"] = $"{data.TotalOrdersCount}"
         };
 
-        var headers = new[] { "Fecha", "Orden", "Proveedor", "RUC", "Total", "Estado" };
+        var headers = new[] { "Fecha", "N° Orden", "Proveedor", "RUC / Cédula", "Subtotal", "IVA", "Total Compra", "Estado" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd"),
             r.OrderNumber,
             r.SupplierName,
             r.SupplierRuc,
-            $"${r.Total:F2}",
+            $"${r.Subtotal:N2}",
+            $"${r.Tax:N2}",
+            $"${r.Total:N2}",
             r.State
         }).ToList();
 
         var bytes = ReportsService.GeneratePdfBytes("Reporte de Compras a Proveedores", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "ComprasProveedores", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-compras-proveedores-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

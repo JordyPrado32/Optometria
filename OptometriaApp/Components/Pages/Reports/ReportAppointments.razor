@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Médico / Especialista</label>
-                <select class="form-select" @bind="filters.DoctorId">
+                <select class="form-select" @bind="filters.DoctorId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los médicos</option>
                     @foreach (var d in doctors)
                     {
@@ -84,7 +84,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Estado de Cita</label>
-                <select class="form-select" @bind="filters.State">
+                <select class="form-select" @bind="filters.State" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos los estados</option>
                     <option value="Realizada">Realizada / Atendida</option>
                     <option value="Confirmada">Confirmada</option>
@@ -189,14 +189,22 @@
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -215,7 +223,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha", "Horario", "Paciente", "Telefono", "Medico", "Tipo", "Motivo", "Estado" };
+        var headers = new[] { "Fecha de Cita", "Horario / Turno", "Paciente", "Teléfono Paciente", "Médico / Especialista", "Tipo de Cita", "Motivo de Consulta", "Estado de Cita" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd"),
@@ -228,9 +236,9 @@
             r.State
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Citas y Turnos", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Citas Médicas y Turnos", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "CitasTurnos", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-citas-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-citas-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -245,20 +253,41 @@
             ["Cumplimiento"] = $"{data.FulfillmentRate}%"
         };
 
-        var headers = new[] { "Fecha", "Horario", "Paciente", "Medico", "Tipo", "Estado" };
+        var headers = new[] { "Fecha", "Horario", "Paciente", "Teléfono", "Especialista / Médico", "Tipo de Cita", "Motivo", "Estado" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd"),
             r.TimeSlot,
             r.PatientName,
+            r.PatientPhone,
             r.DoctorName,
             r.Type,
+            r.Reason,
             r.State
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Reporte de Citas y Turnos", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Citas y Turnos Médicos", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "CitasTurnos", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-citas-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
