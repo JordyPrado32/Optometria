@@ -13,21 +13,23 @@
 <PageTitle>Reporte de Ingresos, Egresos y Flujo de Caja</PageTitle>
 
 <section class="management-shell">
-    <div class="management-hero">
+    <header class="clinical-banner">
         <div>
-            <span class="eyebrow">Reportería Financiera</span>
-            <h1>Ingresos y Egresos Económicos</h1>
-            <p>Consolida las ventas y cobros frente a las compras y gastos operativos para obtener el flujo neto de la óptica.</p>
+            <span class="clinical-banner-tag">
+                <i class="bi bi-currency-dollar"></i> Reportería Financiera
+            </span>
+            <h1 class="clinical-banner-title">Ingresos, Egresos y Flujo de Caja</h1>
+            <p class="clinical-banner-desc">Consolida las ventas y cobros frente a las compras y gastos operativos para obtener el flujo neto de la óptica.</p>
         </div>
-        <div class="workspace-actions">
-            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        <div class="clinical-banner-actions">
+            <button type="button" class="btn btn-excel" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
             </button>
-            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            <button type="button" class="btn btn-coffee" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf-fill" style="margin-right: 6px;"></i> Exportar PDF
             </button>
         </div>
-    </div>
+    </header>
 
     <!-- KPIs -->
     <div class="kpi-grid">

@@ -9,28 +9,23 @@
 <PageTitle>Ciclo de Vida y Renovación del Lente | Óptica Lux</PageTitle>
 
 <div class="management-shell">
-    <div class="management-card" style="margin-bottom: 1.5rem;">
-        <div class="management-card-header">
-            <div>
-                <h2 style="display: flex; align-items: center; gap: 0.6rem;">
-                    <i class="bi bi-hourglass-split" style="color: var(--color-sage, #5DA181);"></i>
-                    Control de Ciclo de Vida y Renovación del Lente
-                </h2>
-                <span>Seguimiento Proactivo de Desgaste, Salud Ocular y Retención de Pacientes</span>
-            </div>
-            <div class="d-flex gap-2">
-                <a class="btn btn-coffee btn-sm" href="/smart-lens-advisor">
-                    <i class="bi bi-cpu-fill me-1"></i> Recomendador IA
-                </a>
-                <a class="btn btn-excel btn-sm" href="/vision-simulator">
-                    <i class="bi bi-eye-fill me-1"></i> Simulador
-                </a>
-            </div>
+    <header class="clinical-banner">
+        <div>
+            <span class="clinical-banner-tag">
+                <i class="bi bi-hourglass-split"></i> Salud Ocular & Retención
+            </span>
+            <h1 class="clinical-banner-title">Control de Ciclo de Vida y Renovación del Lente</h1>
+            <p class="clinical-banner-desc">Calcula la degradación física del material, evalúa riesgos de salud ocular por sobreuso y simula recordatorios para renovación oportuna.</p>
         </div>
-
-        <p class="text-muted" style="font-size: 0.9rem; margin-top: 0.5rem;">
-            Calcule la degradación física del material, evalúe riesgos de salud ocular por sobreuso de lentes y simule recordatorios automáticos por WhatsApp para renovación oportuna.
-        </p>
+        <div class="clinical-banner-actions">
+            <a class="btn btn-coffee" href="/smart-lens-advisor">
+                <i class="bi bi-cpu-fill me-1"></i> Recomendador IA
+            </a>
+            <a class="btn btn-excel" href="/vision-simulator">
+                <i class="bi bi-eye-fill me-1"></i> Simulador
+            </a>
+        </div>
+    </header>
 
         <!-- KPI Cards -->
         <div class="row g-3 mb-4">
@@ -196,7 +191,6 @@
             </table>
         </div>
     </div>
-</div>
 
 @code {
     private string selectedLensType = "lc_mensual";

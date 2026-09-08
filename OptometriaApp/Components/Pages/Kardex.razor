@@ -20,13 +20,15 @@ else if (!canView)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Inventario valorizado</span>
-                <h1>Kardex por promedio ponderado</h1>
-                <p>Consulta entradas, salidas, ajustes, saldo valorizado y costo promedio con trazabilidad util para operacion y auditoria.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-journal-text"></i> Inventario & Valoración
+                </span>
+                <h1 class="clinical-banner-title">Kárdex por Promedio Ponderado</h1>
+                <p class="clinical-banner-desc">Consulta entradas, salidas, ajustes, saldo valorizado y costo promedio con trazabilidad útil para operación y auditoría.</p>
             </div>
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 <button type="button" class="btn btn-excel" @onclick="ExportKardex">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
                 </button>
@@ -36,7 +38,7 @@ else
                     <button type="button" class="btn btn-primary" @onclick="RebuildAllAsync">Recalcular todo</button>
                 }
             </div>
-        </div>
+        </header>
 
         <section class="management-card">
             <div class="management-card-header">

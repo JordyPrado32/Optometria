@@ -6,7 +6,20 @@
 
 <PageTitle>Certificados médicos</PageTitle>
 <section class="management-shell">
-    <div class="management-hero"><div><span class="eyebrow">Documentos clínicos</span><h1>Certificados médicos</h1><p>Consulta #@ConsultationId. Cada emisión conserva el texto y los datos del profesional y del paciente.</p></div><a class="btn btn-outline-primary" href="/doctor/historia-clinica">Volver a historia clínica</a></div>
+    <header class="clinical-banner">
+        <div>
+            <span class="clinical-banner-tag">
+                <i class="bi bi-file-earmark-text-fill"></i> Documentos Clínicos
+            </span>
+            <h1 class="clinical-banner-title">Certificados Médicos</h1>
+            <p class="clinical-banner-desc">Consulta de la atención #@ConsultationId. Cada emisión conserva el texto y los datos del profesional y del paciente.</p>
+        </div>
+        <div class="clinical-banner-actions">
+            <a class="btn btn-coffee" href="/doctor/historia-clinica">
+                <i class="bi bi-arrow-left me-1"></i> Volver a historia clínica
+            </a>
+        </div>
+    </header>
     @if (message != null) { <div role="status" class="alert alert-info">@message</div> }
     @if (canIssue)
     {

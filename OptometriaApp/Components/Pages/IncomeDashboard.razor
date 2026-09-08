@@ -45,13 +45,15 @@ else if (!canViewModule)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Analitica financiera</span>
-                <h1>Ingresos</h1>
-                <p>Monitorea ingresos cobrados, cartera activa, cuentas pendientes y el comportamiento por metodo de pago dentro del periodo seleccionado.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-graph-up-arrow"></i> Analítica Financiera
+                </span>
+                <h1 class="clinical-banner-title">Dashboard de Ingresos</h1>
+                <p class="clinical-banner-desc">Monitorea ingresos cobrados, cartera activa, cuentas pendientes y el comportamiento por método de pago dentro del periodo seleccionado.</p>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {

@@ -30,26 +30,26 @@ else if (!canViewSuppliers)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Compras</span>
-                <h1>Proveedores</h1>
-                <p>Administra relacion comercial, contacto, credito, datos fiscales y seguimiento operativo del proveedor en un solo lugar.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-truck-flatbed"></i> Compras & Abastecimiento
+                </span>
+                <h1 class="clinical-banner-title">Gestión de Proveedores</h1>
+                <p class="clinical-banner-desc">Administra la relación comercial, información de contacto, condiciones de crédito y datos fiscales en un solo directorio.</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNewSupplier">
                         <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo proveedor
                     </button>
                 }
-
                 <button type="button" class="btn btn-excel" @onclick="ExportSuppliers">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header">

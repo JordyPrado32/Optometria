@@ -24,19 +24,23 @@
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Seguimiento clinico</span>
-                <h1>Modulo de examenes</h1>
-                <p>Registra examenes o estudios en fechas distintas y consolida todo dentro de la historia clinica del paciente.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-file-earmark-medical-fill"></i> Seguimiento Clínico
+                </span>
+                <h1 class="clinical-banner-title">Módulo de Exámenes Complementarios</h1>
+                <p class="clinical-banner-desc">Registra exámenes o estudios optométricos en fechas distintas y consolida todo dentro de la historia clínica del paciente.</p>
             </div>
-            <div class="workspace-actions">
+            <div class="clinical-banner-actions">
                 @if (patient is not null)
                 {
-                    <a class="btn btn-outline-primary" href="@GetHistoryUrl()">Ver historia clinica</a>
+                    <a class="btn btn-coffee" href="@GetHistoryUrl()">
+                        <i class="bi bi-journal-medical me-1"></i> Ver historia clínica
+                    </a>
                 }
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {

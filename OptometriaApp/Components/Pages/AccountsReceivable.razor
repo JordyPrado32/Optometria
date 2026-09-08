@@ -130,13 +130,15 @@ else if (!canViewModule)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Cartera</span>
-                <h1>Cuentas por cobrar</h1>
-                <p>Consulta facturas a credito, filtra cartera por cliente o vencimiento y registra abonos sin salir del flujo comercial.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-wallet2"></i> Cartera & Cobranzas
+                </span>
+                <h1 class="clinical-banner-title">Cuentas por Cobrar</h1>
+                <p class="clinical-banner-desc">Consulta facturas a crédito, filtra cartera por cliente o días de mora y registra abonos o liquidaciones de saldo en tiempo real.</p>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {

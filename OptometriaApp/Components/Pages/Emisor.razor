@@ -34,24 +34,24 @@ else if (!canViewEmisor)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Facturacion electronica</span>
-                <h1>Emisor</h1>
-                <p>Cada usuario mantiene un unico emisor propio con control de auditoria, establecimiento y punto de emision.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-building-check"></i> Facturación Electrónica SRI
+                </span>
+                <h1 class="clinical-banner-title">Configuración de Emisor</h1>
+                <p class="clinical-banner-desc">Administra datos del emisor, RUC, firma electrónica, establecimiento, punto de emisión y ambiente SRI.</p>
             </div>
-
-            <div class="workspace-actions">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate && !emisores.Any())
                 {
-                    <button type="button" class="btn btn-primary" @onclick="PrepareNewIssuer">
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNewIssuer">
                         <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Crear emisor
                     </button>
                 }
-
                 <button type="button" class="btn btn-outline-primary" @onclick="ExportIssuer">Exportar CSV</button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card" style="margin-top: 1.5rem;">
             <div class="management-card-header">

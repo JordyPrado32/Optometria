@@ -13,21 +13,23 @@
 <PageTitle>Reporte de Stock y Rotación de Inventario</PageTitle>
 
 <section class="management-shell">
-    <div class="management-hero">
+    <header class="clinical-banner">
         <div>
-            <span class="eyebrow">Reportería de Inventario</span>
-            <h1>Stock Actual, Agotados y Rotación de Productos</h1>
-            <p>Control de existencias valorizadas, alertas de stock mínimo o agotado y análisis de productos de mayor y menor rotación.</p>
+            <span class="clinical-banner-tag">
+                <i class="bi bi-boxes"></i> Reportería de Inventario
+            </span>
+            <h1 class="clinical-banner-title">Reporte de Inventario de Productos y Rotación</h1>
+            <p class="clinical-banner-desc">Control de existencias valorizadas, alertas de stock mínimo o agotado y análisis de productos de alta y baja rotación.</p>
         </div>
-        <div class="workspace-actions">
-            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        <div class="clinical-banner-actions">
+            <button type="button" class="btn btn-excel" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
             </button>
-            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            <button type="button" class="btn btn-coffee" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf-fill" style="margin-right: 6px;"></i> Exportar PDF
             </button>
         </div>
-    </div>
+    </header>
 
     <!-- KPIs -->
     <div class="kpi-grid">

@@ -29,22 +29,23 @@ else if (!canViewCategories)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Catalogo</span>
-                <h1>Categorias de productos</h1>
-                <p>Administra las categorias del catalogo con busqueda, control de estado y auditoria sin salir del flujo operativo.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-tags-fill"></i> Catálogo & Clasificación
+                </span>
+                <h1 class="clinical-banner-title">Categorías de Productos</h1>
+                <p class="clinical-banner-desc">Administra las categorías del catálogo con búsqueda, control de estado y clasificación organizada para inventarios y ventas.</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNewCategory">
-                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva categoria
+                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva categoría
                     </button>
                 }
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header">

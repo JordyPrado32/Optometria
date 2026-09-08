@@ -671,13 +671,15 @@ else if (!canViewModule)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Facturacion</span>
-                <h1>Factura tradicional</h1>
-                <p>Prepara una factura clasica con cabecera, cliente, tabla de items, totales y upserts inline sin salir del flujo.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-receipt-cutoff"></i> Ventas & Facturación
+                </span>
+                <h1 class="clinical-banner-title">Facturación Tradicional y Electrónica</h1>
+                <p class="clinical-banner-desc">Prepara facturas con cabecera, datos de cliente, desglose de ítems, cálculo de IVA, totales y emisión directa sin salir del flujo.</p>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {

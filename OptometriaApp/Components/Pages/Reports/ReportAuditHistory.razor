@@ -13,21 +13,23 @@
 <PageTitle>Historial y Auditoría de Reportes</PageTitle>
 
 <section class="management-shell">
-    <div class="management-hero">
+    <header class="clinical-banner">
         <div>
-            <span class="eyebrow">Seguridad y Auditoría</span>
-            <h1>Historial de Reportes Generados</h1>
-            <p>Registro y trazabilidad de todos los reportes generados y exportados en el sistema para control de cumplimiento y auditorías.</p>
+            <span class="clinical-banner-tag">
+                <i class="bi bi-shield-check"></i> Seguridad & Auditoría
+            </span>
+            <h1 class="clinical-banner-title">Historial y Auditoría de Reportes</h1>
+            <p class="clinical-banner-desc">Registro y trazabilidad de todos los reportes generados y exportados en el sistema para control de cumplimiento y auditorías internas.</p>
         </div>
-        <div class="workspace-actions">
-            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        <div class="clinical-banner-actions">
+            <button type="button" class="btn btn-excel" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
             </button>
-            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            <button type="button" class="btn btn-coffee" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf-fill" style="margin-right: 6px;"></i> Exportar PDF
             </button>
         </div>
-    </div>
+    </header>
 
     <!-- KPIs -->
     <div class="kpi-grid">

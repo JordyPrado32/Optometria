@@ -19,20 +19,26 @@ else if (!canView)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
-            <div><span class="eyebrow">Inventario</span><h1>Inventarios</h1><p>Consulta tus movimientos, lotes y kardex. Tambien puedes registrar ajustes manuales propios.</p></div>
-            <div class="workspace-actions" style="align-items: center;">
+        <header class="clinical-banner">
+            <div>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-box-seam-fill"></i> Inventario & Control
+                </span>
+                <h1 class="clinical-banner-title">Gestión de Inventarios</h1>
+                <p class="clinical-banner-desc">Consulta tus movimientos, lotes y kárdex. Registra ingresos, egresos y ajustes manuales de stock en tiempo real.</p>
+            </div>
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
-                    <button class="btn btn-coffee" @onclick="PrepareNew">
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
                         <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo movimiento
                     </button>
                 }
-                <button class="btn btn-excel" @onclick="ExportInventories">
+                <button type="button" class="btn btn-excel" @onclick="ExportInventories">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredMovements.Count movimientos</span></div>

@@ -18,13 +18,15 @@ else if (!isAdmin)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Personalizacion</span>
-                <h1>Configuracion central de la optica</h1>
-                <p>Administra imagenes, datos institucionales, carpeta RX y plantillas operativas sin tocar codigo.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-gear-fill"></i> Administración Central & Marca
+                </span>
+                <h1 class="clinical-banner-title">Configuración Central de la Óptica</h1>
+                <p class="clinical-banner-desc">Administra imágenes, datos institucionales, logotipo, membrete, políticas y plantillas operativas del sistema.</p>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {

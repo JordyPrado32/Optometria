@@ -24,13 +24,15 @@ else if (!canView)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Compras</span>
-                <h1>Ordenes de compra</h1>
-                <p>Cada usuario administra sus propias ordenes, lineas de producto y seguimiento de recepcion.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-cart-check-fill"></i> Abastecimiento & Pedidos
+                </span>
+                <h1 class="clinical-banner-title">Órdenes de Compra</h1>
+                <p class="clinical-banner-desc">Administra órdenes de compra a proveedores, líneas de productos, estados de autorización y seguimiento de recepción.</p>
             </div>
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
@@ -44,7 +46,7 @@ else
                     <i class="bi bi-file-earmark-pdf-fill" style="margin-right: 6px;"></i> Exportar PDF
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header">

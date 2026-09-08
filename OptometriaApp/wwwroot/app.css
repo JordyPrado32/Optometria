@@ -131,6 +131,70 @@ h1:focus {
     text-align: start;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   GLOBAL CLINICAL PAGE BANNER HEADER STYLES
+   ══════════════════════════════════════════════════════════════ */
+.clinical-banner {
+    background: linear-gradient(135deg, #eaf2ed 0%, #f7f3ea 60%, #faeee9 100%);
+    border: 1px solid rgba(93, 161, 129, 0.25);
+    border-radius: 1.8rem;
+    padding: 2rem 2.4rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.8rem;
+}
+.clinical-banner::after {
+    content: '';
+    position: absolute;
+    right: -30px;
+    bottom: -40px;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(93, 161, 129, 0.18) 0%, transparent 70%);
+    pointer-events: none;
+}
+.clinical-banner-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(93, 161, 129, 0.18);
+    color: #276144;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 0.6rem;
+}
+.clinical-banner-title {
+    font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+    font-weight: 900;
+    color: #241d18;
+    line-height: 1.1;
+    margin: 0 0 0.4rem 0;
+}
+.clinical-banner-desc {
+    color: #6e5c4a;
+    font-size: 0.98rem;
+    margin: 0;
+    max-width: 650px;
+    line-height: 1.5;
+}
+.clinical-banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
 .auth-shell {
     display: grid;
     grid-template-columns: 1.15fr 0.85fr;

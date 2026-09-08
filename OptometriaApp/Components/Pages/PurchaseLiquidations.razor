@@ -18,20 +18,26 @@ else if (!canView)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
-            <div><span class="eyebrow">Compras</span><h1>Liquidaciones de compra</h1><p>Cada usuario gestiona sus liquidaciones asociadas a sus propias ordenes de compra.</p></div>
-            <div class="workspace-actions" style="align-items: center;">
+        <header class="clinical-banner">
+            <div>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-file-earmark-spreadsheet-fill"></i> Liquidaciones & Facturas Proveedor
+                </span>
+                <h1 class="clinical-banner-title">Liquidaciones de Compra</h1>
+                <p class="clinical-banner-desc">Gestiona liquidaciones asociadas a órdenes de compra, controlando retenciones, IVA y montos a pagar.</p>
+            </div>
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
-                    <button class="btn btn-coffee" @onclick="PrepareNew">
-                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva liquidacion
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
+                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva liquidación
                     </button>
                 }
-                <button class="btn btn-excel" @onclick="ExportLiquidations">
+                <button type="button" class="btn btn-excel" @onclick="ExportLiquidations">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredItems.Count resultados</span></div>

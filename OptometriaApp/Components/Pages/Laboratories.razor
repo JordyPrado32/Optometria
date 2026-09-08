@@ -30,26 +30,26 @@ else if (!canViewLaboratories)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Administrador</span>
-                <h1>Laboratorios</h1>
-                <p>Administra convenios y contactos de laboratorio con una vista clara, filtros rápidos y acciones integradas.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-eye-fill"></i> Trabajo Óptico & Laboratorio
+                </span>
+                <h1 class="clinical-banner-title">Gestión de Laboratorios</h1>
+                <p class="clinical-banner-desc">Administra convenios, proveedores de biselado/talla y contactos de laboratorio con control de estado y tiempos de entrega.</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNewLaboratory">
                         <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo laboratorio
                     </button>
                 }
-
                 <button type="button" class="btn btn-excel" @onclick="ExportLaboratories">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header">

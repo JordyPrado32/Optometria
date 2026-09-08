@@ -310,27 +310,28 @@
 else
 {
     <section class="workspace-shell dashboard-shell-v2">
-        <section class="dashboard-hero-v2">
-            <div class="dashboard-hero-copy">
-                <span class="eyebrow">Panel de control</span>
-                <h1>@GetDashboardTitle()</h1>
+        <header class="clinical-banner">
+            <div>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-speedometer2"></i> Panel Principal
+                </span>
+                <h1 class="clinical-banner-title">@GetDashboardTitle()</h1>
+                <p class="clinical-banner-desc">Bienvenido al sistema de gestión clínica y óptica. Monitorea métricas clave, citas del día, cartera e inventario en tiempo real.</p>
             </div>
-
-            <div class="dashboard-hero-side">
-
-                <div class="dashboard-hero-chip">
-                    <span>Fichas Médicas</span>
-                    <strong>@totalAppointments</strong>
+            <div class="clinical-banner-actions">
+                <div class="dashboard-hero-chip" style="background: rgba(93, 161, 129, 0.15); border: 1px solid rgba(93, 161, 129, 0.3); border-radius: 12px; padding: 6px 14px; display: inline-flex; flex-direction: column; align-items: flex-end;">
+                    <span style="font-size: 0.72rem; text-transform: uppercase; color: #7F6951; font-weight: 700;">Fichas Médicas</span>
+                    <strong style="font-size: 1.1rem; color: #241d18;">@totalAppointments</strong>
                 </div>
                 @if (readyForPickupCount > 0)
                 {
-                    <div class="dashboard-hero-chip" style="background: rgba(255, 224, 102, 0.28); border-color: rgba(255, 193, 7, 0.35);">
-                        <span>Pedidos listos</span>
-                        <strong>@readyForPickupCount</strong>
+                    <div class="dashboard-hero-chip" style="background: rgba(254, 188, 100, 0.2); border: 1px solid rgba(254, 188, 100, 0.4); border-radius: 12px; padding: 6px 14px; display: inline-flex; flex-direction: column; align-items: flex-end;">
+                        <span style="font-size: 0.72rem; text-transform: uppercase; color: #7F6951; font-weight: 700;">Pedidos Listos</span>
+                        <strong style="font-size: 1.1rem; color: #856200;">@readyForPickupCount</strong>
                     </div>
                 }
             </div>
-        </section>
+        </header>
 
         <!-- Accesos rápidos animados -->
         <section class="dashboard-actions-v2">

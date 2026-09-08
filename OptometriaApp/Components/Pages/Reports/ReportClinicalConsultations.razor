@@ -13,21 +13,23 @@
 <PageTitle>Reporte de Consultas Optométricas y Diagnósticos</PageTitle>
 
 <section class="management-shell">
-    <div class="management-hero">
+    <header class="clinical-banner">
         <div>
-            <span class="eyebrow">Reportería Clínica</span>
-            <h1>Consultas Optométricas y Diagnósticos</h1>
-            <p>Historial clínico de consultas realizadas, diagnósticos refractivos/oculares, prescripciones y tratamientos.</p>
+            <span class="clinical-banner-tag">
+                <i class="bi bi-journal-medical"></i> Reportería Clínica
+            </span>
+            <h1 class="clinical-banner-title">Evaluaciones Clínicas y Consultas Optométricas</h1>
+            <p class="clinical-banner-desc">Historial clínico de consultas realizadas, diagnósticos refractivos/oculares, prescripciones y tratamientos.</p>
         </div>
-        <div class="workspace-actions">
-            <button type="button" class="btn btn-outline-primary" @onclick="ExportCsvAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        <div class="clinical-banner-actions">
+            <button type="button" class="btn btn-excel" @onclick="ExportCsvAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
             </button>
-            <button type="button" class="btn btn-primary" @onclick="ExportPdfAsync" disabled="@isLoading">
-                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+            <button type="button" class="btn btn-coffee" @onclick="ExportPdfAsync" disabled="@isLoading">
+                <i class="bi bi-file-earmark-pdf-fill" style="margin-right: 6px;"></i> Exportar PDF
             </button>
         </div>
-    </div>
+    </header>
 
     <!-- KPIs -->
     <div class="kpi-grid">

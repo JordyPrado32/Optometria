@@ -22,13 +22,15 @@ else if (!canViewModule)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Clinica</span>
-                <h1>Pedidos a laboratorio</h1>
-                <p>Registra la orden RX, asigna laboratorio y deja lista la trazabilidad para el flujo de envio y entrega.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-file-earmark-medical"></i> Trabajo Óptico & RX
+                </span>
+                <h1 class="clinical-banner-title">Pedidos a Laboratorio</h1>
+                <p class="clinical-banner-desc">Registra la orden de trabajo óptico (RX), asigna laboratorio y mantén la trazabilidad para el flujo de envío y entrega.</p>
             </div>
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
@@ -36,7 +38,7 @@ else
                     </button>
                 }
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {

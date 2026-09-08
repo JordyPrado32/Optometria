@@ -48,13 +48,15 @@
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Logistica</span>
-                <h1>Envios de laboratorio y entregas</h1>
-                <p>Controla el pedido al laboratorio, el alistamiento para entrega y la salida a domicilio con una sola bandeja operativa.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-truck"></i> Logística & Entregas
+                </span>
+                <h1 class="clinical-banner-title">Envíos de Laboratorio y Entregas</h1>
+                <p class="clinical-banner-desc">Controla el estado del pedido en laboratorio, alistamiento para entrega y la salida a paciente o domicilio.</p>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {

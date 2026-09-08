@@ -20,20 +20,26 @@ else if (!canView)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
-            <div><span class="eyebrow">Compras</span><h1>Recepciones de compra</h1><p>Las recepciones registradas por el usuario actual actualizan stock, movimientos y kardex.</p></div>
-            <div class="workspace-actions" style="align-items: center;">
+        <header class="clinical-banner">
+            <div>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-box-arrow-in-down"></i> Ingreso & Recepción
+                </span>
+                <h1 class="clinical-banner-title">Recepciones de Compra</h1>
+                <p class="clinical-banner-desc">Registra el ingreso de mercancía recibida de proveedores, actualizando automáticamente inventarios, lotes y kárdex.</p>
+            </div>
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
-                    <button class="btn btn-coffee" @onclick="PrepareNew">
-                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva recepcion
+                    <button type="button" class="btn btn-coffee" @onclick="PrepareNew">
+                        <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nueva recepción
                     </button>
                 }
-                <button class="btn btn-excel" @onclick="ExportReceptions">
+                <button type="button" class="btn btn-excel" @onclick="ExportReceptions">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar Excel
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredReceptions.Count resultados</span></div>

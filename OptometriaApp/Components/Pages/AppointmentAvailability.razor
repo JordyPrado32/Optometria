@@ -32,14 +32,15 @@ else if (!canViewModule)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Agenda operativa</span>
-                <h1>@HeroTitle</h1>
-                <p>@HeroDescription</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-clock-history"></i> Agenda & Horarios
+                </span>
+                <h1 class="clinical-banner-title">@HeroTitle</h1>
+                <p class="clinical-banner-desc">@HeroDescription</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 <button type="button" class="btn btn-excel" @onclick="ExportAvailability">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
                 </button>
@@ -53,7 +54,7 @@ else
                     </button>
                 }
             </div>
-        </div>
+        </header>
 
         <div class="availability-top-row">
             @if (isAdmin)

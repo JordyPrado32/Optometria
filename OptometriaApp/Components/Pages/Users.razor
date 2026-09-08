@@ -36,26 +36,26 @@ else if (!canViewUsers)
 else
 {
     <section class="management-shell">
-        <div class="management-hero">
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Administración</span>
-                <h1>Usuarios</h1>
-                <p>Consulta, crea y administra cuentas con control por permisos, clave temporal por correo y exportación a CSV.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-people-fill"></i> Administración & Accesos
+                </span>
+                <h1 class="clinical-banner-title">Gestión de Usuarios del Sistema</h1>
+                <p class="clinical-banner-desc">Consulta, crea y administra cuentas con control de roles, clave temporal por correo y exportación de credenciales activas.</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div class="clinical-banner-actions">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNewUser">
                         <i class="bi bi-person-plus-fill" style="margin-right: 6px;"></i> Nuevo usuario
                     </button>
                 }
-
                 <button type="button" class="btn btn-excel" @onclick="ExportUsers">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
                 </button>
             </div>
-        </div>
+        </header>
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header">
