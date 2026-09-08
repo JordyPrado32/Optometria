@@ -15,7 +15,7 @@ public sealed class PurchaseOrderDocumentService
             .Include(x => x.id_proveedorNavigation)
             .Include(x => x.tbl_detalle_orden_compra)
                 .ThenInclude(x => x.id_productoNavigation)
-            .FirstOrDefaultAsync(x => x.id_orden_compra == orderId && x.id_usuario_solicita == userId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.id_orden_compra == orderId && (userId <= 0 || x.id_usuario_solicita == userId), cancellationToken);
 
         if (order is null)
         {

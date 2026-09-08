@@ -708,7 +708,7 @@ else
                         </div>
 
                         <div class="management-actions" style="margin-bottom: 1rem;">
-                            <a class="btn btn-outline-primary" href="@($"/exports/account-statements/{selectedAccount.Id}.pdf")">Descargar PDF</a>
+                            <a class="btn btn-outline-primary" href="@($"/exports/account-statements/{selectedAccount.Id}.pdf")" download="@($"estado-cuenta-{selectedAccount.Id}.pdf")" target="_blank">Descargar PDF</a>
                             <a class="btn btn-outline-primary" href="@($"/account-statements/{selectedAccount.Id}/print")" target="_blank">Imprimir</a>
                         </div>
 

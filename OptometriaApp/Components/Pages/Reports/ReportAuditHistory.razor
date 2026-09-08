@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item" style="flex: 2 1 220px;">
                 <label>Usuario Solicitante</label>
-                <select class="form-select" @bind="filters.UserId">
+                <select class="form-select" @bind="filters.UserId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los usuarios</option>
                     @foreach (var u in users)
                     {
@@ -172,14 +172,22 @@
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -198,7 +206,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha y Hora", "Usuario", "Modulo", "Accion", "Detalles" };
+        var headers = new[] { "Fecha y Hora", "Usuario Solicitante", "Módulo Accedido", "Acción Realizada", "Detalles / Registro" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -208,8 +216,8 @@
             r.Details
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Historial de Reportes Generados", headers, rows);
-        await DownloadFileAsync($"historial-reportes-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        var bytes = ReportsService.GenerateExcelBytes("Historial y Auditoría de Reportes Generados", headers, rows);
+        await DownloadFileAsync($"historial-reportes-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -222,17 +230,37 @@
             ["Exportaciones Excel"] = $"{data.ExcelExportsCount}"
         };
 
-        var headers = new[] { "Fecha y Hora", "Usuario", "Accion", "Detalles" };
+        var headers = new[] { "Fecha y Hora", "Usuario", "Módulo", "Acción", "Detalles" };
         var rows = data.Rows.Select(r => new[]
         {
-            r.Date.ToString("yyyy-MM-dd HH:mm"),
+            r.Date.ToString("yyyy-MM-dd HH:mm:ss"),
             r.User,
+            r.Module,
             r.Action,
             r.Details
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Historial y Auditoria de Reportes", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Historial y Auditoría de Reportes Generados", kpis, headers, rows);
         await DownloadFileAsync($"historial-reportes-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

@@ -66,7 +66,7 @@
         <div class="reports-inline-filters">
             <div class="reports-filter-item">
                 <label>Categoría</label>
-                <select class="form-select" @bind="filters.CategoryId">
+                <select class="form-select" @bind="filters.CategoryId" @bind:after="LoadReportAsync">
                     <option value="0">Todas las categorías</option>
                     @foreach (var c in categories)
                     {
@@ -76,7 +76,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Proveedor</label>
-                <select class="form-select" @bind="filters.SupplierId">
+                <select class="form-select" @bind="filters.SupplierId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los proveedores</option>
                     @foreach (var s in suppliers)
                     {
@@ -86,7 +86,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Estado Stock</label>
-                <select class="form-select" @bind="filters.StockStatus">
+                <select class="form-select" @bind="filters.StockStatus" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos</option>
                     <option value="Agotado">Agotados</option>
                     <option value="Stock Crítico">Stock Crítico</option>
@@ -95,14 +95,14 @@
             </div>
             <div class="reports-filter-item">
                 <label>Rotación</label>
-                <select class="form-select" @bind="filters.SortBy">
+                <select class="form-select" @bind="filters.SortBy" @bind:after="LoadReportAsync">
                     <option value="MayorRotacion">Más Vendidos</option>
                     <option value="MenorRotacion">Menor Rotación</option>
                 </select>
             </div>
             <div class="reports-filter-item" style="flex: 2 1 200px;">
                 <label>Buscar producto / código</label>
-                <input type="text" class="form-control" placeholder="Nombre o código..." @bind="filters.SearchTerm" @bind:event="oninput" />
+                <input type="text" class="form-control" placeholder="Nombre o código..." @bind="filters.SearchTerm" @bind:event="oninput" @bind:after="LoadReportAsync" />
             </div>
             <div class="reports-filter-actions">
                 <button type="button" class="btn btn-primary" @onclick="LoadReportAsync">
@@ -230,7 +230,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Codigo", "Producto", "Categoria", "Proveedor", "Stock Actual", "Stock Minimo", "Estado", "Ventas 90d", "Rotacion", "P. Compra", "P. Venta", "Valor Total" };
+        var headers = new[] { "Código", "Nombre de Producto", "Categoría", "Proveedor", "Stock Actual", "Stock Mínimo", "Estado de Stock", "Unidades Vendidas (90d)", "Nivel de Rotación", "Precio Costo", "Precio Venta", "Valoración Total" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Code,
@@ -242,14 +242,14 @@
             r.StockStatus,
             r.UnitsSold90Days.ToString(),
             r.RotationLevel,
-            r.CostPrice.ToString("F2"),
-            r.SalePrice.ToString("F2"),
-            r.TotalValuation.ToString("F2")
+            $"${r.CostPrice:N2}",
+            $"${r.SalePrice:N2}",
+            $"${r.TotalValuation:N2}"
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Inventario y Rotacion", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Inventario de Productos y Rotación", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "InventarioStock", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-inventario-stock-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-inventario-stock-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -264,21 +264,42 @@
             ["Baja Rotacion"] = $"{data.SlowMovingProductsCount}"
         };
 
-        var headers = new[] { "Codigo", "Producto", "Categoria", "Stock", "Estado", "Ventas", "Valor Total" };
+        var headers = new[] { "Código SKU", "Producto / Ítem", "Categoría", "Stock Actual", "Stock Mínimo", "Estado Stock", "P. Venta", "Ventas (90d)", "Valor Stock" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Code,
             r.Name,
             r.Category,
             r.CurrentStock.ToString(),
+            r.MinStock.ToString(),
             r.StockStatus,
+            $"${r.SalePrice:N2}",
             r.UnitsSold90Days.ToString(),
-            $"${r.TotalValuation:F2}"
+            $"${r.TotalValuation:N2}"
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Reporte de Stock y Rotacion de Inventario", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Inventario de Productos y Rotación", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "InventarioStock", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-inventario-stock-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

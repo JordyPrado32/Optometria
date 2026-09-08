@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Categoría de Producto</label>
-                <select class="form-select" @bind="filters.CategoryId">
+                <select class="form-select" @bind="filters.CategoryId" @bind:after="LoadReportAsync">
                     <option value="0">Todas las categorías</option>
                     @foreach (var c in categories)
                     {
@@ -83,8 +83,19 @@
                 </select>
             </div>
             <div class="reports-filter-item">
+                <label>Usuario / Cajero</label>
+                <select class="form-select" @bind="filters.UserId" @bind:after="LoadReportAsync">
+                    <option value="0">Todos los usuarios</option>
+                    <option value="-1">Ventas Tienda Online / Sistema</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.id_usuario">@($"{u.nombres} {u.apellidos}")</option>
+                    }
+                </select>
+            </div>
+            <div class="reports-filter-item">
                 <label>Estado SRI</label>
-                <select class="form-select" @bind="filters.SriStatus">
+                <select class="form-select" @bind="filters.SriStatus" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos los estados</option>
                     <option value="Autorizada">Autorizada</option>
                     <option value="Pendiente SRI">Pendiente SRI</option>
@@ -172,6 +183,7 @@
     private SalesBillingReportFilters filters = new();
     private SalesBillingReportResult data = new();
     private List<tbl_categoria_producto> categories = [];
+    private List<tbl_usuario> users = [];
     private bool isLoading = true;
     private int currentPage = 1;
     private const int PageSize = 10;
@@ -188,18 +200,27 @@
 
         await using var db = await DbContextFactory.CreateDbContextAsync();
         categories = await db.tbl_categoria_productos.AsNoTracking().Where(c => c.activo ?? true).OrderBy(c => c.nombre).ToListAsync();
+        users = await ReportsService.GetCashierUsersAsync();
 
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -218,7 +239,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha", "Codigo Venta", "Factura", "Productos", "Metodo Pago", "Vendedor", "Subtotal", "IVA", "Total", "Estado SRI" };
+        var headers = new[] { "Fecha y Hora", "Código Venta", "Nº Factura SRI", "Detalle de Productos", "Forma de Pago", "Vendedor / Cajero", "Subtotal", "IVA", "Total", "Estado SRI" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd HH:mm"),
@@ -227,15 +248,15 @@
             r.ItemsSummary,
             r.PaymentMethod,
             r.Seller,
-            r.Subtotal.ToString("F2"),
-            r.Tax.ToString("F2"),
-            r.Total.ToString("F2"),
+            $"${r.Subtotal:N2}",
+            $"${r.Tax:N2}",
+            $"${r.Total:N2}",
             r.SriStatus
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Ventas y Facturacion", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Ventas y Facturación Electrónica", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "VentasFacturacion", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-ventas-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-ventas-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -251,7 +272,7 @@
             ["Comprobantes Autorizados"] = $"{data.AuthorizedCount} de {data.TotalInvoicesCount}"
         };
 
-        var headers = new[] { "Fecha", "Venta", "Factura", "Metodo", "Vendedor", "Total", "SRI" };
+        var headers = new[] { "Fecha", "Cód. Venta", "Factura SRI", "Método Pago", "Vendedor", "Resumen Ítems", "Subtotal", "IVA", "Total", "Estado SRI" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd"),
@@ -259,13 +280,35 @@
             r.InvoiceNumber,
             r.PaymentMethod,
             r.Seller,
-            $"${r.Total:F2}",
+            r.ItemsSummary,
+            $"${r.Subtotal:N2}",
+            $"${r.Tax:N2}",
+            $"${r.Total:N2}",
             r.SriStatus
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Reporte de Ventas y Facturacion", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Ventas y Facturación Electrónica", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "VentasFacturacion", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-ventas-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)

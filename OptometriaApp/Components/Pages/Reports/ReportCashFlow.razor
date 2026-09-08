@@ -74,7 +74,7 @@
             </div>
             <div class="reports-filter-item">
                 <label>Tipo de Movimiento</label>
-                <select class="form-select" @bind="filters.TransactionType">
+                <select class="form-select" @bind="filters.TransactionType" @bind:after="LoadReportAsync">
                     <option value="Todos">Todos (Ingresos y Egresos)</option>
                     <option value="Ingreso">Solo Ingresos</option>
                     <option value="Egreso">Solo Egresos</option>
@@ -82,8 +82,9 @@
             </div>
             <div class="reports-filter-item">
                 <label>Usuario / Cajero</label>
-                <select class="form-select" @bind="filters.UserId">
+                <select class="form-select" @bind="filters.UserId" @bind:after="LoadReportAsync">
                     <option value="0">Todos los usuarios</option>
+                    <option value="-1">Ventas Tienda Online / Sistema</option>
                     @foreach (var u in users)
                     {
                         <option value="@u.id_usuario">@($"{u.nombres} {u.apellidos}")</option>
@@ -182,20 +183,27 @@
         var idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(idClaim, out var uid)) currentUserId = uid;
 
-        await using var db = await DbContextFactory.CreateDbContextAsync();
-        users = await db.tbl_usuarios.AsNoTracking().Where(u => u.activo ?? true).OrderBy(u => u.nombres).ToListAsync();
+        users = await ReportsService.GetCashierUsersAsync();
 
         await LoadReportAsync();
     }
 
-    private void OnStartDateChanged(ChangeEventArgs e)
+    private async Task OnStartDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.StartDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.StartDate = d;
+            await LoadReportAsync();
+        }
     }
 
-    private void OnEndDateChanged(ChangeEventArgs e)
+    private async Task OnEndDateChanged(ChangeEventArgs e)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var d)) filters.EndDate = d;
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            filters.EndDate = d;
+            await LoadReportAsync();
+        }
     }
 
     private async Task LoadReportAsync()
@@ -214,7 +222,7 @@
 
     private async Task ExportCsvAsync()
     {
-        var headers = new[] { "Fecha", "Tipo", "Categoria", "Documento", "Descripcion", "Metodo Pago", "Responsable", "Monto" };
+        var headers = new[] { "Fecha y Hora", "Tipo Movimiento", "Categoría", "Comprobante / Ref", "Descripción", "Forma de Pago", "Responsable", "Monto" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd HH:mm"),
@@ -224,12 +232,12 @@
             r.Description,
             r.PaymentMethod,
             r.ResponsibleUser,
-            (r.Type == "Ingreso" ? r.Amount : -r.Amount).ToString("F2")
+            (r.Type == "Ingreso" ? "+" : "-") + $"${r.Amount:N2}"
         }).ToList();
 
-        var bytes = ReportsService.GenerateCsvBytes("Reporte de Ingresos y Egresos", headers, rows);
+        var bytes = ReportsService.GenerateExcelBytes("Reporte de Ingresos, Egresos y Flujo de Caja", headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "IngresosEgresos", "Excel", $"Registros={rows.Count}");
-        await DownloadFileAsync($"reporte-ingresos-egresos-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", bytes);
+        await DownloadFileAsync($"reporte-ingresos-egresos-{DateTime.Now:yyyyMMdd-HHmmss}.xls", "application/vnd.ms-excel;charset=utf-8", bytes);
     }
 
     private async Task ExportPdfAsync()
@@ -255,9 +263,28 @@
             (r.Type == "Ingreso" ? "+" : "-" ) + $"${r.Amount:F2}"
         }).ToList();
 
-        var bytes = ReportsService.GeneratePdfBytes("Reporte de Ingresos y Egresos Economicos", kpis, headers, rows);
+        var bytes = ReportsService.GeneratePdfBytes("Reporte de Ingresos, Egresos y Flujo de Caja", kpis, headers, rows);
         await ReportsService.LogReportActionAsync(currentUserId, "IngresosEgresos", "PDF", $"Registros={rows.Count}");
         await DownloadFileAsync($"reporte-ingresos-egresos-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", bytes);
+    }
+
+    private async Task OpenPdfPrintWindowAsync(string html)
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            (function(content) {
+                var win = window.open('', '_blank');
+                if (win) {
+                    win.document.open();
+                    win.document.write(content);
+                    win.document.close();
+                    setTimeout(function() {
+                        try { win.print(); } catch(e) {}
+                    }, 500);
+                } else {
+                    alert('Por favor permita ventanas emergentes en el navegador para exportar el PDF.');
+                }
+            })
+        ", html);
     }
 
     private async Task DownloadFileAsync(string fileName, string mimeType, byte[] bytes)
