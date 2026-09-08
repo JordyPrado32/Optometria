@@ -12,6 +12,403 @@
 
 <PageTitle>Productos</PageTitle>
 
+<style>
+    /* ══════════════════════════════════════════════════════════════
+       DASHBOARD PRODUCTOS E INVENTARIO — MINDFUL CLINICAL SUITE
+       ══════════════════════════════════════════════════════════════ */
+    .clinical-portal {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    /* Banner Principal */
+    .clinical-banner {
+        background: linear-gradient(135deg, #eaf2ed 0%, #f7f3ea 60%, #faeee9 100%);
+        border: 1px solid rgba(93, 161, 129, 0.25);
+        border-radius: 1.8rem;
+        padding: 2.2rem 2.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+        position: relative;
+        overflow: hidden;
+    }
+    .clinical-banner::after {
+        content: '';
+        position: absolute;
+        right: -30px;
+        bottom: -40px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(93, 161, 129, 0.18) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .clinical-banner-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(93, 161, 129, 0.18);
+        color: #276144;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 0.35rem 0.9rem;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+    }
+    .clinical-banner-title {
+        font-size: clamp(2rem, 3.2vw, 2.7rem);
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.1;
+        margin: 0 0 0.4rem 0;
+    }
+    .clinical-banner-desc {
+        color: #6e5c4a;
+        font-size: 1rem;
+        margin: 0;
+        max-width: 600px;
+        line-height: 1.5;
+    }
+
+    /* KPIs Superiores */
+    .clinical-kpi-deck {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+    }
+    @@media (max-width: 950px) {
+        .clinical-kpi-deck { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 550px) {
+        .clinical-kpi-deck { grid-template-columns: 1fr; }
+    }
+    .clinical-kpi-box {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.11);
+        border-radius: 1.5rem;
+        padding: 1.25rem 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        box-shadow: 0 4px 18px rgba(127, 105, 81, 0.05);
+        transition: all 0.22s ease;
+    }
+    .clinical-kpi-box:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(127, 105, 81, 0.1);
+    }
+    .clinical-kpi-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+    .clinical-kpi-icon.sage { background: #eef6f2; color: #327552; }
+    .clinical-kpi-icon.amber { background: #fff5e6; color: #a86900; }
+    .clinical-kpi-icon.rose { background: #fdf0ed; color: #9c4c4c; }
+    .clinical-kpi-icon.taupe { background: #f4eee7; color: #6b5540; }
+    .clinical-kpi-label {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8c7864;
+        margin-bottom: 0.2rem;
+    }
+    .clinical-kpi-num {
+        font-size: 2.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1;
+    }
+
+    /* Área Dividida: Sidebar de Filtros + Galería de Productos */
+    .clinical-split-workspace {
+        display: grid;
+        grid-template-columns: 290px 1fr;
+        gap: 1.5rem;
+        align-items: start;
+    }
+    @@media (max-width: 900px) {
+        .clinical-split-workspace { grid-template-columns: 1fr; }
+    }
+
+    /* Sidebar de Filtros */
+    .clinical-filter-sidebar {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.6rem;
+        padding: 1.5rem;
+        box-shadow: 0 6px 22px rgba(127, 105, 81, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+        position: sticky;
+        top: 1rem;
+    }
+    .clinical-sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #241d18;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+        padding-bottom: 0.7rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+    }
+    .clinical-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .clinical-filter-group label {
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b5540;
+    }
+    .clinical-filter-group .form-control,
+    .clinical-filter-group .form-select {
+        border-radius: 0.85rem;
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        background: #faf8f4;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.88rem;
+        color: #241d18;
+        transition: all 0.2s;
+    }
+    .clinical-filter-group .form-control:focus,
+    .clinical-filter-group .form-select:focus {
+        border-color: #5DA181;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15);
+    }
+
+    /* Panel de Contenido Principal */
+    .clinical-content-panel {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.8rem;
+        padding: 1.8rem;
+        box-shadow: 0 8px 24px rgba(127, 105, 81, 0.05);
+    }
+    .clinical-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-bottom: 1.1rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+        margin-bottom: 1.4rem;
+    }
+    .clinical-panel-title {
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: #241d18;
+        margin: 0;
+    }
+    .clinical-panel-counter {
+        font-size: 0.85rem;
+        color: #8c7864;
+        font-weight: 600;
+    }
+
+    /* Grid de Productos */
+    .clinical-products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.25rem;
+    }
+    .clinical-product-tile {
+        background: #faf8f5;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.5rem;
+        padding: 1.4rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1.1rem;
+        box-shadow: 0 4px 14px rgba(127, 105, 81, 0.04);
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .clinical-product-tile:hover {
+        transform: translateY(-4px);
+        background: #ffffff;
+        border-color: rgba(93, 161, 129, 0.4);
+        box-shadow: 0 14px 32px rgba(127, 105, 81, 0.12);
+    }
+    .clinical-product-top {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .clinical-product-thumb {
+        width: 60px;
+        height: 60px;
+        border-radius: 1.2rem;
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.15);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        flex-shrink: 0;
+        font-size: 1.5rem;
+        color: #7F6951;
+    }
+    .clinical-product-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .clinical-product-code {
+        font-size: 0.72rem;
+        font-weight: 800;
+        font-family: monospace;
+        background: #eef6f2;
+        color: #276144;
+        padding: 0.15rem 0.5rem;
+        border-radius: 0.4rem;
+        display: inline-block;
+        margin-bottom: 0.25rem;
+    }
+    .clinical-product-title {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.25;
+        margin: 0 0 0.2rem 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-product-sub {
+        font-size: 0.78rem;
+        color: #7a6652;
+    }
+
+    .clinical-product-body {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.08);
+        border-radius: 1rem;
+        padding: 0.85rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        font-size: 0.83rem;
+        color: #574635;
+    }
+    .clinical-product-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-product-row i {
+        color: #5DA181;
+        font-size: 0.9rem;
+        width: 16px;
+        flex-shrink: 0;
+    }
+
+    .clinical-product-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.09);
+        flex-wrap: wrap;
+    }
+
+    .clinical-actions-cluster {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+    .clinical-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.36rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        text-decoration: none;
+        line-height: 1;
+    }
+    .clinical-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.09);
+    }
+    .clinical-btn.btn-edit {
+        background: #ebf5f0;
+        color: #205c3c;
+        border-color: rgba(93, 161, 129, 0.35);
+    }
+    .clinical-btn.btn-edit:hover { background: #d7eee1; }
+    .clinical-btn.btn-history {
+        background: #fff6e8;
+        color: #9c6200;
+        border-color: rgba(254, 188, 100, 0.5);
+    }
+    .clinical-btn.btn-history:hover { background: #ffebcf; }
+    .clinical-btn.btn-cancel {
+        background: #faece9;
+        color: #943d3d;
+        border-color: rgba(236, 204, 197, 0.7);
+    }
+    .clinical-btn.btn-cancel:hover { background: #f7dad3; }
+
+    /* Barra Inferior */
+    .clinical-footer-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1.8rem;
+        padding-top: 1.2rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.1);
+    }
+    .clinical-pagesize-select {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.84rem;
+        color: #705e4c;
+        font-weight: 700;
+    }
+    .clinical-pagesize-select select {
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(127, 105, 81, 0.25);
+        background: #ffffff;
+        font-weight: 800;
+        color: #241d18;
+        outline: none;
+        cursor: pointer;
+    }
+</style>
+
 @if (isLoading)
 {
     <section class="management-shell">
@@ -32,44 +429,89 @@ else if (!canViewProducts)
 }
 else
 {
-    <section class="management-shell">
-        <div class="management-hero">
+    <div class="clinical-portal">
+        <!-- Banner Principal -->
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Inventario</span>
-                <h1>Productos</h1>
-                <p>Gestiona catalogo, stock, logistica, promociones, reposicion y trazabilidad operativa desde una pagina dedicada.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-box-seam-fill"></i> Inventario & Catálogo
+                </span>
+                <h1 class="clinical-banner-title">Gestión de Productos</h1>
+                <p class="clinical-banner-desc">Catálogo unificado, stock en tiempo real, trazabilidad de kárdex, promociones y reposición operativa.</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 @if (permissions.CanCreate)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="PrepareNewProduct">
                         <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo producto
                     </button>
                 }
-
                 <button type="button" class="btn btn-excel" @onclick="ExportProducts">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
                 </button>
             </div>
-        </div>
+        </header>
 
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Filtros y busqueda</h2>
-                <span>@FilteredProducts.Count resultados</span>
-            </div>
-
-            <div class="product-filters-grid">
+        <!-- KPIs Superiores -->
+        <section class="clinical-kpi-deck">
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon sage">
+                    <i class="bi bi-box-seam"></i>
+                </div>
                 <div>
-                    <label class="form-label" for="productSearch">Buscador</label>
-                    <input id="productSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, nombre, barras, marca, modelo o etiquetas" />
+                    <div class="clinical-kpi-label">Total Productos</div>
+                    <div class="clinical-kpi-num">@products.Count</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon amber">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Activos</div>
+                    <div class="clinical-kpi-num">@products.Count(p => p.activo == true)</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon rose">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Bajo Mínimo / Agotados</div>
+                    <div class="clinical-kpi-num">@products.Count(p => ProductInventoryRules.IsGoodProduct(p) && (p.stock_actual ?? 0) <= (p.stock_minimo ?? 0))</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon taupe">
+                    <i class="bi bi-stars"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Servicios</div>
+                    <div class="clinical-kpi-num">@products.Count(p => !ProductInventoryRules.IsGoodProduct(p))</div>
+                </div>
+            </article>
+        </section>
+
+        <!-- Área Dividida: Sidebar de Filtros + Galería de Productos -->
+        <div class="clinical-split-workspace">
+            <!-- Sidebar Lateral Izquierdo -->
+            <aside class="clinical-filter-sidebar">
+                <h3 class="clinical-sidebar-title">
+                    <i class="bi bi-funnel-fill" style="color: #5DA181;"></i> Filtros del Catálogo
+                </h3>
+
+                <div class="clinical-filter-group">
+                    <label for="productSearch">Buscador</label>
+                    <input id="productSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Código, nombre, barras..." />
                 </div>
 
-                <div>
-                    <label class="form-label" for="productType">Naturaleza</label>
+                <div class="clinical-filter-group">
+                    <label for="productType">Naturaleza</label>
                     <select id="productType" class="form-select" @bind="selectedTypeFilter">
-                        <option value="">Todos</option>
+                        <option value="">Todas</option>
                         @foreach (var option in natureOptions)
                         {
                             <option value="@option">@option</option>
@@ -77,8 +519,8 @@ else
                     </select>
                 </div>
 
-                <div>
-                    <label class="form-label" for="productCategory">Categoria</label>
+                <div class="clinical-filter-group">
+                    <label for="productCategory">Categoría</label>
                     <select id="productCategory" class="form-select" @bind="selectedCategoryFilter">
                         <option value="">Todas</option>
                         @foreach (var category in categories.OrderBy(c => c.nombre))
@@ -88,8 +530,8 @@ else
                     </select>
                 </div>
 
-                <div>
-                    <label class="form-label" for="productSupplier">Proveedor</label>
+                <div class="clinical-filter-group">
+                    <label for="productSupplier">Proveedor</label>
                     <select id="productSupplier" class="form-select" @bind="selectedSupplierFilter">
                         <option value="">Todos</option>
                         @foreach (var supplier in suppliers.OrderBy(s => s.nombre))
@@ -99,8 +541,8 @@ else
                     </select>
                 </div>
 
-                <div>
-                    <label class="form-label" for="productStatus">Estado activo</label>
+                <div class="clinical-filter-group">
+                    <label for="productStatus">Estado Activo</label>
                     <select id="productStatus" class="form-select" @bind="selectedStatusFilter">
                         <option value="all">Todos</option>
                         <option value="active">Activos</option>
@@ -108,8 +550,8 @@ else
                     </select>
                 </div>
 
-                <div>
-                    <label class="form-label" for="productState">Estado producto</label>
+                <div class="clinical-filter-group">
+                    <label for="productState">Estado Producto</label>
                     <select id="productState" class="form-select" @bind="selectedStateFilter">
                         <option value="">Todos</option>
                         @foreach (var option in productStateOptions)
@@ -118,130 +560,140 @@ else
                         }
                     </select>
                 </div>
-            </div>
 
-            <div class="management-actions" style="margin-top: 0.3rem;">
-                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
-                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
-                </button>
-            </div>
-        </section>
+                <div style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100" @onclick="ClearFilters" style="border-color: rgba(127,105,81,0.25) !important;">
+                        <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                    </button>
+                </div>
+            </aside>
 
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
-                <h2>Listado de productos</h2>
-                <span>@FilteredProducts.Count registrados</span>
-            </div>
+            <!-- Panel de Contenido Principal -->
+            <main class="clinical-content-panel">
+                <div class="clinical-panel-header">
+                    <div>
+                        <h2 class="clinical-panel-title">Catálogo de Productos</h2>
+                        <span class="clinical-panel-counter">Mostrando @PagedProducts.Count() de @FilteredProducts.Count productos filtrados</span>
+                    </div>
+                </div>
 
-            <div class="table-responsive" style="margin-top: 1rem;">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Codigo</th>
-                            <th>Producto</th>
-                            <th>Tipo</th>
-                            <th>Categoria</th>
-                            <th>Proveedor</th>
-                            <th>Precio venta</th>
-                            <th>Stock</th>
-                            <th>Estado</th>
-                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (FilteredProducts.Count == 0)
+                @if (FilteredProducts.Count == 0)
+                {
+                    <div style="text-align: center; padding: 3.5rem 1rem; color: #8c7864;">
+                        <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.5;"></i>
+                        <p style="margin-top: 1rem; font-weight: 700; font-size: 1.1rem;">No se encontraron productos con los filtros seleccionados.</p>
+                        <small>Intenta ajustando el buscador o limpia los filtros.</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="clinical-products-grid">
+                        @foreach (var product in PagedProducts)
                         {
-                            <tr>
-                                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
-                                    No se encontraron productos con los filtros seleccionados.
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var product in PagedProducts)
-                            {
-                                <tr>
-                                    <td>
-                                        <strong style="color: var(--color-sage);">@product.codigo_producto</strong>
-                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(product.codigo_barras) ? "Sin barras" : product.codigo_barras)</div>
-                                    </td>
-                                    <td>
-                                        <div class="product-table-identity">
-                                            <div class="product-table-thumb">
-                                                @if (!string.IsNullOrWhiteSpace(product.imagen_url))
-                                                {
-                                                    <img src="@product.imagen_url" alt="@product.nombre_producto" />
-                                                }
-                                                else
-                                                {
-                                                    <i class="bi bi-image"></i>
-                                                }
-                                            </div>
-                                            <div>
-                                                <strong style="color: var(--color-ink);">@product.nombre_producto</strong>
-                                                <div style="font-size: 0.78rem; color: var(--color-taupe);">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>@(product.naturaleza_item ?? "Bien")</td>
-                                    <td>@(product.id_categoriaNavigation?.nombre ?? "-")</td>
-                                    <td>@(product.id_proveedorNavigation?.nombre ?? "-")</td>
-                                    <td>@product.precio_venta.ToString("0.00")</td>
-                                    <td>
-                                        @if (ProductInventoryRules.IsGoodProduct(product))
+                            <article class="clinical-product-tile">
+                                <div class="clinical-product-top">
+                                    <div class="clinical-product-thumb">
+                                        @if (!string.IsNullOrWhiteSpace(product.imagen_url))
                                         {
-                                            <div>@($"{product.stock_actual ?? 0} / min {(product.stock_minimo ?? 0)}")</div>
-                                            @if ((product.stock_actual ?? 0) <= 0)
-                                            {
-                                                <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
-                                                    <i class="bi bi-exclamation-triangle-fill"></i> Sin stock
-                                                </div>
-                                            }
-                                            else if ((product.stock_minimo ?? 0) > 0 && (product.stock_actual ?? 0) <= (product.stock_minimo ?? 0))
-                                            {
-                                                <div style="font-size: 0.75rem; color: #b54a3a; font-weight: 700;">
-                                                    <i class="bi bi-exclamation-triangle-fill"></i> Bajo minimo
-                                                </div>
-                                            }
+                                            <img src="@product.imagen_url" alt="@product.nombre_producto" />
                                         }
                                         else
                                         {
-                                            <div>No aplica</div>
-                                            <div style="font-size: 0.75rem; color: var(--color-taupe); font-weight: 700;">
-                                                <i class="bi bi-stars"></i> Servicio
-                                            </div>
+                                            <i class="bi bi-box-seam"></i>
                                         }
-                                    </td>
-                                    <td>
-                                        <div>@((product.activo ?? false) ? "Activo" : "Inactivo")</div>
-                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(product.estado_producto ?? "Disponible")</div>
-                                    </td>
-                                    <td style="text-align: right; padding-right: 1.2rem;">
-                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
-                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditProduct(product)">
-                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
-                                            </button>
-                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditProduct(product)">
-                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoria
-                                            </button>
-                                            @if (permissions.CanDelete)
+                                    </div>
+                                    <div style="min-width: 0; flex: 1;">
+                                        <div class="clinical-product-code">@product.codigo_producto</div>
+                                        <h3 class="clinical-product-title" title="@product.nombre_producto">@product.nombre_producto</h3>
+                                        <div class="clinical-product-sub">@($"{product.marca ?? "-"} / {product.modelo ?? "-"}")</div>
+                                    </div>
+                                </div>
+
+                                <div class="clinical-product-body">
+                                    <div class="clinical-product-row">
+                                        <i class="bi bi-tags"></i>
+                                        <span>Categoría: <strong>@(product.id_categoriaNavigation?.nombre ?? "-")</strong></span>
+                                    </div>
+                                    <div class="clinical-product-row">
+                                        <i class="bi bi-truck"></i>
+                                        <span>Proveedor: <strong>@(product.id_proveedorNavigation?.nombre ?? "-")</strong></span>
+                                    </div>
+                                    <div class="clinical-product-row">
+                                        <i class="bi bi-cash-stack"></i>
+                                        <span>Precio Venta: <strong style="color: #205c3c; font-size: 0.95rem;">$@product.precio_venta.ToString("0.00")</strong></span>
+                                    </div>
+                                    <div class="clinical-product-row">
+                                        <i class="bi bi-boxes"></i>
+                                        @if (ProductInventoryRules.IsGoodProduct(product))
+                                        {
+                                            <span>Stock: <strong>@($"{product.stock_actual ?? 0} (Mín: {product.stock_minimo ?? 0})")</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span style="font-weight: 700; color: #7F6951;"><i class="bi bi-stars"></i> Servicio</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="clinical-product-footer">
+                                    <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                                        <span class="badge" style="background: @((product.activo ?? false) ? "#edf7f2" : "#faece9"); color: @((product.activo ?? false) ? "#205c3c" : "#943d3d"); font-size: 0.78rem; padding: 0.35rem 0.7rem; border-radius: 999px; font-weight: 800;">
+                                            ● @((product.activo ?? false) ? "Activo" : "Inactivo")
+                                        </span>
+                                        @if (ProductInventoryRules.IsGoodProduct(product))
+                                        {
+                                            if ((product.stock_actual ?? 0) <= 0)
                                             {
-                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => DeleteProductAsync(product)">
-                                                    <i class="bi bi-trash3-fill"></i> Eliminar
-                                                </button>
+                                                <span class="badge" style="background: #faece9; color: #943d3d; font-size: 0.72rem; padding: 0.3rem 0.6rem; border-radius: 999px; font-weight: 800;">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i> Sin Stock
+                                                </span>
                                             }
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
+                                            else if ((product.stock_minimo ?? 0) > 0 && (product.stock_actual ?? 0) <= (product.stock_minimo ?? 0))
+                                            {
+                                                <span class="badge" style="background: #fff5e6; color: #a86900; font-size: 0.72rem; padding: 0.3rem 0.6rem; border-radius: 999px; font-weight: 800;">
+                                                    <i class="bi bi-exclamation-triangle-fill"></i> Bajo Mínimo
+                                                </span>
+                                            }
+                                        }
+                                    </div>
+
+                                    <div class="clinical-actions-cluster">
+                                        <button type="button" class="clinical-btn btn-edit" title="Ver / Editar" @onclick="() => PrepareEditProduct(product)">
+                                            <i class="bi bi-pencil-fill"></i> Editar
+                                        </button>
+                                        <button type="button" class="clinical-btn btn-history" title="Auditoría" @onclick="() => PrepareAuditProduct(product)">
+                                            <i class="bi bi-clock-history"></i> Auditoría
+                                        </button>
+                                        @if (permissions.CanDelete)
+                                        {
+                                            <button type="button" class="clinical-btn btn-cancel" title="Eliminar" @onclick="() => DeleteProductAsync(product)">
+                                                <i class="bi bi-trash3-fill"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </article>
                         }
-                    </tbody>
-                </table>
-            </div>
-            <TablePager TotalItems="@FilteredProducts.Count" CurrentPage="@productPage" CurrentPageChanged="SetProductPage" />
-        </section>
-    </section>
+                    </div>
+                }
+
+                <!-- Barra Inferior de Paginación -->
+                <footer class="clinical-footer-bar">
+                    <div class="clinical-pagesize-select">
+                        <span>Mostrar por página:</span>
+                        <select value="@tablePageSize" @onchange="OnPageSizeChanged">
+                            <option value="6">6 productos</option>
+                            <option value="8">8 productos</option>
+                            <option value="12">12 productos</option>
+                            <option value="24">24 productos</option>
+                            <option value="48">48 productos</option>
+                        </select>
+                    </div>
+                    <TablePager TotalItems="@FilteredProducts.Count" CurrentPage="@productPage" CurrentPageChanged="SetProductPage" PageSize="@tablePageSize" />
+                </footer>
+            </main>
+        </div>
+    </div>
 }
 
 @if (showFormModal && editor is not null)
@@ -723,11 +1175,19 @@ else
         .OrderBy(p => p.nombre_producto)
         .ThenBy(p => p.codigo_producto)
         .ToList();
-    private const int TablePageSize = 5;
+    private int tablePageSize = 8;
     private int productPage = 1;
-    private int EffectiveProductPage => Math.Min(productPage, Math.Max(1, (int)Math.Ceiling(FilteredProducts.Count / (double)TablePageSize)));
-    private IEnumerable<tbl_producto> PagedProducts => FilteredProducts.Skip((EffectiveProductPage - 1) * TablePageSize).Take(TablePageSize);
+    private int EffectiveProductPage => Math.Min(productPage, Math.Max(1, (int)Math.Ceiling(FilteredProducts.Count / (double)tablePageSize)));
+    private IEnumerable<tbl_producto> PagedProducts => FilteredProducts.Skip((EffectiveProductPage - 1) * tablePageSize).Take(tablePageSize);
     private void SetProductPage(int page) => productPage = page;
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            tablePageSize = size;
+            productPage = 1;
+        }
+    }
 
     private string EditorTitle => isCreatingNewProduct ? "Nuevo producto" : "Detalle del producto";
     private bool CanModifyEditor => isCreatingNewProduct ? permissions.CanCreate : permissions.CanEdit;

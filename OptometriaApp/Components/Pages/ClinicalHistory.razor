@@ -12,12 +12,477 @@
 
 <PageTitle>Historia clinica</PageTitle>
 
-@if (canViewModule && selectedEncounterSummary is not null)
-{
-    <ClinicalEditControl EncounterId="@selectedEncounterSummary.EncounterId" />
-    <label for="clinical-edit-reason">Motivo obligatorio de la edición</label>
-    <textarea id="clinical-edit-reason" class="form-control" maxlength="1000" @bind="editReason"></textarea>
-}
+<style>
+    /* ══════════════════════════════════════════════════════════════
+       CLINICAL HISTORY SUITE — MINDFUL CLINICAL PALETTE
+       ══════════════════════════════════════════════════════════════ */
+    .clinical-portal {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    /* Banner Principal */
+    .clinical-banner {
+        background: linear-gradient(135deg, #eaf2ed 0%, #f7f3ea 60%, #faeee9 100%);
+        border: 1px solid rgba(93, 161, 129, 0.25);
+        border-radius: 1.8rem;
+        padding: 2.2rem 2.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .clinical-banner::after {
+        content: '';
+        position: absolute;
+        right: -30px;
+        bottom: -40px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(93, 161, 129, 0.18) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .clinical-banner-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(93, 161, 129, 0.18);
+        color: #276144;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 0.35rem 0.9rem;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+    }
+    .clinical-banner-title {
+        font-size: clamp(2rem, 3.2vw, 2.7rem);
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.1;
+        margin: 0 0 0.4rem 0;
+    }
+    .clinical-banner-desc {
+        color: #6e5c4a;
+        font-size: 1rem;
+        margin: 0;
+        max-width: 600px;
+        line-height: 1.5;
+    }
+    .clinical-banner-info {
+        flex: 1 1 320px;
+    }
+    .clinical-banner-actions {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    /* Flashcards Grid de Acciones Rápidas */
+    .clinical-flashcards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .clinical-flashcard-card {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.14);
+        border-radius: 1.3rem;
+        padding: 1.1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        text-decoration: none !important;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 16px rgba(127, 105, 81, 0.04);
+        position: relative;
+    }
+    .clinical-flashcard-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 28px rgba(93, 161, 129, 0.15);
+        border-color: #5DA181;
+    }
+    .clinical-flashcard-card:hover .flashcard-arrow {
+        transform: translateX(3px);
+        color: #5DA181;
+    }
+
+    .flashcard-icon-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 1rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+    .flashcard-icon--sage { background: #eef6f2; color: #276144; }
+    .flashcard-icon--apricot { background: #fff6ea; color: #b87814; }
+    .flashcard-icon--blue { background: #eaf2ff; color: #1c54b2; }
+    .flashcard-icon--rose { background: #faece9; color: #a14242; }
+    .flashcard-icon--taupe { background: #f4eee7; color: #6b5540; }
+
+    .flashcard-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        flex: 1;
+        min-width: 0;
+    }
+    .flashcard-content strong {
+        font-size: 0.88rem;
+        font-weight: 800;
+        color: #241d18;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .flashcard-content span {
+        font-size: 0.74rem;
+        color: #8c7864;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .flashcard-arrow {
+        font-size: 1rem;
+        color: #bfaea0;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    /* KPI Deck & Cards */
+    .clinical-kpi-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+        margin-bottom: 1.5rem;
+    }
+    @@media (max-width: 1050px) {
+        .clinical-kpi-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 600px) {
+        .clinical-kpi-row { grid-template-columns: 1fr; }
+    }
+
+    .clinical-kpi-card {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.5rem;
+        padding: 1.25rem 1.4rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 0.8rem;
+        box-shadow: 0 4px 18px rgba(127, 105, 81, 0.05);
+        transition: all 0.22s ease;
+    }
+    .clinical-kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(127, 105, 81, 0.1);
+    }
+    .kpi-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .kpi-icon-badge {
+        width: 38px;
+        height: 38px;
+        border-radius: 0.9rem;
+        background: #eef6f2;
+        color: #327552;
+        display: grid;
+        place-items: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .kpi-label {
+        font-size: 0.74rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8c7864;
+    }
+    .kpi-title {
+        font-size: 1.25rem;
+        font-weight: 900;
+        color: #241d18;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .kpi-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.8rem;
+        color: #6b5540;
+        margin-top: 0.3rem;
+    }
+    .kpi-hint {
+        font-size: 0.76rem;
+        color: #8c7864;
+    }
+
+    /* Cards de Gestión de Historia */
+    .clinical-card {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.6rem;
+        padding: 1.8rem;
+        box-shadow: 0 6px 22px rgba(127, 105, 81, 0.05);
+        margin-bottom: 1.5rem;
+    }
+    .clinical-card .management-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 0.9rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+        margin-bottom: 1.2rem;
+    }
+    .clinical-card .management-card-header h2 {
+        font-size: 1.25rem;
+        font-weight: 900;
+        color: #241d18;
+        margin: 0;
+    }
+    .clinical-card .management-card-header span {
+        font-size: 0.82rem;
+        color: #8c7864;
+        font-weight: 600;
+    }
+
+    .clinical-helper-text {
+        font-size: 0.86rem;
+        color: #6e5c4a;
+        background: #faf8f4;
+        border-left: 4px solid #5DA181;
+        padding: 0.75rem 1rem;
+        border-radius: 0 0.8rem 0.8rem 0;
+        margin-bottom: 1.2rem;
+    }
+
+    /* Formularios e Inputs */
+    .form-label {
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b5540;
+        margin-bottom: 0.35rem;
+    }
+    .form-control, .form-select {
+        border-radius: 0.85rem;
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        background: #faf8f4;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.88rem;
+        color: #241d18;
+        transition: all 0.2s;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #5DA181;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15);
+    }
+    .form-control[readonly] {
+        background: #f4eee7;
+        color: #5c4733;
+        font-weight: 600;
+    }
+
+    /* Grid Layouts */
+    .clinical-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.2rem;
+    }
+    .clinical-grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+    }
+    @@media (max-width: 900px) {
+        .clinical-grid-4 { grid-template-columns: repeat(2, 1fr); }
+        .clinical-grid-2 { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 550px) {
+        .clinical-grid-4 { grid-template-columns: 1fr; }
+    }
+
+    .clinical-span-2 { grid-column: span 2; }
+    .clinical-span-3 { grid-column: span 3; }
+    .clinical-span-4 { grid-column: span 4; }
+    @@media (max-width: 900px) {
+        .clinical-span-2, .clinical-span-3, .clinical-span-4 { grid-column: span 1; }
+    }
+
+    /* Grid OD/OI */
+    .clinical-odoi-grid {
+        display: grid;
+        grid-template-columns: 200px 1fr 1fr;
+        gap: 0.75rem;
+        align-items: center;
+        margin-top: 1.2rem;
+        background: #faf8f5;
+        border: 1px solid rgba(127, 105, 81, 0.1);
+        border-radius: 1.2rem;
+        padding: 1.2rem;
+    }
+    @@media (max-width: 700px) {
+        .clinical-odoi-grid { grid-template-columns: 1fr; }
+    }
+    .clinical-odoi-head {
+        font-size: 0.8rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: #276144;
+        background: #eef6f2;
+        padding: 0.5rem 0.8rem;
+        border-radius: 0.6rem;
+        text-align: center;
+    }
+    .clinical-odoi-label {
+        font-size: 0.83rem;
+        font-weight: 800;
+        color: #574635;
+    }
+
+    /* Chips y Botones de Síntomas */
+    .clinical-chip-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+
+    /* Badges */
+    .clinical-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .clinical-badge--success { background: #edf7f2; color: #205c3c; border: 1px solid rgba(93,161,129,0.3); }
+    .clinical-badge--warning { background: #fff5e6; color: #a86900; border: 1px solid rgba(254,188,100,0.4); }
+    .clinical-badge--danger { background: #faece9; color: #943d3d; border: 1px solid rgba(236,204,197,0.7); }
+    .clinical-badge--neutral { background: #f4eee7; color: #6b5540; border: 1px solid rgba(127,105,81,0.2); }
+
+    /* Footer del Wizard y Acciones */
+    .clinical-wizard-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        background: linear-gradient(135deg, #ffffff 0%, #faf8f5 100%);
+        border-top: 2px solid #5DA181;
+    }
+    .clinical-wizard-footer-copy strong {
+        font-size: 1.1rem;
+        color: #241d18;
+    }
+    .clinical-wizard-footer-copy p {
+        margin: 0;
+        font-size: 0.82rem;
+        color: #7a6652;
+    }
+
+    /* Tutorial Cards */
+    .clinical-tutorial-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+    @@media (max-width: 800px) {
+        .clinical-tutorial-grid { grid-template-columns: 1fr; }
+    }
+    .clinical-tutorial-card {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.1rem;
+        padding: 1rem 1.1rem;
+    }
+    .clinical-tutorial-card strong {
+        display: block;
+        font-size: 0.92rem;
+        color: #241d18;
+        margin: 0.2rem 0;
+    }
+    .clinical-tutorial-card p {
+        font-size: 0.8rem;
+        color: #6b5540;
+        margin: 0;
+    }
+    .clinical-tutorial-warning {
+        background: #fff8eb;
+        border: 1px solid rgba(254, 188, 100, 0.4);
+        border-radius: 1rem;
+        padding: 0.85rem 1.1rem;
+        font-size: 0.84rem;
+        color: #7a5000;
+        margin-top: 1rem;
+    }
+
+    /* Tarjeta Preview */
+    .clinical-preview-card {
+        background: #eef6f2;
+        border: 1px solid rgba(93, 161, 129, 0.3);
+        border-radius: 1.1rem;
+        padding: 1rem 1.25rem;
+        margin-top: 1rem;
+    }
+    .clinical-preview-card p {
+        font-size: 0.88rem;
+        color: #205c3c;
+        margin: 0.2rem 0 0 0;
+        font-weight: 600;
+    }
+
+    /* Firma Digital Shell */
+    .clinical-signature-shell {
+        background: #ffffff;
+        border: 2px dashed rgba(127, 105, 81, 0.25);
+        border-radius: 1.2rem;
+        padding: 1rem;
+        text-align: center;
+        margin-top: 0.6rem;
+    }
+    .clinical-signature-pad {
+        width: 100%;
+        height: 180px;
+        border-radius: 0.8rem;
+        background: #faf8f5;
+        touch-action: none;
+        cursor: crosshair;
+    }
+
+    /* Panel Historial / Drawer */
+    .clinical-drawer-panel {
+        background: #FAF8F4;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.6rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(127, 105, 81, 0.05);
+    }
+</style>
 
 @if (isLoading)
 {
@@ -40,28 +505,108 @@ else if (!canViewModule)
 else
 {
     <section class="management-shell clinical-history-shell">
-        <div class="management-hero">
-            <div>
-                <span class="eyebrow">Historia optometrica</span>
-                <h1>Historia clinica</h1>
-                <p>Trabaja la historia maestra del paciente y registra cada evolucion como un encuentro clinico independiente, con trazabilidad, borrador y cierre seguro.</p>
+        @if (canViewModule && selectedEncounterSummary is not null)
+        {
+            <div class="clinical-edit-section" style="margin-bottom: 1.5rem;">
+                <ClinicalEditControl EncounterId="@selectedEncounterSummary.EncounterId" />
+                <div class="management-card clinical-card">
+                    <div class="management-card-header">
+                        <h2>Motivo de la Edición</h2>
+                        <span>Obligatorio para guardar modificaciones</span>
+                    </div>
+                    <div>
+                        <label for="clinical-edit-reason" class="form-label">Motivo obligatorio de la edición</label>
+                        <textarea id="clinical-edit-reason" class="form-control" rows="3" maxlength="1000" @bind="editReason" placeholder="Indica detalladamente el motivo por el cual editas esta historia clínica..."></textarea>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Banner Principal -->
+        <header class="clinical-banner">
+            <div class="clinical-banner-info">
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-journal-medical"></i> Historia Optométrica
+                </span>
+                <h1 class="clinical-banner-title">Historia Clínica</h1>
+                <p class="clinical-banner-desc">Trabaja la historia maestra del paciente y registra cada evolución como un encuentro clínico independiente, con trazabilidad, borrador y cierre seguro.</p>
             </div>
 
-            <div class="workspace-actions">
-                @if (selectedEncounterSummary is not null)
-                {
-                    <a class="btn btn-outline-primary" href="@($"/certificados-medicos/{selectedEncounterSummary.ConsultationId}")">Certificados médicos</a>
-                    <a class="btn btn-outline-primary" href="@($"/prescriptions/{selectedEncounterSummary.ConsultationId}/print")" target="_blank" rel="noopener">Imprimir receta</a>
-                }
-                <a class="btn btn-outline-primary" href="/doctor/historia-clinica">Cambiar paciente</a>
-                @if (patient is not null && editor is not null)
-                {
-                    <a class="btn btn-outline-primary" href="@GetExamModuleUrl()">Modulo de examenes</a>
-                    <a class="btn btn-outline-primary" href="@GetAppointmentPrefillUrl()">Agendar cita</a>
-                    <button type="button" class="btn btn-outline-primary" @onclick="StartNewEncounterAsync">Nueva evolucion</button>
-                    <button type="button" class="btn btn-primary" @onclick="SaveDraftAsync">Guardar borrador</button>
-                }
-            </div>
+            @if (patient is not null && editor is not null)
+            {
+                <div class="clinical-banner-actions">
+                    <button type="button" class="btn btn-coffee" style="border-radius: 999px; font-weight: 800; padding: 0.55rem 1.2rem;" @onclick="StartNewEncounterAsync">
+                        <i class="bi bi-plus-lg me-1"></i> Nueva evolución
+                    </button>
+                    <button type="button" class="btn btn-coffee" style="border-radius: 999px; font-weight: 800; padding: 0.55rem 1.2rem;" @onclick="SaveDraftAsync">
+                        <i class="bi bi-save me-1"></i> Guardar borrador
+                    </button>
+                </div>
+            }
+        </header>
+
+        <!-- Tarjetas de Acción Rápida (Flashcards Grid) -->
+        <div class="clinical-flashcards-grid">
+            @if (selectedEncounterSummary is not null)
+            {
+                <a class="clinical-flashcard-card" href="@($"/certificados-medicos/{selectedEncounterSummary.ConsultationId}")">
+                    <div class="flashcard-icon-badge flashcard-icon--sage">
+                        <i class="bi bi-file-earmark-medical-fill"></i>
+                    </div>
+                    <div class="flashcard-content">
+                        <strong>Certificados Médicos</strong>
+                        <span>Emitir certificado de reposo</span>
+                    </div>
+                    <i class="bi bi-chevron-right flashcard-arrow"></i>
+                </a>
+
+                <a class="clinical-flashcard-card" href="@($"/prescriptions/{selectedEncounterSummary.ConsultationId}/print")" target="_blank" rel="noopener">
+                    <div class="flashcard-icon-badge flashcard-icon--apricot">
+                        <i class="bi bi-printer-fill"></i>
+                    </div>
+                    <div class="flashcard-content">
+                        <strong>Imprimir Receta</strong>
+                        <span>Formato físico o PDF</span>
+                    </div>
+                    <i class="bi bi-chevron-right flashcard-arrow"></i>
+                </a>
+            }
+
+            @if (patient is not null && editor is not null)
+            {
+                <a class="clinical-flashcard-card" href="@GetExamModuleUrl()">
+                    <div class="flashcard-icon-badge flashcard-icon--blue">
+                        <i class="bi bi-clipboard2-pulse-fill"></i>
+                    </div>
+                    <div class="flashcard-content">
+                        <strong>Exámenes Clínicos</strong>
+                        <span>Pruebas, OCT y tonometría</span>
+                    </div>
+                    <i class="bi bi-chevron-right flashcard-arrow"></i>
+                </a>
+
+                <a class="clinical-flashcard-card" href="@GetAppointmentPrefillUrl()">
+                    <div class="flashcard-icon-badge flashcard-icon--rose">
+                        <i class="bi bi-calendar-event-fill"></i>
+                    </div>
+                    <div class="flashcard-content">
+                        <strong>Agendar Cita</strong>
+                        <span>Crear control en agenda</span>
+                    </div>
+                    <i class="bi bi-chevron-right flashcard-arrow"></i>
+                </a>
+            }
+
+            <a class="clinical-flashcard-card" href="/doctor/historia-clinica">
+                <div class="flashcard-icon-badge flashcard-icon--taupe">
+                    <i class="bi bi-person-bounding-box"></i>
+                </div>
+                <div class="flashcard-content">
+                    <strong>Cambiar Paciente</strong>
+                    <span>Abrir otro expediente</span>
+                </div>
+                <i class="bi bi-chevron-right flashcard-arrow"></i>
+            </a>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))

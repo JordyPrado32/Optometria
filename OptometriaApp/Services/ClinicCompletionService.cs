@@ -16,12 +16,21 @@ public sealed class ClinicCompletionService(IDbContextFactory<OpticaDbContext> f
 
     public static async Task<bool> CanReadConsultationAsync(OpticaDbContext db, int userId, int consultationId)
     {
-        if (!await db.tbl_usuarios.AnyAsync(x => x.id_usuario == userId && x.activo == true && x.bloqueado != true)) return false;
-        return await db.tbl_consulta.AnyAsync(x => x.id_consulta == consultationId &&
-            (x.id_pacienteNavigation.id_usuario == userId ||
-             (x.id_optometra == userId && db.tbl_medico.Any(m => m.id_usuario == userId && m.activo == true && m.puede_gestionar_historia_clinica == true)
-                && db.tbl_rol_menu_permisos.Any(p => p.puede_ver && db.tbl_usuarios.Any(u => u.id_usuario == userId && u.id_rol == p.id_rol)
-                    && db.tbl_menu_apps.Any(m => m.id_menu == p.id_menu && m.activo && m.ruta == "/doctor/historia-clinica")))));
+        var user = await db.tbl_usuarios.AsNoTracking().FirstOrDefaultAsync(x => x.id_usuario == userId && x.activo == true && x.bloqueado != true);
+        if (user == null) return false;
+
+        var consultation = await db.tbl_consulta.AsNoTracking()
+            .Include(x => x.id_pacienteNavigation)
+            .FirstOrDefaultAsync(x => x.id_consulta == consultationId);
+
+        if (consultation == null) return false;
+
+        if (consultation.id_pacienteNavigation?.id_usuario == userId) return true;
+        if (user.id_rol == 1) return true;
+
+        return await db.tbl_rol_menu_permisos.AsNoTracking().AnyAsync(p =>
+            p.id_rol == user.id_rol && p.puede_ver &&
+            db.tbl_menu_apps.Any(m => m.id_menu == p.id_menu && m.activo && m.ruta == "/doctor/historia-clinica"));
     }
 
     public static async Task<bool> CanIssueAsync(OpticaDbContext db, int userId, int consultationId) =>

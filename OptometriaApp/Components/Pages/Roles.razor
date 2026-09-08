@@ -27,53 +27,343 @@ else if (isLoading)
 }
 else
 {
+    <style>
+        .roles-dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .role-kpi-card {
+            background: rgba(255, 250, 244, 0.95);
+            border: 1px solid rgba(127, 105, 81, 0.12);
+            border-radius: 1.3rem;
+            padding: 1.25rem 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 1.1rem;
+            box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .role-kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 16px 36px rgba(127, 105, 81, 0.12);
+        }
+
+        .role-kpi-icon {
+            width: 3.2rem;
+            height: 3.2rem;
+            border-radius: 1rem;
+            display: grid;
+            place-items: center;
+            font-size: 1.4rem;
+            flex-shrink: 0;
+        }
+
+        .kpi-icon-sage { background: rgba(93, 161, 129, 0.15); color: var(--color-sage); }
+        .kpi-icon-apricot { background: rgba(254, 188, 100, 0.2); color: #c97e18; }
+        .kpi-icon-rose { background: rgba(236, 204, 197, 0.4); color: #b05d53; }
+
+        .role-kpi-info h3 {
+            margin: 0;
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--color-ink);
+            line-height: 1.1;
+        }
+
+        .role-kpi-info span {
+            font-size: 0.82rem;
+            color: var(--color-taupe);
+            font-weight: 600;
+        }
+
+        .btn-new-role-glow {
+            background: linear-gradient(135deg, var(--color-sage) 0%, #468668 100%) !important;
+            color: #fff !important;
+            border: none !important;
+            border-radius: 999px !important;
+            padding: 0.65rem 1.4rem !important;
+            font-weight: 700 !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 8px 20px rgba(93, 161, 129, 0.35);
+            transition: all 0.25s ease;
+        }
+
+        .btn-new-role-glow:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 26px rgba(93, 161, 129, 0.45);
+            filter: brightness(1.05);
+        }
+
+        .roles-card-container {
+            background: rgba(255, 250, 244, 0.98);
+            border: 1px solid rgba(127, 105, 81, 0.12);
+            border-radius: 1.6rem;
+            padding: 1.75rem;
+            box-shadow: 0 16px 40px rgba(127, 105, 81, 0.07);
+        }
+
+        .roles-floating-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 0.65rem;
+        }
+
+        .roles-floating-table thead th {
+            border: none;
+            color: var(--color-taupe);
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0 1.25rem 0.5rem;
+        }
+
+        .roles-floating-table tbody tr {
+            background: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 16px rgba(127, 105, 81, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .roles-floating-table tbody tr:hover {
+            transform: scale(1.008) translateY(-2px);
+            box-shadow: 0 10px 24px rgba(127, 105, 81, 0.12);
+            background: #fffdfa;
+        }
+
+        .roles-floating-table tbody td {
+            padding: 1rem 1.25rem;
+            vertical-align: middle;
+            border-top: 1px solid rgba(127, 105, 81, 0.06);
+            border-bottom: 1px solid rgba(127, 105, 81, 0.06);
+        }
+
+        .roles-floating-table tbody td:first-child {
+            border-left: 1px solid rgba(127, 105, 81, 0.06);
+            border-top-left-radius: 1rem;
+            border-bottom-left-radius: 1rem;
+        }
+
+        .roles-floating-table tbody td:last-child {
+            border-right: 1px solid rgba(127, 105, 81, 0.06);
+            border-top-right-radius: 1rem;
+            border-bottom-right-radius: 1rem;
+            text-align: right;
+        }
+
+        .role-identity {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .role-badge-avatar {
+            width: 2.6rem;
+            height: 2.6rem;
+            border-radius: 0.85rem;
+            display: grid;
+            place-items: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
+
+        .role-avatar-admin { background: linear-gradient(135deg, rgba(142, 68, 173, 0.18), rgba(254, 188, 100, 0.3)); color: #7d3c98; }
+        .role-avatar-recep { background: rgba(93, 161, 129, 0.2); color: var(--color-sage); }
+        .role-avatar-medico { background: rgba(52, 152, 219, 0.2); color: #2980b9; }
+        .role-avatar-bodega { background: rgba(230, 126, 34, 0.2); color: #d35400; }
+        .role-avatar-paciente { background: rgba(236, 204, 197, 0.5); color: #b05d53; }
+        .role-avatar-default { background: rgba(127, 105, 81, 0.15); color: var(--color-taupe); }
+
+        .role-title-text {
+            font-size: 0.98rem;
+            font-weight: 800;
+            color: var(--color-ink);
+        }
+
+        .role-desc-text {
+            font-size: 0.85rem;
+            color: var(--color-taupe);
+            max-width: 28rem;
+            line-height: 1.35;
+        }
+
+        .role-coverage-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            background: rgba(93, 161, 129, 0.12);
+            color: var(--color-sage);
+            border: 1px solid rgba(93, 161, 129, 0.25);
+        }
+
+        .role-coverage-badge.badge-total {
+            background: linear-gradient(135deg, rgba(254, 188, 100, 0.25), rgba(93, 161, 129, 0.2));
+            color: #b36e10;
+            border-color: rgba(254, 188, 100, 0.4);
+        }
+
+        .btn-edit-role-pill {
+            background: rgba(244, 240, 228, 0.85);
+            border: 1px solid rgba(127, 105, 81, 0.2);
+            color: var(--color-taupe-deep);
+            border-radius: 999px;
+            padding: 0.42rem 1.05rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-edit-role-pill:hover {
+            background: var(--color-sage);
+            color: #ffffff;
+            border-color: var(--color-sage);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(93, 161, 129, 0.3);
+        }
+    </style>
+
     <section class="management-shell">
-        <div class="management-hero">
+        <div class="management-hero" style="align-items: center;">
             <div>
-                <span class="eyebrow">Administracion</span>
-                <h1>Roles y permisos</h1>
-                <p>Selecciona un rol, edita su descripcion y define exactamente que menus puede ver o administrar.</p>
+                <span class="eyebrow" style="letter-spacing: 0.12em;"><i class="bi bi-shield-lock-fill"></i> Seguridad y Acceso</span>
+                <h1 style="margin-top: 0.2rem;">Roles y permisos</h1>
+                <p>Configura las atribuciones operativas de cada perfil en la clínica.</p>
             </div>
 
-            <button type="button" class="btn btn-outline-primary" @onclick="PrepareNewRole">Nuevo rol</button>
+            <button type="button" class="btn-new-role-glow" @onclick="PrepareNewRole">
+                <i class="bi bi-plus-circle-fill"></i>
+                <span>Nuevo rol</span>
+            </button>
+        </div>
+
+        <!-- KPI Widgets -->
+        <div class="roles-dashboard-grid">
+            <article class="role-kpi-card">
+                <div class="role-kpi-icon kpi-icon-sage">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+                <div class="role-kpi-info">
+                    <h3>@roles.Count</h3>
+                    <span>Roles registrados</span>
+                </div>
+            </article>
+
+            <article class="role-kpi-card">
+                <div class="role-kpi-icon kpi-icon-apricot">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                </div>
+                <div class="role-kpi-info">
+                    <h3>@menus.Count</h3>
+                    <span>Módulos de sistema</span>
+                </div>
+            </article>
+
+            <article class="role-kpi-card">
+                <div class="role-kpi-icon kpi-icon-rose">
+                    <i class="bi bi-key-fill"></i>
+                </div>
+                <div class="role-kpi-info">
+                    <h3>RBAC</h3>
+                    <span>Matriz dinámica</span>
+                </div>
+            </article>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {
-            <div class="alert alert-success" role="alert">@statusMessage</div>
+            <div class="alert alert-success" role="alert" style="border-radius: 1rem;">@statusMessage</div>
         }
 
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
+            <div class="alert alert-danger" role="alert" style="border-radius: 1rem;">@errorMessage</div>
         }
 
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Listado de roles</h2>
-                <span>@roles.Count roles</span>
+        <section class="roles-card-container">
+            <div class="management-card-header" style="border-bottom: 1px solid rgba(127, 105, 81, 0.08); padding-bottom: 1rem; margin-bottom: 0.5rem;">
+                <div>
+                    <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--color-ink); margin: 0;">Matriz de Perfiles</h2>
+                    <small style="color: var(--color-taupe);">Haz clic en editar para gestionar privilegios por módulo</small>
+                </div>
+                <span style="font-weight: 700; color: var(--color-taupe); background: rgba(127, 105, 81, 0.08); padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.8rem;">
+                    @roles.Count perfiles activos
+                </span>
             </div>
 
-            <div class="management-table-wrap">
-                <table class="management-table soft-management-table">
+            <div class="table-responsive">
+                <table class="roles-floating-table">
                     <thead>
                         <tr>
-                            <th>Rol</th>
-                            <th>Descripcion</th>
-                            <th>Menus asignados</th>
-                            <th class="table-actions-cell">Acciones</th>
+                            <th>Perfil / Rol</th>
+                            <th>Descripción operativa</th>
+                            <th>Módulos con acceso</th>
+                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var role in PagedRoles)
                         {
+                            var visibleCount = GetVisibleMenuCount(role.id_rol);
+                            var isFullAccess = visibleCount >= menus.Count && menus.Count > 0;
+                            var avatarClass = role.nombre.ToLower() switch
+                            {
+                                var n when n.Contains("admin") => "role-avatar-admin",
+                                var n when n.Contains("recep") => "role-avatar-recep",
+                                var n when n.Contains("optomet") || n.Contains("medic") => "role-avatar-medico",
+                                var n when n.Contains("bodeg") => "role-avatar-bodega",
+                                var n when n.Contains("paciente") => "role-avatar-paciente",
+                                _ => "role-avatar-default"
+                            };
+                            var iconClass = role.nombre.ToLower() switch
+                            {
+                                var n when n.Contains("admin") => "bi-shield-check",
+                                var n when n.Contains("recep") => "bi-headset",
+                                var n when n.Contains("optomet") || n.Contains("medic") => "bi-eyeglasses",
+                                var n when n.Contains("bodeg") => "bi-box-seam",
+                                var n when n.Contains("paciente") => "bi-person-heart",
+                                _ => "bi-person-badge"
+                            };
+
                             <tr>
-                                <td><strong>@role.nombre</strong></td>
-                                <td>@(string.IsNullOrWhiteSpace(role.descripcion) ? "Sin descripcion" : role.descripcion)</td>
-                                <td>@GetVisibleMenuCount(role.id_rol)</td>
-                                <td class="table-actions-cell">
-                                    <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditRole(role.id_rol)">
-                                        <i class="bi bi-pencil-fill"></i> Editar
+                                <td>
+                                    <div class="role-identity">
+                                        <div class="role-badge-avatar @avatarClass">
+                                            <i class="bi @iconClass"></i>
+                                        </div>
+                                        <div>
+                                            <div class="role-title-text">@role.nombre</div>
+                                            <small style="color: var(--color-taupe); font-size: 0.75rem;">ID: #@role.id_rol</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="role-desc-text">
+                                        @(string.IsNullOrWhiteSpace(role.descripcion) ? "Sin descripción asignada" : role.descripcion)
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="role-coverage-badge @(isFullAccess ? "badge-total" : string.Empty)">
+                                        <i class="bi @(isFullAccess ? "bi-stars" : "bi-check2-circle")"></i>
+                                        <span>@visibleCount de @menus.Count módulos</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <button type="button" class="btn-edit-role-pill" @onclick="() => OpenEditRole(role.id_rol)">
+                                        <i class="bi bi-sliders"></i>
+                                        <span>Editar permisos</span>
                                     </button>
                                 </td>
                             </tr>
@@ -82,10 +372,14 @@ else
                 </table>
             </div>
 
-            <div class="table-pager">
-                <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousRolePage" disabled="@(rolePage <= 1)">Anterior</button>
-                <span>Pagina @rolePage de @TotalRolePages</span>
-                <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextRolePage" disabled="@(rolePage >= TotalRolePages)">Siguiente</button>
+            <div class="table-pager" style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousRolePage" disabled="@(rolePage <= 1)">
+                    <i class="bi bi-chevron-left"></i> Anterior
+                </button>
+                <span style="font-weight: 700; font-size: 0.85rem; color: var(--color-taupe);">Página @rolePage de @TotalRolePages</span>
+                <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextRolePage" disabled="@(rolePage >= TotalRolePages)">
+                    Siguiente <i class="bi bi-chevron-right"></i>
+                </button>
             </div>
         </section>
     </section>

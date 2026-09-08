@@ -16,6 +16,423 @@
 
 <PageTitle>Citas y turnos</PageTitle>
 
+<style>
+    /* ══════════════════════════════════════════════════════════════
+       DASHBOARD CITAS Y TURNOS — MINDFUL CLINICAL SUITE
+       ══════════════════════════════════════════════════════════════ */
+    .clinical-portal {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    /* Banner Principal */
+    .clinical-banner {
+        background: linear-gradient(135deg, #eaf2ed 0%, #f7f3ea 60%, #faeee9 100%);
+        border: 1px solid rgba(93, 161, 129, 0.25);
+        border-radius: 1.8rem;
+        padding: 2.2rem 2.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+        position: relative;
+        overflow: hidden;
+    }
+    .clinical-banner::after {
+        content: '';
+        position: absolute;
+        right: -30px;
+        bottom: -40px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(93, 161, 129, 0.18) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .clinical-banner-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(93, 161, 129, 0.18);
+        color: #276144;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 0.35rem 0.9rem;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+    }
+    .clinical-banner-title {
+        font-size: clamp(2rem, 3.2vw, 2.7rem);
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.1;
+        margin: 0 0 0.4rem 0;
+    }
+    .clinical-banner-desc {
+        color: #6e5c4a;
+        font-size: 1rem;
+        margin: 0;
+        max-width: 600px;
+        line-height: 1.5;
+    }
+
+    /* KPIs Superiores */
+    .clinical-kpi-deck {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+    }
+    @@media (max-width: 950px) {
+        .clinical-kpi-deck { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 550px) {
+        .clinical-kpi-deck { grid-template-columns: 1fr; }
+    }
+    .clinical-kpi-box {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.11);
+        border-radius: 1.5rem;
+        padding: 1.25rem 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        box-shadow: 0 4px 18px rgba(127, 105, 81, 0.05);
+        transition: all 0.22s ease;
+    }
+    .clinical-kpi-box:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(127, 105, 81, 0.1);
+    }
+    .clinical-kpi-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+    .clinical-kpi-icon.sage { background: #eef6f2; color: #327552; }
+    .clinical-kpi-icon.amber { background: #fff5e6; color: #a86900; }
+    .clinical-kpi-icon.rose { background: #fdf0ed; color: #9c4c4c; }
+    .clinical-kpi-icon.taupe { background: #f4eee7; color: #6b5540; }
+    .clinical-kpi-label {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8c7864;
+        margin-bottom: 0.2rem;
+    }
+    .clinical-kpi-num {
+        font-size: 2.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1;
+    }
+
+    /* Área Dividida: Sidebar de Filtros + Galería de Citas */
+    .clinical-split-workspace {
+        display: grid;
+        grid-template-columns: 290px 1fr;
+        gap: 1.5rem;
+        align-items: start;
+    }
+    @@media (max-width: 900px) {
+        .clinical-split-workspace { grid-template-columns: 1fr; }
+    }
+
+    /* Sidebar de Filtros */
+    .clinical-filter-sidebar {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.6rem;
+        padding: 1.5rem;
+        box-shadow: 0 6px 22px rgba(127, 105, 81, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+        position: sticky;
+        top: 1rem;
+    }
+    .clinical-sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #241d18;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+        padding-bottom: 0.7rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+    }
+    .clinical-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .clinical-filter-group label {
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b5540;
+    }
+    .clinical-filter-group .form-control,
+    .clinical-filter-group .form-select {
+        border-radius: 0.85rem;
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        background: #faf8f4;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.88rem;
+        color: #241d18;
+        transition: all 0.2s;
+    }
+    .clinical-filter-group .form-control:focus,
+    .clinical-filter-group .form-select:focus {
+        border-color: #5DA181;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15);
+    }
+
+    /* Panel de Contenido Principal */
+    .clinical-content-panel {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.8rem;
+        padding: 1.8rem;
+        box-shadow: 0 8px 24px rgba(127, 105, 81, 0.05);
+    }
+    .clinical-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-bottom: 1.1rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+        margin-bottom: 1.4rem;
+    }
+    .clinical-panel-title {
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: #241d18;
+        margin: 0;
+    }
+    .clinical-panel-counter {
+        font-size: 0.85rem;
+        color: #8c7864;
+        font-weight: 600;
+    }
+
+    /* Grid de Citas en Tarjetas Modernas */
+    .clinical-appts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.25rem;
+    }
+    .clinical-appt-tile {
+        background: #faf8f5;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.5rem;
+        padding: 1.4rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1.1rem;
+        box-shadow: 0 4px 14px rgba(127, 105, 81, 0.04);
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .clinical-appt-tile:hover {
+        transform: translateY(-4px);
+        background: #ffffff;
+        border-color: rgba(93, 161, 129, 0.4);
+        box-shadow: 0 14px 32px rgba(127, 105, 81, 0.12);
+    }
+    .clinical-tile-top {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .clinical-tile-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.2rem;
+        font-weight: 900;
+        color: #ffffff;
+        flex-shrink: 0;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+    }
+    .clinical-tile-name {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.2;
+        margin-bottom: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-tile-sub {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.78rem;
+        color: #7a6652;
+    }
+    .clinical-tile-code {
+        font-family: monospace;
+        background: #ede8dc;
+        padding: 0.15rem 0.5rem;
+        border-radius: 0.4rem;
+        font-weight: 800;
+        color: #4a3c2e;
+    }
+
+    /* Caja de detalles de la cita */
+    .clinical-tile-body {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.08);
+        border-radius: 1rem;
+        padding: 0.85rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        font-size: 0.83rem;
+        color: #574635;
+    }
+    .clinical-tile-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-tile-row i {
+        color: #5DA181;
+        font-size: 0.9rem;
+        width: 16px;
+        flex-shrink: 0;
+    }
+
+    /* Footer con Estado y Acciones */
+    .clinical-tile-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.09);
+        flex-wrap: wrap;
+    }
+
+    /* Botones de Acción */
+    .clinical-actions-cluster {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+    .clinical-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.36rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        text-decoration: none;
+        line-height: 1;
+    }
+    .clinical-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.09);
+    }
+    .clinical-btn.btn-edit {
+        background: #ebf5f0;
+        color: #205c3c;
+        border-color: rgba(93, 161, 129, 0.35);
+    }
+    .clinical-btn.btn-edit:hover { background: #d7eee1; }
+
+    .clinical-btn.btn-history {
+        background: #fff6e8;
+        color: #9c6200;
+        border-color: rgba(254, 188, 100, 0.5);
+    }
+    .clinical-btn.btn-history:hover { background: #ffebcf; }
+
+    .clinical-btn.btn-audit {
+        background: #f4eee7;
+        color: #5c4733;
+        border-color: rgba(127, 105, 81, 0.25);
+    }
+    .clinical-btn.btn-audit:hover { background: #e7ded2; }
+
+    .clinical-btn.btn-confirm {
+        background: #edf7f2;
+        color: #205c3c;
+        border-color: rgba(93, 161, 129, 0.4);
+    }
+    .clinical-btn.btn-confirm:hover { background: #daf2e4; }
+
+    .clinical-btn.btn-cancel {
+        background: #faece9;
+        color: #943d3d;
+        border-color: rgba(236, 204, 197, 0.7);
+    }
+    .clinical-btn.btn-cancel:hover { background: #f7dad3; }
+
+    .clinical-btn.btn-whatsapp {
+        background: #eaf8f0;
+        color: #1f9d57;
+        border-color: rgba(37, 211, 102, 0.35);
+    }
+    .clinical-btn.btn-whatsapp:hover { background: #d4f2e0; }
+
+    /* Barra Inferior */
+    .clinical-footer-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1.8rem;
+        padding-top: 1.2rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.1);
+    }
+    .clinical-pagesize-select {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.84rem;
+        color: #705e4c;
+        font-weight: 700;
+    }
+    .clinical-pagesize-select select {
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(127, 105, 81, 0.25);
+        background: #ffffff;
+        font-weight: 800;
+        color: #241d18;
+        outline: none;
+        cursor: pointer;
+    }
+</style>
+
 @if (isLoading)
 {
     <section class="management-shell">
@@ -36,27 +453,28 @@ else if (!canViewModule)
 }
 else
 {
-    <section class="management-shell">
-        <div class="management-hero">
+    <div class="clinical-portal">
+        <!-- Banner Principal -->
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Agenda clinica</span>
-                <h1>@HeroTitle</h1>
-                <p>@HeroDescription</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-calendar2-check-fill"></i> Agenda Clínica
+                </span>
+                <h1 class="clinical-banner-title">@HeroTitle</h1>
+                <p class="clinical-banner-desc">@HeroDescription</p>
             </div>
-
-            <div class="workspace-actions" style="align-items: center;">
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 @if (CanCreateAppointments)
                 {
                     <button type="button" class="btn btn-coffee" @onclick="OpenNewAppointmentModal">
                         <i class="bi bi-calendar-plus-fill" style="margin-right: 6px;"></i> Nueva cita
                     </button>
                 }
-
                 <button type="button" class="btn btn-excel" @onclick="ExportAppointments">
                     <i class="bi bi-file-earmark-excel-fill" style="margin-right: 6px;"></i> Exportar CSV
                 </button>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {
@@ -68,26 +486,68 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-
-
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Filtros</h2>
-                <span>@FilteredAppointments.Count resultados</span>
-            </div>
-
-            <div class="@(isDoctor ? "appointment-filters-grid-doctor" : "appointment-filters-grid-all")">
+        <!-- KPIs Superiores -->
+        <section class="clinical-kpi-deck">
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon amber">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <div>
-                    <label class="form-label" for="appointmentSearch">Busqueda</label>
-                    <input id="appointmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Paciente, doctor, motivo o tipo" />
+                    <div class="clinical-kpi-label">Pendientes</div>
+                    <div class="clinical-kpi-num">@PendingAppointmentsCount</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon sage">
+                    <i class="bi bi-calendar-check-fill"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Confirmadas</div>
+                    <div class="clinical-kpi-num">@ConfirmedAppointmentsCount</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon taupe">
+                    <i class="bi bi-check2-circle"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Atendidas</div>
+                    <div class="clinical-kpi-num">@CompletedAppointmentsCount</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon rose">
+                    <i class="bi bi-x-circle-fill"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Canceladas</div>
+                    <div class="clinical-kpi-num">@CancelledAppointmentsCount</div>
+                </div>
+            </article>
+        </section>
+
+        <!-- Área Dividida: Sidebar de Filtros + Grid de Citas -->
+        <div class="clinical-split-workspace">
+            <!-- Sidebar Lateral Izquierdo -->
+            <aside class="clinical-filter-sidebar">
+                <h3 class="clinical-sidebar-title">
+                    <i class="bi bi-funnel-fill" style="color: #5DA181;"></i> Filtros y Vista
+                </h3>
+
+                <div class="clinical-filter-group">
+                    <label for="appointmentSearch">Búsqueda</label>
+                    <input id="appointmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Paciente, doctor, motivo..." />
                 </div>
 
                 @if (!isDoctor)
                 {
-                    <div>
-                        <label class="form-label" for="appointmentDoctorFilter">Medico</label>
+                    <div class="clinical-filter-group">
+                        <label for="appointmentDoctorFilter">Médico</label>
                         <select id="appointmentDoctorFilter" class="form-select" @bind="selectedDoctorFilter">
-                            <option value="0">Todos</option>
+                            <option value="0">Todos los médicos</option>
                             @foreach (var doctor in doctors)
                             {
                                 <option value="@doctor.id_medico">@GetDoctorDisplayName(doctor)</option>
@@ -96,20 +556,20 @@ else
                     </div>
                 }
 
-                <div>
-                    <label class="form-label" for="appointmentScope">Periodo</label>
+                <div class="clinical-filter-group">
+                    <label for="appointmentScope">Período</label>
                     <select id="appointmentScope" class="form-select" @bind="selectedTemporalFilter">
-                        <option value="upcoming">Proximas</option>
+                        <option value="upcoming">Próximas</option>
                         <option value="past">Anteriores</option>
                         <option value="today">Hoy</option>
                         <option value="all">Todas</option>
                     </select>
                 </div>
 
-                <div>
-                    <label class="form-label" for="appointmentStatus">Estado</label>
+                <div class="clinical-filter-group">
+                    <label for="appointmentStatus">Estado</label>
                     <select id="appointmentStatus" class="form-select" @bind="selectedStatusFilter">
-                        <option value="">Todos</option>
+                        <option value="">Todos los estados</option>
                         @foreach (var state in appointmentStates)
                         {
                             <option value="@state.nombre_estado">@state.nombre_estado</option>
@@ -117,301 +577,278 @@ else
                     </select>
                 </div>
 
-                <div>
-                    <label class="form-label" for="appointmentDateFrom">Desde</label>
+                <div class="clinical-filter-group">
+                    <label for="appointmentDateFrom">Desde</label>
                     <input id="appointmentDateFrom" type="date" class="form-control" value="@dateFromFilter" @onchange="OnDateFromFilterChanged" />
                 </div>
 
-                <div>
-                    <label class="form-label" for="appointmentDateTo">Hasta</label>
+                <div class="clinical-filter-group">
+                    <label for="appointmentDateTo">Hasta</label>
                     <input id="appointmentDateTo" type="date" class="form-control" value="@dateToFilter" @onchange="OnDateToFilterChanged" />
                 </div>
-            </div>
 
-            <div class="management-actions" style="margin-top: 0.3rem;">
-                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
-                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
-                </button>
-            </div>
-
-            @if (!doctors.Any())
-            {
-                <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
-                    No hay medicos disponibles para agendar o filtrar en este momento.
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="border-color: rgba(127,105,81,0.25) !important;">
+                        <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="OpenCalendarModal" style="border-color: #5DA181 !important; color: #327552 !important; background: #eef6f2;">
+                        <i class="bi bi-calendar3" style="margin-right: 4px;"></i> Ver Calendario
+                    </button>
                 </div>
-            }
-        </section>
 
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
-                <h2>Control administrativo</h2>
-                <span>Resumen rapido</span>
-            </div>
-            <div class="appointment-admin-grid" style="margin-top: 1rem;">
-                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
-                    <span class="dashboard-action-badge appointment-admin-icon is-pending"><i class="bi bi-hourglass-split"></i></span>
-                    <strong>Pendientes</strong>
-                    <p>Programadas o reprogramadas.</p>
-                    <b>@PendingAppointmentsCount</b>
-                </article>
-                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
-                    <span class="dashboard-action-badge appointment-admin-icon is-confirmed"><i class="bi bi-calendar-check-fill"></i></span>
-                    <strong>Confirmadas</strong>
-                    <p>Listas para atencion.</p>
-                    <b>@ConfirmedAppointmentsCount</b>
-                </article>
-                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
-                    <span class="dashboard-action-badge appointment-admin-icon is-completed"><i class="bi bi-check2-circle"></i></span>
-                    <strong>Atendidas</strong>
-                    <p>Cerradas como realizadas.</p>
-                    <b>@CompletedAppointmentsCount</b>
-                </article>
-                <article class="dashboard-action-card quick-access-animated appointment-admin-card">
-                    <span class="dashboard-action-badge appointment-admin-icon is-cancelled"><i class="bi bi-x-circle-fill"></i></span>
-                    <strong>Canceladas</strong>
-                    <p>Con motivo registrado.</p>
-                    <b>@CancelledAppointmentsCount</b>
-                </article>
-            </div>
-        </section>
-
-        @if (showCalendarModal)
-        {
-        <div class="custom-modal-overlay" @onclick="CloseCalendarModal">
-        <div class="custom-modal-card appointment-calendar-modal" @onclick:stopPropagation="true">
-        <section class="management-card appointment-calendar-card">
-            <div class="management-card-header">
-                <h2>Calendario</h2>
-                <div class="workspace-actions" style="align-items:center;">
-                    <span>Vista @GetCalendarViewLabel()</span>
-                    <button type="button" class="btn-close-modal" @onclick="CloseCalendarModal">×</button>
-                </div>
-            </div>
-            <div class="custom-modal-body appointment-calendar-body">
-                <div class="appointment-calendar-toolbar">
-                    <div class="appointment-calendar-view-buttons">
-                        <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "day" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("day")'>
-                            <i class="bi bi-calendar-day"></i> Dia
-                        </button>
-                        <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "week" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("week")'>
-                            <i class="bi bi-calendar-week"></i> Semana
-                        </button>
-                        <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "month" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("month")'>
-                            <i class="bi bi-calendar3"></i> Mes
-                        </button>
+                @if (!doctors.Any())
+                {
+                    <div class="alert alert-warning" role="alert" style="margin-top: 0.5rem; font-size: 0.78rem; padding: 0.5rem 0.8rem;">
+                        No hay médicos disponibles para agendar o filtrar.
                     </div>
-                    <label class="appointment-calendar-date-picker">
-                        <span>Fecha</span>
-                        <input type="date" class="form-control" value="@calendarFocusDate" @onchange="OnCalendarFocusDateChanged" />
-                    </label>
+                }
+            </aside>
+
+            <!-- Panel de Contenido Principal -->
+            <main class="clinical-content-panel">
+                <div class="clinical-panel-header">
+                    <div>
+                        <h2 class="clinical-panel-title">Agenda de Citas</h2>
+                        <span class="clinical-panel-counter">Mostrando @PagedAppointments.Count() de @FilteredAppointments.Count citas registradas</span>
+                    </div>
                 </div>
 
-            @if (selectedCalendarView == "day")
-            {
-                <div class="appointment-calendar-day-grid">
-                    @if (!CalendarDayAppointments.Any())
-                    {
-                        <div class="appointment-calendar-empty">
-                            <i class="bi bi-calendar-x"></i>
-                            <span>No hay citas para la fecha seleccionada.</span>
-                        </div>
-                    }
-                    else
-                    {
-                        @foreach (var appointment in CalendarDayAppointments)
+                @if (FilteredAppointments.Count == 0)
+                {
+                    <div style="text-align: center; padding: 3.5rem 1rem; color: #8c7864;">
+                        <i class="bi bi-calendar-x" style="font-size: 3rem; opacity: 0.5;"></i>
+                        <p style="margin-top: 1rem; font-weight: 700; font-size: 1.1rem;">No hay citas que coincidan con los filtros seleccionados.</p>
+                        <small>Intenta cambiando los criterios de búsqueda o limpia los filtros.</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="clinical-appts-grid">
+                        @foreach (var appointment in PagedAppointments)
                         {
-                            <article class="appointment-calendar-slot-card">
-                                <span class="appointment-calendar-slot-icon"><i class="bi bi-clock"></i></span>
-                                <div class="appointment-calendar-slot-copy">
-                                    <strong>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</strong>
-                                    <span><i class="bi bi-person"></i>@GetPatientDisplayName(appointment.id_pacienteNavigation)</span>
-                                    <span><i class="bi bi-person-badge"></i>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
-                                    <span><i class="bi bi-circle-fill"></i>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                            var stateName = appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado";
+                            var stateColor = stateName switch
+                            {
+                                "Confirmada" => "#205c3c",
+                                "Programada" => "#a86900",
+                                "Reprogramada" => "#6b5540",
+                                "Cancelada" => "#943d3d",
+                                "Realizada" => "#205c3c",
+                                _ => "#6b5540"
+                            };
+                            var stateBg = stateName switch
+                            {
+                                "Confirmada" => "#edf7f2",
+                                "Programada" => "#fff5e6",
+                                "Reprogramada" => "#f4eee7",
+                                "Cancelada" => "#faece9",
+                                "Realizada" => "#edf7f2",
+                                _ => "#f4eee7"
+                            };
+                            var patientName = GetPatientDisplayName(appointment.id_pacienteNavigation);
+                            var initials = string.IsNullOrWhiteSpace(patientName) || patientName == "Sin paciente"
+                                ? "C"
+                                : string.Join("", patientName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(s => s[0])).ToUpper();
+
+                            <article class="clinical-appt-tile">
+                                <div class="clinical-tile-top">
+                                    <div class="clinical-tile-avatar" style="background: linear-gradient(135deg, #FEBC64 0%, #7F6951 100%);">
+                                        @initials
+                                    </div>
+                                    <div style="min-width: 0; flex: 1;">
+                                        <div class="clinical-tile-name" title="@patientName">@patientName</div>
+                                        <div class="clinical-tile-sub">
+                                            <span class="clinical-tile-code"><i class="bi bi-calendar-event"></i> @appointment.fecha_cita.ToString("dd/MM/yyyy")</span>
+                                            <span style="font-weight: 800; color: #3C342E;"><i class="bi bi-clock"></i> @($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="clinical-tile-body">
+                                    @if (!isDoctor)
+                                    {
+                                        <div class="clinical-tile-row">
+                                            <i class="bi bi-person-badge"></i>
+                                            <strong>Médico:</strong>
+                                            <span>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
+                                        </div>
+                                    }
+                                    <div class="clinical-tile-row">
+                                        <i class="bi bi-tag"></i>
+                                        <strong>Tipo:</strong>
+                                        <span>@(string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita)</span>
+                                    </div>
+                                    <div class="clinical-tile-row">
+                                        <i class="bi bi-chat-left-text"></i>
+                                        <strong>Motivo:</strong>
+                                        <span title="@appointment.motivo_cita">@(appointment.motivo_cita ?? "-")</span>
+                                    </div>
+                                </div>
+
+                                <div class="clinical-tile-footer">
+                                    <span class="badge" style="background: @stateBg !important; color: @stateColor !important; font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 800;">
+                                        ● @stateName
+                                    </span>
+
+                                    <div class="clinical-actions-cluster">
+                                        <button type="button" class="clinical-btn btn-history" title="Ver en Calendario" @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
+                                            <i class="bi bi-calendar-event"></i> Calendario
+                                        </button>
+                                        <button type="button" class="clinical-btn btn-edit" title="Ver / Editar" @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
+                                            <i class="bi bi-pencil-fill"></i> Editar
+                                        </button>
+                                        @if (CanViewPatientHistory)
+                                        {
+                                            <button type="button" class="clinical-btn btn-history" title="Historial del Paciente" @onclick="() => OpenPatientHistoryModalAsync(appointment.id_paciente)">
+                                                <i class="bi bi-person-lines-fill"></i> Historial
+                                            </button>
+                                        }
+                                        @if (!isClient && !string.IsNullOrWhiteSpace(BuildAppointmentWhatsappUrl(appointment)))
+                                        {
+                                            <a class="clinical-btn btn-whatsapp" title="Enviar recordatorio WhatsApp" href="@BuildAppointmentWhatsappUrl(appointment)" target="_blank" rel="noopener noreferrer">
+                                                <i class="bi bi-whatsapp"></i> WhatsApp
+                                            </a>
+                                        }
+                                        @if (CanConfirmAppointments && IsPendingState(stateName) && !isClient)
+                                        {
+                                            <button type="button" class="clinical-btn btn-confirm" title="Confirmar Cita" @onclick="() => QuickConfirmAsync(appointment.id_cita)">
+                                                <i class="bi bi-check2-circle"></i> Confirmar
+                                            </button>
+                                        }
+                                        else if (stateName == "Confirmada" && (permissions.CanDelete || isAdmin || isDoctor || isClient))
+                                        {
+                                            <button type="button" class="clinical-btn btn-cancel" title="Cancelar Cita" @onclick="() => OpenCancellationChoiceAsync(appointment.id_cita)">
+                                                <i class="bi bi-x-circle"></i> Cancelar
+                                            </button>
+                                        }
+                                        @if (!isClient)
+                                        {
+                                            <button type="button" class="clinical-btn btn-audit" title="Auditoría" @onclick="() => OpenAuditModal(appointment.id_cita)">
+                                                <i class="bi bi-clock-history"></i> Auditoría
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
                             </article>
                         }
-                    }
-                </div>
-            }
-            else if (selectedCalendarView == "week")
-            {
-                <div class="appointment-calendar-summary-grid">
-                    @foreach (var day in WeeklyCalendarSummaries)
-                    {
-                        <article class="appointment-calendar-summary-card">
-                            <span class="appointment-calendar-date-chip"><i class="bi bi-calendar2-week"></i>@day.Label</span>
-                            <div class="appointment-calendar-metrics">
-                                <span><i class="bi bi-calendar-check"></i><strong>@day.Total</strong><small>citas</small></span>
-                                <span><i class="bi bi-hourglass-split"></i><strong>@day.Pending</strong><small>pendientes</small></span>
-                                <span><i class="bi bi-check2-circle"></i><strong>@day.Confirmed</strong><small>confirmadas</small></span>
-                            </div>
-                        </article>
-                    }
-                </div>
-            }
-            else
-            {
-                <div class="appointment-calendar-summary-grid is-month">
-                    @foreach (var day in MonthlyCalendarSummaries)
-                    {
-                        <article class="appointment-calendar-summary-card">
-                            <span class="appointment-calendar-date-chip"><i class="bi bi-calendar3"></i>@day.Label</span>
-                            <div class="appointment-calendar-metrics">
-                                <span><i class="bi bi-calendar-check"></i><strong>@day.Total</strong><small>total</small></span>
-                                <span><i class="bi bi-hourglass-split"></i><strong>@day.Pending</strong><small>pendientes</small></span>
-                                <span><i class="bi bi-check2-circle"></i><strong>@day.Confirmed</strong><small>confirmadas</small></span>
-                                <span><i class="bi bi-person-check"></i><strong>@day.Completed</strong><small>atendidas</small></span>
-                                <span><i class="bi bi-x-circle"></i><strong>@day.Cancelled</strong><small>canceladas</small></span>
-                            </div>
-                        </article>
-                    }
-                </div>
-            }
-            </div>
-        </section>
-        </div>
-        </div>
-        }
+                    </div>
+                }
 
-        <!-- Appointments Table -->
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
-                <div>
-                    <h2>Agenda de citas</h2>
-                    <span>@FilteredAppointments.Count registros</span>
-                </div>
-                <button type="button" class="btn btn-outline-primary" @onclick="OpenCalendarModal">
-                    <i class="bi bi-calendar3"></i> Calendario
-                </button>
-            </div>
+                <!-- Barra Inferior de Paginación -->
+                <footer class="clinical-footer-bar">
+                    <div class="clinical-pagesize-select">
+                        <span>Mostrar por página:</span>
+                        <select value="@tablePageSize" @onchange="OnPageSizeChanged">
+                            <option value="6">6 citas</option>
+                            <option value="8">8 citas</option>
+                            <option value="12">12 citas</option>
+                            <option value="24">24 citas</option>
+                            <option value="48">48 citas</option>
+                        </select>
+                    </div>
+                    <TablePager TotalItems="@FilteredAppointments.Count" CurrentPage="@appointmentPage" CurrentPageChanged="SetAppointmentPage" PageSize="@tablePageSize" />
+                </footer>
+            </main>
+        </div>
+    </div>
 
-            <div class="table-responsive" style="margin-top: 1rem;">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Hora</th>
-                            <th>Paciente</th>
-                            @if (!isDoctor)
+        @if (showCalendarModal)
+        {
+            <div class="custom-modal-overlay" @onclick="CloseCalendarModal">
+                <div class="custom-modal-card appointment-calendar-modal" @onclick:stopPropagation="true">
+                    <section class="management-card appointment-calendar-card">
+                        <div class="management-card-header">
+                            <h2>Calendario</h2>
+                            <div class="workspace-actions" style="align-items:center;">
+                                <span>Vista @GetCalendarViewLabel()</span>
+                                <button type="button" class="btn-close-modal" @onclick="CloseCalendarModal">×</button>
+                            </div>
+                        </div>
+                        <div class="custom-modal-body appointment-calendar-body">
+                            <div class="appointment-calendar-toolbar">
+                                <div class="appointment-calendar-view-buttons">
+                                    <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "day" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("day")'>
+                                        <i class="bi bi-calendar-day"></i> Día
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "week" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("week")'>
+                                        <i class="bi bi-calendar-week"></i> Semana
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary @(selectedCalendarView == "month" ? "is-active" : string.Empty)" @onclick='() => SetCalendarView("month")'>
+                                        <i class="bi bi-calendar3"></i> Mes
+                                    </button>
+                                </div>
+                                <label class="appointment-calendar-date-picker">
+                                    <span>Fecha</span>
+                                    <input type="date" class="form-control" value="@calendarFocusDate" @onchange="OnCalendarFocusDateChanged" />
+                                </label>
+                            </div>
+
+                            @if (selectedCalendarView == "day")
                             {
-                                <th>Médico</th>
-                            }
-                            <th>Tipo</th>
-                            <th>Motivo</th>
-                            <th>Estado</th>
-                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (FilteredAppointments.Count == 0)
-                        {
-                            <tr>
-                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
-                                    No hay citas que coincidan con los filtros actuales.
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var appointment in PagedAppointments)
-                            {
-                                var stateName = appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado";
-                                var stateColor = stateName switch
-                                {
-                                    "Confirmada" => "#5DA181",
-                                    "Programada" => "#e09b3c",
-                                    "Reprogramada" => "#7F6951",
-                                    "Cancelada" => "#dc3545",
-                                    "Realizada" => "#5DA181",
-                                    _ => "#7F6951"
-                                };
-                                var stateBg = stateName switch
-                                {
-                                    "Confirmada" => "rgba(93,161,129,0.12)",
-                                    "Programada" => "rgba(254,188,100,0.15)",
-                                    "Reprogramada" => "rgba(127,105,81,0.12)",
-                                    "Cancelada" => "rgba(220,53,69,0.1)",
-                                    "Realizada" => "rgba(93,161,129,0.12)",
-                                    _ => "rgba(127,105,81,0.1)"
-                                };
-                                <tr>
-                                    <td><strong>@appointment.fecha_cita.ToString("yyyy-MM-dd")</strong></td>
-                                    <td style="font-family: monospace; font-size: 0.85rem;">@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</td>
-                                    <td><strong style="color: var(--color-ink);">@GetPatientDisplayName(appointment.id_pacienteNavigation)</strong></td>
-                                    @if (!isDoctor)
+                                <div class="appointment-calendar-day-grid">
+                                    @if (!CalendarDayAppointments.Any())
                                     {
-                                        <td>@GetDoctorDisplayName(appointment.id_medicoNavigation)</td>
-                                    }
-                                    <td>@(string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita)</td>
-                                    <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(appointment.motivo_cita ?? "-")</td>
-                                    <td>
-                                        <span class="badge" style="background: @stateBg !important; color: @stateColor !important; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 2rem;">
-                                            @stateName
-                                        </span>
-                                    </td>
-                                    <td style="text-align: right; padding-right: 1.2rem;">
-                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
-                                            <button type="button" class="btn btn-outline-primary"
-                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
-                                                    @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
-                                                <i class="bi bi-calendar-event-fill" style="margin-right: 4px;"></i> Calendario
-                                            </button>
-                                            <button type="button" class="btn btn-outline-primary"
-                                                    style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
-                                                    @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
-                                                <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Ver/Editar
-                                            </button>
-                                            @if (CanViewPatientHistory)
-                                            {
-                                                <button type="button" class="btn btn-outline-primary"
-                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;"
-                                                        @onclick="() => OpenPatientHistoryModalAsync(appointment.id_paciente)">
-                                                    <i class="bi bi-person-lines-fill" style="margin-right: 4px;"></i> Historial
-                                                </button>
-                                            }
-                                            @if (!isClient && !string.IsNullOrWhiteSpace(BuildAppointmentWhatsappUrl(appointment)))
-                                            {
-                                                <a class="btn btn-outline-primary"
-                                                   style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(37, 211, 102, 0.35) !important; color: #1f9d57 !important;"
-                                                   href="@BuildAppointmentWhatsappUrl(appointment)" target="_blank" rel="noopener noreferrer">
-                                                    <i class="bi bi-whatsapp" style="margin-right: 4px;"></i> WhatsApp
-                                                </a>
-                                            }
-                                            @if (CanConfirmAppointments && IsPendingState(stateName) && !isClient)
-                                            {
-                                                <button type="button" class="btn btn-outline-primary"
-                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93,161,129,0.3) !important; color: var(--color-sage) !important;"
-                                                        @onclick="() => QuickConfirmAsync(appointment.id_cita)">
-                                                    <i class="bi bi-check2-circle" style="margin-right: 4px;"></i> Confirmar
-                                                </button>
-                                            }
-                                            else if (stateName == "Confirmada" && (permissions.CanDelete || isAdmin || isDoctor || isClient))
-                                            {
-                                                <button type="button" class="btn btn-outline-primary"
-                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(220,53,69,0.35) !important; color: #dc3545 !important;"
-                                                        @onclick="() => OpenCancellationChoiceAsync(appointment.id_cita)">
-                                                    <i class="bi bi-x-circle" style="margin-right: 4px;"></i> Cancelar
-                                                </button>
-                                            }
-                                            @if (!isClient)
-                                            {
-                                                <button type="button" class="btn btn-outline-primary"
-                                                        style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254,188,100,0.4) !important; color: #e09b3c !important;"
-                                                        @onclick="() => OpenAuditModal(appointment.id_cita)">
-                                                    <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoría
-                                                </button>
-                                            }
+                                        <div class="appointment-calendar-empty">
+                                            <i class="bi bi-calendar-x"></i>
+                                            <span>No hay citas para la fecha seleccionada.</span>
                                         </div>
-                                    </td>
-                                </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var appointment in CalendarDayAppointments)
+                                        {
+                                            <article class="appointment-calendar-slot-card">
+                                                <span class="appointment-calendar-slot-icon"><i class="bi bi-clock"></i></span>
+                                                <div class="appointment-calendar-slot-copy">
+                                                    <strong>@($"{appointment.hora_inicio:HH\\:mm} - {appointment.hora_fin:HH\\:mm}")</strong>
+                                                    <span><i class="bi bi-person"></i>@GetPatientDisplayName(appointment.id_pacienteNavigation)</span>
+                                                    <span><i class="bi bi-person-badge"></i>@GetDoctorDisplayName(appointment.id_medicoNavigation)</span>
+                                                    <span><i class="bi bi-circle-fill"></i>@(appointment.id_estadoNavigation?.nombre_estado ?? "Sin estado")</span>
+                                                </div>
+                                            </article>
+                                        }
+                                    }
+                                </div>
                             }
-                        }
-                    </tbody>
-                </table>
+                            else if (selectedCalendarView == "week")
+                            {
+                                <div class="appointment-calendar-summary-grid">
+                                    @foreach (var day in WeeklyCalendarSummaries)
+                                    {
+                                        <article class="appointment-calendar-summary-card">
+                                            <span class="appointment-calendar-date-chip"><i class="bi bi-calendar2-week"></i>@day.Label</span>
+                                            <div class="appointment-calendar-metrics">
+                                                <span><i class="bi bi-calendar-check"></i><strong>@day.Total</strong><small>citas</small></span>
+                                                <span><i class="bi bi-hourglass-split"></i><strong>@day.Pending</strong><small>pendientes</small></span>
+                                                <span><i class="bi bi-check2-circle"></i><strong>@day.Confirmed</strong><small>confirmadas</small></span>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="appointment-calendar-summary-grid is-month">
+                                    @foreach (var day in MonthlyCalendarSummaries)
+                                    {
+                                        <article class="appointment-calendar-summary-card">
+                                            <span class="appointment-calendar-date-chip"><i class="bi bi-calendar3"></i>@day.Label</span>
+                                            <div class="appointment-calendar-metrics">
+                                                <span><i class="bi bi-calendar-check"></i><strong>@day.Total</strong><small>total</small></span>
+                                                <span><i class="bi bi-hourglass-split"></i><strong>@day.Pending</strong><small>pendientes</small></span>
+                                                <span><i class="bi bi-check2-circle"></i><strong>@day.Confirmed</strong><small>confirmadas</small></span>
+                                                <span><i class="bi bi-person-check"></i><strong>@day.Completed</strong><small>atendidas</small></span>
+                                                <span><i class="bi bi-x-circle"></i><strong>@day.Cancelled</strong><small>canceladas</small></span>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </div>
             </div>
-            <TablePager TotalItems="@FilteredAppointments.Count" CurrentPage="@appointmentPage" CurrentPageChanged="SetAppointmentPage" />
-        </section>
-    </section>
+        }
 }
 
 <!-- Form Modal -->
@@ -755,6 +1192,7 @@ else
     private bool canViewModule;
     private bool isAdmin;
     private bool isDoctor;
+    private bool isReceptionist;
     private bool isClient;
     private bool isCreatingAppointment;
     private bool showFormModal;
@@ -812,7 +1250,7 @@ else
     private bool CanViewPatientHistory => isAdmin || (!isClient && permissions.CanView);
     private bool CanManageAvailability => permissions.CanEdit && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_disponibilidad != false));
     private bool CanWriteMedicalNotes => appointmentEditor is not null && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_historia_clinica != false)) && permissions.CanEdit;
-    private bool CanChangeDoctor => CanEditAppointments && (isAdmin || (isDoctor && currentDoctorId == appointmentEditor!.IdMedico));
+    private bool CanChangeDoctor => CanEditAppointments && (isAdmin || isReceptionist || (isDoctor && currentDoctorId == appointmentEditor!.IdMedico));
     private bool ShowCancellationReasonInForm => appointmentEditor is not null && (showFormCancellationReason || IsCanceledState(appointmentEditor.Estado));
     private string CurrentEditorLabel => isCreatingAppointment ? "Nuevo registro" : (selectedAppointmentId > 0 ? $"Cita #{selectedAppointmentId}" : "Sin seleccion");
     private string CurrentEditorModeLabel => appointmentEditor is null ? "Sin seleccion" : isCreatingAppointment ? "Creacion" : CanEditAppointments ? "Edicion" : "Consulta";
@@ -834,8 +1272,8 @@ else
             : CanEditAppointments
                 ? "Estas trabajando sobre una cita existente. Cualquier ajuste que guardes actualizara su agenda, estado o detalle."
                 : "Estas revisando una cita existente en modo consulta.";
-    private string HeroTitle => isAdmin ? "Control total de citas y turnos" : isDoctor ? "Mi agenda medica" : "Mis citas y recordatorios";
-    private string HeroDescription => isAdmin
+    private string HeroTitle => (isAdmin || isReceptionist) ? "Control total de citas y turnos" : isDoctor ? "Mi agenda medica" : "Mis citas y recordatorios";
+    private string HeroDescription => (isAdmin || isReceptionist)
         ? "Consulta todas las citas del sistema, controla estados, agenda por cualquier paciente y exporta la operacion filtrada."
         : isDoctor
             ? "Revisa todas tus citas asignadas, su motivo, su estado y mantien tu agenda diaria bajo control."
@@ -867,11 +1305,19 @@ else
         .OrderBy(a => a.fecha_cita)
         .ThenBy(a => a.hora_inicio)
         .ToList();
-    private const int TablePageSize = 5;
+    private int tablePageSize = 8;
     private int appointmentPage = 1;
-    private int EffectiveAppointmentPage => Math.Min(appointmentPage, Math.Max(1, (int)Math.Ceiling(FilteredAppointments.Count / (double)TablePageSize)));
-    private IEnumerable<tbl_citas> PagedAppointments => FilteredAppointments.Skip((EffectiveAppointmentPage - 1) * TablePageSize).Take(TablePageSize);
+    private int EffectiveAppointmentPage => Math.Min(appointmentPage, Math.Max(1, (int)Math.Ceiling(FilteredAppointments.Count / (double)tablePageSize)));
+    private IEnumerable<tbl_citas> PagedAppointments => FilteredAppointments.Skip((EffectiveAppointmentPage - 1) * tablePageSize).Take(tablePageSize);
     private void SetAppointmentPage(int page) => appointmentPage = page;
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            tablePageSize = size;
+            appointmentPage = 1;
+        }
+    }
     private int PendingAppointmentsCount => FilteredAppointments.Count(x => IsPendingState(x.id_estadoNavigation?.nombre_estado ?? string.Empty));
     private int ConfirmedAppointmentsCount => FilteredAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Confirmada", StringComparison.OrdinalIgnoreCase));
     private int CompletedAppointmentsCount => FilteredAppointments.Count(x => string.Equals(x.id_estadoNavigation?.nombre_estado, "Realizada", StringComparison.OrdinalIgnoreCase));
@@ -904,7 +1350,8 @@ else
         isDoctor = currentRoleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
             || currentRoleName.Contains("medic", StringComparison.OrdinalIgnoreCase)
             || currentRoleName.Contains("optomet", StringComparison.OrdinalIgnoreCase);
-        isClient = !isAdmin && !isDoctor;
+        isReceptionist = currentRoleId == 2 || currentRoleName.Contains("recep", StringComparison.OrdinalIgnoreCase);
+        isClient = !isAdmin && !isDoctor && !isReceptionist;
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
@@ -968,7 +1415,7 @@ else
         }
 
         patients.Clear();
-        if (isAdmin || isDoctor)
+        if (isAdmin || isDoctor || isReceptionist)
         {
             patients.AddRange(await dbContext.tbl_pacientes.AsNoTracking().Include(p => p.id_usuarioNavigation).Where(p => p.activo == true).OrderBy(p => p.apellidos).ThenBy(p => p.nombres).ToListAsync());
         }
@@ -985,7 +1432,7 @@ else
             .Include(c => c.id_disponibilidadNavigation)
             .AsQueryable();
 
-        if (isAdmin)
+        if (isAdmin || isReceptionist)
         {
         }
         else if (isDoctor)

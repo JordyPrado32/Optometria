@@ -2965,8 +2965,36 @@ app.MapGet("/prescriptions/{consultationId:int}/print", async (
     CancellationToken cancellationToken) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-    if (!await ClinicCompletionService.CanReadConsultationAsync(dbContext, GetUserId(httpContext.User) ?? 0, consultationId))
-        return Results.NotFound();
+    var userId = GetUserId(httpContext.User) ?? 0;
+    if (!await ClinicCompletionService.CanReadConsultationAsync(dbContext, userId, consultationId))
+    {
+        var noAccessHtml = $$"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="utf-8"/>
+            <title>Consulta No Encontrada</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 40px; background: #faf8f5; color: #3c342e; text-align: center; }
+                .card { max-width: 540px; margin: 40px auto; background: #ffffff; border: 1px solid rgba(127,105,81,0.18); border-radius: 20px; padding: 40px 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
+                .icon { font-size: 54px; margin-bottom: 16px; color: #a86900; }
+                h2 { font-size: 22px; color: #241d18; margin: 0 0 12px 0; }
+                p { font-size: 15px; color: #6e5c4a; line-height: 1.6; margin-bottom: 24px; }
+                .btn { display: inline-block; background: #5DA181; color: white; text-decoration: none; padding: 10px 24px; border-radius: 12px; font-weight: bold; font-size: 14px; border: none; cursor: pointer; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon">⚠️</div>
+                <h2>Consulta #{{consultationId}} no disponible</h2>
+                <p>No se encontró la consulta especificada o no dispones de los permisos necesarios para acceder a su receta.</p>
+                <button onclick="window.close()" class="btn">Cerrar ventana</button>
+            </div>
+        </body>
+        </html>
+        """;
+        return Results.Content(noAccessHtml, "text/html; charset=utf-8");
+    }
     httpContext.Response.Headers.CacheControl = "no-store";
     var prescription = await dbContext.tbl_receta_medica
         .AsNoTracking()
@@ -2976,7 +3004,44 @@ app.MapGet("/prescriptions/{consultationId:int}/print", async (
 
     if (prescription is null)
     {
-        return Results.NotFound();
+        var consultation = await dbContext.tbl_consulta
+            .AsNoTracking()
+            .Include(x => x.id_pacienteNavigation)
+            .FirstOrDefaultAsync(x => x.id_consulta == consultationId, cancellationToken);
+
+        var missingPatientName = consultation?.id_pacienteNavigation != null
+            ? $"{consultation.id_pacienteNavigation.nombres} {consultation.id_pacienteNavigation.apellidos}".Trim()
+            : "Paciente N/A";
+            
+        var noPrescriptionHtml = $$"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="utf-8"/>
+            <title>Sin Receta Registrada</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 40px; background: #faf8f5; color: #3c342e; text-align: center; }
+                .card { max-width: 540px; margin: 40px auto; background: #ffffff; border: 1px solid rgba(127,105,81,0.18); border-radius: 20px; padding: 40px 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
+                .icon { font-size: 54px; margin-bottom: 16px; color: #5DA181; }
+                h2 { font-size: 22px; color: #241d18; margin: 0 0 12px 0; }
+                p { font-size: 15px; color: #6e5c4a; line-height: 1.6; margin-bottom: 24px; }
+                .badge { display: inline-block; background: #eef6f2; color: #205c3c; padding: 6px 16px; border-radius: 999px; font-weight: bold; font-size: 13px; margin-bottom: 20px; }
+                .btn { display: inline-block; background: #5DA181; color: white; text-decoration: none; padding: 10px 24px; border-radius: 12px; font-weight: bold; font-size: 14px; border: none; cursor: pointer; }
+                .btn:hover { background: #4a886b; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon">📋</div>
+                <span class="badge">Consulta #{{consultationId}} — {{WebUtility.HtmlEncode(missingPatientName)}}</span>
+                <h2>No se ha registrado una receta aún</h2>
+                <p>Esta consulta existe pero no tiene una receta médica cargada. Para emitir e imprimir la receta, agrega los medicamentos en el paso <strong>4. Diagnóstico y Conducta</strong> de la Historia Clínica y guarda la evolución.</p>
+                <button onclick="window.close()" class="btn">Cerrar esta ventana</button>
+            </div>
+        </body>
+        </html>
+        """;
+        return Results.Content(noPrescriptionHtml, "text/html; charset=utf-8");
     }
 
     var items = await dbContext.tbl_receta_medica_detalle
@@ -5147,23 +5212,32 @@ static PasswordVerificationResult VerifyPassword(
         return PasswordVerificationResult.Failed;
     }
 
-    try
+    if (LooksLikeBcryptHash(storedPassword))
     {
-        return passwordHasher.VerifyHashedPassword(usuario, storedPassword, providedPassword);
-    }
-    catch (FormatException)
-    {
-        if (LooksLikeBcryptHash(storedPassword))
+        try
         {
             return BCrypt.Net.BCrypt.Verify(providedPassword, storedPassword)
                 ? PasswordVerificationResult.SuccessRehashNeeded
                 : PasswordVerificationResult.Failed;
         }
-
-        return string.Equals(storedPassword, providedPassword, StringComparison.Ordinal)
-            ? PasswordVerificationResult.SuccessRehashNeeded
-            : PasswordVerificationResult.Failed;
+        catch
+        {
+            return PasswordVerificationResult.Failed;
+        }
     }
+
+    try
+    {
+        var res = passwordHasher.VerifyHashedPassword(usuario, storedPassword, providedPassword);
+        if (res != PasswordVerificationResult.Failed) return res;
+    }
+    catch
+    {
+    }
+
+    return string.Equals(storedPassword, providedPassword, StringComparison.Ordinal)
+        ? PasswordVerificationResult.SuccessRehashNeeded
+        : PasswordVerificationResult.Failed;
 }
 
 static bool LooksLikeBcryptHash(string storedPassword)

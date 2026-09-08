@@ -12,6 +12,433 @@
 
 <PageTitle>Medicos</PageTitle>
 
+<style>
+    /* ══════════════════════════════════════════════════════════════
+       DASHBOARD MÉDICO — MINDFUL CLINICAL SUITE
+       ══════════════════════════════════════════════════════════════ */
+    .clinical-portal {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    /* Banner Principal */
+    .clinical-banner {
+        background: linear-gradient(135deg, #eaf2ed 0%, #f7f3ea 60%, #faeee9 100%);
+        border: 1px solid rgba(93, 161, 129, 0.25);
+        border-radius: 1.8rem;
+        padding: 2.2rem 2.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+        position: relative;
+        overflow: hidden;
+    }
+    .clinical-banner::after {
+        content: '';
+        position: absolute;
+        right: -30px;
+        bottom: -40px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(93, 161, 129, 0.18) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .clinical-banner-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(93, 161, 129, 0.18);
+        color: #276144;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 0.35rem 0.9rem;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+    }
+    .clinical-banner-title {
+        font-size: clamp(2rem, 3.2vw, 2.7rem);
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.1;
+        margin: 0 0 0.4rem 0;
+    }
+    .clinical-banner-desc {
+        color: #6e5c4a;
+        font-size: 1rem;
+        margin: 0;
+        max-width: 600px;
+        line-height: 1.5;
+    }
+
+    /* KPIs Superiores */
+    .clinical-kpi-deck {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+    }
+    @@media (max-width: 950px) {
+        .clinical-kpi-deck { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 550px) {
+        .clinical-kpi-deck { grid-template-columns: 1fr; }
+    }
+    .clinical-kpi-box {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.11);
+        border-radius: 1.5rem;
+        padding: 1.25rem 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        box-shadow: 0 4px 18px rgba(127, 105, 81, 0.05);
+        transition: all 0.22s ease;
+    }
+    .clinical-kpi-box:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(127, 105, 81, 0.1);
+    }
+    .clinical-kpi-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+    .clinical-kpi-icon.sage { background: #eef6f2; color: #327552; }
+    .clinical-kpi-icon.amber { background: #fff5e6; color: #a86900; }
+    .clinical-kpi-icon.rose { background: #fdf0ed; color: #9c4c4c; }
+    .clinical-kpi-icon.taupe { background: #f4eee7; color: #6b5540; }
+    .clinical-kpi-label {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8c7864;
+        margin-bottom: 0.2rem;
+    }
+    .clinical-kpi-num {
+        font-size: 2.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1;
+    }
+
+    /* Área Dividida: Sidebar de Filtros + Galería de Especialistas */
+    .clinical-split-workspace {
+        display: grid;
+        grid-template-columns: 290px 1fr;
+        gap: 1.5rem;
+        align-items: start;
+    }
+    @@media (max-width: 900px) {
+        .clinical-split-workspace { grid-template-columns: 1fr; }
+    }
+
+    /* Sidebar de Filtros */
+    .clinical-filter-sidebar {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.6rem;
+        padding: 1.5rem;
+        box-shadow: 0 6px 22px rgba(127, 105, 81, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+        position: sticky;
+        top: 1rem;
+    }
+    .clinical-sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #241d18;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+        padding-bottom: 0.7rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+    }
+    .clinical-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .clinical-filter-group label {
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b5540;
+    }
+    .clinical-filter-group .form-control,
+    .clinical-filter-group .form-select {
+        border-radius: 0.85rem;
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        background: #faf8f4;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.88rem;
+        color: #241d18;
+        transition: all 0.2s;
+    }
+    .clinical-filter-group .form-control:focus,
+    .clinical-filter-group .form-select:focus {
+        border-color: #5DA181;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15);
+    }
+
+    /* Panel de Contenido Principal */
+    .clinical-content-panel {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.8rem;
+        padding: 1.8rem;
+        box-shadow: 0 8px 24px rgba(127, 105, 81, 0.05);
+    }
+    .clinical-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-bottom: 1.1rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+        margin-bottom: 1.4rem;
+    }
+    .clinical-panel-title {
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: #241d18;
+        margin: 0;
+    }
+    .clinical-panel-counter {
+        font-size: 0.85rem;
+        color: #8c7864;
+        font-weight: 600;
+    }
+
+    /* Grid de Médicos en Tarjetas Modernas */
+    .clinical-doctors-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.25rem;
+    }
+    .clinical-doctor-tile {
+        background: #faf8f5;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.5rem;
+        padding: 1.4rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1.1rem;
+        box-shadow: 0 4px 14px rgba(127, 105, 81, 0.04);
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .clinical-doctor-tile:hover {
+        transform: translateY(-4px);
+        background: #ffffff;
+        border-color: rgba(93, 161, 129, 0.4);
+        box-shadow: 0 14px 32px rgba(127, 105, 81, 0.12);
+    }
+    .clinical-tile-top {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .clinical-tile-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.2rem;
+        font-weight: 900;
+        color: #ffffff;
+        flex-shrink: 0;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+    }
+    .clinical-tile-name {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.2;
+        margin-bottom: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-tile-sub {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.78rem;
+        color: #7a6652;
+    }
+    .clinical-tile-code {
+        font-family: monospace;
+        background: #ede8dc;
+        padding: 0.15rem 0.5rem;
+        border-radius: 0.4rem;
+        font-weight: 800;
+        color: #4a3c2e;
+    }
+
+    /* Caja de contacto y especialidad */
+    .clinical-tile-body {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.08);
+        border-radius: 1rem;
+        padding: 0.85rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        font-size: 0.83rem;
+        color: #574635;
+    }
+    .clinical-tile-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-tile-row i {
+        color: #5DA181;
+        font-size: 0.9rem;
+        width: 16px;
+        flex-shrink: 0;
+    }
+
+    /* Footer con Estado y Acciones */
+    .clinical-tile-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.09);
+        flex-wrap: wrap;
+    }
+    .clinical-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.73rem;
+        font-weight: 800;
+    }
+    .clinical-status-pill.active { background: #eaf5ee; color: #235c3d; }
+    .clinical-status-pill.pending { background: #fff5e6; color: #945d00; }
+    .clinical-status-pill.inactive { background: #f0eae1; color: #6b5540; }
+    .clinical-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .clinical-status-pill.active .clinical-dot { background: #32945d; box-shadow: 0 0 0 2px rgba(50, 148, 93, 0.25); }
+    .clinical-status-pill.pending .clinical-dot { background: #e09b3c; }
+    .clinical-status-pill.inactive .clinical-dot { background: #9c8874; }
+
+    /* Botones de Acción */
+    .clinical-actions-cluster {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+    .clinical-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.36rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        text-decoration: none;
+        line-height: 1;
+    }
+    .clinical-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.09);
+    }
+    .clinical-btn.btn-complete {
+        background: #5DA181;
+        color: #ffffff;
+        border-color: #5DA181;
+    }
+    .clinical-btn.btn-complete:hover { background: #4b886c; }
+
+    .clinical-btn.btn-edit {
+        background: #fff6e8;
+        color: #9c6200;
+        border-color: rgba(254, 188, 100, 0.5);
+    }
+    .clinical-btn.btn-edit:hover { background: #ffebcf; }
+
+    .clinical-btn.btn-audit {
+        background: #f4eee7;
+        color: #5c4733;
+        border-color: rgba(127, 105, 81, 0.25);
+    }
+    .clinical-btn.btn-audit:hover { background: #e7ded2; }
+
+    .clinical-btn.btn-toggle-off {
+        background: #faece9;
+        color: #943d3d;
+        border-color: rgba(236, 204, 197, 0.7);
+    }
+    .clinical-btn.btn-toggle-off:hover { background: #f7dad3; }
+
+    .clinical-btn.btn-toggle-on {
+        background: #edf7f2;
+        color: #205c3c;
+        border-color: rgba(93, 161, 129, 0.4);
+    }
+    .clinical-btn.btn-toggle-on:hover { background: #daf2e4; }
+
+    /* Barra Inferior */
+    .clinical-footer-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1.8rem;
+        padding-top: 1.2rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.1);
+    }
+    .clinical-pagesize-select {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.84rem;
+        color: #705e4c;
+        font-weight: 700;
+    }
+    .clinical-pagesize-select select {
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(127, 105, 81, 0.25);
+        background: #ffffff;
+        font-weight: 800;
+        color: #241d18;
+        outline: none;
+        cursor: pointer;
+    }
+</style>
+
+
 @if (isLoading)
 {
     <section class="management-shell">
@@ -32,206 +459,280 @@ else if (!canViewDoctors)
 }
 else
 {
-    <section class="management-shell">
-        <div class="management-hero">
+    <section class="clinical-portal">
+        <!-- Banner Principal -->
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Agenda medica</span>
-                <h1>@HeroTitle</h1>
-                <p>@HeroDescription</p>
+                <span class="clinical-banner-tag"><i class="bi bi-person-badge-fill"></i> Directorio Especializado</span>
+                <h1 class="clinical-banner-title">@HeroTitle</h1>
+                <p class="clinical-banner-desc">@HeroDescription</p>
             </div>
 
-            <div class="workspace-actions" style="align-items: center;">
+            <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
                 @if (CanCreateDoctorProfile)
                 {
-                    <button type="button" class="btn btn-coffee" @onclick="PrepareNewDoctor">
-                        <i class="bi bi-person-badge-fill" style="margin-right: 6px;"></i> Nueva ficha medica
+                    <button type="button" class="btn btn-coffee" style="box-shadow: 0 4px 14px rgba(127, 105, 81, 0.25); border-radius: 999px; padding: 0.55rem 1.3rem;" @onclick="PrepareNewDoctor">
+                        <i class="bi bi-person-badge-fill" style="margin-right: 6px;"></i> Nueva ficha médica
                     </button>
                 }
             </div>
-        </div>
+        </header>
 
         @if (selfManagedMode && CurrentSelfUser is not null && CurrentSelfUser.tbl_medico is null)
         {
-            <section class="management-card">
-                <div class="management-card-header">
-                    <h2>Perfil pendiente</h2>
-                    <span>Necesario para citas</span>
+            <section class="clinical-content-panel" style="border: 1px solid rgba(254, 188, 100, 0.4); background: #fffdf9;">
+                <div class="clinical-panel-header">
+                    <div>
+                        <h2 class="clinical-panel-title" style="color: #ad6d00;"><i class="bi bi-exclamation-triangle-fill" style="margin-right: 6px;"></i> Perfil profesional pendiente</h2>
+                        <span class="clinical-panel-counter">Acción requerida para agendar citas</span>
+                    </div>
                 </div>
 
-                <p>
-                    Tu usuario ya tiene rol medico, pero aun no tiene ficha profesional completada. Mientras siga pendiente,
-                    los pacientes no podran encontrarte para agendar citas.
+                <p style="color: #6e5c4a; font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.2rem;">
+                    Tu usuario ya tiene asignado el rol médico, pero aún no se ha completado tu ficha profesional con especialidad y número de licencia. Mientras permanezca pendiente, los pacientes no podrán agendar citas contigo.
                 </p>
 
-                <div class="workspace-actions">
+                <div>
                     @if (CanCreateDoctorProfile)
                     {
-                        <button type="button" class="btn btn-primary" @onclick="PrepareNewDoctor">Completar mi ficha</button>
+                        <button type="button" class="clinical-btn btn-complete" style="padding: 0.55rem 1.3rem; font-size: 0.85rem;" @onclick="PrepareNewDoctor">
+                            <i class="bi bi-clipboard-plus-fill"></i> Completar mi ficha ahora
+                        </button>
                     }
                 </div>
             </section>
         }
 
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Filtros y busqueda</h2>
-                <span>@FilteredUsers.Count resultados</span>
-            </div>
-
-            <div class="filters-row">
+        <!-- Deck Superior de KPIs Médicos -->
+        <div class="clinical-kpi-deck">
+            <div class="clinical-kpi-box">
+                <div class="clinical-kpi-icon sage"><i class="bi bi-person-heart"></i></div>
                 <div>
-                    <label class="form-label" for="doctorSearch">Buscador</label>
-                    <input id="doctorSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Usuario, nombre, especialidad o licencia" />
-                </div>
-
-                <div class="filter-selects-col">
-                    <div>
-                        <label class="form-label" for="doctorProfileFilter">Ficha</label>
-                        <select id="doctorProfileFilter" class="form-select" @bind="selectedProfileFilter">
-                            <option value="all">Todas</option>
-                            <option value="configured">Con ficha</option>
-                            <option value="pending">Pendientes</option>
-                            <option value="available">Disponibles para agenda</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="doctorAccessFilter">Usuario</label>
-                        <select id="doctorAccessFilter" class="form-select" @bind="selectedAccessFilter">
-                            <option value="all">Todos</option>
-                            <option value="active">Activos</option>
-                            <option value="inactive">Inactivos</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="form-label" for="doctorRecordFilter">Estado de ficha</label>
-                        <select id="doctorRecordFilter" class="form-select" @bind="selectedRecordFilter">
-                            <option value="all">Todos</option>
-                            <option value="active">Fichas activas</option>
-                            <option value="inactive">Fichas inactivas</option>
-                        </select>
-                    </div>
+                    <div class="clinical-kpi-label">Total Cuentas</div>
+                    <div class="clinical-kpi-num">@medicalUsers.Count</div>
                 </div>
             </div>
+            <div class="clinical-kpi-box">
+                <div class="clinical-kpi-icon amber"><i class="bi bi-patch-check-fill"></i></div>
+                <div>
+                    <div class="clinical-kpi-label">Con Ficha</div>
+                    <div class="clinical-kpi-num">@medicalUsers.Count(u => u.tbl_medico is not null)</div>
+                </div>
+            </div>
+            <div class="clinical-kpi-box">
+                <div class="clinical-kpi-icon rose"><i class="bi bi-clock-history"></i></div>
+                <div>
+                    <div class="clinical-kpi-label">Pendientes</div>
+                    <div class="clinical-kpi-num">@medicalUsers.Count(u => u.tbl_medico is null)</div>
+                </div>
+            </div>
+            <div class="clinical-kpi-box">
+                <div class="clinical-kpi-icon taupe"><i class="bi bi-calendar-check-fill"></i></div>
+                <div>
+                    <div class="clinical-kpi-label">En Agenda</div>
+                    <div class="clinical-kpi-num">@medicalUsers.Count(IsAvailableForAppointments)</div>
+                </div>
+            </div>
+        </div>
 
-            <div class="management-actions" style="margin-top: 0.3rem;">
-                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="ClearFilters" style="padding: 0.3rem 0.7rem !important; font-size: 0.78rem !important; border-color: rgba(127,105,81,0.25) !important;">
-                    <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar filtros
+        <!-- Área Dividida: Sidebar de Filtros + Galería de Tarjetas -->
+        <div class="clinical-split-workspace">
+            <!-- Sidebar de Búsqueda y Filtros -->
+            <aside class="clinical-filter-sidebar">
+                <h3 class="clinical-sidebar-title">
+                    <i class="bi bi-sliders2-vertical" style="color: #5DA181;"></i> Filtros Médicos
+                </h3>
+
+                <div class="clinical-filter-group">
+                    <label for="doctorSearch">Buscador especialista</label>
+                    <input id="doctorSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, especialidad, licencia..." />
+                </div>
+
+                <div class="clinical-filter-group">
+                    <label for="doctorProfileFilter">Estado de Ficha</label>
+                    <select id="doctorProfileFilter" class="form-select" @bind="selectedProfileFilter">
+                        <option value="all">Todas las fichas</option>
+                        <option value="configured">Con ficha completada</option>
+                        <option value="pending">Fichas pendientes</option>
+                        <option value="available">Disponibles en agenda</option>
+                    </select>
+                </div>
+
+                <div class="clinical-filter-group">
+                    <label for="doctorAccessFilter">Estado Usuario</label>
+                    <select id="doctorAccessFilter" class="form-select" @bind="selectedAccessFilter">
+                        <option value="all">Todos los usuarios</option>
+                        <option value="active">Solo Usuarios activos</option>
+                        <option value="inactive">Solo Usuarios inactivos</option>
+                    </select>
+                </div>
+
+                <div class="clinical-filter-group">
+                    <label for="doctorRecordFilter">Estado de la Ficha</label>
+                    <select id="doctorRecordFilter" class="form-select" @bind="selectedRecordFilter">
+                        <option value="all">Todos</option>
+                        <option value="active">Fichas activas</option>
+                        <option value="inactive">Fichas inactivas</option>
+                    </select>
+                </div>
+
+                <button type="button" class="btn btn-outline-primary" style="border-radius: 0.85rem; margin-top: 0.5rem; font-weight: 700;" @onclick="ClearFilters">
+                    <i class="bi bi-arrow-counterclockwise" style="margin-right: 4px;"></i> Limpiar filtros
                 </button>
-            </div>
-        </section>
+            </aside>
 
-        <section class="management-card" style="margin-top: 1.5rem;">
-            <div class="management-card-header">
-                <h2>Listado de medicos</h2>
-                <span>@FilteredUsers.Count registrados</span>
-            </div>
+            <!-- Panel Principal de Especialistas -->
+            <main class="clinical-content-panel">
+                <div class="clinical-panel-header">
+                    <div>
+                        <h2 class="clinical-panel-title">Especialistas y Médicos</h2>
+                        <span class="clinical-panel-counter">Mostrando @PagedUsers.Count() de @FilteredUsers.Count médicos</span>
+                    </div>
+                </div>
 
-            <div class="table-responsive" style="margin-top: 1rem;">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th>Nombre</th>
-                            <th>Rol</th>
-                            <th>Especialidad</th>
-                            <th>Licencia</th>
-                            <th>Estado de ficha</th>
-                            <th>Agenda</th>
-                            <th style="text-align: right; padding-right: 1.5rem;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (FilteredUsers.Count == 0)
+                <div class="clinical-doctors-grid">
+                    @if (FilteredUsers.Count == 0)
+                    {
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 1rem; color: #8c7864;">
+                            <i class="bi bi-person-badge-fill" style="font-size: 3.5rem; opacity: 0.3; display: block; margin-bottom: 0.8rem;"></i>
+                            <p style="margin: 0; font-size: 1.05rem; font-weight: 700;">No se encontraron médicos con los filtros seleccionados.</p>
+                            <span style="font-size: 0.85rem; color: #a3907c;">Intenta ajustar la búsqueda en la barra lateral.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var user in PagedUsers)
                         {
-                            <tr>
-                                <td colspan="8" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
-                                    No se encontraron medicos con los filtros seleccionados.
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var user in PagedUsers)
-                            {
-                                <tr>
-                                    <td>
-                                        <strong style="color: var(--color-sage);">@user.usuario</strong>
-                                    </td>
-                                    <td>
-                                        <strong style="color: var(--color-ink);">@GetFullName(user)</strong>
-                                        <div style="font-size: 0.78rem; color: var(--color-taupe);">@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo" : user.email)</div>
-                                    </td>
-                                    <td>@(user.id_rolNavigation?.nombre ?? "Sin rol")</td>
-                                    <td>@(string.IsNullOrWhiteSpace(user.tbl_medico?.especialidad) ? "-" : user.tbl_medico!.especialidad)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(user.tbl_medico?.numero_licencia) ? "-" : user.tbl_medico!.numero_licencia)</td>
-                                    <td>
+                            var fullName = GetFullName(user);
+                            var initials = $"{(user.nombres?.Length > 0 ? user.nombres[0] : (user.usuario?.Length > 0 ? user.usuario[0] : '?'))}{(user.apellidos?.Length > 0 ? user.apellidos[0] : '?')}".ToUpper();
+                            var avatarGradients = new[] {
+                                "background: linear-gradient(135deg, #5DA181 0%, #356b50 100%)",
+                                "background: linear-gradient(135deg, #7F6951 0%, #4d3e2f 100%)",
+                                "background: linear-gradient(135deg, #FEBC64 0%, #cc821f 100%)",
+                                "background: linear-gradient(135deg, #669e86 0%, #36634f 100%)"
+                            };
+                            var avatarBg = avatarGradients[Math.Abs(user.id_usuario) % avatarGradients.Length];
+
+                            <article class="clinical-doctor-tile">
+                                <!-- Cabecera del Médico -->
+                                <div class="clinical-tile-top">
+                                    <div class="clinical-tile-avatar" style="@avatarBg">@initials</div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div class="clinical-tile-name" title="@fullName">@fullName</div>
+                                        <div class="clinical-tile-sub">
+                                            <span class="clinical-tile-code">@@@user.usuario</span>
+                                            <span>•</span>
+                                            <span>@(user.id_rolNavigation?.nombre ?? "Sin rol")</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Información Profesional -->
+                                <div class="clinical-tile-body">
+                                    <div class="clinical-tile-row" title="@(user.tbl_medico?.especialidad ?? "Sin especialidad")">
+                                        <i class="bi bi-briefcase-fill"></i>
+                                        <span>Especialidad: <strong>@(string.IsNullOrWhiteSpace(user.tbl_medico?.especialidad) ? "Pendiente" : user.tbl_medico!.especialidad)</strong></span>
+                                    </div>
+                                    <div class="clinical-tile-row" title="@(user.tbl_medico?.numero_licencia ?? "Sin licencia")">
+                                        <i class="bi bi-card-heading"></i>
+                                        <span>Licencia: <strong>@(string.IsNullOrWhiteSpace(user.tbl_medico?.numero_licencia) ? "N/A" : user.tbl_medico!.numero_licencia)</strong></span>
+                                    </div>
+                                    <div class="clinical-tile-row" title="@user.email">
+                                        <i class="bi bi-envelope-fill"></i>
+                                        <span>@(string.IsNullOrWhiteSpace(user.email) ? "Sin correo electrónico" : user.email)</span>
+                                    </div>
+                                </div>
+
+                                <!-- Pie con Estado y Todos los Botones Originales -->
+                                <div class="clinical-tile-footer">
+                                    <div style="display: flex; gap: 0.35rem; align-items: center;">
+                                        <!-- Estado Ficha -->
                                         @if (user.tbl_medico is null)
                                         {
-                                            <span class="badge" style="background: rgba(254, 188, 100, 0.15) !important; color: #e09b3c !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Pendiente</span>
+                                            <div class="clinical-status-pill pending" title="Ficha médica no creada">
+                                                <span class="clinical-dot"></span>
+                                                <span>Pendiente</span>
+                                            </div>
                                         }
                                         else if (user.tbl_medico.activo == true)
                                         {
-                                            <span class="badge" style="background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Activa</span>
+                                            <div class="clinical-status-pill active" title="Ficha médica activa">
+                                                <span class="clinical-dot"></span>
+                                                <span>Ficha Activa</span>
+                                            </div>
                                         }
                                         else
                                         {
-                                            <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Inactiva</span>
+                                            <div class="clinical-status-pill inactive" title="Ficha médica inactiva">
+                                                <span class="clinical-dot"></span>
+                                                <span>Inactiva</span>
+                                            </div>
                                         }
-                                    </td>
-                                    <td>
+
+                                        <!-- Visibilidad Agenda -->
                                         @if (IsAvailableForAppointments(user))
                                         {
-                                            <span class="badge" style="background: rgba(93, 161, 129, 0.15) !important; color: #5DA181 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">Visible</span>
+                                            <span style="font-size: 0.7rem; font-weight: 800; color: #276144; background: #eaf5ee; padding: 0.2rem 0.5rem; border-radius: 999px;">
+                                                <i class="bi bi-eye-fill"></i> Agenda
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <div class="clinical-actions-cluster">
+                                        @if (user.tbl_medico is null)
+                                        {
+                                            @if (permissions.CanCreate && CanManageUser(user))
+                                            {
+                                                <button type="button" class="clinical-btn btn-complete" title="Completar datos profesionales" @onclick="() => PrepareEditDoctor(user)">
+                                                    <i class="bi bi-clipboard-plus-fill"></i> Completar
+                                                </button>
+                                            }
                                         }
                                         else
                                         {
-                                            <span class="badge" style="background: rgba(127, 105, 81, 0.12) !important; color: #7F6951 !important; padding: 0.3rem 0.6rem; border-radius: 2rem;">No visible</span>
-                                        }
-                                    </td>
-                                    <td style="text-align: right; padding-right: 1.2rem;">
-                                        <div style="display: inline-flex; gap: 0.4rem; justify-content: flex-end;">
-                                            @if (user.tbl_medico is null)
+                                            @if (permissions.CanEdit && CanManageUser(user))
                                             {
-                                                @if (permissions.CanCreate && CanManageUser(user))
-                                                {
-                                                    <button type="button" class="btn btn-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important;" @onclick="() => PrepareEditDoctor(user)">
-                                                        <i class="bi bi-clipboard-plus-fill"></i> Completar ficha
-                                                    </button>
-                                                }
-                                            }
-                                            else
-                                            {
-                                                @if (permissions.CanEdit && CanManageUser(user))
-                                                {
-                                                    <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(93, 161, 129, 0.3) !important; color: var(--color-sage) !important;" @onclick="() => PrepareEditDoctor(user)">
-                                                        <i class="bi bi-pencil-fill" style="margin-right: 4px;"></i> Editar
-                                                    </button>
-                                                }
-                                            }
-
-                                            <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(254, 188, 100, 0.4) !important; color: #e09b3c !important;" @onclick="() => PrepareAuditDoctor(user)">
-                                                <i class="bi bi-clock-history" style="margin-right: 4px;"></i> Auditoria
-                                            </button>
-
-                                            @if (CanToggleDoctorProfile(user))
-                                            {
-                                                <button type="button" class="btn btn-outline-primary" style="padding: 0.3rem 0.8rem !important; font-size: 0.78rem !important; border-color: rgba(127, 105, 81, 0.2) !important; color: var(--color-taupe) !important;" @onclick="() => ToggleActiveAsync(user)">
-                                                    <i class="bi @(user.tbl_medico!.activo == true ? "bi-toggle-off" : "bi-toggle-on")"></i>
-                                                    @(user.tbl_medico!.activo == true ? "Inactivar" : "Activar")
+                                                <button type="button" class="clinical-btn btn-edit" title="Editar médico" @onclick="() => PrepareEditDoctor(user)">
+                                                    <i class="bi bi-pencil-fill"></i> Editar
                                                 </button>
                                             }
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
+                                        }
+
+                                        <button type="button" class="clinical-btn btn-audit" title="Ver historial de auditoría" @onclick="() => PrepareAuditDoctor(user)">
+                                            <i class="bi bi-clock-history"></i> Auditoría
+                                        </button>
+
+                                        @if (CanToggleDoctorProfile(user))
+                                        {
+                                            <button type="button" class="clinical-btn @(user.tbl_medico!.activo == true ? "btn-toggle-off" : "btn-toggle-on")" title="@(user.tbl_medico!.activo == true ? "Inactivar" : "Activar")" @onclick="() => ToggleActiveAsync(user)">
+                                                <i class="bi @(user.tbl_medico!.activo == true ? "bi-toggle-off" : "bi-toggle-on")"></i>
+                                                @(user.tbl_medico!.activo == true ? "Inactivar" : "Activar")
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </article>
                         }
-                    </tbody>
-                </table>
-            </div>
-            <TablePager TotalItems="@FilteredUsers.Count" CurrentPage="@doctorPage" CurrentPageChanged="SetDoctorPage" />
-        </section>
+                    }
+                </div>
+
+                <!-- Barra de Paginación Inteligente -->
+                <footer class="clinical-footer-bar">
+                    <div class="clinical-pagesize-select">
+                        <label for="pageSizeSelect"><i class="bi bi-grid-fill" style="color: #5DA181;"></i> Mostrar por página:</label>
+                        <select id="pageSizeSelect" value="@tablePageSize" @onchange="OnPageSizeChanged">
+                            <option value="6">6 médicos</option>
+                            <option value="8">8 médicos</option>
+                            <option value="12">12 médicos</option>
+                            <option value="24">24 médicos</option>
+                        </select>
+                        <span>(@FilteredUsers.Count médicos en total)</span>
+                    </div>
+
+                    <TablePager TotalItems="@FilteredUsers.Count" PageSize="@tablePageSize" CurrentPage="@doctorPage" CurrentPageChanged="SetDoctorPage" />
+                </footer>
+            </main>
+        </div>
     </section>
 }
 
@@ -717,11 +1218,19 @@ else
         .OrderBy(u => u.apellidos)
         .ThenBy(u => u.nombres)
         .ToList();
-    private const int TablePageSize = 5;
+    private int tablePageSize = 8;
     private int doctorPage = 1;
-    private int EffectiveDoctorPage => Math.Min(doctorPage, Math.Max(1, (int)Math.Ceiling(FilteredUsers.Count / (double)TablePageSize)));
-    private IEnumerable<tbl_usuario> PagedUsers => FilteredUsers.Skip((EffectiveDoctorPage - 1) * TablePageSize).Take(TablePageSize);
+    private int EffectiveDoctorPage => Math.Min(doctorPage, Math.Max(1, (int)Math.Ceiling(FilteredUsers.Count / (double)tablePageSize)));
+    private IEnumerable<tbl_usuario> PagedUsers => FilteredUsers.Skip((EffectiveDoctorPage - 1) * tablePageSize).Take(tablePageSize);
     private void SetDoctorPage(int page) => doctorPage = page;
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            tablePageSize = size;
+            doctorPage = 1;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

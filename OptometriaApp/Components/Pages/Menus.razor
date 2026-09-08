@@ -9,6 +9,397 @@
 
 <PageTitle>Menus</PageTitle>
 
+<style>
+    /* ══════════════════════════════════════════════════════════════
+       DASHBOARD MENUS Y NAVEGACIÓN — MINDFUL CLINICAL SUITE
+       ══════════════════════════════════════════════════════════════ */
+    .clinical-portal {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    /* Banner Principal */
+    .clinical-banner {
+        background: linear-gradient(135deg, #eaf2ed 0%, #f7f3ea 60%, #faeee9 100%);
+        border: 1px solid rgba(93, 161, 129, 0.25);
+        border-radius: 1.8rem;
+        padding: 2.2rem 2.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        box-shadow: 0 10px 30px rgba(127, 105, 81, 0.06);
+        position: relative;
+        overflow: hidden;
+    }
+    .clinical-banner::after {
+        content: '';
+        position: absolute;
+        right: -30px;
+        bottom: -40px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(93, 161, 129, 0.18) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .clinical-banner-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(93, 161, 129, 0.18);
+        color: #276144;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 0.35rem 0.9rem;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+    }
+    .clinical-banner-title {
+        font-size: clamp(2rem, 3.2vw, 2.7rem);
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.1;
+        margin: 0 0 0.4rem 0;
+    }
+    .clinical-banner-desc {
+        color: #6e5c4a;
+        font-size: 1rem;
+        margin: 0;
+        max-width: 600px;
+        line-height: 1.5;
+    }
+
+    /* KPIs Superiores */
+    .clinical-kpi-deck {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.2rem;
+    }
+    @@media (max-width: 950px) {
+        .clinical-kpi-deck { grid-template-columns: repeat(2, 1fr); }
+    }
+    @@media (max-width: 550px) {
+        .clinical-kpi-deck { grid-template-columns: 1fr; }
+    }
+    .clinical-kpi-box {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.11);
+        border-radius: 1.5rem;
+        padding: 1.25rem 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 1.1rem;
+        box-shadow: 0 4px 18px rgba(127, 105, 81, 0.05);
+        transition: all 0.22s ease;
+    }
+    .clinical-kpi-box:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(127, 105, 81, 0.1);
+    }
+    .clinical-kpi-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+    .clinical-kpi-icon.sage { background: #eef6f2; color: #327552; }
+    .clinical-kpi-icon.amber { background: #fff5e6; color: #a86900; }
+    .clinical-kpi-icon.rose { background: #fdf0ed; color: #9c4c4c; }
+    .clinical-kpi-icon.taupe { background: #f4eee7; color: #6b5540; }
+    .clinical-kpi-label {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8c7864;
+        margin-bottom: 0.2rem;
+    }
+    .clinical-kpi-num {
+        font-size: 2.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1;
+    }
+
+    /* Área Dividida: Sidebar de Filtros + Galería de Menús */
+    .clinical-split-workspace {
+        display: grid;
+        grid-template-columns: 290px 1fr;
+        gap: 1.5rem;
+        align-items: start;
+    }
+    @@media (max-width: 900px) {
+        .clinical-split-workspace { grid-template-columns: 1fr; }
+    }
+
+    /* Sidebar de Filtros */
+    .clinical-filter-sidebar {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.6rem;
+        padding: 1.5rem;
+        box-shadow: 0 6px 22px rgba(127, 105, 81, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+        position: sticky;
+        top: 1rem;
+    }
+    .clinical-sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #241d18;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+        padding-bottom: 0.7rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+    }
+    .clinical-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .clinical-filter-group label {
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b5540;
+    }
+    .clinical-filter-group .form-control,
+    .clinical-filter-group .form-select {
+        border-radius: 0.85rem;
+        border: 1px solid rgba(127, 105, 81, 0.18);
+        background: #faf8f4;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.88rem;
+        color: #241d18;
+        transition: all 0.2s;
+    }
+    .clinical-filter-group .form-control:focus,
+    .clinical-filter-group .form-select:focus {
+        border-color: #5DA181;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(93, 161, 129, 0.15);
+    }
+
+    /* Panel de Contenido Principal */
+    .clinical-content-panel {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.8rem;
+        padding: 1.8rem;
+        box-shadow: 0 8px 24px rgba(127, 105, 81, 0.05);
+    }
+    .clinical-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-bottom: 1.1rem;
+        border-bottom: 1px solid rgba(127, 105, 81, 0.09);
+        margin-bottom: 1.4rem;
+    }
+    .clinical-panel-title {
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: #241d18;
+        margin: 0;
+    }
+    .clinical-panel-counter {
+        font-size: 0.85rem;
+        color: #8c7864;
+        font-weight: 600;
+    }
+
+    /* Grid de Menús */
+    .clinical-menus-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.25rem;
+    }
+    .clinical-menu-tile {
+        background: #faf8f5;
+        border: 1px solid rgba(127, 105, 81, 0.12);
+        border-radius: 1.5rem;
+        padding: 1.4rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1.1rem;
+        box-shadow: 0 4px 14px rgba(127, 105, 81, 0.04);
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .clinical-menu-tile:hover {
+        transform: translateY(-4px);
+        background: #ffffff;
+        border-color: rgba(93, 161, 129, 0.4);
+        box-shadow: 0 14px 32px rgba(127, 105, 81, 0.12);
+    }
+    .clinical-tile-top {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .clinical-tile-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 1.2rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        font-weight: 900;
+        color: #ffffff;
+        flex-shrink: 0;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+    }
+    .clinical-tile-name {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: #241d18;
+        line-height: 1.2;
+        margin-bottom: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-tile-sub {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.78rem;
+        color: #7a6652;
+    }
+    .clinical-tile-code {
+        font-family: monospace;
+        background: #ede8dc;
+        padding: 0.15rem 0.5rem;
+        border-radius: 0.4rem;
+        font-weight: 800;
+        color: #4a3c2e;
+    }
+
+    .clinical-tile-body {
+        background: #ffffff;
+        border: 1px solid rgba(127, 105, 81, 0.08);
+        border-radius: 1rem;
+        padding: 0.85rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        font-size: 0.83rem;
+        color: #574635;
+    }
+    .clinical-tile-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .clinical-tile-row i {
+        color: #5DA181;
+        font-size: 0.9rem;
+        width: 16px;
+        flex-shrink: 0;
+    }
+
+    .clinical-tile-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.09);
+        flex-wrap: wrap;
+    }
+
+    .clinical-actions-cluster {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+    .clinical-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.36rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        text-decoration: none;
+        line-height: 1;
+    }
+    .clinical-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.09);
+    }
+    .clinical-btn.btn-edit {
+        background: #ebf5f0;
+        color: #205c3c;
+        border-color: rgba(93, 161, 129, 0.35);
+    }
+    .clinical-btn.btn-edit:hover { background: #d7eee1; }
+    .clinical-btn.btn-confirm {
+        background: #edf7f2;
+        color: #205c3c;
+        border-color: rgba(93, 161, 129, 0.4);
+    }
+    .clinical-btn.btn-confirm:hover { background: #daf2e4; }
+    .clinical-btn.btn-cancel {
+        background: #faece9;
+        color: #943d3d;
+        border-color: rgba(236, 204, 197, 0.7);
+    }
+    .clinical-btn.btn-cancel:hover { background: #f7dad3; }
+
+    /* Barra Inferior */
+    .clinical-footer-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1.8rem;
+        padding-top: 1.2rem;
+        border-top: 1px solid rgba(127, 105, 81, 0.1);
+    }
+    .clinical-pagesize-select {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.84rem;
+        color: #705e4c;
+        font-weight: 700;
+    }
+    .clinical-pagesize-select select {
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(127, 105, 81, 0.25);
+        background: #ffffff;
+        font-weight: 800;
+        color: #241d18;
+        outline: none;
+        cursor: pointer;
+    }
+</style>
+
 @if (!isAdmin)
 {
     <section class="management-shell">
@@ -29,23 +420,25 @@ else if (isLoading)
 }
 else
 {
-    <section class="management-shell">
-        <div class="management-hero">
+    <div class="clinical-portal">
+        <!-- Banner Principal -->
+        <header class="clinical-banner">
             <div>
-                <span class="eyebrow">Navegacion</span>
-                <h1>Menus del sistema</h1>
-                <p>Controla el nombre, la ruta, el orden y el estado de cada modulo que luego se asigna por rol.</p>
+                <span class="clinical-banner-tag">
+                    <i class="bi bi-compass-fill"></i> Navegación & Permisos
+                </span>
+                <h1 class="clinical-banner-title">Menús del Sistema</h1>
+                <p class="clinical-banner-desc">Controla la estructura, jerarquía, rutas, íconos y orden del menú lateral asignado a cada rol.</p>
             </div>
-
-            <div class="workspace-actions">
-                <button type="button" class="btn btn-outline-primary" @onclick="OpenSortModal">
-                    <i class="bi bi-list-ol" style="margin-right: 6px;"></i> Ordenar menus
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-coffee" @onclick="OpenSortModal">
+                    <i class="bi bi-list-ol" style="margin-right: 6px;"></i> Ordenar menús
                 </button>
-                <button type="button" class="btn btn-primary" @onclick="PrepareNewMenu">
-                    <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo menu
+                <button type="button" class="btn btn-coffee" @onclick="PrepareNewMenu">
+                    <i class="bi bi-plus-lg" style="margin-right: 6px;"></i> Nuevo menú
                 </button>
             </div>
-        </div>
+        </header>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
         {
@@ -57,91 +450,160 @@ else
             <div class="alert alert-danger" role="alert">@errorMessage</div>
         }
 
-        <section class="management-card">
-            <div class="management-card-header">
-                <h2>Listado de menus</h2>
-                <span>@FilteredMenus.Count resultados</span>
-            </div>
-
-            <div class="filters-row-1-1" style="margin-bottom: 1rem;">
+        <!-- KPIs Superiores -->
+        <section class="clinical-kpi-deck">
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon sage">
+                    <i class="bi bi-list-nested"></i>
+                </div>
                 <div>
-                    <label class="form-label" for="menuSearch">Buscar menu</label>
-                    <input id="menuSearch" class="form-control" @bind="menuSearchTerm" @bind:event="oninput" placeholder="Nombre, ruta o icono" />
+                    <div class="clinical-kpi-label">Total Menús</div>
+                    <div class="clinical-kpi-num">@menus.Count</div>
                 </div>
-                <div class="management-actions" style="align-self: end;">
-                    <button type="button" class="btn btn-outline-primary" @onclick="ClearMenuSearch">Limpiar</button>
-                </div>
-            </div>
+            </article>
 
-            <div class="management-table-wrap">
-                <table class="management-table soft-management-table">
-                    <thead>
-                        <tr>
-                            <th>Orden</th>
-                            <th>Menu</th>
-                            <th>Ruta</th>
-                            <th>Padre</th>
-                            <th>Icono</th>
-                            <th>Estado</th>
-                            <th class="table-actions-cell">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (FilteredMenus.Count == 0)
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon amber">
+                    <i class="bi bi-grid-fill"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Módulos Principales</div>
+                    <div class="clinical-kpi-num">@TopLevelMenus.Count</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon taupe">
+                    <i class="bi bi-diagram-3"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Submenús</div>
+                    <div class="clinical-kpi-num">@menus.Count(m => m.id_menu_padre.HasValue)</div>
+                </div>
+            </article>
+
+            <article class="clinical-kpi-box">
+                <div class="clinical-kpi-icon sage">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <div>
+                    <div class="clinical-kpi-label">Activos</div>
+                    <div class="clinical-kpi-num">@menus.Count(m => m.activo == true)</div>
+                </div>
+            </article>
+        </section>
+
+        <!-- Área Dividida: Sidebar de Filtros + Galería de Menús -->
+        <div class="clinical-split-workspace">
+            <!-- Sidebar Lateral Izquierdo -->
+            <aside class="clinical-filter-sidebar">
+                <h3 class="clinical-sidebar-title">
+                    <i class="bi bi-funnel-fill" style="color: #5DA181;"></i> Búsqueda de Menú
+                </h3>
+
+                <div class="clinical-filter-group">
+                    <label for="menuSearch">Buscador</label>
+                    <input id="menuSearch" class="form-control" @bind="menuSearchTerm" @bind:event="oninput" placeholder="Nombre, ruta o ícono..." />
+                </div>
+
+                <div style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100" @onclick="ClearMenuSearch" style="border-color: rgba(127,105,81,0.25) !important;">
+                        <i class="bi bi-trash" style="margin-right: 4px;"></i> Limpiar búsqueda
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Panel de Contenido Principal -->
+            <main class="clinical-content-panel">
+                <div class="clinical-panel-header">
+                    <div>
+                        <h2 class="clinical-panel-title">Estructura de Navegación</h2>
+                        <span class="clinical-panel-counter">Mostrando @PagedMenus.Count() de @FilteredMenus.Count menús registrados</span>
+                    </div>
+                </div>
+
+                @if (FilteredMenus.Count == 0)
+                {
+                    <div style="text-align: center; padding: 3.5rem 1rem; color: #8c7864;">
+                        <i class="bi bi-list-task" style="font-size: 3rem; opacity: 0.5;"></i>
+                        <p style="margin-top: 1rem; font-weight: 700; font-size: 1.1rem;">No hay menús que coincidan con la búsqueda.</p>
+                        <small>Intenta buscando por otro término o limpia el buscador.</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="clinical-menus-grid">
+                        @foreach (var menu in PagedMenus)
                         {
-                            <tr>
-                                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--color-taupe);">
-                                    No hay menus que coincidan con la busqueda.
-                                </td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var menu in PagedMenus)
-                            {
-                                <tr>
-                                    <td><span class="soft-rank">@menu.orden</span></td>
-                                    <td><strong>@menu.nombre</strong></td>
-                                    <td>
-                                        @if (string.IsNullOrWhiteSpace(menu.ruta))
-                                        {
-                                            <span class="soft-status is-muted">Agrupador</span>
-                                        }
-                                        else
-                                        {
-                                            <code>@menu.ruta</code>
-                                        }
-                                    </td>
-                                    <td>@GetParentName(menu)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(menu.icono) ? "-" : menu.icono)</td>
-                                    <td>
-                                        <span class="soft-status @(menu.activo == true ? "is-active" : "is-muted")">
-                                            @(menu.activo == true ? "Activo" : "Inactivo")
-                                        </span>
-                                    </td>
-                                    <td class="table-actions-cell">
-                                        <button type="button" class="btn btn-outline-primary compact-action" @onclick="() => OpenEditMenu(menu.id_menu)">
+                            <article class="clinical-menu-tile">
+                                <div class="clinical-tile-top">
+                                    <div class="clinical-tile-avatar" style="background: linear-gradient(135deg, #5DA181 0%, #7F6951 100%);">
+                                        <i class="@GetBootstrapIcon(menu)"></i>
+                                    </div>
+                                    <div style="min-width: 0; flex: 1;">
+                                        <div class="clinical-tile-name" title="@menu.nombre">@menu.nombre</div>
+                                        <div class="clinical-tile-sub">
+                                            <span class="clinical-tile-code">Orden #@menu.orden</span>
+                                            @if (string.IsNullOrWhiteSpace(menu.ruta))
+                                            {
+                                                <span style="font-weight: 800; color: #a86900;"><i class="bi bi-folder"></i> Agrupador</span>
+                                            }
+                                            else
+                                            {
+                                                <span style="font-weight: 800; color: #3C342E; font-family: monospace;"><i class="bi bi-link-45deg"></i> @menu.ruta</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="clinical-tile-body">
+                                    <div class="clinical-tile-row">
+                                        <i class="bi bi-diagram-2"></i>
+                                        <span>Menú Padre: <strong>@GetParentName(menu)</strong></span>
+                                    </div>
+                                    <div class="clinical-tile-row">
+                                        <i class="bi bi-app-indicator"></i>
+                                        <span>Ícono CSS: <strong>@(string.IsNullOrWhiteSpace(menu.icono) ? "Predeterminado" : menu.icono)</strong></span>
+                                    </div>
+                                </div>
+
+                                <div class="clinical-tile-footer">
+                                    <span class="badge" style="background: @((menu.activo == true) ? "#edf7f2" : "#faece9"); color: @((menu.activo == true) ? "#205c3c" : "#943d3d"); font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-weight: 800;">
+                                        ● @((menu.activo == true) ? "Activo" : "Inactivo")
+                                    </span>
+
+                                    <div class="clinical-actions-cluster">
+                                        <button type="button" class="clinical-btn btn-edit" title="Editar menú" @onclick="() => OpenEditMenu(menu.id_menu)">
                                             <i class="bi bi-pencil-fill"></i> Editar
                                         </button>
-                                        <button type="button" class="btn @(menu.activo == true ? "btn-outline-primary" : "btn-primary") compact-action" @onclick="() => ToggleMenuActiveAsync(menu)">
-                                            <i class="bi @(menu.activo == true ? "bi-toggle-off" : "bi-toggle-on")"></i>
-                                            @(menu.activo == true ? "Desactivar" : "Activar")
+                                        <button type="button" class="clinical-btn @((menu.activo == true) ? "btn-cancel" : "btn-confirm")" title="Cambiar estado" @onclick="() => ToggleMenuActiveAsync(menu)">
+                                            <i class="bi @((menu.activo == true) ? "bi-toggle-off" : "bi-toggle-on")"></i>
+                                            @((menu.activo == true) ? "Desactivar" : "Activar")
                                         </button>
-                                    </td>
-                                </tr>
-                            }
+                                    </div>
+                                </div>
+                            </article>
                         }
-                    </tbody>
-                </table>
-            </div>
+                    </div>
+                }
 
-            <div class="table-pager">
-                <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousMenuPage" disabled="@(CurrentMenuPage <= 1)">Anterior</button>
-                <span>Pagina @CurrentMenuPage de @TotalMenuPages</span>
-                <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextMenuPage" disabled="@(CurrentMenuPage >= TotalMenuPages)">Siguiente</button>
-            </div>
-        </section>
-    </section>
+                <!-- Barra Inferior de Paginación -->
+                <footer class="clinical-footer-bar">
+                    <div class="clinical-pagesize-select">
+                        <span>Mostrar por página:</span>
+                        <select value="@tablePageSize" @onchange="OnPageSizeChanged">
+                            <option value="6">6 menús</option>
+                            <option value="8">8 menús</option>
+                            <option value="12">12 menús</option>
+                            <option value="24">24 menús</option>
+                            <option value="48">48 menús</option>
+                        </select>
+                    </div>
+                    <TablePager TotalItems="@FilteredMenus.Count" CurrentPage="@menuPage" CurrentPageChanged="SetMenuPage" PageSize="@tablePageSize" />
+                </footer>
+            </main>
+        </div>
+    </div>
 }
 
 @if (showFormModal)
@@ -327,17 +789,26 @@ else
     private string? statusMessage;
     private string? errorMessage;
     private DotNetObjectReference<Menus>? sortInteropReference;
-    private const int PageSize = 5;
+    private int tablePageSize = 8;
     private List<tbl_menu_app> FilteredMenus => menus
         .Where(MatchesMenuSearch)
         .OrderBy(m => m.orden)
         .ThenBy(m => m.nombre)
         .ToList();
     private IEnumerable<tbl_menu_app> PagedMenus => FilteredMenus
-        .Skip((CurrentMenuPage - 1) * PageSize)
-        .Take(PageSize);
-    private int TotalMenuPages => Math.Max(1, (int)Math.Ceiling(FilteredMenus.Count / (double)PageSize));
+        .Skip((CurrentMenuPage - 1) * tablePageSize)
+        .Take(tablePageSize);
+    private int TotalMenuPages => Math.Max(1, (int)Math.Ceiling(FilteredMenus.Count / (double)tablePageSize));
     private int CurrentMenuPage => Math.Clamp(menuPage, 1, TotalMenuPages);
+    private void SetMenuPage(int page) => menuPage = page;
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            tablePageSize = size;
+            menuPage = 1;
+        }
+    }
     private List<tbl_menu_app> TopLevelMenus => menus
         .Where(m => !m.id_menu_padre.HasValue)
         .OrderBy(m => m.orden)

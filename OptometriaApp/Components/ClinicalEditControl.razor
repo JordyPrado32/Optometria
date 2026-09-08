@@ -4,28 +4,51 @@
 @inject IDbContextFactory<OpticaDbContext> Factory
 @inject AuthenticationStateProvider Auth
 
-<section class="management-card">
-    <h2>Control de modificaciones</h2>
-    <p>Después de 24 horas desde la apertura, el médico requiere autorización de un administrador para cada edición. Toda edición exige un motivo.</p>
+<section class="management-card clinical-card" style="margin-bottom: 1.5rem;">
+    <div class="management-card-header">
+        <h2>Control de Modificaciones</h2>
+        <span>Seguridad y trazabilidad</span>
+    </div>
+    <p class="clinical-helper-text" style="font-size: 0.86rem; color: #6e5c4a; background: #faf8f4; border-left: 4px solid #5DA181; padding: 0.75rem 1rem; border-radius: 0 0.8rem 0.8rem 0; margin-bottom: 1.2rem;">
+        Después de 24 horas desde la apertura, el médico requiere autorización de un administrador para cada edición. Toda edición exige un motivo.
+    </p>
     @if (isAdmin)
     {
-        <label for="edit-doctor">Médico autorizado</label>
-        <select id="edit-doctor" class="form-select" @bind="doctorId">
-            <option value="0">Selecciona un médico</option>
-            @foreach (var doctor in doctors) { <option value="@doctor.id_usuario">@doctor.nombres @doctor.apellidos</option> }
-        </select>
-        <label for="grant-reason">Motivo de autorización</label>
-        <textarea id="grant-reason" class="form-control" maxlength="1000" @bind="reason"></textarea>
-        <button type="button" class="btn btn-outline-primary" disabled="@busy" @onclick="GrantAsync">Autorizar una edición</button>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; margin-bottom: 1.2rem;">
+            <div>
+                <label for="edit-doctor" class="form-label" style="font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #6b5540; margin-bottom: 0.35rem; display: block;">Médico autorizado</label>
+                <select id="edit-doctor" class="form-select" style="border-radius: 0.85rem; border: 1px solid rgba(127, 105, 81, 0.18); background: #faf8f4; padding: 0.55rem 0.85rem; font-size: 0.88rem; width: 100%;" @bind="doctorId">
+                    <option value="0">Selecciona un médico</option>
+                    @foreach (var doctor in doctors) { <option value="@doctor.id_usuario">@doctor.nombres @doctor.apellidos</option> }
+                </select>
+            </div>
+            <div>
+                <label for="grant-reason" class="form-label" style="font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #6b5540; margin-bottom: 0.35rem; display: block;">Motivo de autorización</label>
+                <textarea id="grant-reason" class="form-control" style="border-radius: 0.85rem; border: 1px solid rgba(127, 105, 81, 0.18); background: #faf8f4; padding: 0.55rem 0.85rem; font-size: 0.88rem; width: 100%;" rows="2" maxlength="1000" @bind="reason"></textarea>
+            </div>
+        </div>
+        <div style="margin-bottom: 1.2rem;">
+            <button type="button" class="btn btn-outline-primary" style="border-radius: 0.85rem; font-weight: 700;" disabled="@busy" @onclick="GrantAsync">Autorizar una edición</button>
+        </div>
     }
-    @if (!string.IsNullOrEmpty(message)) { <p role="status">@message</p> }
-    <p>Autorizaciones pendientes para ti: @pending</p>
-    <details>
-        <summary>Historial de modificaciones (@audits.Count)</summary>
+    @if (!string.IsNullOrEmpty(message)) { 
+        <div class="alert alert-info py-2 px-3 mb-3 rounded-3" style="font-size: 0.88rem;">@message</div> 
+    }
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;">
+        <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.85rem; border-radius: 999px; font-size: 0.78rem; font-weight: 800; background: #fff5e6; color: #a86900; border: 1px solid rgba(254,188,100,0.4);">
+            <i class="bi bi-shield-exclamation"></i> Autorizaciones pendientes para ti: @pending
+        </span>
+    </div>
+    <details style="margin-top: 1.2rem; background: #faf8f5; border: 1px solid rgba(127, 105, 81, 0.1); border-radius: 1rem; padding: 0.85rem 1.1rem;">
+        <summary style="cursor: pointer; font-weight: 800; font-size: 0.88rem; color: #574635;">Historial de modificaciones (@audits.Count)</summary>
+        <div style="margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.4rem;">
         @foreach (var audit in audits)
         {
-            <p>@audit.EditedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · Usuario #@audit.UserId · @audit.Reason @(audit.AuthorizationId.HasValue ? $" · Autorización #{audit.AuthorizationId}" : "")</p>
+            <div style="font-size: 0.82rem; color: #6b5540; padding: 0.4rem 0.6rem; background: #ffffff; border-radius: 0.6rem; border: 1px solid rgba(127,105,81,0.08);">
+                <strong>@audit.EditedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong> · Usuario #@audit.UserId · @audit.Reason @(audit.AuthorizationId.HasValue ? $" · Autorización #{audit.AuthorizationId}" : "")
+            </div>
         }
+        </div>
     </details>
 </section>
 
