@@ -164,7 +164,7 @@ public sealed class BillingDraftService
     {
         var identification = patient.cedula.Trim();
         var existingClient = await dbContext.clients
-            .FirstOrDefaultAsync(x => x.id_usuario_creacion == actorUserId && x.numero_identificacion == identification);
+            .FirstOrDefaultAsync(x => x.numero_identificacion == identification);
 
         if (existingClient is not null)
         {

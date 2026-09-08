@@ -3053,57 +3053,377 @@ app.MapGet("/prescriptions/{consultationId:int}/print", async (
     static string Html(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
 
     var doctorName = $"{prescription.id_medicoNavigation.id_usuarioNavigation.nombres} {prescription.id_medicoNavigation.id_usuarioNavigation.apellidos}".Trim();
+    var doctorSpecialty = string.IsNullOrWhiteSpace(prescription.id_medicoNavigation.especialidad) ? "Optometría & Salud Visual" : prescription.id_medicoNavigation.especialidad;
     var patientName = $"{prescription.id_pacienteNavigation.nombres} {prescription.id_pacienteNavigation.apellidos}".Trim();
+    var patientCedula = prescription.id_pacienteNavigation.cedula ?? "N/A";
+    var emissionDate = prescription.fecha_emision?.ToString("dd/MM/yyyy HH:mm") ?? DateTime.Now.ToString("dd/MM/yyyy HH:mm");
+
     var rows = string.Join(string.Empty, items.Select(item =>
-        $"""
+    {
+        var badgeColor = item.tipo_item_prescrito?.ToLower() switch
+        {
+            "lente" or "lentes" => "background:#eef6ff; color:#1d4ed8; border:1px solid #bfdbfe;",
+            "medicamento" or "fármaco" => "background:#ecfdf5; color:#047857; border:1px solid #a7f3d0;",
+            "solución" or "gotas" => "background:#fff7ed; color:#c2410c; border:1px solid #ffedd5;",
+            _ => "background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;"
+        };
+
+        return $"""
         <tr>
-            <td>{Html(item.tipo_item_prescrito)}</td>
-            <td>{Html(item.nombre_item)}</td>
-            <td>{item.cantidad}</td>
-            <td>{Html(item.unidad)}</td>
-            <td>{Html(item.indicaciones)}</td>
+            <td style="width: 15%;"><span class="badge" style="{badgeColor}">{Html(item.tipo_item_prescrito)}</span></td>
+            <td style="width: 30%;"><strong>{Html(item.nombre_item)}</strong></td>
+            <td style="width: 12%; text-align: center;"><strong>{item.cantidad}</strong></td>
+            <td style="width: 13%;">{Html(item.unidad)}</td>
+            <td style="width: 30%; font-size: 13px; color: #374151;">{Html(item.indicaciones)}</td>
         </tr>
-        """));
+        """;
+    }));
+
+    var observationsSection = !string.IsNullOrWhiteSpace(prescription.observaciones)
+        ? $$"""
+          <div class="section-label">INDICACIONES Y OBSERVACIONES ADICIONALES</div>
+          <div class="notes-box">{{Html(prescription.observaciones)}}</div>
+          """
+        : string.Empty;
 
     var html = $$"""
     <!DOCTYPE html>
     <html lang="es">
     <head>
         <meta charset="utf-8" />
-        <title>Receta {{Html(prescription.numero_receta)}}</title>
+        <title>Receta Médica - {{Html(prescription.numero_receta)}}</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #2f2a24; }
-            .printbar { margin-bottom: 18px; }
-            .card { border: 1px solid #d8d0c4; border-radius: 14px; padding: 20px; }
-            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
-            .label { font-size: 12px; text-transform: uppercase; color: #7f6951; margin-bottom: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td { border: 1px solid #d8d0c4; padding: 10px; text-align: left; vertical-align: top; }
-            th { background: #f6f1e7; }
-            .notes { margin-top: 18px; white-space: pre-wrap; }
-            @media print { .printbar { display:none; } body { margin: 10mm; } }
+            * { box-sizing: border-box; }
+            body { 
+                font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
+                margin: 0; 
+                padding: 0; 
+                background: #f8faf9; 
+                color: #1f2937; 
+                line-height: 1.5;
+            }
+            .printbar { 
+                background: #233F33; 
+                color: white; 
+                padding: 12px 24px; 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: center; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            .printbar h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+            .printbar-btns { display: flex; gap: 10px; }
+            .btn-print { 
+                background: #5DA181; 
+                color: white; 
+                border: none; 
+                padding: 8px 20px; 
+                border-radius: 8px; 
+                font-weight: 700; 
+                font-size: 14px; 
+                cursor: pointer; 
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                transition: background 0.2s;
+            }
+            .btn-print:hover { background: #4a886b; }
+            .btn-close { 
+                background: rgba(255,255,255,0.15); 
+                color: white; 
+                border: none; 
+                padding: 8px 16px; 
+                border-radius: 8px; 
+                font-size: 14px; 
+                cursor: pointer; 
+            }
+            
+            .page-container {
+                max-width: 820px;
+                margin: 30px auto;
+                background: #ffffff;
+                border: 1px solid #e5e7eb;
+                border-radius: 16px;
+                padding: 40px 45px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+                position: relative;
+            }
+            
+            .clinic-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 2px solid #233F33;
+                padding-bottom: 20px;
+                margin-bottom: 24px;
+            }
+            .brand-box {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+            }
+            .clinic-logo-img {
+                height: 64px;
+                width: auto;
+                object-fit: contain;
+            }
+            
+            .prescription-badge-box {
+                text-align: right;
+            }
+            .rx-title {
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-weight: 700;
+                color: #233F33;
+                background: #eef6f2;
+                padding: 4px 12px;
+                border-radius: 20px;
+                display: inline-block;
+                margin-bottom: 6px;
+            }
+            .rx-number {
+                font-size: 18px;
+                font-weight: 800;
+                color: #111827;
+                display: block;
+            }
+            .rx-date {
+                font-size: 12px;
+                color: #6b7280;
+            }
+
+            .info-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+            .info-card {
+                background: #f9fafb;
+                border: 1px solid #f3f4f6;
+                border-radius: 12px;
+                padding: 14px 18px;
+            }
+            .info-card-title {
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+                color: #6b7280;
+                font-weight: 700;
+                margin-bottom: 6px;
+            }
+            .info-value-main {
+                font-size: 15px;
+                font-weight: 700;
+                color: #111827;
+            }
+            .info-value-sub {
+                font-size: 13px;
+                color: #4b5563;
+                margin-top: 2px;
+            }
+
+            .section-label {
+                font-size: 13px;
+                font-weight: 700;
+                color: #233F33;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .section-label::after {
+                content: '';
+                flex: 1;
+                height: 1px;
+                background: #e5e7eb;
+            }
+
+            .dx-box {
+                background: #f0fdf4;
+                border: 1px solid #bbf7d0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-size: 14px;
+                color: #166534;
+                margin-bottom: 24px;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 0;
+                margin-bottom: 24px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            th {
+                background: #f4f7f5;
+                color: #233F33;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                font-weight: 700;
+                padding: 12px 14px;
+                text-align: left;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            td {
+                padding: 12px 14px;
+                border-bottom: 1px solid #f3f4f6;
+                font-size: 14px;
+                vertical-align: middle;
+            }
+            tr:last-child td {
+                border-bottom: none;
+            }
+            .badge {
+                padding: 3px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 700;
+                display: inline-block;
+                text-transform: uppercase;
+            }
+
+            .notes-box {
+                background: #fffbeb;
+                border: 1px solid #fef3c7;
+                border-radius: 10px;
+                padding: 14px 18px;
+                font-size: 13px;
+                color: #92400e;
+                margin-bottom: 40px;
+                white-space: pre-wrap;
+            }
+
+            .footer-signatures {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                margin-top: 40px;
+                padding-top: 20px;
+            }
+            .legal-text {
+                font-size: 11px;
+                color: #9ca3af;
+                max-width: 320px;
+            }
+            .signature-box {
+                text-align: center;
+                min-width: 240px;
+            }
+            .signature-line {
+                border-top: 1px dashed #9ca3af;
+                margin-bottom: 8px;
+                padding-top: 6px;
+            }
+            .doctor-sig-name {
+                font-size: 14px;
+                font-weight: 700;
+                color: #111827;
+            }
+            .doctor-sig-spec {
+                font-size: 12px;
+                color: #6b7280;
+            }
+
+            @media print {
+                .printbar { display: none !important; }
+                body { background: white; margin: 0; }
+                .page-container {
+                    border: none;
+                    box-shadow: none;
+                    margin: 0;
+                    padding: 20mm 15mm;
+                    max-width: 100%;
+                }
+            }
         </style>
     </head>
     <body>
-        <div class="printbar"><button onclick="window.print()">Imprimir</button></div>
-        <div class="card">
-            <h1 style="margin-top:0;">Receta medica</h1>
-            <div class="grid">
-                <div><div class="label">Numero</div><strong>{{Html(prescription.numero_receta)}}</strong></div>
-                <div><div class="label">Fecha</div><strong>{{prescription.fecha_emision?.ToString("yyyy-MM-dd HH:mm")}}</strong></div>
-                <div><div class="label">Paciente</div><strong>{{Html(patientName)}}</strong><div>{{Html(prescription.id_pacienteNavigation.cedula)}}</div></div>
-                <div><div class="label">Profesional</div><strong>{{Html(doctorName)}}</strong><div>{{Html(prescription.id_medicoNavigation.especialidad)}}</div></div>
+        <div class="printbar">
+            <h3>👁️ VISTA PREVIA DE IMPRESIÓN — RECETA MÉDICA</h3>
+            <div class="printbar-btns">
+                <button onclick="window.print()" class="btn-print">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-4 0h8v4H6v-4z"></path></svg>
+                    Imprimir Receta
+                </button>
+                <button onclick="window.close()" class="btn-close">Cerrar</button>
             </div>
-            <div><div class="label">Diagnostico</div><strong>{{Html(prescription.diagnostico_resumen)}}</strong></div>
+        </div>
+
+        <div class="page-container">
+            <!-- Header Institucional -->
+            <div class="clinic-header">
+                <div class="brand-box">
+                    <img src="/images/logo_opticalux.png" alt="Óptica Lux Logo" style="height: 72px; width: auto; max-width: 280px; object-fit: contain;" />
+                </div>
+                <div class="prescription-badge-box">
+                    <span class="rx-title">Receta Médica</span>
+                    <span class="rx-number">{{Html(prescription.numero_receta)}}</span>
+                    <span class="rx-date">Emisión: {{emissionDate}}</span>
+                </div>
+            </div>
+
+            <!-- Información Paciente y Médico -->
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-card-title">DATOS DEL PACIENTE</div>
+                    <div class="info-value-main">{{Html(patientName)}}</div>
+                    <div class="info-value-sub">C.I. / Identificación: <strong>{{Html(patientCedula)}}</strong></div>
+                </div>
+                <div class="info-card">
+                    <div class="info-card-title">PROFESIONAL TRATANTE</div>
+                    <div class="info-value-main">{{Html(doctorName)}}</div>
+                    <div class="info-value-sub">Especialidad: <strong>{{Html(doctorSpecialty)}}</strong></div>
+                </div>
+            </div>
+
+            <!-- Diagnóstico Resumen -->
+            <div class="section-label">DIAGNÓSTICO Y EVALUACIÓN</div>
+            <div class="dx-box">
+                <strong>Diagnóstico:</strong> {{Html(prescription.diagnostico_resumen)}}
+            </div>
+
+            <!-- Tabla de Prescripción -->
+            <div class="section-label">PRESCRIPCIÓN DE MEDICAMENTOS Y LENTES</div>
             <table>
                 <thead>
-                    <tr><th>Tipo</th><th>Item prescrito</th><th>Cantidad</th><th>Unidad</th><th>Indicaciones</th></tr>
+                    <tr>
+                        <th>TIPO</th>
+                        <th>ITEM PRESCRITO</th>
+                        <th style="text-align: center;">CANT.</th>
+                        <th>UNIDAD</th>
+                        <th>INDICACIONES / DOSIFICACIÓN</th>
+                    </tr>
                 </thead>
                 <tbody>
                     {{rows}}
                 </tbody>
             </table>
-            <div class="notes"><div class="label">Observaciones</div>{{Html(prescription.observaciones)}}</div>
+
+            <!-- Observaciones Adicionales -->
+            {{observationsSection}}
+
+            <!-- Firmas y Pie de Página -->
+            <div class="footer-signatures">
+                <div class="legal-text">
+                    <p style="margin: 0 0 4px 0;"><strong>Vigencia de la receta:</strong> Según criterio médico y normativa sanitaria vigente.</p>
+                    <p style="margin: 0;">Documento oficial generado por el Sistema Integrado de Optometría.</p>
+                </div>
+                <div class="signature-box">
+                    <div class="signature-line">
+                        <div class="doctor-sig-name">{{Html(doctorName)}}</div>
+                        <div class="doctor-sig-spec">{{Html(doctorSpecialty)}}</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </body>
     </html>

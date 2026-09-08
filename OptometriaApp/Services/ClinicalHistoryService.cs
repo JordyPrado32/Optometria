@@ -902,6 +902,22 @@ public sealed class ClinicalHistoryService
             .Select(x => (int?)x.id_medico)
             .FirstOrDefaultAsync(cancellationToken);
 
+        if (!doctorProfileId.HasValue && consultation.id_optometra > 0)
+        {
+            doctorProfileId = await dbContext.tbl_medico
+                .Where(x => x.id_usuario == consultation.id_optometra || x.id_medico == consultation.id_optometra)
+                .Select(x => (int?)x.id_medico)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (!doctorProfileId.HasValue)
+        {
+            doctorProfileId = await dbContext.tbl_medico
+                .Where(x => x.activo == true)
+                .Select(x => (int?)x.id_medico)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         if (!doctorProfileId.HasValue)
         {
             return;
