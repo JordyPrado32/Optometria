@@ -1,6 +1,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject MenuAccessService MenuAccessService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 @implements IDisposable
 
@@ -12,7 +13,7 @@
     </button>
 
     <nav class="app-nav @(menuOpen ? "is-open" : string.Empty)">
-        <div class="app-nav-scroll">
+        <div class="app-nav-scroll" @ref="navScroll">
             <div class="app-nav-links">
                 @foreach (var item in RenderItems)
                 {
@@ -90,6 +91,9 @@
         "/menus"
     ];
     private bool menuOpen;
+    private ElementReference navScroll;
+    private IJSObjectReference? navModule;
+    private bool restoredNavigationState;
     private string UserName { get; set; } = "Cuenta";
     private string RoleName { get; set; } = "Sesion";
     private ClaimsPrincipal? currentUser;
@@ -105,6 +109,30 @@
         RoleName = currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sesion";
 
         await LoadMenusAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || restoredNavigationState)
+        {
+            return;
+        }
+
+        try
+        {
+            navModule = await JS.InvokeAsync<IJSObjectReference>("import", "./nav-menu.js");
+            var state = await navModule.InvokeAsync<NavigationState?>("restore");
+            if (state is not null)
+            {
+                expandedMenuIds.UnionWith(state.ExpandedMenuIds);
+                restoredNavigationState = true;
+                await InvokeAsync(StateHasChanged);
+                await navModule.InvokeVoidAsync("setScroll", navScroll, state.ScrollTop);
+            }
+
+            restoredNavigationState = true;
+        }
+        catch (JSDisconnectedException) { }
     }
 
     private async Task LoadMenusAsync()
@@ -273,7 +301,6 @@
         await InvokeAsync(async () =>
         {
             RenderItems.Clear();
-            expandedMenuIds.Clear();
             await LoadMenusAsync();
             StateHasChanged();
         });
@@ -285,29 +312,54 @@
         NavigationManager.LocationChanged -= HandleLocationChanged;
     }
 
-    private void ToggleMenu()
+    private async Task ToggleMenu()
     {
         menuOpen = !menuOpen;
+        await PersistNavigationStateAsync();
     }
 
-    private void ToggleGroup(int menuId)
+    private async Task ToggleGroup(int menuId)
     {
         if (!expandedMenuIds.Add(menuId))
         {
             expandedMenuIds.Remove(menuId);
         }
+
+        await PersistNavigationStateAsync();
     }
 
-    private void HandleNavigationClick()
+    private async Task HandleNavigationClick()
     {
         menuOpen = false;
+        await PersistNavigationStateAsync();
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        menuOpen = false;
-        ExpandGroupForCurrentRoute();
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            menuOpen = false;
+            ExpandGroupForCurrentRoute();
+            await PersistNavigationStateAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task PersistNavigationStateAsync()
+    {
+        if (navModule is null)
+        {
+            return;
+        }
+
+        try { await navModule.InvokeVoidAsync("save", expandedMenuIds.ToArray(), navScroll); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private sealed class NavigationState
+    {
+        public int[] ExpandedMenuIds { get; set; } = [];
+        public double ScrollTop { get; set; }
     }
 
     private static int GetRouteOrder(string route) => route switch

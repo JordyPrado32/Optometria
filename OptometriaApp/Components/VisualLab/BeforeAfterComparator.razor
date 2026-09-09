@@ -1,7 +1,7 @@
 @using System.Globalization
 <div class="vl-comparator" style="@($"--split:{split.ToString(CultureInfo.InvariantCulture)}%")">
     <div class="vl-comparison-image" style="@($"background-image:url('{Source}');{AfterStyle}")"></div>
-    <div class="vl-comparison-before"><div class="vl-comparison-image" style="@($"background-image:url('{Source}');{BeforeStyle}")"></div></div>
+    <div class="vl-comparison-before"><div class="vl-comparison-image" style="@($"background-image:url('{Source}');{BeforeStyle}")"></div>@if (!string.IsNullOrWhiteSpace(BeforeOverlay)) { <div class="vl-comparison-overlay" style="@BeforeOverlay"></div> }</div>
     <span class="vl-image-label before">@BeforeLabel<small>@BeforeCaption</small></span><span class="vl-image-label after">@AfterLabel<small>@AfterCaption</small></span>
     <div class="vl-divider"><b>‹ ›</b></div>
     <input class="vl-comparison-slider" type="range" min="0" max="100" step="1" @bind="split" @bind:event="oninput" aria-label="División de la comparación antes y después" aria-valuetext="@($"{split}% sin corrección")" />
@@ -15,6 +15,6 @@
     [Parameter] public string AfterLabel { get; set; } = "Con corrección";
     [Parameter] public string BeforeCaption { get; set; } = "Percepción simulada";
     [Parameter] public string AfterCaption { get; set; } = "Imagen de referencia";
+    [Parameter] public string BeforeOverlay { get; set; } = "";
     private double split = 50;
 }
-

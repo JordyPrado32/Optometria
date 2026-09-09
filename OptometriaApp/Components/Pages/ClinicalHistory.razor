@@ -1069,6 +1069,23 @@ else
                         </div>
                     </div>
 
+                    @if (AnamnesisAlerts.Count > 0)
+                    {
+                        <div class="clinical-tutorial-warning" style="margin-top: 1rem;">
+                            <strong><i class="bi bi-shield-exclamation"></i> Revisión asistida</strong>
+                            <ul class="mb-0 mt-2">@foreach (var alert in AnamnesisAlerts) { <li>@alert</li> }</ul>
+                        </div>
+                    }
+
+                    @if (ShowDigitalFollowUp || ShowMetabolicFollowUp)
+                    {
+                        <div class="clinical-preview-card" style="margin-top: 1rem;">
+                            <span class="eyebrow">Preguntas sugeridas según respuestas</span>
+                            @if (ShowDigitalFollowUp) { <p class="mb-1"><strong>Pantallas:</strong> confirma horas de exposición, pausas, distancia de trabajo y si mejora con descanso.</p> }
+                            @if (ShowMetabolicFollowUp) { <p class="mb-0"><strong>Antecedente metabólico:</strong> confirma diagnóstico, control reciente, tratamiento y último examen ocular.</p> }
+                        </div>
+                    }
+
                     <div class="clinical-stack">
                         <div>
                             <label class="form-label">Motivo de consulta</label>
@@ -1593,6 +1610,22 @@ else
     private int currentUserId;
     private string editReason = "";
     private bool showHistoryDetails;
+    private List<string> AnamnesisAlerts
+    {
+        get
+        {
+            if (editor is null) return [];
+            var guided = editor.AnamnesisGuiada;
+            var alerts = new List<string>();
+            var acuteVisualRisk = guided.BanderasAlerta.Any(flag => flag is "Pérdida súbita de visión" or "Destellos nuevos" or "Moscas volantes nuevas" or "Diplopía aguda");
+            if (acuteVisualRisk) alerts.Add("Prioritaria: documenta inicio, lateralidad y conducta clínica ante los signos visuales agudos seleccionados.");
+            if ((guided.MotivoPrincipal == "Dolor ocular" || guided.Sintomas.Contains("Fotofobia")) && (guided.Intensidad is "Severa" or "10/10") && !guided.BanderasAlerta.Contains("Dolor intenso")) alerts.Add("Coherencia: hay dolor/fotofobia intensa; confirma o descarta una bandera de alerta y registra la conducta.");
+            if (guided.MotivoPrincipal == "Visión borrosa" && string.IsNullOrWhiteSpace(guided.Lateralidad)) alerts.Add("Completa lateralidad para que la evolución de visión borrosa sea reutilizable.");
+            return alerts;
+        }
+    }
+    private bool ShowDigitalFollowUp => editor?.AnamnesisGuiada.Desencadenantes?.Contains("pantalla", StringComparison.OrdinalIgnoreCase) == true || editor?.AnamnesisGuiada.Sintomas.Contains("Cefalea") == true;
+    private bool ShowMetabolicFollowUp => editor?.Antecedentes.PersonalesGenerales?.Contains("diabet", StringComparison.OrdinalIgnoreCase) == true;
     private void ToggleHistoryDetails() => showHistoryDetails = !showHistoryDetails;
     private bool savingHistory;
     private int currentRoleId;

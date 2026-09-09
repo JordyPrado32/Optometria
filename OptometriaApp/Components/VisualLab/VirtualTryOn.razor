@@ -6,20 +6,23 @@
     @if(open) {
         <label class="vl-switch"><input type="checkbox" @bind="consent" @bind:after="ConsentChanged" /> Permitir cámara durante esta prueba</label>
         <button class="vl-secondary" disabled="@(!consent || active)" @onclick="Start">Activar cámara</button>
-        <div class="vl-tryon-video"><video @ref="video" autoplay muted playsinline></video><div class="vl-face-frame @Shape" style="@($"--frame:{Color};left:{x}%;top:{y}%;width:{width}px")"><b></b><b></b></div></div>
+        <div class="vl-tryon-video"><video @ref="video" autoplay muted playsinline></video><span class="vl-face-center-line"></span><span class="vl-face-eye-line"></span><div class="vl-face-frame @Shape" style="@($"--frame:{Color};left:{x}%;top:{y}%;width:{width}px")"><b></b><b></b></div><div class="vl-fit-badge @(FitScore >= 85 ? "good" : "")">@FitScore% alineación</div></div>
         <label>Posición horizontal <input aria-label="Posición horizontal de la montura" type="range" min="15" max="85" @bind="x" @bind:event="oninput" /></label>
         <label>Altura <input aria-label="Altura de la montura" type="range" min="15" max="85" @bind="y" @bind:event="oninput" /></label>
         <label>Escala visual <input aria-label="Anchura visual de la montura" type="range" min="80" max="280" @bind="width" @bind:event="oninput" /></label>
-        <small>Encaja la guía sobre tus ojos. Esta escala no mide la distancia pupilar.</small>
+        <div class="vl-tryon-actions"><button class="vl-secondary" @onclick="CenterGuide">Centrar guía</button><button class="vl-secondary" disabled="@(!active)" @onclick="AnalyzeFace">Analizar encuadre</button><button class="vl-secondary" disabled="@(!active)" @onclick="Capture">Capturar referencia</button></div>
+        <small>@(analysisMessage ?? FitMessage) La lectura se procesa en este dispositivo; es una guía estética, no una medición clínica.</small>
+        @if (capture is not null) { <img class="vl-tryon-capture" src="@capture" alt="Referencia local de prueba de montura" /> }
         @if(message is not null) { <p role="status">@message</p> }
     }
 </div>
 @code {
     [Parameter] public string Color { get; set; } = "#c7a15e";
     [Parameter] public string Shape { get; set; } = "aviator";
+    [Parameter] public EventCallback<string> OnFaceDetected { get; set; }
     private bool open, consent, active, starting, disposed;
     private int x = 50,y = 43,width = 180;
-    private string? message;
+    private string? message, capture, analysisMessage;
     private ElementReference video;
     private IJSObjectReference? module, camera;
     protected override async Task OnAfterRenderAsync(bool first) { if (!open && active) await Stop(); }
@@ -33,5 +36,20 @@
         finally { starting = false; }
     }
     private async Task Stop() { if(camera is not null) { await camera.InvokeVoidAsync("dispose"); await camera.DisposeAsync(); camera = null; } active = false; }
+    private int FitScore => Math.Max(0, 100 - Math.Abs(x - 50) * 3 - Math.Abs(y - 43) * 3 - Math.Abs(width - 180) / 3);
+    private string FitMessage => FitScore >= 85 ? "La guía está centrada y proporcionada." : FitScore >= 65 ? "Ajusta altura, centrado y ancho hasta acercarte a la guía facial." : "La montura parece desalineada: centra el puente y alinea los aros con los ojos.";
+    private void CenterGuide() { x = 50; y = 43; width = 180; }
+    private async Task AnalyzeFace() {
+        if (camera is null) return;
+        try {
+            var result = await camera.InvokeAsync<FaceAnalysis?>("analyzeFace");
+            if (result is null) { analysisMessage = "No se detectó un rostro. Mira de frente con buena luz y vuelve a intentarlo."; return; }
+            x = (int)Math.Round(result.X); y = (int)Math.Round(result.Y); width = (int)Math.Clamp(result.Width, 100, 280);
+            analysisMessage = $"Encuadre facial detectado · perfil {result.ShapeLabel.ToLowerInvariant()} · {result.Confidence}% de confianza.";
+            await OnFaceDetected.InvokeAsync(result.Shape);
+        } catch (JSException) { analysisMessage = "Tu navegador no permite análisis facial local; usa la guía de encuadre manual."; }
+    }
+    private async Task Capture() { if (camera is not null) capture = await camera.InvokeAsync<string>("capture"); }
+    private sealed class FaceAnalysis { public string Shape { get; set; } = "oval"; public string ShapeLabel { get; set; } = "Ovalado"; public int Confidence { get; set; } public double X { get; set; } = 50; public double Y { get; set; } = 43; public double Width { get; set; } = 180; }
     public async ValueTask DisposeAsync() { disposed = true; try { await Stop(); if(module is not null) await module.DisposeAsync(); } catch(JSDisconnectedException) { } }
 }

@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
+@inject InventoryInsightsService InventoryInsightsService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Inventarios</PageTitle>
@@ -39,6 +40,19 @@ else
                 </button>
             </div>
         </header>
+
+        @if (insights is not null)
+        {
+            <section class="management-card" style="margin-top:1.25rem; border-left:4px solid #5da181;">
+                <div class="management-card-header"><h2><i class="bi bi-stars"></i> Decisiones de inventario</h2><span>Basado en ventas de los últimos 30/90 días</span></div>
+                <div class="clinical-tutorial-grid" style="margin-top:1rem;">
+                    <div class="clinical-tutorial-card"><span class="eyebrow">RIESGO</span><strong>@insights.CriticalRestockCount críticos</strong><p>Productos sin cobertura suficiente para su demanda reciente.</p></div>
+                    <div class="clinical-tutorial-card"><span class="eyebrow">CAPITAL</span><strong>@insights.StagnantCount lentos</strong><p>Existencias sin rotación para revisar, promocionar o pausar.</p></div>
+                    <div class="clinical-tutorial-card"><span class="eyebrow">DEMANDA</span><strong>@insights.HotRiskCount por vigilar</strong><p>Productos de buena salida cuya cobertura puede agotarse pronto.</p></div>
+                </div>
+                @if (insights.RestockSuggestions.Count > 0) { <div class="table-responsive" style="margin-top:1rem;"><table class="table table-sm"><thead><tr><th>Reabastecer</th><th>Stock / punto</th><th>Pedido sugerido</th><th>Cobertura</th><th>Prioridad</th></tr></thead><tbody>@foreach(var row in insights.RestockSuggestions.Take(5)) { <tr><td>@row.ProductName</td><td>@row.CurrentStock / @row.ReorderPoint</td><td>@row.SuggestedOrderQty</td><td>@(row.CoverageDays?.ToString("0.0") ?? "Sin demanda") días</td><td><span class="badge bg-@(row.Priority == "Critica" ? "danger" : "warning")">@row.Priority</span></td></tr> }</tbody></table></div> }
+            </section>
+        }
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header"><h2>Filtros</h2><span>@FilteredMovements.Count movimientos</span></div>
@@ -202,6 +216,7 @@ else
     private Permissions permissions = new();
     private MovementEditor? editor;
     private bool isLoading = true, canView, isCreating, showForm, showAlert, alertIsError;
+    private InventoryInsightsSnapshot? insights;
     private int currentUserId, currentRoleId;
     private string alertMessage = string.Empty, alertTitle = string.Empty, searchTerm = string.Empty, movementTypeFilter = string.Empty, productFilter = string.Empty;
 
@@ -255,6 +270,7 @@ else
             .Where(x => x.id_usuario_ingreso == currentUserId && productIds.Contains(x.id_producto))
             .OrderByDescending(x => x.fecha_ingreso)
             .ToListAsync());
+        insights = await InventoryInsightsService.BuildAsync(db, new InventoryInsightsFilters(DateOnly.FromDateTime(DateTime.Today)));
         isLoading = false;
     }
 

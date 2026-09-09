@@ -39,6 +39,7 @@
             } else {
                 <i class="bi bi-check-circle" style="font-size:40px;color:#08734e"></i><h2>Tu recorrido visual</h2><p>Resultados orientativos · @(near ? "Visión cercana a 40 cm" : $"Visión lejana a {distance} m")</p>
                 <div class="vl-test-result-grid">@for(int i=0;i<3;i++) { <div><small>@eyeNames[i]</small><strong>@Result(i)</strong><small>@DecimalResult(i)</small></div> }</div>
+                <div class="vl-result-chart" role="img" aria-label="Comparación visual orientativa entre ambos ojos"><div class="vl-result-chart-head"><span>Comparación por ojo</span><small>Mayor altura representa mejor nivel superado</small></div><svg viewBox="0 0 300 110" aria-hidden="true"><path class="vl-chart-grid" d="M25 15V92H285M25 35H285M25 58H285M25 80H285" /><path class="vl-chart-line" d="@ResultPath" /><g class="vl-chart-points">@for(int i=0;i<3;i++) { <circle cx="@(25+i*130)" cy="@ResultY(i)" r="5" /> }</g><text x="25" y="106">AO</text><text x="150" y="106">OD</text><text x="275" y="106">OI</text></svg></div>
                 <p>Estos resultados describen el ejercicio en esta pantalla; no constituyen un diagnóstico ni una medición clínica certificada.</p>
                 <a class="vl-primary" href="/vision-simulator">Explorar cómo funciona la refracción <i class="bi bi-arrow-right"></i></a><button class="vl-secondary" style="margin-top:12px" @onclick="Reset">Repetir calibración y test</button>
             }
@@ -83,5 +84,7 @@
     private void Keyboard(KeyboardEventArgs e){var choice=letterMode ? Array.IndexOf(letters,e.Key.ToUpperInvariant()) : e.Key switch{"ArrowRight"=>0,"ArrowDown"=>1,"ArrowLeft"=>2,"ArrowUp"=>3,_=>-2};if(choice>=0)Answer(choice);}
     private string Result(int i)=>passed[i]<0?"No estimado":$"20/{levels[passed[i]]}";
     private string DecimalResult(int i)=>passed[i]<0?"Primer nivel no superado":$"{(20.0/levels[passed[i]]).ToString("0.00",CultureInfo.InvariantCulture)} · aproximado";
+    private double ResultY(int i) => passed[i] < 0 ? 90 : 84 - passed[i] * 10;
+    private string ResultPath => string.Join(" ", Enumerable.Range(0, 3).Select((i) => $"{(i == 0 ? "M" : "L")}{25 + i * 130} {ResultY(i).ToString("0.0", CultureInfo.InvariantCulture)}"));
     private void Reset(){Phase=0;calibrated=false;}
 }

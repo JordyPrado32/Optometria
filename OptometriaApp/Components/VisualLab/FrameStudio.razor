@@ -2,7 +2,10 @@
 <div class="vl-workspace">
     <aside class="vl-panel">
         <section><h2>Estilo del armazón</h2><div class="vl-frame-shapes">@foreach(var f in shapes) { <button class="@(shape == f.Id ? "selected" : "")" @onclick="() => shape = f.Id"><span class="vl-mini-frame @f.Id"><b></b><b></b></span>@f.Label</button> }</div></section>
+        <section><h2>Tipo de rostro <small>guía estética</small></h2><div class="vl-choice-grid">@foreach (var face in faces) { <button class="@(faceShape == face.Id ? "selected" : "")" @onclick="() => SetFaceShape(face.Id)">@face.Label</button> }</div><div class="vl-disease-note"><i class="bi bi-person-bounding-box"></i><div><strong>@FaceRecommendation</strong><small>@FaceRecommendationDetail</small></div></div></section>
         <section><h2>Medidas <small>(mm)</small></h2><div class="vl-measures"><label>Calibre<input type="number" min="44" max="62" @bind="caliber" /></label><label>Puente<input type="number" min="14" max="24" @bind="bridge" /></label><label>Varilla<input type="number" min="125" max="155" @bind="temple" /></label></div></section>
+        <section><h2>Perfil óptico <small>estimación visual</small></h2><label>Esfera <output>@sphere.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) D</output></label><input type="range" min="-8" max="6" step=".25" @bind="sphere" @bind:event="oninput" /><label>Índice del lente</label><select @bind="lensIndex"><option value="1.50">1.50 estándar</option><option value="1.60">1.60 delgado</option><option value="1.67">1.67 alto índice</option><option value="1.74">1.74 ultradelgado</option></select></section>
+        <section><h2>Uso principal</h2><div class="vl-choice-grid"><button class="@(use == "screens" ? "selected" : "")" @onclick='() => SetUse("screens")'>Pantallas</button><button class="@(use == "driving" ? "selected" : "")" @onclick='() => SetUse("driving")'>Conducción</button><button class="@(use == "outdoor" ? "selected" : "")" @onclick='() => SetUse("outdoor")'>Exterior</button><button class="@(use == "general" ? "selected" : "")" @onclick='() => SetUse("general")'>Mixto</button></div></section>
         <section><h2>Color y material</h2><div class="vl-swatches">@foreach(var c in colors) { <button style="@($"--swatch:{c.Hex}")" class="@(color == c.Hex ? "selected" : "")" aria-label="@c.Label" title="@c.Label" aria-pressed="@(color == c.Hex)" @onclick="() => color = c.Hex"></button> }<select aria-label="Material de la montura" @bind="material"><option value="metal">Metal</option><option value="acetate">Acetato</option></select></div></section>
         <section><h2>Tratamientos de lunas</h2><div class="vl-treatment-grid">@foreach(var t in treatments) { <button title="@t.Description" class="@(treatment == t.Id ? "selected" : "")" @onclick="() => treatment = t.Id"><i class="bi @t.Icon"></i>@t.Label</button> }</div>
         @if (treatment == "photochromic") { <label for="frame-sun">Exposición al sol <output>@((int)(sun * 100))%</output></label><input id="frame-sun" type="range" min="0" max="1" step=".05" @bind="sun" @bind:event="oninput" /><div class="vl-range-ends"><span>Interior</span><span>Exterior</span></div> }
@@ -14,7 +17,7 @@
         <Top><span class="vl-stage-kicker">ESTUDIO DE MONTURAS <b>360°</b></span><div class="vl-stage-bar">@foreach(var v in views) { <button class="@(view == v.Id ? "on" : "")" @onclick="() => view = v.Id">@v.Label</button> }<button @onclick="() => bright = !bright" title="Cambiar iluminación"><i class="bi bi-brightness-high"></i></button></div></Top>
         <Bottom><div class="vl-product-caption"><span>COLECCIÓN DIGITAL</span><h3>@shapes.First(x => x.Id == shape).Label</h3><small>@(material == "metal" ? "Metal" : "Acetato") · @caliber–@bridge–@temple mm · @TreatmentName</small></div></Bottom>
     </LabViewport>
-    <div class="vl-studio-bottom"><VirtualTryOn Color="@color" Shape="@shape" /><div class="vl-panel vl-treatment-info"><i class="bi bi-layers"></i><div><h2>@TreatmentName</h2><p>@treatments.First(x => x.Id == treatment).Description</p><small>Acabado ilustrativo; consulta la ficha del producto.</small></div></div></div>
+    <div class="vl-studio-bottom"><VirtualTryOn Color="@color" Shape="@shape" OnFaceDetected="ApplyFaceProfile" /><div class="vl-panel vl-treatment-info"><i class="bi bi-magic"></i><div><h2>@RecommendationTitle</h2><p>@RecommendationReason</p><small>@FitMessage</small></div></div></div>
     @if(Guided) { <div class="vl-guidance"><span>ESTUDIO</span><p>Elige una forma, gira la montura y compara el acabado de las lunas.</p></div> }
     </main>
 </div>
@@ -23,9 +26,12 @@
     [Parameter] public bool ReducedMotion { get; set; }
     private LabViewport? viewport;
     private string shape = "aviator", treatment = "antireflective", color = "#c7a15e", material = "metal", view = "threequarter";
-    private double caliber = 52, bridge = 18, temple = 140, sun = .6;
+    private double caliber = 52, bridge = 18, temple = 140, sun = .6, sphere = -2.5;
+    private string lensIndex = "1.60", use = "screens";
     private bool compare, bright;
-    private readonly (string Id,string Label)[] shapes = [("aviator","Aviador"),("wayfarer","Wayfarer"),("round","Redondo")];
+    private readonly (string Id,string Label)[] shapes = [("aviator","Aviador"),("wayfarer","Wayfarer"),("round","Redondo"),("rectangle","Rectangular"),("cateye","Cat eye"),("browline","Browline")];
+    private readonly (string Id,string Label)[] faces = [("oval","Ovalado"),("round","Redondo"),("square","Cuadrado"),("heart","Corazón")];
+    private string faceShape = "oval";
     private readonly (string Hex,string Label)[] colors = [("#c7a15e","Dorado"),("#22272a","Negro"),("#694630","Carey"),("#963f42","Burdeos"),("#9aabb1","Plata")];
     private readonly (string Id,string Label)[] views = [("front","Frente"),("threequarter","¾"),("profile","Perfil")];
     private readonly (string Id,string Label,string Icon,string Description)[] treatments = [
@@ -36,6 +42,16 @@
         ("polarized","Polarizado","bi-circle-half","Reduce determinados reflejos de superficies como agua o carretera."),
         ("mirror","Espejado","bi-disc","Acabado reflectante con aspecto de espejo.")];
     private string TreatmentName => treatments.First(x => x.Id == treatment).Label;
+    private double EdgeEstimate => Math.Max(.6, (.8 + Math.Abs(sphere) * .34 + (caliber - 48) * .035) / double.Parse(lensIndex, CultureInfo.InvariantCulture));
+    private string RecommendationTitle => use switch { "screens" => "Blue Cut + antirreflejo", "driving" => "Antirreflejo para conducción", "outdoor" => "Fotocromático o polarizado", _ => "Antirreflejo de uso diario" };
+    private string RecommendationReason => $"Con {sphere.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture)} D, el espesor estimado de borde es {EdgeEstimate:0.0} mm. {use switch { "screens" => "Priorizamos comodidad frente a pantallas.", "driving" => "Priorizamos contraste y control de reflejos.", "outdoor" => "Priorizamos protección frente a luz intensa.", _ => "Equilibramos estética y uso cotidiano." }}";
+    private string FitMessage => caliber > 58 && Math.Abs(sphere) >= 4 ? "Atención: una montura grande puede hacer más visible el borde; considera menor calibre o mayor índice." : bridge < 16 ? "Puente estrecho: confirma apoyo y comodidad en nariz." : "Ajuste probable: valida las medidas reales con el profesional.";
+    private string FaceRecommendation => faceShape switch { "round" => "Las formas angulares equilibran este rostro", "square" => "Las líneas suaves suelen aportar equilibrio", "heart" => "Las formas ligeras o inferiores suaves suelen favorecer", _ => "El rostro ovalado admite varias proporciones" };
+    private string FaceRecommendationDetail => $"{shapes.First(x => x.Id == shape).Label} {(IsFaceMatch ? "es una opción compatible" : "puede funcionar, aunque hay formas con mayor contraste")}. Esta guía es estética y debe confirmarse con comodidad y medidas reales.";
+    private bool IsFaceMatch => faceShape switch { "round" => shape is "rectangle" or "wayfarer" or "browline", "square" => shape is "round" or "aviator", "heart" => shape is "aviator" or "round" or "wayfarer", _ => true };
     private string TreatmentFilter => treatment switch { "bluecut" => "filter:sepia(.18)", "photochromic" => FormattableString.Invariant($"filter:brightness({1-sun*.55})"), "polarized" or "mirror" => "filter:brightness(.8) contrast(1.15)", _ => "" };
-    private object Settings => new { shape, treatment, color, material, caliber = Math.Clamp(caliber,44,62), bridge = Math.Clamp(bridge,14,24), temple = Math.Clamp(temple,125,155), sun, view, bright, reduced = ReducedMotion };
+    private void SetUse(string value) => use = value;
+    private void SetFaceShape(string value) => faceShape = value;
+    private void ApplyFaceProfile(string value) => faceShape = faces.Any(x => x.Id == value) ? value : "oval";
+    private object Settings => new { shape, treatment, color, material, caliber = Math.Clamp(caliber,44,62), bridge = Math.Clamp(bridge,14,24), temple = Math.Clamp(temple,125,155), sun, edgeThickness = EdgeEstimate / 18, view, bright, reduced = ReducedMotion };
 }

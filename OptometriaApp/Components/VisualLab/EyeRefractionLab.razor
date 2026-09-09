@@ -1,46 +1,114 @@
 @using System.Globalization
-<div class="vl-workspace">
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+<div class="vl-workspace vl-eye-lab">
     <aside class="vl-panel">
+        <section><h2>Ojo a estudiar</h2><div class="vl-segments vl-eye-selector"><button class="@(eye == "right" ? "active" : "")" aria-pressed="@(eye == "right")" @onclick="SelectRightEye">OD <small>Derecho</small></button><button class="@(eye == "left" ? "active" : "")" aria-pressed="@(eye == "left")" @onclick="SelectLeftEye">OI <small>Izquierdo</small></button></div><small class="vl-field-note">OD: @EyeSummary(right)<br />OI: @EyeSummary(left)</small></section>
         <section><h2>Condición refractiva</h2><div class="vl-choice-grid">
             @foreach (var c in conditions) { <button class="@(condition == c.Id ? "selected" : "")" aria-pressed="@(condition == c.Id)" @onclick="() => Select(c.Id)">@c.Label</button> }
         </div></section>
         <section><label for="eye-defect">Magnitud del defecto <output>@Signed(Target) D</output></label><input id="eye-defect" type="range" min="0" max="6" step=".25" @bind="magnitude" @bind:event="oninput" disabled="@(condition == "normal")" /><div class="vl-range-ends"><span>0 D</span><span>6 D</span></div>
         @if (condition == "astigmatism") { <label for="eye-axis">Eje del cilindro <output>@axis°</output></label><input id="eye-axis" type="range" min="0" max="180" step="5" @bind="axis" @bind:event="oninput" /> }
         </section>
+        <section><h2>Salud ocular <small>combina alteraciones</small></h2><div class="vl-disease-grid">@foreach(var d in diseases) { <button class="@(HasDisease(d.Id) ? "selected" : "")" aria-pressed="@HasDisease(d.Id)" @onclick="() => ToggleDisease(d.Id)"><i class="bi @d.Icon"></i>@d.Name</button> }</div>@if (ActiveEye.Diseases.Count > 0) { <div class="vl-active-diseases"><span>Activas (@ActiveEye.Diseases.Count)</span>@foreach(var d in ActiveEye.Diseases) { <button @onclick="() => FocusDisease(d)">@DiseaseName(d) <i class="bi bi-crosshair"></i></button> }<button class="clear" @onclick="ClearDiseases">Limpiar</button></div> }<div class="vl-disease-note"><i class="bi @DiseaseIcon"></i><div><strong>@DiseaseTitle</strong><small>@DiseaseDescription</small><button class="vl-text-button" @onclick="OpenDiseaseDrawer">Ver qué cambia <i class="bi bi-arrow-right"></i></button></div></div></section>
         <section><h2>Lente correctora</h2><label class="vl-switch"><input type="checkbox" @bind="corrected" /> Con corrección</label><label for="eye-power">@(condition == "astigmatism" ? "Cilindro" : "Esfera") <output>@Signed(power) D</output></label><input id="eye-power" type="range" min="-6" max="6" step=".25" @bind="power" @bind:event="oninput" disabled="@(!corrected)" />
         <div class="vl-insight @(Aligned ? "good" : "")" role="status"><i class="bi @(Aligned ? "bi-check-circle-fill" : "bi-bullseye")"></i><div><strong>@Focus</strong><small>@Explanation</small></div></div></section>
-        <section><h2>Comparar vista</h2><div class="vl-segments"><button class="@(!corrected ? "active" : "")" @onclick="() => corrected = false">Sin corrección</button><button class="@(corrected ? "active" : "")" @onclick="Correct">Corregido</button></div><button class="vl-primary vl-full" @onclick="Next"><i class="bi bi-play-fill"></i> @(step < 0 ? "Explicar paso a paso" : "Siguiente paso")</button></section>
+        <section><h2>Comparar vista</h2><div class="vl-segments"><button class="@(!corrected ? "active" : "")" @onclick="() => corrected = false">Sin corrección</button><button class="@(corrected ? "active" : "")" @onclick="Correct">Corregido</button></div><label class="vl-switch"><input type="checkbox" @bind="compareBoth" /> Ver OD y OI a la vez</label><button class="vl-primary vl-full" @onclick="Next"><i class="bi bi-play-fill"></i> @(step < 0 ? "Explicar paso a paso" : "Siguiente paso")</button></section>
     </aside>
     <main class="vl-main">
-        <LabViewport Kind="eye" Settings="Settings" Description="@($"{Focus}. {Explanation}")">
+        @if (compareBoth) { <div class="vl-eye-compare"><article><div class="vl-eye-compare-head"><span>OD · Derecho</span><small>@EyeSummary(right)</small></div><LabViewport Kind="eye" Settings="RightSettings" Description="@($"Ojo derecho. {EyeSummary(right)}")" /></article><article><div class="vl-eye-compare-head"><span>OI · Izquierdo</span><small>@EyeSummary(left)</small></div><LabViewport Kind="eye" Settings="LeftSettings" Description="@($"Ojo izquierdo. {EyeSummary(left)}")" /></article></div> }
+        else { <LabViewport Kind="eye" Settings="Settings" Description="@($"{Focus}. {Explanation}")">
             <Top><div class="vl-stage-bar">@foreach(var l in layers) { <button class="@(visible.Contains(l.Id) ? "on" : "")" aria-pressed="@visible.Contains(l.Id)" @onclick="() => Toggle(l.Id)">@l.Label</button> }</div><button class="vl-dark-button" @onclick="() => cut = !cut"><i class="bi bi-circle-half"></i> @(cut ? "Corte anatómico" : "Ojo completo")</button></Top>
             <Bottom><div class="vl-focus-card"><i class="bi bi-eye"></i><div><strong>@Focus</strong><small>@Explanation</small></div><span class="vl-focus-measure">@(Aligned ? "ALINEADO" : "DESENFOQUE")<b>@Signed(Residual) D</b><small>residual del modelo</small></span></div></Bottom>
-        </LabViewport>
+        </LabViewport> }
         @if (Guided || step >= 0) { <div class="vl-guidance"><span>0@(Math.Max(step, 0) + 1) / 04</span><p>@steps[Math.Max(step, 0)]</p><button @onclick="Next">Continuar <i class="bi bi-arrow-right"></i></button></div> }
+        <section class="vl-correction-compare" aria-labelledby="correction-compare-title">
+            <div><span class="vl-eyebrow">COMPARAR CORRECCIONES · @EyeLabel</span><h2 id="correction-compare-title">Del desenfoque al foco</h2><p>Selecciona un estado para ver cómo cambia el trayecto de la luz en el modelo.</p></div>
+            <div class="vl-correction-options">
+                <button class="@(!corrected ? "active" : "")" @onclick="ShowUncorrected"><i class="bi bi-eye-slash"></i><strong>Sin corrección</strong><small>@UncorrectedSummary</small></button>
+                <button class="@(corrected && !Aligned ? "active warning" : "")" @onclick="ShowCurrentCorrection"><i class="bi bi-sliders"></i><strong>Corrección actual</strong><small>@Signed(power) D · @Focus</small></button>
+                <button class="@(corrected && Aligned ? "active success" : "")" @onclick="Correct"><i class="bi bi-bullseye"></i><strong>Corrección objetivo</strong><small>@Signed(Target) D · Retina</small></button>
+            </div>
+            <div class="vl-correction-result"><i class="bi @(Aligned ? "bi-check-circle-fill" : "bi-info-circle")"></i><span>@CorrectionComparisonMessage</span><b>@Signed(Residual) D residual</b></div>
+        </section>
+        <div class="vl-eye-journey"><button class="@(step == 0 ? "active" : "")" @onclick="() => SetStep(0)"><b>1</b><span>Entrada de luz<small>Córnea y pupila</small></span></button><button class="@(step == 1 ? "active" : "")" @onclick="() => SetStep(1)"><b>2</b><span>Enfoque<small>Cristalino</small></span></button><button class="@(step == 2 ? "active" : "")" @onclick="() => SetStep(2)"><b>3</b><span>Imagen<small>Retina</small></span></button><button class="@(step == 3 ? "active" : "")" @onclick="() => SetStep(3)"><b>4</b><span>Percepción<small>Fóvea y cerebro</small></span></button></div>
         <div class="vl-anatomy-legend"><span><b class="cornea"></b>Córnea</span><span><b class="iris"></b>Iris & pupila</span><span><b class="lens"></b>Cristalino</span><span><b class="retina"></b>Retina</span><span><b class="focus"></b>Fóvea</span></div>
+        <section class="vl-vision-impact"><div><span class="vl-eyebrow">PERCEPCIÓN · @EyeLabel</span><h2>Cómo podría afectar la visión</h2><p>@VisionExplanation</p></div><BeforeAfterComparator Source="@VisionSource" BeforeStyle="@VisionEffect" BeforeOverlay="@VisionOverlay" BeforeLabel="Visión representada" AfterLabel="Referencia" BeforeCaption="Efecto educativo combinado" AfterCaption="Sin efecto añadido" /></section>
+        <section class="vl-case-summary"><div><span class="vl-eyebrow">MAPA VISUAL · DEMO</span><h2>Resumen de evaluación</h2><p>OD: @EyeSummary(right) · OI: @EyeSummary(left)</p></div><div class="vl-case-actions"><button class="vl-secondary" @onclick="SaveCase"><i class="bi bi-bookmark"></i> @(saved ? "Demo guardada" : "Guardar demo")</button><button class="vl-secondary" @onclick="ShareCase"><i class="bi bi-share"></i> Compartir</button><a class="vl-primary" href="/visual-acuity-test">Ir al test <i class="bi bi-arrow-right"></i></a></div>@if (caseMessage is not null) { <small role="status">@caseMessage</small> }</section>
     </main>
+    <aside class="vl-eye-right">
+        <section class="vl-panel vl-realtime-card"><span class="vl-eyebrow">SIMULACIÓN EN TIEMPO REAL</span><h2>Así podría percibirse</h2><div class="vl-segments"><button class="@(scene == "street" ? "active" : "")" @onclick='() => SetScene("street")'>Lejos</button><button class="@(scene == "reading" ? "active" : "")" @onclick='() => SetScene("reading")'>Cerca</button><button class="@(scene == "night" ? "active" : "")" @onclick='() => SetScene("night")'>Noche</button></div><div class="vl-mini-comparison"><BeforeAfterComparator Source="@VisionSource" BeforeStyle="@VisionEffect" BeforeOverlay="@VisionOverlay" BeforeLabel="Sin corrección" AfterLabel="Referencia" BeforeCaption="" AfterCaption="" /></div><small>Desliza el divisor para comparar la percepción representada.</small></section>
+        <section class="vl-panel vl-optotype-card"><span class="vl-eyebrow">OPTOTIPOS INTERACTIVOS</span><h2>Prueba rápida</h2><div class="vl-segments"><button class="@(quickChart == "E" ? "active" : "")" @onclick='() => quickChart = "E"'>E</button><button class="@(quickChart == "letters" ? "active" : "")" @onclick='() => quickChart = "letters"'>Letras</button></div><div class="vl-quick-optotype"><DirectionalOptotype Pixels="@quickPixels" Direction="@quickDirection" Letter="@(quickChart == "E" ? "E" : "P")" /></div><p>@(quickChart == "E" ? "¿Puedes identificar hacia dónde apunta la abertura?" : "¿Distingues con claridad el optotipo?")</p><a class="vl-primary vl-full" href="/visual-acuity-test"><i class="bi bi-play-fill"></i> Iniciar prueba completa</a></section>
+        <section class="vl-panel vl-structure-card"><span class="vl-eyebrow">RECORRIDO</span><h2>Qué está ocurriendo</h2><ol><li class="active">Entrada de luz</li><li>Enfoque del cristalino</li><li>Formación de imagen</li><li>Percepción retinal</li></ol></section>
+    </aside>
 </div>
+@if (drawerOpen) { <div class="vl-drawer-backdrop" @onclick="CloseDiseaseDrawer"><aside class="vl-drawer" role="dialog" aria-modal="true" aria-labelledby="disease-title" @onclick:stopPropagation="true"><button class="vl-drawer-close" aria-label="Cerrar" @onclick="CloseDiseaseDrawer"><i class="bi bi-x-lg"></i></button><span class="vl-eyebrow">ESTRUCTURA EN FOCO · @EyeLabel</span><i class="bi @DiseaseIcon vl-drawer-icon"></i><h2 id="disease-title">@DiseaseTitle</h2><p>@DiseaseDescription</p><hr /><strong>Qué observar en el modelo</strong><p>@DiseaseObservation</p><div class="vl-drawer-notice"><i class="bi bi-info-circle"></i> Ilustración educativa; no permite diagnosticar ni reemplaza un examen profesional.</div></aside></div> }
 @code {
     [Parameter] public bool Guided { get; set; }
     [Parameter] public bool ReducedMotion { get; set; }
-    private string condition = "myopia";
-    private double magnitude = 2.5, power = -2.5;
-    private int axis = 90, step = -1;
-    private bool corrected = true, cut = true;
+    private sealed class EyeState { public string Condition { get; set; } = "myopia"; public HashSet<string> Diseases { get; } = []; public double Magnitude { get; set; } = 2.5; public double Power { get; set; } = -2.5; public int Axis { get; set; } = 90; public bool Corrected { get; set; } = true; }
+    private readonly EyeState right = new(), left = new EyeState { Condition = "normal", Magnitude = 0, Power = 0 };
+    private string eye = "right", focusedDisease = "healthy";
+    private int step = -1, quickDirection = 0;
+    private string scene = "street", quickChart = "E";
+    private bool cut = true, compareBoth, drawerOpen, saved;
+    private string? caseMessage;
+    private IJSObjectReference? module;
     private readonly HashSet<string> visible = ["anatomy", "rays", "retina", "lens", "labels"];
     private readonly (string Id, string Label)[] conditions = [("normal","Emétrope"),("myopia","Miopía"),("hyperopia","Hipermetropía"),("astigmatism","Astigmatismo")];
+    private readonly (string Id, string Name, string Icon)[] diseases = [("cataract","Catarata","bi-cloud-haze2"),("glaucoma","Glaucoma","bi-bullseye"),("retinopathy","Retinopatía","bi-activity"),("keratoconus","Queratocono","bi-triangle"),("macular","Mácula","bi-eye")];
     private readonly (string Id, string Label)[] layers = [("anatomy","Anatomía"),("rays","Rayos"),("retina","Retina"),("lens","Lente"),("labels","Etiquetas")];
     private readonly string[] steps = ["La luz entra por la córnea y atraviesa el cristalino.", "Observa el foco sin corrección. Cambia la magnitud para desplazarlo.", "Una lente correctora modifica el recorrido de los rayos.", "El foco vuelve a la retina en este modelo simplificado. Puedes seguir explorando."];
-    private double Target => condition == "normal" ? 0 : condition == "hyperopia" ? magnitude : -magnitude;
-    private double Residual => Target - (corrected ? power : 0);
+    private EyeState ActiveEye => eye == "right" ? right : left;
+    private string condition { get => ActiveEye.Condition; set => ActiveEye.Condition = value; }
+    private double magnitude { get => ActiveEye.Magnitude; set => ActiveEye.Magnitude = value; }
+    private double power { get => ActiveEye.Power; set => ActiveEye.Power = value; }
+    private int axis { get => ActiveEye.Axis; set => ActiveEye.Axis = value; }
+    private bool corrected { get => ActiveEye.Corrected; set => ActiveEye.Corrected = value; }
+    private double Target => TargetFor(ActiveEye);
+    private double Residual => ResidualFor(ActiveEye);
     private bool Aligned => Math.Abs(Residual) < .125;
     private string Focus => Aligned ? "Foco alineado en retina" : Residual < 0 ? "Foco delante de la retina" : "Foco detrás de la retina";
     private string Explanation => condition == "astigmatism" ? "Dos meridianos enfocan en planos diferentes." : Aligned ? "La corrección coincide con el defecto representado." : condition == "myopia" ? "El ojo miope enfoca antes de la retina." : "Ajusta la lente para observar cómo se desplaza el foco.";
-    private object Settings => new { condition, residual = Residual, axis, corrected, cut, layers = visible.ToArray(), reduced = ReducedMotion };
+    private string ActiveDisease => ActiveEye.Diseases.Contains(focusedDisease) ? focusedDisease : ActiveEye.Diseases.FirstOrDefault() ?? "healthy";
+    private string DiseaseTitle => ActiveEye.Diseases.Count == 0 ? "Anatomía sin alteración" : ActiveEye.Diseases.Count == 1 ? DiseaseName(ActiveDisease) : $"{ActiveEye.Diseases.Count} alteraciones combinadas";
+    private string DiseaseIcon => ActiveDisease switch { "healthy" => "bi-check-circle-fill", "cataract" => "bi-cloud-haze2", "glaucoma" => "bi-bullseye", "retinopathy" => "bi-activity", "keratoconus" => "bi-triangle", _ => "bi-eye" };
+    private string DiseaseDescription => ActiveEye.Diseases.Count == 0 ? "Selecciona una o varias alteraciones para comparar su efecto." : ActiveEye.Diseases.Count == 1 ? DiseaseDetail(ActiveDisease) : "El modelo superpone los cambios anatómicos seleccionados y combina sus efectos visuales de forma ilustrativa.";
+    private string DiseaseObservation => ActiveEye.Diseases.Count == 0 ? "Observa córnea, cristalino, retina y fóvea como estructuras de referencia." : string.Join(" ", ActiveEye.Diseases.Select(DiseaseDetail));
+    private object Settings => SettingsFor(ActiveEye, eye);
+    private object RightSettings => SettingsFor(right, "right");
+    private object LeftSettings => SettingsFor(left, "left");
     private static string Signed(double v) => v.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture);
+    private void SelectRightEye() { eye = "right"; focusedDisease = right.Diseases.FirstOrDefault() ?? "healthy"; }
+    private void SelectLeftEye() { eye = "left"; focusedDisease = left.Diseases.FirstOrDefault() ?? "healthy"; }
     private void Select(string value) { condition = value; power = Target; }
     private void Correct() { corrected = true; power = Target; }
     private void Toggle(string value) { if (!visible.Remove(value)) visible.Add(value); }
-    private void Next() { step = (step + 1) % 4; if (step == 1) corrected = false; if (step >= 2) Correct(); }
+    private void Next() => SetStep((step + 1) % 4);
+    private void SetStep(int value) { step = value; visible.Clear(); visible.Add("anatomy"); visible.Add("labels"); if (step is 0 or 1 or 2) visible.Add("rays"); if (step is 2 or 3) visible.Add("retina"); if (step is 1 or 2) visible.Add("lens"); if (step == 1) corrected = false; if (step >= 2) Correct(); }
+    private static double TargetFor(EyeState state) => state.Condition == "normal" ? 0 : state.Condition == "hyperopia" ? state.Magnitude : -state.Magnitude;
+    private static double ResidualFor(EyeState state) => TargetFor(state) - (state.Corrected ? state.Power : 0);
+    private object SettingsFor(EyeState state, string side) => new { condition = state.Condition, diseases = state.Diseases.ToArray(), focusDisease = side == eye ? ActiveDisease : state.Diseases.FirstOrDefault() ?? "healthy", eye = side, residual = ResidualFor(state), axis = state.Axis, corrected = state.Corrected, cut, layers = visible.ToArray(), reduced = ReducedMotion };
+    private string EyeSummary(EyeState state) { var refractive = state.Condition switch { "normal" => "Emétrope", "myopia" => $"Miopía {Signed(-state.Magnitude)} D", "hyperopia" => $"Hipermetropía {Signed(state.Magnitude)} D", _ => $"Astigmatismo {Signed(-state.Magnitude)} D × {state.Axis}°" }; return state.Diseases.Count == 0 ? refractive : $"{refractive} · {string.Join(" + ", state.Diseases.Select(DiseaseName))}"; }
+    private static string DiseaseName(string disease) => disease switch { "cataract" => "Catarata", "glaucoma" => "Glaucoma", "retinopathy" => "Retinopatía", "keratoconus" => "Queratocono", "macular" => "Degeneración macular", _ => "Sin alteración" };
+    private void OpenDiseaseDrawer() => drawerOpen = true;
+    private void CloseDiseaseDrawer() => drawerOpen = false;
+    private bool HasDisease(string id) => ActiveEye.Diseases.Contains(id);
+    private void ToggleDisease(string id) { if (!ActiveEye.Diseases.Add(id)) ActiveEye.Diseases.Remove(id); else focusedDisease = id; if (focusedDisease == id && !ActiveEye.Diseases.Contains(id)) focusedDisease = ActiveEye.Diseases.FirstOrDefault() ?? "healthy"; }
+    private void FocusDisease(string id) => focusedDisease = id;
+    private void ClearDiseases() { ActiveEye.Diseases.Clear(); focusedDisease = "healthy"; }
+    private string EyeLabel => eye == "right" ? "OD · Derecho" : "OI · Izquierdo";
+    private string UncorrectedSummary => condition == "normal" ? "Foco natural en retina" : $"Foco {((Target < 0) ? "delante" : "detrás")} de retina";
+    private string CorrectionComparisonMessage => !corrected ? "Sin lente, el defecto representado desplaza el foco." : Aligned ? "La potencia objetivo devuelve el foco a la retina en esta simulación." : "La potencia actual aún deja un desenfoque residual; ajusta el control o aplica la corrección objetivo.";
+    private void ShowUncorrected() => corrected = false;
+    private void ShowCurrentCorrection() => corrected = true;
+    private string VisionSource => scene switch { "reading" => "/images/visual-lab/reading.svg", "night" => "/images/visual-lab/street.png", _ => "/images/visual-lab/street.png" };
+    private string VisionEffect { get { var blur = condition == "myopia" ? magnitude * (scene == "reading" ? .3 : 1.15) : condition == "hyperopia" ? magnitude * (scene == "reading" ? 1.1 : .35) : condition == "astigmatism" ? magnitude * .5 : 0; if (HasDisease("cataract")) blur += 2.4; if (HasDisease("macular")) blur += .8; if (HasDisease("retinopathy")) blur += .45; return FormattableString.Invariant($"filter:blur({blur:0.0}px) brightness({(HasDisease("cataract") || scene == "night" ? .72 : .96)}) contrast({(HasDisease("retinopathy") ? .78 : .96)});") + (condition == "astigmatism" || HasDisease("keratoconus") ? "transform:scale(1.025) skewX(.55deg);" : ""); } }
+    private double quickPixels => scene == "reading" ? 72 : 98;
+    private void SetScene(string value) { scene = value; quickDirection = (quickDirection + 1) % 4; }
+    private string VisionOverlay => HasDisease("glaucoma") ? "background:radial-gradient(ellipse at center,transparent 34%,#06110bdd 75%,#020706f5 100%);" : HasDisease("macular") ? "background:radial-gradient(circle at center,#d3c7b6bf 0 12%,transparent 29%);" : "";
+    private string VisionExplanation => ActiveEye.Diseases.Count == 0 && condition == "normal" ? "Imagen de referencia sin efecto añadido." : "La imagen combina de manera orientativa el desenfoque refractivo y las alteraciones seleccionadas; no representa una percepción clínica exacta.";
+    private static string DiseaseDetail(string disease) => disease switch { "cataract" => "Cristalino velado y menor contraste.", "glaucoma" => "Pérdida periférica ilustrativa alrededor del campo visual.", "retinopathy" => "Cambios vasculares y reducción de contraste ilustrativos.", "keratoconus" => "Curvatura corneal irregular y distorsión de contornos.", "macular" => "Alteración representada en la visión central.", _ => "" };
+    private async Task SaveCase() { module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./visual-lab.js"); await module.InvokeVoidAsync("saveDemoCase", new { right = EyeSummary(right), left = EyeSummary(left) }); saved = true; caseMessage = "Configuración demo guardada en este navegador."; }
+    private async Task ShareCase() { var text = $"Mapa visual demo — OD: {EyeSummary(right)} | OI: {EyeSummary(left)}. Representación educativa."; module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./visual-lab.js"); var copied = await module.InvokeAsync<bool>("copyText", text); caseMessage = copied ? "Resumen copiado para compartir." : "No se pudo copiar automáticamente el resumen."; }
 }
-
