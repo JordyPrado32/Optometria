@@ -11,6 +11,7 @@
 @inject ElectronicBillingDocumentService ElectronicBillingDocumentService
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject KardexService KardexService
+@inject OpticaCustomizationService CustomizationService
 
 <PageTitle>Facturas</PageTitle>
 
@@ -1299,7 +1300,8 @@ else
     private decimal taxPreview;
     private decimal totalPreview;
     private decimal balancePreview;
-    private readonly decimal[] ivaPercentageOptions = [5m, 8m, 13m, 15m];
+    private decimal[] ivaPercentageOptions = [0m, 5m, 15m];
+    private decimal defaultIvaPercentage = 15m;
     private ManualLineEditor lineEditor = new();
     private ProductUpsertEditor productUpsertEditor = new();
     private bool showProductUpsertForm;
@@ -1352,6 +1354,9 @@ else
             isLoading = false;
             return;
         }
+
+        defaultIvaPercentage = await CustomizationService.GetActiveVatPercentageAsync();
+        ivaPercentageOptions = await CustomizationService.GetAvailableVatRatesAsync();
 
         patients.Clear();
         patients.AddRange(await dbContext.tbl_pacientes
@@ -1568,7 +1573,7 @@ else
             {
                 if (!ivaPercentageOptions.Contains(lineEditor.PorcentajeIva))
                 {
-                    lineEditor.PorcentajeIva = ivaPercentageOptions[0];
+                    lineEditor.PorcentajeIva = defaultIvaPercentage;
                 }
             }
             else
@@ -2252,7 +2257,7 @@ else
             TieneIva = line.id_productoNavigation.tiene_iva ?? false,
             PorcentajeIva = line.id_productoNavigation.tiene_iva == true && ivaPercentageOptions.Contains(line.id_productoNavigation.porcentaje_iva ?? 0m)
                 ? line.id_productoNavigation.porcentaje_iva ?? 0m
-                : (line.id_productoNavigation.tiene_iva == true ? ivaPercentageOptions[0] : 0m)
+                : (line.id_productoNavigation.tiene_iva == true ? defaultIvaPercentage : 0m)
         };
     }
 
@@ -2271,7 +2276,7 @@ else
                 TipoItem = "Producto",
                 PrecioVenta = lineEditor.UnitPrice,
                 NombreProducto = lineEditor.Concept,
-                PorcentajeIva = ivaPercentageOptions[0]
+                PorcentajeIva = defaultIvaPercentage
             };
             return;
         }
@@ -2287,7 +2292,7 @@ else
             TieneIva = selectedProduct.tiene_iva ?? false,
             PorcentajeIva = selectedProduct.tiene_iva == true && ivaPercentageOptions.Contains(selectedProduct.porcentaje_iva ?? 0m)
                 ? selectedProduct.porcentaje_iva ?? 0m
-                : (selectedProduct.tiene_iva == true ? ivaPercentageOptions[0] : 0m)
+                : (selectedProduct.tiene_iva == true ? defaultIvaPercentage : 0m)
         };
     }
 
@@ -2301,7 +2306,7 @@ else
             {
                 if (!ivaPercentageOptions.Contains(productUpsertEditor.PorcentajeIva))
                 {
-                    productUpsertEditor.PorcentajeIva = ivaPercentageOptions[0];
+                    productUpsertEditor.PorcentajeIva = defaultIvaPercentage;
                 }
             }
             else
@@ -2467,7 +2472,7 @@ else
         lineEditor.Concept = product.nombre_producto;
         lineEditor.TieneIva = product.tiene_iva ?? false;
         lineEditor.PorcentajeIva = lineEditor.TieneIva
-            ? (ivaPercentageOptions.Contains(product.porcentaje_iva ?? 0m) ? product.porcentaje_iva ?? 0m : ivaPercentageOptions[0])
+            ? (ivaPercentageOptions.Contains(product.porcentaje_iva ?? 0m) ? product.porcentaje_iva ?? 0m : defaultIvaPercentage)
             : 0m;
     }
 

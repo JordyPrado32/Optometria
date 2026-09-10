@@ -600,14 +600,13 @@ else
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         var identificationExists = await dbContext.clients.AnyAsync(c =>
-            c.id_usuario_creacion == currentUserId &&
             c.cliente_id != editor!.ClienteId &&
             c.tipo_identificacion == editor.TipoIdentificacion &&
             c.numero_identificacion == editor.NumeroIdentificacion.Trim());
 
         if (identificationExists)
         {
-            ShowAlert("Ya existe un cliente tuyo con la misma identificacion.", true);
+            ShowAlert("Ya existe un cliente con la misma identificacion.", true);
             return;
         }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using OptometriaApp.Data;
 using OptometriaApp.Models;
@@ -1450,15 +1451,83 @@ public sealed class AntecedentsSection
 
 public sealed class LensSection
 {
-    public string Addicion { get; set; } = string.Empty;
+    private string? _od;
+    private string? _oi;
+    private string? _ao;
+    private string? _addicion;
+    private string? _tiempoUsoRx;
+
+    public string Addicion
+    {
+        get => _addicion ?? string.Empty;
+        set => _addicion = value;
+    }
+
+    [JsonPropertyName("add")]
+    public string? Add
+    {
+        get => _addicion;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_addicion)) _addicion = value; }
+    }
+
     public string Prismas { get; set; } = string.Empty;
-    public string Od { get; set; } = string.Empty;
-    public string Oi { get; set; } = string.Empty;
-    public string Ao { get; set; } = string.Empty;
+
+    public string Od
+    {
+        get => _od ?? string.Empty;
+        set => _od = value;
+    }
+
+    [JsonPropertyName("ojoDerecho")]
+    public string? OjoDerecho
+    {
+        get => _od;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_od)) _od = value; }
+    }
+
+    public string Oi
+    {
+        get => _oi ?? string.Empty;
+        set => _oi = value;
+    }
+
+    [JsonPropertyName("ojoIzquierdo")]
+    public string? OjoIzquierdo
+    {
+        get => _oi;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_oi)) _oi = value; }
+    }
+
+    public string Ao
+    {
+        get => _ao ?? string.Empty;
+        set => _ao = value;
+    }
+
+    [JsonPropertyName("ambosOjos")]
+    public string? AmbosOjos
+    {
+        get => _ao;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_ao)) _ao = value; }
+    }
+
     public string TipoLente { get; set; } = string.Empty;
     public string Material { get; set; } = string.Empty;
     public string Filtro { get; set; } = string.Empty;
-    public string TiempoUsoRx { get; set; } = string.Empty;
+
+    public string TiempoUsoRx
+    {
+        get => _tiempoUsoRx ?? string.Empty;
+        set => _tiempoUsoRx = value;
+    }
+
+    [JsonPropertyName("tiempoUso")]
+    public string? TiempoUso
+    {
+        get => _tiempoUsoRx;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_tiempoUsoRx)) _tiempoUsoRx = value; }
+    }
+
     public string DistPupilar { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
 }
@@ -1480,14 +1549,42 @@ public sealed class VisualSection
 
 public sealed class BiomicroscopiaSection
 {
+    private string? _sistemaLagrimalOd;
+    private string? _sistemaLagrimalOi;
+
     public string GraphicOd { get; set; } = string.Empty;
     public string GraphicOi { get; set; } = string.Empty;
     public string OrbitaOd { get; set; } = string.Empty;
     public string OrbitaOi { get; set; } = string.Empty;
     public string ParpadosOd { get; set; } = string.Empty;
     public string ParpadosOi { get; set; } = string.Empty;
-    public string SistemaLagrimalOd { get; set; } = string.Empty;
-    public string SistemaLagrimalOi { get; set; } = string.Empty;
+
+    public string SistemaLagrimalOd
+    {
+        get => _sistemaLagrimalOd ?? string.Empty;
+        set => _sistemaLagrimalOd = value;
+    }
+
+    [JsonPropertyName("lagrimalOd")]
+    public string? LagrimalOd
+    {
+        get => _sistemaLagrimalOd;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_sistemaLagrimalOd)) _sistemaLagrimalOd = value; }
+    }
+
+    public string SistemaLagrimalOi
+    {
+        get => _sistemaLagrimalOi ?? string.Empty;
+        set => _sistemaLagrimalOi = value;
+    }
+
+    [JsonPropertyName("lagrimalOi")]
+    public string? LagrimalOi
+    {
+        get => _sistemaLagrimalOi;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_sistemaLagrimalOi)) _sistemaLagrimalOi = value; }
+    }
+
     public string ConjuntivaOd { get; set; } = string.Empty;
     public string ConjuntivaOi { get; set; } = string.Empty;
     public string CorneaOd { get; set; } = string.Empty;
@@ -1528,9 +1625,37 @@ public sealed class KeratometrySection
 
 public sealed class RefractionSection
 {
+    private string? _subjetivoAfinacionBalance;
+    private string? _pruebaAmbulatoriaRxFinal;
+
     public string RxEstaticaDinamica { get; set; } = string.Empty;
-    public string SubjetivoAfinacionBalance { get; set; } = string.Empty;
-    public string PruebaAmbulatoriaRxFinal { get; set; } = string.Empty;
+
+    public string SubjetivoAfinacionBalance
+    {
+        get => _subjetivoAfinacionBalance ?? string.Empty;
+        set => _subjetivoAfinacionBalance = value;
+    }
+
+    [JsonPropertyName("subjetivoAfinacion")]
+    public string? SubjetivoAfinacion
+    {
+        get => _subjetivoAfinacionBalance;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_subjetivoAfinacionBalance)) _subjetivoAfinacionBalance = value; }
+    }
+
+    public string PruebaAmbulatoriaRxFinal
+    {
+        get => _pruebaAmbulatoriaRxFinal ?? string.Empty;
+        set => _pruebaAmbulatoriaRxFinal = value;
+    }
+
+    [JsonPropertyName("pruebaAmbulatoria")]
+    public string? PruebaAmbulatoria
+    {
+        get => _pruebaAmbulatoriaRxFinal;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(_pruebaAmbulatoriaRxFinal)) _pruebaAmbulatoriaRxFinal = value; }
+    }
+
     public string Observaciones { get; set; } = string.Empty;
 }
 

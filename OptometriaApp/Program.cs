@@ -4366,6 +4366,10 @@ static async Task EnsureProductSchemaAsync(WebApplication app)
         IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_banner_texto') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_banner_texto VARCHAR(180) NULL;
         IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_basicos_titulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_basicos_titulo VARCHAR(120) NULL;
         IF COL_LENGTH('dbo.tbl_configuracion_optica', 'tienda_basicos_subtitulo') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD tienda_basicos_subtitulo VARCHAR(240) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'opciones_impuesto_csv') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD opciones_impuesto_csv VARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'horas_liberacion_cita_no_confirmada') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD horas_liberacion_cita_no_confirmada INT NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'telefono_recepcion_asistida') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD telefono_recepcion_asistida VARCHAR(30) NULL;
+        IF COL_LENGTH('dbo.tbl_configuracion_optica', 'telefono_laboratorio_asistido') IS NULL ALTER TABLE dbo.tbl_configuracion_optica ADD telefono_laboratorio_asistido VARCHAR(30) NULL;
         IF OBJECT_ID('dbo.tbl_plantilla_mensaje', 'U') IS NULL
         BEGIN
             CREATE TABLE dbo.tbl_plantilla_mensaje

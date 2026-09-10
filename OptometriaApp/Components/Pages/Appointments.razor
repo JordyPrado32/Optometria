@@ -13,6 +13,9 @@
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
 @inject NotificationService NotificationService
+@inject EmailSender EmailSender
+@inject IJSRuntime JSRuntime
+@inject OpticaCustomizationService CustomizationService
 
 <PageTitle>Citas y turnos</PageTitle>
 
@@ -395,12 +398,158 @@
     }
     .clinical-btn.btn-cancel:hover { background: #f7dad3; }
 
+    .clinical-btn.btn-smart {
+        background: linear-gradient(135deg, #205c3c 0%, #327552 100%);
+        color: #ffffff;
+        border-color: #205c3c;
+        box-shadow: 0 2px 6px rgba(32, 92, 60, 0.25);
+    }
+    .clinical-btn.btn-smart:hover {
+        background: linear-gradient(135deg, #18482f 0%, #276144 100%);
+        color: #ffffff;
+    }
+
     .clinical-btn.btn-whatsapp {
         background: #eaf8f0;
         color: #1f9d57;
         border-color: rgba(37, 211, 102, 0.35);
     }
     .clinical-btn.btn-whatsapp:hover { background: #d4f2e0; }
+
+    /* Modal de Confirmación Inteligente */
+    .smart-modal-card {
+        max-width: 680px;
+        border-radius: 1.6rem;
+        overflow: hidden;
+    }
+    .smart-action-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1rem;
+    }
+    .smart-action-card {
+        background: #ffffff;
+        border: 2px solid rgba(127, 105, 81, 0.15);
+        border-radius: 1.2rem;
+        padding: 1.1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .smart-action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    .smart-action-card.card-confirm {
+        border-color: rgba(93, 161, 129, 0.4);
+        background: #fbfdfc;
+    }
+    .smart-action-card.card-confirm:hover {
+        border-color: #205c3c;
+        background: #f2faf5;
+    }
+    .smart-action-card.card-reschedule {
+        border-color: rgba(254, 188, 100, 0.5);
+        background: #fffdfa;
+    }
+    .smart-action-card.card-reschedule:hover {
+        border-color: #febc64;
+        background: #fff8ee;
+    }
+    .smart-action-card.card-cancel {
+        border-color: rgba(236, 204, 197, 0.7);
+        background: #fffbfc;
+    }
+    .smart-action-card.card-cancel:hover {
+        border-color: #e57373;
+        background: #fdf2f0;
+    }
+    .smart-action-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 1rem;
+        display: grid;
+        place-items: center;
+        font-size: 1.3rem;
+    }
+    .smart-action-icon.sage { background: #eef6f2; color: #205c3c; }
+    .smart-action-icon.amber { background: #fff5e6; color: #a86900; }
+    .smart-action-icon.rose { background: #faece9; color: #943d3d; }
+    .smart-action-content h4 {
+        margin: 0 0 0.3rem 0;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #241d18;
+    }
+    .smart-action-content p {
+        margin: 0;
+        font-size: 0.84rem;
+        color: #6e5c4a;
+        line-height: 1.4;
+    }
+
+    /* Asistencia Accesible / Adultos Mayores */
+    .accessible-assistance-widget {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 1050;
+        background: #ffffff;
+        border: 2px solid #5DA181;
+        border-radius: 1.4rem;
+        padding: 0.9rem 1.1rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        max-width: 320px;
+    }
+    .accessible-assistance-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.86rem;
+        font-weight: 800;
+        color: #241d18;
+    }
+    .accessible-assistance-header i {
+        color: #205c3c;
+        font-size: 1.1rem;
+    }
+    .accessible-assistance-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+    .accessible-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 800;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+    .accessible-btn.btn-rec {
+        background: #25D366;
+        color: #ffffff;
+    }
+    .accessible-btn.btn-rec:hover {
+        background: #1eb857;
+        color: #ffffff;
+    }
+    .accessible-btn.btn-lab {
+        background: #3730a3;
+        color: #ffffff;
+    }
+    .accessible-btn.btn-lab:hover {
+        background: #2d2682;
+        color: #ffffff;
+    }
 
     /* Barra Inferior */
     .clinical-footer-bar {
@@ -686,11 +835,25 @@ else
                                 </div>
 
                                 <div class="clinical-tile-footer">
-                                    <span class="badge" style="background: @stateBg !important; color: @stateColor !important; font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 800;">
-                                        ● @stateName
-                                    </span>
+                                    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                        <span class="badge" style="background: @stateBg !important; color: @stateColor !important; font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 800;">
+                                            ● @stateName
+                                        </span>
+                                        @if (appointment.recordatorio_24hrs == true)
+                                        {
+                                            <span class="badge" style="background: #e0e7ff !important; color: #3730a3 !important; font-size: 0.74rem; padding: 0.35rem 0.65rem; border-radius: 999px; font-weight: 700;" title="Recordatorio 24h enviado por Gmail">
+                                                <i class="bi bi-envelope-check-fill"></i> Gmail 24h enviado
+                                            </span>
+                                        }
+                                    </div>
 
                                     <div class="clinical-actions-cluster">
+                                        @if (IsPendingState(stateName) || stateName == "Confirmada" || stateName == "Programada" || stateName == "Reprogramada")
+                                        {
+                                            <button type="button" class="clinical-btn btn-smart" title="Gestión Rápida (Confirmar, Reagendar, Cancelar)" @onclick="() => OpenSmartConfirmationModal(appointment)">
+                                                <i class="bi bi-patch-check-fill"></i> Gestionar / Confirmar
+                                            </button>
+                                        }
                                         <button type="button" class="clinical-btn btn-history" title="Ver en Calendario" @onclick="() => OpenEditAppointmentModal(appointment.id_cita)">
                                             <i class="bi bi-calendar-event"></i> Calendario
                                         </button>
@@ -703,10 +866,22 @@ else
                                                 <i class="bi bi-person-lines-fill"></i> Historial
                                             </button>
                                         }
+                                        @if (!isClient && appointment.id_pacienteNavigation != null && !string.IsNullOrWhiteSpace(appointment.id_pacienteNavigation.email))
+                                        {
+                                            <button type="button" class="clinical-btn btn-edit" style="background: #eef2ff; color: #3730a3; border-color: rgba(99, 102, 241, 0.35);" title="Enviar recordatorio por Gmail (24h)" @onclick="() => SendGmail24hReminderAsync(appointment)">
+                                                <i class="bi bi-envelope-at-fill"></i> Recordatorio Gmail
+                                            </button>
+                                        }
                                         @if (!isClient && !string.IsNullOrWhiteSpace(BuildAppointmentWhatsappUrl(appointment)))
                                         {
-                                            <a class="clinical-btn btn-whatsapp" title="Enviar recordatorio WhatsApp" href="@BuildAppointmentWhatsappUrl(appointment)" target="_blank" rel="noopener noreferrer">
-                                                <i class="bi bi-whatsapp"></i> WhatsApp
+                                            <a class="clinical-btn btn-whatsapp" title="Enviar recordatorio WhatsApp al Paciente" href="@BuildAppointmentWhatsappUrl(appointment)" target="_blank" rel="noopener noreferrer">
+                                                <i class="bi bi-whatsapp"></i> WhatsApp Paciente
+                                            </a>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(assistedReceptionPhone))
+                                        {
+                                            <a class="clinical-btn btn-whatsapp" title="Chatear con Recepción sobre esta cita" href="@BuildAssistedWhatsappUrl(assistedReceptionPhone, "Recepción", appointment)" target="_blank" rel="noopener noreferrer">
+                                                <i class="bi bi-headset"></i> Ayuda Recepción
                                             </a>
                                         }
                                         @if (CanConfirmAppointments && IsPendingState(stateName) && !isClient)
@@ -751,6 +926,164 @@ else
             </main>
         </div>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(assistedReceptionPhone) || !string.IsNullOrWhiteSpace(assistedLabPhone))
+    {
+        <aside class="accessible-assistance-widget" aria-label="Canales de Asistencia al Paciente">
+            <div class="accessible-assistance-header">
+                <i class="bi bi-headset"></i>
+                <span>¿Necesitas ayuda con tu cita?</span>
+            </div>
+            <div class="accessible-assistance-buttons">
+                @if (!string.IsNullOrWhiteSpace(assistedReceptionPhone))
+                {
+                    <a class="accessible-btn btn-rec" href="@BuildAssistedWhatsappUrl(assistedReceptionPhone, "Recepción")" target="_blank" rel="noopener noreferrer" title="Chatear por WhatsApp con Recepción">
+                        <i class="bi bi-whatsapp"></i>
+                        <span>Recepción (@assistedReceptionPhone)</span>
+                    </a>
+                }
+                @if (!string.IsNullOrWhiteSpace(assistedLabPhone))
+                {
+                    <a class="accessible-btn btn-lab" href="@BuildAssistedWhatsappUrl(assistedLabPhone, "Laboratorista")" target="_blank" rel="noopener noreferrer" title="Chatear por WhatsApp con Laboratorista">
+                        <i class="bi bi-whatsapp"></i>
+                        <span>Laboratorio (@assistedLabPhone)</span>
+                    </a>
+                }
+            </div>
+        </aside>
+    }
+
+    @if (showSmartConfirmationModal && smartSelectedAppointment is not null)
+    {
+        var apptState = smartSelectedAppointment.id_estadoNavigation?.nombre_estado ?? "Programada";
+        var patientName = GetPatientDisplayName(smartSelectedAppointment.id_pacienteNavigation);
+        var doctorName = GetDoctorDisplayName(smartSelectedAppointment.id_medicoNavigation);
+
+        <div class="custom-modal-overlay" @onclick="CloseSmartConfirmationModal">
+            <div class="custom-modal-card smart-modal-card" @onclick:stopPropagation="true">
+                <header class="custom-modal-header" style="background: linear-gradient(135deg, #eef6f2 0%, #fff5e6 100%); border-bottom: 1px solid rgba(93, 161, 129, 0.3);">
+                    <div>
+                        <span class="badge" style="background: #276144; color: #fff; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.3rem 0.6rem; border-radius: 999px;">
+                            <i class="bi bi-shield-check"></i> Confirmación Inteligente
+                        </span>
+                        <h2 style="font-size: 1.4rem; font-weight: 800; color: #241d18; margin: 0.4rem 0 0 0;">
+                            Gestión de Cita #@smartSelectedAppointment.id_cita
+                        </h2>
+                    </div>
+                    <button type="button" class="btn-close-modal" @onclick="CloseSmartConfirmationModal">×</button>
+                </header>
+
+                <div class="custom-modal-body" style="padding: 1.5rem;">
+                    <!-- Resumen de Cita -->
+                    <div style="background: #ffffff; border: 1px solid rgba(127, 105, 81, 0.15); border-radius: 1.2rem; padding: 1.2rem; margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="font-size: 1.1rem; font-weight: 900; color: #241d18;">
+                                <i class="bi bi-person-fill" style="color: #5DA181;"></i> @patientName
+                            </span>
+                            <span class="badge" style="background: #fff5e6; color: #a86900; font-weight: 800; font-size: 0.82rem; padding: 0.4rem 0.8rem; border-radius: 999px; border: 1px solid rgba(254, 188, 100, 0.5);">
+                                Estado: @apptState
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: 0.92rem; color: #6e5c4a; margin-top: 0.3rem;">
+                            <span><i class="bi bi-calendar-check-fill" style="color: #7F6951;"></i> <strong>Fecha:</strong> @smartSelectedAppointment.fecha_cita.ToString("dd/MM/yyyy")</span>
+                            <span><i class="bi bi-clock-fill" style="color: #7F6951;"></i> <strong>Hora:</strong> @($"{smartSelectedAppointment.hora_inicio:HH\\:mm} - {smartSelectedAppointment.hora_fin:HH\\:mm}")</span>
+                            <span><i class="bi bi-person-badge-fill" style="color: #7F6951;"></i> <strong>Médico:</strong> @doctorName</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(smartSelectedAppointment.motivo_cita))
+                        {
+                            <div style="font-size: 0.88rem; color: #8c7864; background: #fdfbf7; padding: 0.5rem 0.8rem; border-radius: 0.6rem;">
+                                <strong>Motivo:</strong> @smartSelectedAppointment.motivo_cita
+                            </div>
+                        }
+                    </div>
+
+                    <!-- 3 Tarjetas de Acción -->
+                    <h3 style="font-size: 0.95rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #705e4c; margin-bottom: 0.8rem;">
+                        Selecciona una opción rápida:
+                    </h3>
+                    <div class="smart-action-grid">
+                        <!-- Opción 1: Confirmar Cita -->
+                        <div class="smart-action-card card-confirm" @onclick="SmartConfirmAsync">
+                            <div class="smart-action-icon sage">
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                            <div class="smart-action-content">
+                                <h4>Confirmar Cita</h4>
+                                <p>Confirma en 1 clic que el paciente asistirá a la cita reservada.</p>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-success" style="font-weight: 800;">
+                                Confirmar ahora
+                            </button>
+                        </div>
+
+                        <!-- Opción 2: Reagendar -->
+                        <div class="smart-action-card card-reschedule" @onclick="SmartOpenRescheduleAsync">
+                            <div class="smart-action-icon amber">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </div>
+                            <div class="smart-action-content">
+                                <h4>Reagendar Cita</h4>
+                                <p>Elige un nuevo horario disponible. El cupo anterior se libera de inmediato.</p>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-warning" style="font-weight: 800; color: #8a5700; border-color: #febc64;">
+                                Elegir nuevo horario
+                            </button>
+                        </div>
+
+                        <!-- Opción 3: Cancelar -->
+                        <div class="smart-action-card card-cancel">
+                            <div class="smart-action-icon rose">
+                                <i class="bi bi-x-circle-fill"></i>
+                            </div>
+                            <div class="smart-action-content">
+                                <h4>Cancelar y Liberar Cupo</h4>
+                                <p>Libera el turno al instante para otros pacientes. Puedes registrar el motivo.</p>
+                                <input type="text" class="form-control form-control-sm" placeholder="Motivo de cancelación (opcional)" @bind="smartCancelReason" style="margin-top: 0.5rem;" @onclick:stopPropagation="true" />
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" style="font-weight: 800;" @onclick="SmartCancelAsync" @onclick:stopPropagation="true">
+                                Cancelar y liberar cupo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sección de Asistencia para Adultos Mayores -->
+                    <div class="elderly-chat-section" style="margin-top: 1.5rem; background: #fdfbf7; border: 1px dashed rgba(127, 105, 81, 0.35); border-radius: 1.2rem; padding: 1.2rem;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem;">
+                            <i class="bi bi-chat-heart-fill" style="font-size: 1.4rem; color: #25D366;"></i>
+                            <div>
+                                <strong style="font-size: 0.95rem; color: #241d18;">¿Prefieres chatear o recibir ayuda personalizada?</strong>
+                                <div style="font-size: 0.8rem; color: #8c7864;">Pensado para adultos mayores o si prefieres coordinar directamente con nuestro equipo.</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.8rem;">
+                            @if (!string.IsNullOrWhiteSpace(assistedReceptionPhone))
+                            {
+                                <a class="btn btn-success" href="@BuildAssistedWhatsappUrl(assistedReceptionPhone, "Recepción", smartSelectedAppointment)" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 800; border-radius: 999px; padding: 0.45rem 1rem;">
+                                    <i class="bi bi-whatsapp"></i> Chatear con Recepción (@assistedReceptionPhone)
+                                </a>
+                                <a class="btn btn-outline-secondary" href="tel:@assistedReceptionPhone" style="display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; border-radius: 999px; padding: 0.45rem 0.8rem;">
+                                    <i class="bi bi-telephone-fill"></i> Llamar Recepción
+                                </a>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(assistedLabPhone))
+                            {
+                                <a class="btn btn-primary" href="@BuildAssistedWhatsappUrl(assistedLabPhone, "Laboratorista", smartSelectedAppointment)" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 800; border-radius: 999px; padding: 0.45rem 1rem; background: #3730a3; border-color: #3730a3;">
+                                    <i class="bi bi-whatsapp"></i> Chatear con Laboratorista (@assistedLabPhone)
+                                </a>
+                                <a class="btn btn-outline-secondary" href="tel:@assistedLabPhone" style="display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; border-radius: 999px; padding: 0.45rem 0.8rem;">
+                                    <i class="bi bi-telephone-fill"></i> Llamar Lab
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="custom-modal-footer">
+                    <button type="button" class="btn btn-outline-primary" @onclick="CloseSmartConfirmationModal">Cerrar</button>
+                </footer>
+            </div>
+        </div>
+    }
 
         @if (showCalendarModal)
         {
@@ -1202,6 +1535,11 @@ else
     private bool showCancellationChoiceModal;
     private bool showApiDraftModal;
     private bool showFormCancellationReason;
+    private bool showSmartConfirmationModal;
+    private tbl_citas? smartSelectedAppointment;
+    private string smartCancelReason = string.Empty;
+    private string assistedReceptionPhone = string.Empty;
+    private string assistedLabPhone = string.Empty;
     private int selectedAppointmentId;
     private int currentUserId;
     private int currentRoleId;
@@ -1483,6 +1821,10 @@ else
             showFormModal = true;
         }
 
+        var contactNumbers = await CustomizationService.GetAssistedContactNumbersAsync();
+        assistedReceptionPhone = contactNumbers.ReceptionPhone;
+        assistedLabPhone = contactNumbers.LabPhone;
+
         isLoading = false;
     }
 
@@ -1674,6 +2016,62 @@ else
         showPatientHistoryModal = false;
         selectedPatientHistory.Clear();
         selectedPatientHistoryLabel = string.Empty;
+    }
+
+    private void OpenSmartConfirmationModal(tbl_citas appointment)
+    {
+        statusMessage = null;
+        errorMessage = null;
+        smartSelectedAppointment = appointment;
+        smartCancelReason = string.Empty;
+        showSmartConfirmationModal = true;
+    }
+
+    private void CloseSmartConfirmationModal()
+    {
+        showSmartConfirmationModal = false;
+        smartSelectedAppointment = null;
+        smartCancelReason = string.Empty;
+    }
+
+    private async Task SmartConfirmAsync()
+    {
+        if (smartSelectedAppointment is null) return;
+        var apptId = smartSelectedAppointment.id_cita;
+        CloseSmartConfirmationModal();
+        await QuickConfirmAsync(apptId);
+    }
+
+    private async Task SmartOpenRescheduleAsync()
+    {
+        if (smartSelectedAppointment is null) return;
+        var apptId = smartSelectedAppointment.id_cita;
+        CloseSmartConfirmationModal();
+        await OpenEditAppointmentModal(apptId);
+    }
+
+    private async Task SmartCancelAsync()
+    {
+        if (smartSelectedAppointment is null) return;
+        var apptId = smartSelectedAppointment.id_cita;
+        var reason = string.IsNullOrWhiteSpace(smartCancelReason) ? "Cancelada desde confirmación inteligente" : smartCancelReason.Trim();
+        await SelectAppointmentAsync(apptId, false);
+        if (appointmentEditor is not null)
+        {
+            appointmentEditor.RazonCancelacion = reason;
+        }
+        CloseSmartConfirmationModal();
+        await ChangeAppointmentStateAsync("Cancelada");
+    }
+
+    private string BuildAssistedWhatsappUrl(string rawPhone, string targetRole, tbl_citas? appt = null)
+    {
+        var cleanPhone = NormalizeWhatsapp(rawPhone);
+        if (string.IsNullOrWhiteSpace(cleanPhone)) return string.Empty;
+        var text = appt != null
+            ? $"Hola {targetRole}, necesito asistencia con mi cita optométrica del {appt.fecha_cita:dd/MM/yyyy} a las {appt.hora_inicio:HH\\:mm} (Paciente: {GetPatientDisplayName(appt.id_pacienteNavigation)})."
+            : $"Hola {targetRole}, necesito asistencia o información sobre citas y servicios visuales.";
+        return $"https://wa.me/{cleanPhone}?text={Uri.EscapeDataString(text)}";
     }
 
     private async Task OpenCancellationChoiceAsync(int appointmentId)
@@ -3691,6 +4089,57 @@ else
 
     private static bool SlotOverlapsAnyBlock(IEnumerable<tbl_bloqueo_horarios> blocks, DateOnly date, TimeOnly start, TimeOnly end)
         => blocks.Any(block => DoesBlockAffectAppointment(block, date, start, end));
+
+    private async Task SendGmail24hReminderAsync(tbl_citas appointment)
+    {
+        if (appointment.id_pacienteNavigation == null || string.IsNullOrWhiteSpace(appointment.id_pacienteNavigation.email))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "El paciente no tiene un correo electrónico registrado.");
+            return;
+        }
+
+        try
+        {
+            var patientEmail = appointment.id_pacienteNavigation.email.Trim();
+            var patientName = GetPatientDisplayName(appointment.id_pacienteNavigation);
+            var doctorName = GetDoctorDisplayName(appointment.id_medicoNavigation);
+            var appointmentType = string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita!;
+            var statusLabel = appointment.id_estadoNavigation?.nombre_estado ?? "Programada";
+            var reminderWindow = "24 horas antes";
+
+            await EmailSender.SendAppointmentReminderAsync(
+                patientEmail,
+                string.IsNullOrWhiteSpace(patientName) ? "Paciente" : patientName,
+                string.IsNullOrWhiteSpace(doctorName) ? "Profesional asignado" : doctorName,
+                appointment.fecha_cita,
+                appointment.hora_inicio,
+                appointmentType,
+                statusLabel,
+                reminderWindow,
+                null,
+                $"Recordatorio de cita optométrica (24 horas antes)");
+
+            using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            var dbAppt = await dbContext.tbl_citas.FindAsync(appointment.id_cita);
+            if (dbAppt != null)
+            {
+                dbAppt.recordatorio_24hrs = true;
+                dbAppt.notificacion_enviada = true;
+                dbAppt.fecha_notificacion_enviada = DateTime.Now;
+                dbAppt.tipo_notificacion = "Email 24 horas antes (Manual)";
+                dbAppt.fecha_actualizacion = DateTime.Now;
+                dbAppt.usuario_actualizacion = GetCurrentActorLabel();
+                await dbContext.SaveChangesAsync();
+            }
+
+            appointment.recordatorio_24hrs = true;
+            await JSRuntime.InvokeVoidAsync("alert", $"Recordatorio por Gmail enviado exitosamente a {patientEmail}.");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error al enviar correo por Gmail: {ex.Message}");
+        }
+    }
 
     private sealed class ApiActionDraft
     {

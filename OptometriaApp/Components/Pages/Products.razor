@@ -9,6 +9,7 @@
 @inject KardexService KardexService
 @inject NavigationManager NavigationManager
 @inject IWebHostEnvironment WebHostEnvironment
+@inject OpticaCustomizationService CustomizationService
 
 <PageTitle>Productos</PageTitle>
 
@@ -1142,7 +1143,8 @@ else
     private readonly string[] productTypeOptions = ["Producto"];
     private readonly string[] movementFrequencyOptions = ["Alta", "Media", "Baja"];
     private readonly string[] natureOptions = [ProductInventoryRules.GoodNature, ProductInventoryRules.ServiceNature];
-    private readonly decimal[] ivaPercentageOptions = [5m, 8m, 13m, 15m];
+    private decimal[] ivaPercentageOptions = [0m, 5m, 15m];
+    private decimal defaultIvaPercentage = 15m;
     private List<tbl_log_auditoria> auditEntries = [];
     private ProductEditorModel? editor;
     private ModulePermissions permissions = new();
@@ -1216,6 +1218,9 @@ else
             isLoading = false;
             return;
         }
+
+        defaultIvaPercentage = await CustomizationService.GetActiveVatPercentageAsync();
+        ivaPercentageOptions = await CustomizationService.GetAvailableVatRatesAsync();
 
         var loadedProducts = await dbContext.tbl_productos
             .AsNoTracking()
@@ -1324,7 +1329,7 @@ else
             {
                 if (!ivaPercentageOptions.Contains(editor.PorcentajeIva))
                 {
-                    editor.PorcentajeIva = ivaPercentageOptions[0];
+                    editor.PorcentajeIva = defaultIvaPercentage;
                 }
             }
             else

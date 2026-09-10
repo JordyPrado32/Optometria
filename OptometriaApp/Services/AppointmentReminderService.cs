@@ -87,8 +87,8 @@ public sealed class AppointmentReminderService : BackgroundService
 
             var difference = appointmentDateTime - now;
             var needs24HourReminder = appointment.recordatorio_24hrs != true &&
-                                      difference.TotalHours <= 24 &&
-                                      difference.TotalHours > 23;
+                                       difference.TotalHours <= 24 &&
+                                       difference.TotalHours > 0;
             var needs1HourReminder = appointment.recordatorio_1hr != true &&
                                      difference.TotalMinutes <= 60 &&
                                      difference.TotalMinutes > 0;
@@ -132,7 +132,7 @@ public sealed class AppointmentReminderService : BackgroundService
                 statusLabel,
                 reminderWindow,
                 reminderBody,
-                $"Recordatorio de cita optometrica ({reminderWindow})",
+                $"Recordatorio de cita optométrica ({reminderWindow})",
                 cancellationToken);
 
             appointment.notificacion_enviada = true;
@@ -173,9 +173,70 @@ public sealed class AppointmentReminderService : BackgroundService
             hasChanges = true;
         }
 
+        await ProcessUnconfirmedSlotReleaseAsync(dbContext, customizationService, now, cancellationToken);
+
         if (hasChanges)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task ProcessUnconfirmedSlotReleaseAsync(
+        OpticaDbContext dbContext,
+        OpticaCustomizationService customizationService,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var releaseHours = await customizationService.GetAppointmentReleaseHoursAsync(cancellationToken);
+        var thresholdTime = now.AddHours(releaseHours);
+
+        var cancelledState = await dbContext.tbl_estado_cita
+            .FirstOrDefaultAsync(x => x.nombre_estado == "Cancelada", cancellationToken);
+
+        if (cancelledState is null)
+        {
+            return;
+        }
+
+        var unconfirmedAppointments = await dbContext.tbl_citas
+            .Include(c => c.id_estadoNavigation)
+            .Include(c => c.id_pacienteNavigation)
+            .Include(c => c.id_medicoNavigation)
+                .ThenInclude(m => m.id_usuarioNavigation)
+            .Where(c =>
+                c.id_estadoNavigation != null &&
+                c.id_estadoNavigation.nombre_estado == "Programada")
+            .ToListAsync(cancellationToken);
+
+        var releasedCount = 0;
+        foreach (var appointment in unconfirmedAppointments)
+        {
+            var appointmentDateTime = appointment.fecha_cita.ToDateTime(appointment.hora_inicio);
+            if (appointmentDateTime > now && appointmentDateTime <= thresholdTime)
+            {
+                appointment.id_estado = cancelledState.id_estado;
+                appointment.razon_cancelacion = $"Liberación automática de cupo por falta de confirmación (umbral {releaseHours}h).";
+                appointment.fecha_actualizacion = now;
+                appointment.usuario_actualizacion = "SYSTEM_AUTO_RELEASE";
+
+                var doctorUserId = appointment.id_medicoNavigation?.id_usuario ?? 1;
+                dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
+                {
+                    id_usuario = doctorUserId,
+                    accion = "Liberación automática de cupo",
+                    modulo = "Citas",
+                    fecha = now,
+                    detalle = $"CitaId={appointment.id_cita}; Paciente={appointment.id_pacienteNavigation?.nombres} {appointment.id_pacienteNavigation?.apellidos}; Motivo=Liberacion automatica por falta de confirmacion ({releaseHours}h)"
+                });
+
+                releasedCount++;
+            }
+        }
+
+        if (releasedCount > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Se liberaron {Count} citas no confirmadas de forma automática.", releasedCount);
         }
     }
 }

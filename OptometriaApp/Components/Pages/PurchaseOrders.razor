@@ -11,15 +11,15 @@
 @inject ReportsDataService ReportsService
 @inject PurchaseOrderDocumentService DocumentService
 
-<PageTitle>Ordenes de compra</PageTitle>
+<PageTitle>Órdenes de Compra</PageTitle>
 
 @if (isLoading)
 {
-    <section class="management-shell"><div class="management-card"><h1>Cargando ordenes...</h1></div></section>
+    <section class="management-shell"><div class="management-card"><h1>Cargando órdenes...</h1></div></section>
 }
 else if (!canView)
 {
-    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para este modulo.</p></div></section>
+    <section class="management-shell"><div class="management-card"><h1>Sin acceso</h1><p>Tu rol no tiene permiso para este módulo.</p></div></section>
 }
 else
 {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace OptometriaApp.Models;
@@ -38,4 +38,12 @@ public partial class tbl_configuracion_optica
     public string? tienda_basicos_titulo { get; set; }
 
     public string? tienda_basicos_subtitulo { get; set; }
+
+    public string? opciones_impuesto_csv { get; set; }
+
+    public int? horas_liberacion_cita_no_confirmada { get; set; }
+
+    public string? telefono_recepcion_asistida { get; set; }
+
+    public string? telefono_laboratorio_asistido { get; set; }
 }

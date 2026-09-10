@@ -78,18 +78,92 @@ Si necesitas reprogramarla o cancelarla, ingresa al sistema cuanto antes.
         var settings = await dbContext.tbl_configuracion_opticas.FirstOrDefaultAsync(cancellationToken);
         if (settings is not null)
         {
+            if (settings.porcentaje_impuesto is null or <= 0m)
+            {
+                settings.porcentaje_impuesto = 15.00m;
+            }
+            if (string.IsNullOrWhiteSpace(settings.opciones_impuesto_csv))
+            {
+                settings.opciones_impuesto_csv = "0, 5, 15";
+            }
+            if (settings.horas_liberacion_cita_no_confirmada is null or <= 0)
+            {
+                settings.horas_liberacion_cita_no_confirmada = 2;
+            }
             return settings;
         }
 
         settings = new tbl_configuracion_optica
         {
             nombre_comercial = "Optica Lux",
-            prefijo_pais = "593"
+            prefijo_pais = "593",
+            porcentaje_impuesto = 15.00m,
+            opciones_impuesto_csv = "0, 5, 15",
+            horas_liberacion_cita_no_confirmada = 2
         };
 
         dbContext.tbl_configuracion_opticas.Add(settings);
         await dbContext.SaveChangesAsync(cancellationToken);
         return settings;
+    }
+
+    public async Task<decimal> GetActiveVatPercentageAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await GetSettingsAsync(cancellationToken);
+        return (settings.porcentaje_impuesto ?? 0m) > 0m ? settings.porcentaje_impuesto!.Value : 15.00m;
+    }
+
+    public async Task<decimal[]> GetAvailableVatRatesAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await GetSettingsAsync(cancellationToken);
+        return ParseVatRates(settings.opciones_impuesto_csv, settings.porcentaje_impuesto);
+    }
+
+    public static decimal[] ParseVatRates(string? rawCsv, decimal? defaultVatRate)
+    {
+        var activeRate = (defaultVatRate ?? 0m) > 0m ? defaultVatRate!.Value : 15.00m;
+        if (string.IsNullOrWhiteSpace(rawCsv))
+        {
+            return [0m, 5m, activeRate];
+        }
+
+        var rates = rawCsv.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => decimal.TryParse(s.Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var r) ? r : (decimal?)null)
+            .Where(r => r.HasValue)
+            .Select(r => r!.Value)
+            .Distinct()
+            .OrderBy(r => r)
+            .ToArray();
+
+        if (rates.Length == 0)
+        {
+            return [0m, 5m, activeRate];
+        }
+
+        if (!rates.Contains(activeRate))
+        {
+            rates = rates.Append(activeRate).OrderBy(r => r).ToArray();
+        }
+
+        return rates;
+    }
+
+    public async Task<int> GetAppointmentReleaseHoursAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await GetSettingsAsync(cancellationToken);
+        return (settings.horas_liberacion_cita_no_confirmada ?? 0) > 0 ? settings.horas_liberacion_cita_no_confirmada!.Value : 2;
+    }
+
+    public async Task<(string ReceptionPhone, string LabPhone)> GetAssistedContactNumbersAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await GetSettingsAsync(cancellationToken);
+        var reception = !string.IsNullOrWhiteSpace(settings.telefono_recepcion_asistida)
+            ? settings.telefono_recepcion_asistida
+            : settings.telefono ?? string.Empty;
+        var lab = !string.IsNullOrWhiteSpace(settings.telefono_laboratorio_asistido)
+            ? settings.telefono_laboratorio_asistido
+            : reception;
+        return (reception, lab);
     }
 
     public static async Task<tbl_plantilla_mensaje> GetOrCreateTemplateAsync(

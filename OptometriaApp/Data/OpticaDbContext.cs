@@ -296,6 +296,15 @@ public partial class OpticaDbContext : DbContext
             entity.Property(e => e.tienda_hero_titulo)
                 .HasMaxLength(180)
                 .IsUnicode(false);
+            entity.Property(e => e.opciones_impuesto_csv)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.telefono_recepcion_asistida)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.telefono_laboratorio_asistido)
+                .HasMaxLength(30)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<tbl_consulta>(entity =>

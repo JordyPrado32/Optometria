@@ -31,13 +31,13 @@ public sealed class EmailSender
     {
         if (!IsConfigured())
         {
-            throw new InvalidOperationException("SMTP no configurado. Completa la seccion Smtp en appsettings.json.");
+            throw new InvalidOperationException("SMTP no configurado. Completa la sección Smtp en appsettings.json.");
         }
 
         using var message = new MailMessage
         {
             From = BuildFromAddress(),
-            Subject = "Recuperacion de acceso - clave temporal",
+            Subject = "Recuperación de acceso - clave temporal",
             Body = $"""
 Hola {destinationName},
 
@@ -45,7 +45,7 @@ Tu clave temporal para ingresar al sistema es:
 
 {temporaryPassword}
 
-Esta clave vencera en {minutesValid} minutos. Despues de usarla, el sistema te pedira cambiar tu contrasena.
+Esta clave vencerá en {minutesValid} minutos. Después de usarla, el sistema te pedirá cambiar tu contraseña.
 
 Si no solicitaste este acceso, ignora este correo y avisa al administrador.
 """,
@@ -71,13 +71,13 @@ Si no solicitaste este acceso, ignora este correo y avisa al administrador.
     {
         if (!IsConfigured())
         {
-            throw new InvalidOperationException("SMTP no configurado. Completa la seccion Smtp en appsettings.json.");
+            throw new InvalidOperationException("SMTP no configurado. Completa la sección Smtp en appsettings.json.");
         }
 
         using var message = new MailMessage
         {
             From = BuildFromAddress(),
-            Subject = string.IsNullOrWhiteSpace(customSubject) ? $"Recordatorio de cita optometrica ({reminderWindow})" : customSubject,
+            Subject = string.IsNullOrWhiteSpace(customSubject) ? $"Recordatorio de cita optométrica ({reminderWindow})" : customSubject,
             Body = string.IsNullOrWhiteSpace(customBody) ? $"""
 Hola {destinationName},
 
@@ -108,7 +108,7 @@ Si necesitas reprogramarla o cancelarla, ingresa al sistema cuanto antes.
     {
         if (!IsConfigured())
         {
-            throw new InvalidOperationException("SMTP no configurado. Completa la seccion Smtp en appsettings.json.");
+            throw new InvalidOperationException("SMTP no configurado. Completa la sección Smtp en appsettings.json.");
         }
 
         using var message = new MailMessage

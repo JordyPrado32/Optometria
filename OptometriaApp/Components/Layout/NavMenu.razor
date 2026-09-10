@@ -6,7 +6,7 @@
 @implements IDisposable
 
 <div class="app-nav-shell">
-    <button type="button" class="app-nav-toggle" @onclick="ToggleMenu" aria-label="Abrir menu">
+    <button type="button" class="app-nav-toggle" @onclick="ToggleMenu" aria-label="Abrir menú">
         <span></span>
         <span></span>
         <span></span>
@@ -95,7 +95,7 @@
     private IJSObjectReference? navModule;
     private bool restoredNavigationState;
     private string UserName { get; set; } = "Cuenta";
-    private string RoleName { get; set; } = "Sesion";
+    private string RoleName { get; set; } = "Sesión";
     private ClaimsPrincipal? currentUser;
 
     protected override async Task OnInitializedAsync()
@@ -106,7 +106,7 @@
         NavigationManager.LocationChanged += HandleLocationChanged;
 
         UserName = currentUser.Identity?.Name ?? "Cuenta";
-        RoleName = currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sesion";
+        RoleName = currentUser.FindFirst(ClaimTypes.Role)?.Value ?? "Sesión";
 
         await LoadMenusAsync();
     }
@@ -215,7 +215,7 @@
                 MenuItem = new AppMenuItem
                 {
                     IdMenu = -1000,
-                    Nombre = "Configuracion",
+                    Nombre = "Configuración",
                     Ruta = "/configuracion",
                     Icono = "gear-fill",
                     Orden = GetRouteOrder("/configuracion")

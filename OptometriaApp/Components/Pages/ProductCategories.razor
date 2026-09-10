@@ -6,13 +6,13 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 
-<PageTitle>Categorias de productos</PageTitle>
+<PageTitle>Categorías de productos</PageTitle>
 
 @if (isLoading)
 {
     <section class="management-shell">
         <div class="management-card">
-            <h1>Cargando categorias...</h1>
+            <h1>Cargando categorías...</h1>
         </div>
     </section>
 }
@@ -21,8 +21,8 @@ else if (!canViewCategories)
     <section class="management-shell">
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
-            <h1>Categorias de productos</h1>
-            <p>Tu rol no tiene permiso para ver este modulo.</p>
+            <h1>Categorías de productos</h1>
+            <p>Tu rol no tiene permiso para ver este módulo.</p>
         </div>
     </section>
 }
