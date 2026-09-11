@@ -25,7 +25,7 @@
             <div class="auth-heading">
                 <span class="eyebrow">Configurar ingreso</span>
                 <h2>Autenticación 2 factores</h2>
-                <p>Esta configuracion se pedira una sola vez. Luego se validara en cada acceso.</p>
+                <p>Esta configuración se pedirá una sola vez. Luego se validará en cada acceso.</p>
             </div>
 
             @if (!string.IsNullOrWhiteSpace(Error))
@@ -35,21 +35,21 @@
 
             @if (loading)
             {
-                <p>Cargando configuracion de 2 factores...</p>
+                <p>Cargando configuración de 2 factores...</p>
             }
             else if (!string.IsNullOrWhiteSpace(QrCodeDataUri))
             {
                 <div class="totp-setup-grid">
                     <div class="totp-qr-card">
-                        <img class="totp-qr" src="@QrCodeDataUri" alt="Codigo QR para Google Authenticator" />
+                        <img class="totp-qr" src="@QrCodeDataUri" alt="Código QR para Google Authenticator" />
                     </div>
 
                     <div class="totp-instructions">
                         <h3>Paso a paso</h3>
                         <ol class="totp-steps">
-                            <li>Abre Google Authenticator en tu telefono.</li>
+                            <li>Abre Google Authenticator en tu teléfono.</li>
                             <li>Escanea el QR o escribe la clave manual.</li>
-                            <li>Ingresa el codigo actual de 6 digitos para confirmar.</li>
+                            <li>Ingresa el código actual de 6 dígitos para confirmar.</li>
                         </ol>
 
                         <div class="manual-key-card">
@@ -62,11 +62,11 @@
                 <form method="post" action="/auth/setup-2fa/confirm" class="auth-form totp-form">
                 <AntiforgeryToken />
                     <div>
-                        <label class="form-label" for="code">Codigo de Google Authenticator</label>
+                        <label class="form-label" for="code">Código de Google Authenticator</label>
                         <input id="code" name="code" class="form-control auth-code-input" inputmode="numeric" maxlength="6" placeholder="123456" required />
                     </div>
 
-                    <button type="submit" class="btn btn-primary auth-submit">Activar autenticacion de 2 factores</button>
+                    <button type="submit" class="btn btn-primary auth-submit">Activar autenticación de 2 factores</button>
                     <a class="btn btn-outline-primary auth-back-button" href="@BackUrl" onclick="if (window.history.length > 1) { window.history.back(); return false; }">Regresar</a>
                 </form>
             }

@@ -221,7 +221,7 @@ else
 
             <div class="table-pager">
                 <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousUserPage" disabled="@(CurrentUserPage <= 1)">Anterior</button>
-                <span>Pagina @CurrentUserPage de @TotalUserPages</span>
+                <span>Página @CurrentUserPage de @TotalUserPages</span>
                 <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextUserPage" disabled="@(CurrentUserPage >= TotalUserPages)">Siguiente</button>
             </div>
         </section>
@@ -1238,7 +1238,7 @@ else
         if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) &&
             !DateOnly.TryParse(editor.FechaNacimiento, out _))
         {
-            errorMessage = "La fecha de nacimiento no es valida.";
+            errorMessage = "La fecha de nacimiento no es válida.";
             return false;
         }
 
@@ -1254,13 +1254,13 @@ else
         {
             if (string.IsNullOrWhiteSpace(editor.Password))
             {
-                errorMessage = "Define una contrasena inicial.";
+                errorMessage = "Define una contraseña inicial.";
                 return false;
             }
 
             if (editor.Password != editor.ConfirmPassword)
             {
-                errorMessage = "La contrasena inicial y su confirmacion no coinciden.";
+                errorMessage = "La contraseña inicial y su confirmación no coinciden.";
                 return false;
             }
         }
@@ -1403,32 +1403,32 @@ else
     {
         if (password.Length < 12)
         {
-            return "La contrasena debe tener al menos 12 caracteres.";
+            return "La contraseña debe tener al menos 12 caracteres.";
         }
 
         if (!Regex.IsMatch(password, "[A-Z]"))
         {
-            return "La contrasena debe incluir al menos una letra mayuscula.";
+            return "La contraseña debe incluir al menos una letra mayúscula.";
         }
 
         if (!Regex.IsMatch(password, "[a-z]"))
         {
-            return "La contrasena debe incluir al menos una letra minuscula.";
+            return "La contraseña debe incluir al menos una letra minúscula.";
         }
 
         if (!Regex.IsMatch(password, "[0-9]"))
         {
-            return "La contrasena debe incluir al menos un numero.";
+            return "La contraseña debe incluir al menos un número.";
         }
 
         if (!Regex.IsMatch(password, "[^a-zA-Z0-9\\s]"))
         {
-            return "La contrasena debe incluir al menos un caracter especial.";
+            return "La contraseña debe incluir al menos un carácter especial.";
         }
 
         if (password.Any(char.IsWhiteSpace))
         {
-            return "La contrasena no debe contener espacios.";
+            return "La contraseña no debe contener espacios.";
         }
 
         var loweredPassword = password.ToLowerInvariant();
@@ -1447,7 +1447,7 @@ else
         {
             if (loweredPassword.Contains(fragment))
             {
-                return "La contrasena no debe contener partes del usuario, nombre o correo.";
+                return "La contraseña no debe contener partes del usuario, nombre o correo.";
             }
         }
 

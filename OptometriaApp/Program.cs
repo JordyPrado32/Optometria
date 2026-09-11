@@ -183,7 +183,7 @@ app.MapPost("/auth/login", async (
 
     if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(password))
     {
-        return Results.LocalRedirect("/?error=Completa+tu+usuario+y+contrasena");
+        return Results.LocalRedirect("/?error=Completa+tu+usuario+y+contrase%C3%B1a");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -195,7 +195,7 @@ app.MapPost("/auth/login", async (
     if (usuarioDb is null)
     {
         await WriteSecurityAuditAsync(dbContext, null, "Login fallido", $"Usuario={usuario}; Motivo=Credenciales invalidas");
-        return Results.LocalRedirect("/?error=Usuario+o+contrasena+incorrectos");
+        return Results.LocalRedirect("/?error=Usuario+o+contrase%C3%B1a+incorrectos");
     }
 
     var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
@@ -203,7 +203,7 @@ app.MapPost("/auth/login", async (
     if (usuarioDb.activo == false)
     {
         await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login rechazado", "Motivo=Cuenta inactiva");
-        return Results.LocalRedirect("/?error=Tu+cuenta+esta+inactiva");
+        return Results.LocalRedirect("/?error=Tu+cuenta+est%C3%A1+inactiva");
     }
 
     var passwordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, password);
@@ -270,7 +270,7 @@ app.MapPost("/auth/login", async (
         seguridad.updated_at = DateTime.Now;
         await WriteSecurityAuditAsync(dbContext, usuarioDb.id_usuario, "Login fallido", $"IntentosFallidos={usuarioDb.intentos_fallidos ?? 0}");
         await dbContext.SaveChangesAsync();
-        return Results.LocalRedirect("/?error=Usuario+o+contrasena+incorrectos");
+        return Results.LocalRedirect("/?error=Usuario+o+contrase%C3%B1a+incorrectos");
     }
 
     var usedTemporaryPassword = temporaryPasswordResult != PasswordVerificationResult.Failed;
@@ -338,17 +338,17 @@ app.MapPost("/auth/register", async (
 
     if (!IsValidEmail(email))
     {
-        return Results.LocalRedirect("/registro?error=Ingresa+un+correo+electronico+valido");
+        return Results.LocalRedirect("/registro?error=Ingresa+un+correo+electr%C3%B3nico+v%C3%A1lido");
     }
 
     if (password != confirmPassword)
     {
-        return Results.LocalRedirect("/registro?error=Las+contrasenas+no+coinciden");
+        return Results.LocalRedirect("/registro?error=Las+contrase%C3%B1as+no+coinciden");
     }
 
     if (!acceptedTerms)
     {
-        return Results.LocalRedirect("/registro?error=Debes+aceptar+los+terminos+y+condiciones");
+        return Results.LocalRedirect("/registro?error=Debes+aceptar+los+t%C3%A9rminos+y+condiciones");
     }
 
     var passwordValidationError = ValidatePassword(password, usuario, nombres, apellidos, email);
@@ -360,13 +360,13 @@ app.MapPost("/auth/register", async (
     var existeUsuario = await dbContext.tbl_usuarios.AnyAsync(u => u.usuario.ToLower() == usuarioNormalizado);
     if (existeUsuario)
     {
-        return Results.LocalRedirect("/registro?error=El+nombre+de+usuario+ya+esta+registrado");
+        return Results.LocalRedirect("/registro?error=El+nombre+de+usuario+ya+est%C3%A1+registrado");
     }
 
     var existeEmail = await dbContext.tbl_usuarios.AnyAsync(u => u.email != null && u.email.ToLower() == emailNormalizado);
     if (existeEmail)
     {
-        return Results.LocalRedirect("/registro?error=El+correo+electronico+ya+esta+registrado");
+        return Results.LocalRedirect("/registro?error=El+correo+electr%C3%B3nico+ya+est%C3%A1+registrado");
     }
 
     var rol = await dbContext.tbl_rols.FirstOrDefaultAsync(r => r.id_rol == 2);
@@ -430,7 +430,7 @@ app.MapPost("/auth/forgot-password", async (
 {
     if (!emailSender.IsConfigured())
     {
-        return Results.LocalRedirect("/recuperar-contrasena?error=SMTP+no+configurado.+Completa+la+seccion+Smtp+en+appsettings.json");
+        return Results.LocalRedirect("/recuperar-contrasena?error=SMTP+no+configurado.+Completa+la+secci%C3%B3n+Smtp+en+appsettings.json");
     }
 
     var form = await httpContext.Request.ReadFormAsync();
@@ -439,7 +439,7 @@ app.MapPost("/auth/forgot-password", async (
 
     if (string.IsNullOrWhiteSpace(credential))
     {
-        return Results.LocalRedirect("/recuperar-contrasena?error=Ingresa+tu+usuario+o+correo+electronico");
+        return Results.LocalRedirect("/recuperar-contrasena?error=Ingresa+tu+usuario+o+correo+electr%C3%B3nico");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -451,7 +451,7 @@ app.MapPost("/auth/forgot-password", async (
 
     if (usuarioDb is null || string.IsNullOrWhiteSpace(usuarioDb.email))
     {
-        return Results.LocalRedirect("/?message=Si+la+cuenta+existe,+se+ha+programado+el+envio+de+una+clave+temporal+al+correo+registrado");
+        return Results.LocalRedirect("/?message=Si+la+cuenta+existe,+se+ha+programado+el+env%C3%ADo+de+una+clave+temporal+al+correo+registrado");
     }
 
     var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
@@ -481,7 +481,7 @@ app.MapPost("/auth/setup-2fa/confirm", async (
     var userId = GetUserId(httpContext.User);
     if (userId is null)
     {
-        return Results.LocalRedirect("/?error=Tu+sesion+expiro");
+        return Results.LocalRedirect("/?error=Tu+sesi%C3%B3n+expir%C3%B3");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -492,7 +492,7 @@ app.MapPost("/auth/setup-2fa/confirm", async (
 
     if (usuarioDb is null)
     {
-        return Results.LocalRedirect("/?error=No+se+encontro+el+usuario");
+        return Results.LocalRedirect("/?error=No+se+encontr%C3%B3+el+usuario");
     }
 
     var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
@@ -505,7 +505,7 @@ app.MapPost("/auth/setup-2fa/confirm", async (
 
     if (!authenticatorService.ValidateCode(seguridad.authenticator_secret, code))
     {
-        return Results.LocalRedirect("/configurar-2fa?error=El+codigo+de+Google+Authenticator+no+es+valido");
+        return Results.LocalRedirect("/configurar-2fa?error=El+c%C3%B3digo+de+Google+Authenticator+no+es+v%C3%A1lido");
     }
 
     seguridad.two_factor_enabled = true;
@@ -529,7 +529,7 @@ app.MapPost("/auth/verify-2fa", async (
     var userId = GetUserId(httpContext.User);
     if (userId is null)
     {
-        return Results.LocalRedirect("/?error=Tu+sesion+expiro");
+        return Results.LocalRedirect("/?error=Tu+sesi%C3%B3n+expir%C3%B3");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -540,13 +540,13 @@ app.MapPost("/auth/verify-2fa", async (
 
     if (usuarioDb is null || usuarioDb.tbl_usuario_seguridad is null || string.IsNullOrWhiteSpace(usuarioDb.tbl_usuario_seguridad.authenticator_secret))
     {
-        return Results.LocalRedirect("/?error=No+se+encontro+la+configuracion+de+2+factores");
+        return Results.LocalRedirect("/?error=No+se+encontr%C3%B3+la+configuraci%C3%B3n+de+2+factores");
     }
 
     var code = (await httpContext.Request.ReadFormAsync())["code"].ToString();
     if (!authenticatorService.ValidateCode(usuarioDb.tbl_usuario_seguridad.authenticator_secret, code))
     {
-        return Results.LocalRedirect("/verificar-2fa?error=El+codigo+de+Google+Authenticator+no+es+valido");
+        return Results.LocalRedirect("/verificar-2fa?error=El+c%C3%B3digo+de+Google+Authenticator+no+es+v%C3%A1lido");
     }
 
     usuarioDb.tbl_usuario_seguridad.updated_at = DateTime.Now;
@@ -569,7 +569,7 @@ app.MapPost("/auth/change-password", async (
     var userId = GetUserId(httpContext.User);
     if (userId is null)
     {
-        return Results.LocalRedirect("/?error=Tu+sesion+expiro");
+        return Results.LocalRedirect("/?error=Tu+sesi%C3%B3n+expir%C3%B3");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -590,12 +590,12 @@ app.MapPost("/auth/change-password", async (
 
     if (string.IsNullOrWhiteSpace(password))
     {
-        return Results.LocalRedirect("/cambiar-contrasena?error=Ingresa+la+nueva+contrasena");
+        return Results.LocalRedirect("/cambiar-contrasena?error=Ingresa+la+nueva+contrase%C3%B1a");
     }
 
     if (password != confirmPassword)
     {
-        return Results.LocalRedirect("/cambiar-contrasena?error=Las+contrasenas+no+coinciden");
+        return Results.LocalRedirect("/cambiar-contrasena?error=Las+contrase%C3%B1as+no+coinciden");
     }
 
     var passwordValidationError = ValidatePassword(password, usuarioDb.usuario, usuarioDb.nombres, usuarioDb.apellidos, usuarioDb.email ?? string.Empty);
@@ -629,7 +629,7 @@ app.MapPost("/auth/profile", async (
     var userId = GetUserId(httpContext.User);
     if (userId is null)
     {
-        return Results.LocalRedirect("/?error=Tu+sesion+expiro");
+        return Results.LocalRedirect("/?error=Tu+sesi%C3%B3n+expir%C3%B3");
     }
 
     var usuarioDb = await dbContext.tbl_usuarios
@@ -640,7 +640,7 @@ app.MapPost("/auth/profile", async (
 
     if (usuarioDb is null)
     {
-        return Results.LocalRedirect("/?error=No+se+encontro+el+usuario");
+        return Results.LocalRedirect("/?error=No+se+encontr%C3%B3+el+usuario");
     }
 
     var seguridad = await GetOrCreateUserSecurityAsync(dbContext, usuarioDb);
@@ -669,7 +669,7 @@ app.MapPost("/auth/profile", async (
     {
         if (!DateOnly.TryParseExact(fechaNacimientoRaw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedFechaNacimiento))
         {
-            return Results.LocalRedirect("/perfil?error=La+fecha+de+nacimiento+no+es+valida");
+            return Results.LocalRedirect("/perfil?error=La+fecha+de+nacimiento+no+es+v%C3%A1lida");
         }
 
         fechaNacimiento = parsedFechaNacimiento;
@@ -677,7 +677,7 @@ app.MapPost("/auth/profile", async (
 
     if (!string.IsNullOrWhiteSpace(avatarUrl) && !IsValidAvatarFileName(avatarUrl))
     {
-        return Results.LocalRedirect("/perfil?error=El+avatar+seleccionado+no+es+valido");
+        return Results.LocalRedirect("/perfil?error=El+avatar+seleccionado+no+es+v%C3%A1lido");
     }
 
     usuarioDb.nombres = nombres;
@@ -698,7 +698,7 @@ app.MapPost("/auth/profile", async (
             BuildPrincipal(usuarioDb, AuthStages.FullAccess, false, IsRemembered(httpContext.User)),
             BuildAuthenticationProperties(IsRemembered(httpContext.User)));
 
-        return Results.LocalRedirect("/perfil?message=La+verificacion+2FA+fue+desactivada");
+        return Results.LocalRedirect("/perfil?message=La+verificaci%C3%B3n+2FA+fue+desactivada");
     }
 
     if (twoFactorAction == "enable" && seguridad.two_factor_enabled != true)
@@ -718,23 +718,23 @@ app.MapPost("/auth/profile", async (
     {
         if (!hasCurrentPassword || !hasNewPassword || !hasConfirmNewPassword)
         {
-            return Results.LocalRedirect("/perfil?error=Completa+los+campos+actual%2C+nueva+y+confirmacion+de+contrasena");
+            return Results.LocalRedirect("/perfil?error=Completa+los+campos+actual%2C+nueva+y+confirmaci%C3%B3n+de+contrase%C3%B1a");
         }
 
         var currentPasswordResult = VerifyPassword(passwordHasher, usuarioDb, usuarioDb.password_hash, currentPassword);
         if (currentPasswordResult == PasswordVerificationResult.Failed)
         {
-            return Results.LocalRedirect("/perfil?error=La+contrasena+actual+no+coincide");
+            return Results.LocalRedirect("/perfil?error=La+contrase%C3%B1a+actual+no+coincide");
         }
 
         if (newPassword != confirmNewPassword)
         {
-            return Results.LocalRedirect("/perfil?error=La+nueva+contrasena+y+su+confirmacion+no+coinciden");
+            return Results.LocalRedirect("/perfil?error=La+nueva+contrase%C3%B1a+y+su+confirmaci%C3%B3n+no+coinciden");
         }
 
         if (string.Equals(currentPassword, newPassword, StringComparison.Ordinal))
         {
-            return Results.LocalRedirect("/perfil?error=La+nueva+contrasena+debe+ser+diferente+a+la+actual");
+            return Results.LocalRedirect("/perfil?error=La+nueva+contrase%C3%B1a+debe+ser+diferente+a+la+actual");
         }
 
         var passwordValidationError = ValidatePassword(newPassword, usuarioDb.usuario, nombres, apellidos, usuarioDb.email ?? string.Empty);
@@ -769,12 +769,12 @@ app.MapGet("/auth/logout", async (HttpContext httpContext) =>
         await using var scope = httpContext.RequestServices.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<OpticaDbContext>();
         await RegisterSessionEndAsync(dbContext, userId.Value);
-        await WriteSecurityAuditAsync(dbContext, userId.Value, "Logout", "Cierre de sesion manual");
+        await WriteSecurityAuditAsync(dbContext, userId.Value, "Logout", "Cierre de sesión manual");
         await dbContext.SaveChangesAsync();
     }
 
     await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    return Results.LocalRedirect("/?message=Sesion+cerrada");
+    return Results.LocalRedirect("/?message=Sesi%C3%B3n+cerrada");
 });
 
 app.MapGet("/exports/users.csv", async (
@@ -4043,6 +4043,7 @@ static async Task EnsureAppointmentSchemaAsync(WebApplication app)
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_bloqueo_fechas' AND object_id = OBJECT_ID('dbo.tbl_bloqueo_horarios'))
             CREATE NONCLUSTERED INDEX idx_bloqueo_fechas ON dbo.tbl_bloqueo_horarios(fecha_inicio, fecha_fin);
 
+        IF COL_LENGTH('dbo.tbl_citas', 'recordatorio_12hrs') IS NULL ALTER TABLE dbo.tbl_citas ADD recordatorio_12hrs BIT NOT NULL CONSTRAINT DF_tbl_citas_recordatorio_12 DEFAULT (0);
         IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_agenda') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_agenda BIT NOT NULL CONSTRAINT DF_tbl_medico_agenda_legacy DEFAULT (1);
         IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_disponibilidad') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_disponibilidad BIT NOT NULL CONSTRAINT DF_tbl_medico_disponibilidad_legacy DEFAULT (1);
         IF COL_LENGTH('dbo.tbl_medico', 'puede_gestionar_historia_clinica') IS NULL ALTER TABLE dbo.tbl_medico ADD puede_gestionar_historia_clinica BIT NOT NULL CONSTRAINT DF_tbl_medico_historia_legacy DEFAULT (1);
@@ -5670,32 +5671,32 @@ static string? ValidatePassword(string password, string usuario, string nombres,
 {
     if (password.Length < 12)
     {
-        return "La contrasena debe tener al menos 12 caracteres";
+        return "La contraseña debe tener al menos 12 caracteres";
     }
 
     if (!Regex.IsMatch(password, "[A-Z]"))
     {
-        return "La contrasena debe incluir al menos una letra mayuscula";
+        return "La contraseña debe incluir al menos una letra mayúscula";
     }
 
     if (!Regex.IsMatch(password, "[a-z]"))
     {
-        return "La contrasena debe incluir al menos una letra minuscula";
+        return "La contraseña debe incluir al menos una letra minúscula";
     }
 
     if (!Regex.IsMatch(password, "[0-9]"))
     {
-        return "La contrasena debe incluir al menos un numero";
+        return "La contraseña debe incluir al menos un número";
     }
 
     if (!Regex.IsMatch(password, "[^a-zA-Z0-9\\s]"))
     {
-        return "La contrasena debe incluir al menos un caracter especial";
+        return "La contraseña debe incluir al menos un carácter especial";
     }
 
     if (password.Any(char.IsWhiteSpace))
     {
-        return "La contrasena no debe contener espacios";
+        return "La contraseña no debe contener espacios";
     }
 
     var loweredPassword = password.ToLowerInvariant();
@@ -5714,7 +5715,7 @@ static string? ValidatePassword(string password, string usuario, string nombres,
     {
         if (loweredPassword.Contains(fragment))
         {
-            return "La contrasena no debe contener partes de tu usuario, nombre o correo";
+            return "La contraseña no debe contener partes de tu usuario, nombre o correo";
         }
     }
 

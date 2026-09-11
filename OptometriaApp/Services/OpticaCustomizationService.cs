@@ -63,14 +63,14 @@ public sealed class OpticaCustomizationService
         """
 Hola {{patient_name}},
 
-Te recordamos que tienes una cita {{reminder_window}} con el profesional {{doctor_name}}.
+Te recordamos que tienes una cita de optometría programada {{reminder_window}} con el profesional {{doctor_name}}.
 
 Fecha: {{appointment_date}}
 Hora: {{appointment_time}}
-Tipo: {{appointment_type}}
+Modalidad: {{appointment_type}}
 Estado actual: {{status_label}}
 
-Si necesitas reprogramarla o cancelarla, ingresa al sistema cuanto antes.
+Por favor ingresa a la aplicación para confirmar tu asistencia o, en caso de algún inconveniente, reagendar o cancelar la cita con anticipación para liberar tu turno.
 """;
 
     public static async Task<tbl_configuracion_optica> GetOrCreateSettingsAsync(OpticaDbContext dbContext, CancellationToken cancellationToken = default)

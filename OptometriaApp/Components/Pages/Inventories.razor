@@ -350,22 +350,22 @@ else
             await db.SaveChangesAsync();
             await KardexService.RebuildForProductsAsync(affectedProductIds, currentUserId, "Movimiento manual");
             CloseForm();
-            ShowAlert("Movimiento registrado", "El movimiento de inventario se guardo correctamente.", false);
+            ShowAlert("Movimiento registrado", "El movimiento de inventario se guardó correctamente.", false);
             await LoadAsync();
         }
         catch (DbUpdateException)
         {
-            ShowAlert("No se pudo guardar el movimiento.", "La base de datos rechazo el guardado del kardex. La configuracion ya fue ajustada; recarga la pagina e intenta de nuevo.", true);
+            ShowAlert("No se pudo guardar el movimiento.", "La base de datos rechazó el guardado del kardex. La configuración ya fue ajustada; recarga la página e intenta de nuevo.", true);
         }
         catch (Exception ex)
         {
-            ShowAlert("No se pudo guardar el movimiento.", $"Ocurrio un error inesperado al guardar el inventario: {ex.Message}", true);
+            ShowAlert("No se pudo guardar el movimiento.", $"Ocurrió un error inesperado al guardar el inventario: {ex.Message}", true);
         }
     }
 
     private async Task DeleteAsync(tbl_movimiento_inventario item)
     {
-        ShowAlert("No se puede eliminar el movimiento.", "Los movimientos historicos no se eliminan. Registra un movimiento compensatorio para corregir el stock.", true);
+        ShowAlert("No se puede eliminar el movimiento.", "Los movimientos históricos no se eliminan. Registra un movimiento compensatorio para corregir el stock.", true);
     }
 
     private void ClearFilters()

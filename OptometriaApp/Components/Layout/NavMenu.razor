@@ -405,11 +405,11 @@
 
     private static string GetMenuCategory(string route) => route switch
     {
-        "/dashboard" or "/pacientes" or "/doctor/ingresar-pacientes" or "/doctor/mis-pacientes" or "/doctor/historia-clinica" or "/citas" or "/disponibilidad-medica" or "/doctores" or "/laboratorios" or "/pedidos-laboratorio" or "/envios-laboratorio" => "Clinica",
+        "/dashboard" or "/pacientes" or "/doctor/ingresar-pacientes" or "/doctor/mis-pacientes" or "/doctor/historia-clinica" or "/citas" or "/disponibilidad-medica" or "/doctores" or "/laboratorios" or "/pedidos-laboratorio" or "/envios-laboratorio" => "Clínica",
         "/clientes" or "/emisor" or "/invoices" or "/facturas" or "/mis-facturas" or "/mis-notas-de-credito" or "/cuentas-por-cobrar" or "/ingresos" or "/tienda-online" or "/mis-compras-online" or "/gestion-tienda-online" or "/cobros-transferencia" => "Comercial",
         "/productos" or "/categorias-de-productos" or "/proveedores" or "/purchases" or "/compras" or "/ordenes-de-compra" or "/recepciones-de-compra" or "/liquidaciones-de-compra" or "/inventarios" or "/kardex" => "Inventario",
-        "/configuracion" or "/usuarios" or "/roles" or "/menus" or "/perfil" => "Configuracion",
-        _ => "Configuracion"
+        "/configuracion" or "/usuarios" or "/roles" or "/menus" or "/perfil" => "Configuración",
+        _ => "Configuración"
     };
 
     private static string GetMenuIconClass(AppMenuItem menu)

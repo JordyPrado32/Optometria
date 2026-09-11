@@ -11,9 +11,9 @@
 <div class="auth-shell">
     <section class="auth-panel auth-panel-brand">
         <div class="brand-badge">Segundo factor</div>
-        <h1>Confirma tu codigo de Google Authenticator</h1>
+        <h1>Confirma tu código de Google Authenticator</h1>
         <p>
-            Ya validamos tu usuario y contrasena. Falta el codigo de 6 digitos
+            Ya validamos tu usuario y contraseña. Falta el código de 6 dígitos
             para abrir el sistema.
         </p>
     </section>
@@ -21,9 +21,9 @@
     <section class="auth-panel auth-panel-form">
         <div class="auth-card">
             <div class="auth-heading">
-                <span class="eyebrow">Verificacion 2FA</span>
-                <h2>Ingresa tu codigo</h2>
-                <p>Este paso se pedira siempre que ingreses al sistema.</p>
+                <span class="eyebrow">Verificación 2FA</span>
+                <h2>Ingresa tu código</h2>
+                <p>Este paso se pedirá siempre que ingreses al sistema.</p>
             </div>
 
             @if (!string.IsNullOrWhiteSpace(Error))
@@ -34,15 +34,15 @@
             <form method="post" action="/auth/verify-2fa" class="auth-form">
                 <AntiforgeryToken />
                 <div>
-                    <label class="form-label" for="code">Codigo de 6 digitos</label>
+                    <label class="form-label" for="code">Código de 6 dígitos</label>
                     <input id="code" name="code" class="form-control auth-code-input" inputmode="numeric" maxlength="6" placeholder="123456" required />
                 </div>
 
-                <button type="submit" class="btn btn-primary auth-submit">Validar codigo</button>
+                <button type="submit" class="btn btn-primary auth-submit">Validar código</button>
             </form>
 
             <div class="auth-footer">
-                <span>Te equivocaste de cuenta?</span>
+                <span>¿Te equivocaste de cuenta?</span>
                 <a href="/auth/logout">Volver</a>
             </div>
         </div>

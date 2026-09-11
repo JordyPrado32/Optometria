@@ -246,15 +246,15 @@
     {
         var kpis = new Dictionary<string, string>
         {
-            ["Periodo"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
+            ["Período"] = $"{filters.StartDate:yyyy-MM-dd} a {filters.EndDate:yyyy-MM-dd}",
             ["Total Ingresos"] = $"+${data.TotalIncome:N2}",
             ["Total Egresos"] = $"-${data.TotalExpense:N2}",
             ["Flujo Neto"] = $"${data.NetCashFlow:N2}",
             ["Ingresos Efectivo"] = $"${data.IncomeCash:N2}",
-            ["Ingresos Electronicos"] = $"${data.IncomeElectronic:N2}"
+            ["Ingresos Electrónicos"] = $"${data.IncomeElectronic:N2}"
         };
 
-        var headers = new[] { "Fecha", "Tipo", "Categoria", "Documento", "Metodo", "Monto" };
+        var headers = new[] { "Fecha", "Tipo", "Categoría", "Documento", "Método", "Monto" };
         var rows = data.Rows.Select(r => new[]
         {
             r.Date.ToString("yyyy-MM-dd"),

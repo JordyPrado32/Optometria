@@ -87,13 +87,16 @@ public sealed class AppointmentReminderService : BackgroundService
 
             var difference = appointmentDateTime - now;
             var needs24HourReminder = appointment.recordatorio_24hrs != true &&
-                                       difference.TotalHours <= 24 &&
-                                       difference.TotalHours > 0;
+                                      difference.TotalHours <= 24 &&
+                                      difference.TotalHours > 12;
+            var needs12HourReminder = appointment.recordatorio_12hrs != true &&
+                                      difference.TotalHours <= 12 &&
+                                      difference.TotalHours > 1;
             var needs1HourReminder = appointment.recordatorio_1hr != true &&
                                      difference.TotalMinutes <= 60 &&
                                      difference.TotalMinutes > 0;
 
-            if (!needs24HourReminder && !needs1HourReminder)
+            if (!needs24HourReminder && !needs12HourReminder && !needs1HourReminder)
             {
                 continue;
             }
@@ -106,7 +109,11 @@ public sealed class AppointmentReminderService : BackgroundService
 
             var patientName = $"{appointment.id_pacienteNavigation.nombres} {appointment.id_pacienteNavigation.apellidos}".Trim();
             var doctorName = $"{appointment.id_medicoNavigation.id_usuarioNavigation.nombres} {appointment.id_medicoNavigation.id_usuarioNavigation.apellidos}".Trim();
-            var reminderWindow = needs24HourReminder ? "24 horas antes" : "1 hora antes";
+            var reminderWindow = needs1HourReminder
+                ? "1 hora antes"
+                : needs12HourReminder
+                    ? "12 horas antes"
+                    : "24 horas antes";
             var appointmentType = string.IsNullOrWhiteSpace(appointment.tipo_cita) ? "Presencial" : appointment.tipo_cita!;
             var statusLabel = appointment.id_estadoNavigation?.nombre_estado ?? "Programada";
             var reminderBody = OpticaCustomizationService.RenderTemplate(
@@ -132,7 +139,7 @@ public sealed class AppointmentReminderService : BackgroundService
                 statusLabel,
                 reminderWindow,
                 reminderBody,
-                $"Recordatorio de cita optométrica ({reminderWindow})",
+                $"Recordatorio de cita optométrica ({reminderWindow}) · Óptica Lux",
                 cancellationToken);
 
             appointment.notificacion_enviada = true;
@@ -146,9 +153,17 @@ public sealed class AppointmentReminderService : BackgroundService
                 appointment.recordatorio_24hrs = true;
             }
 
+            if (needs12HourReminder)
+            {
+                appointment.recordatorio_12hrs = true;
+                appointment.recordatorio_24hrs = true;
+            }
+
             if (needs1HourReminder)
             {
                 appointment.recordatorio_1hr = true;
+                appointment.recordatorio_12hrs = true;
+                appointment.recordatorio_24hrs = true;
             }
 
             dbContext.tbl_comunicacions.Add(new tbl_comunicacion

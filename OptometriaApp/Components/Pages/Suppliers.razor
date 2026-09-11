@@ -240,12 +240,12 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label">Número identificación *</label>
+                        <label class="form-label">Número de identificación *</label>
                         <input class="form-control" @bind="editor.Ruc" readonly="@(!CanModifyEditor)" maxlength="13" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
-                        <label class="form-label">Tipo identificacion *</label>
+                        <label class="form-label">Tipo de identificación *</label>
                         <select class="form-select" @bind="editor.TipoIdentificacion" disabled="@(!CanModifyEditor)">
                             @foreach (var option in identificationOptions)
                             {
@@ -260,7 +260,7 @@ else
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label">Direccion *</label>
+                        <label class="form-label">Dirección *</label>
                         <input class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
                     </div>
 
@@ -290,7 +290,7 @@ else
                         <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
                         <div class="additional-details-body">
                             <div>
-                                <label class="form-label">Razon social</label>
+                                <label class="form-label">Razón social</label>
                                 <input class="form-control" @bind="editor.RazonSocial" readonly="@(!CanModifyEditor)" maxlength="300" />
                             </div>
 
@@ -300,12 +300,12 @@ else
                             </div>
 
                             <div>
-                                <label class="form-label">Telefono</label>
+                                <label class="form-label">Teléfono</label>
                                 <input class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                             </div>
 
                             <div>
-                                <label class="form-label">Codigo postal</label>
+                                <label class="form-label">Código postal</label>
                                 <input class="form-control" @bind="editor.CodigoPostal" readonly="@(!CanModifyEditor)" maxlength="10" />
                             </div>
 
@@ -315,17 +315,17 @@ else
                             </div>
 
                             <div>
-                                <label class="form-label">Contacto telefono</label>
+                                <label class="form-label">Teléfono de contacto</label>
                                 <input class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                             </div>
 
                             <div>
-                                <label class="form-label">Contacto correo</label>
+                                <label class="form-label">Correo de contacto</label>
                                 <input type="email" class="form-control" @bind="editor.ContactoCorreo" readonly="@(!CanModifyEditor)" maxlength="100" />
                             </div>
 
                             <div>
-                                <label class="form-label">Dias credito promedio</label>
+                                <label class="form-label">Días de crédito promedio</label>
                                 <input type="number" class="form-control" @bind="editor.DiasCreditoPromedio" readonly="@(!CanModifyEditor)" min="0" />
                             </div>
 
@@ -335,7 +335,7 @@ else
                             </div>
 
                             <div>
-                                <label class="form-label">Limite credito</label>
+                                <label class="form-label">Límite de crédito</label>
                                 <input type="number" step="0.01" class="form-control" @bind="editor.LimiteCredito" readonly="@(!CanModifyEditor)" min="0" />
                             </div>
 
@@ -1025,13 +1025,13 @@ else
 
         if (!AppValidation.IsValidEmail(editor.Email))
         {
-            errorMessage = "Ingresa un correo electronico valido.";
+            errorMessage = "Ingresa un correo electrónico válido.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.ContactoCorreo) && !IsValidEmail(editor.ContactoCorreo))
         {
-            errorMessage = "Ingresa un correo del contacto valido.";
+            errorMessage = "Ingresa un correo de contacto válido.";
             return false;
         }
 

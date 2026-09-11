@@ -839,10 +839,10 @@ else
                                         <span class="badge" style="background: @stateBg !important; color: @stateColor !important; font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 800;">
                                             ● @stateName
                                         </span>
-                                        @if (appointment.recordatorio_24hrs == true)
+                                        @if (appointment.recordatorio_24hrs == true || appointment.recordatorio_12hrs == true || appointment.recordatorio_1hr == true)
                                         {
-                                            <span class="badge" style="background: #e0e7ff !important; color: #3730a3 !important; font-size: 0.74rem; padding: 0.35rem 0.65rem; border-radius: 999px; font-weight: 700;" title="Recordatorio 24h enviado por Gmail">
-                                                <i class="bi bi-envelope-check-fill"></i> Gmail 24h enviado
+                                            <span class="badge" style="background: #e0e7ff !important; color: #3730a3 !important; font-size: 0.74rem; padding: 0.35rem 0.65rem; border-radius: 999px; font-weight: 700;" title="Recordatorio enviado por Gmail">
+                                                <i class="bi bi-envelope-check-fill"></i> Gmail enviado
                                             </span>
                                         }
                                     </div>
@@ -967,7 +967,7 @@ else
                             <i class="bi bi-shield-check"></i> Confirmación Inteligente
                         </span>
                         <h2 style="font-size: 1.4rem; font-weight: 800; color: #241d18; margin: 0.4rem 0 0 0;">
-                            Gestión de Cita #@smartSelectedAppointment.id_cita
+                            Confirmación de Cita
                         </h2>
                     </div>
                     <button type="button" class="btn-close-modal" @onclick="CloseSmartConfirmationModal">×</button>
@@ -1208,7 +1208,7 @@ else
                 <div class="appointment-modal-layout">
                     <div class="appointment-modal-fields">
                         <div>
-                            <label class="form-label" for="modalAppointmentDoctor">Medico *</label>
+                            <label class="form-label" for="modalAppointmentDoctor">Médico *</label>
                             <select id="modalAppointmentDoctor" class="form-select" value="@appointmentEditor.IdMedico" @onchange="OnDoctorSelectionChanged" disabled="@(!CanChangeDoctor)">
                                 <option value="0">Selecciona</option>
                                 @foreach (var doctor in doctors)
@@ -1252,13 +1252,13 @@ else
                         @if (ShowCancellationReasonInForm)
                         {
                             <div>
-                                <label class="form-label" for="modalAppointmentCancelReason">Razon de cancelacion</label>
+                                <label class="form-label" for="modalAppointmentCancelReason">Razón de cancelación</label>
                                 <textarea id="modalAppointmentCancelReason" class="form-control" rows="2" @bind="appointmentEditor.RazonCancelacion" readonly="@(!CanCancelAppointments)"></textarea>
                             </div>
                         }
                     </div>
 
-                    <section class="appointment-scheduler-panel" aria-label="Seleccion de fecha y turno">
+                    <section class="appointment-scheduler-panel" aria-label="Selección de fecha y turno">
                         <div class="appointment-scheduler-header">
                             <button type="button" class="calendar-nav-button" title="Mes anterior" @onclick="() => ChangeAppointmentCalendarMonthAsync(-1)" disabled="@(!CanEditAppointments)">
                                 <i class="bi bi-chevron-left"></i>
@@ -1337,14 +1337,14 @@ else
                     <summary><span><i class="bi bi-info-circle"></i> Detalles adicionales</span></summary>
                     <div class="additional-details-body is-single">
                         <div>
-                            <label class="form-label" for="modalAppointmentDescription">Descripcion adicional</label>
+                            <label class="form-label" for="modalAppointmentDescription">Descripción adicional</label>
                             <textarea id="modalAppointmentDescription" class="form-control" rows="3" @bind="appointmentEditor.Descripcion" readonly="@(!CanEditAppointments)"></textarea>
                         </div>
 
                         @if (CanWriteMedicalNotes)
                         {
                             <div>
-                                <label class="form-label" for="modalAppointmentNotes">Notas medicas</label>
+                                <label class="form-label" for="modalAppointmentNotes">Notas médicas</label>
                                 <textarea id="modalAppointmentNotes" class="form-control" rows="3" @bind="appointmentEditor.NotasMedico"></textarea>
                             </div>
                         }
@@ -1366,7 +1366,7 @@ else
                 @if (!isCreatingAppointment && CanCloseAppointments)
                 {
                     <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("Realizada")'>Marcar realizada</button>
-                    <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("No presento")'>No presento</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick='() => ChangeAppointmentStateAsync("No presento")'>No presentó</button>
                 }
                 @if (!isCreatingAppointment && CanCancelAppointments)
                 {
@@ -1536,6 +1536,7 @@ else
     private bool showApiDraftModal;
     private bool showFormCancellationReason;
     private bool showSmartConfirmationModal;
+    private bool hasPromptedInitialConfirmation;
     private tbl_citas? smartSelectedAppointment;
     private string smartCancelReason = string.Empty;
     private string assistedReceptionPhone = string.Empty;
@@ -1824,6 +1825,21 @@ else
         var contactNumbers = await CustomizationService.GetAssistedContactNumbersAsync();
         assistedReceptionPhone = contactNumbers.ReceptionPhone;
         assistedLabPhone = contactNumbers.LabPhone;
+
+        if (!hasPromptedInitialConfirmation && !showFormModal && !showSmartConfirmationModal)
+        {
+            var todayDate = DateOnly.FromDateTime(DateTime.Today);
+            var pendingAppt = appointments.FirstOrDefault(c =>
+                (string.Equals(c.id_estadoNavigation?.nombre_estado, "Programada", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(c.id_estadoNavigation?.nombre_estado, "Reprogramada", StringComparison.OrdinalIgnoreCase)) &&
+                c.fecha_cita >= todayDate);
+
+            if (pendingAppt != null)
+            {
+                hasPromptedInitialConfirmation = true;
+                OpenSmartConfirmationModal(pendingAppt);
+            }
+        }
 
         isLoading = false;
     }
@@ -2439,7 +2455,27 @@ else
                 entity.fecha_cita,
                 entity.hora_inicio);
 
-            statusMessage = "La cita fue agendada correctamente.";
+            if (!string.IsNullOrWhiteSpace(patient.email) && EmailSender.IsConfigured())
+            {
+                try
+                {
+                    await EmailSender.SendAppointmentCreatedAsync(
+                        patient.email.Trim(),
+                        GetPatientDisplayName(patient),
+                        GetDoctorDisplayName(doctor),
+                        entity.fecha_cita,
+                        entity.hora_inicio,
+                        entity.hora_fin,
+                        entity.tipo_cita ?? "Presencial",
+                        entity.motivo_cita);
+                }
+                catch
+                {
+                    // No bloquear el agendamiento si falla el envío de correo por red
+                }
+            }
+
+            statusMessage = "La cita fue agendada correctamente y se envió la confirmación por correo.";
             await LoadAsync(entity.id_cita);
             return;
         }
@@ -2474,6 +2510,7 @@ else
         {
             appointmentEntity.id_estado = await GetStateIdAsync(dbContext, "Reprogramada");
             appointmentEntity.recordatorio_24hrs = false;
+            appointmentEntity.recordatorio_12hrs = false;
             appointmentEntity.recordatorio_1hr = false;
             appointmentEntity.notificacion_enviada = false;
         }
@@ -3796,6 +3833,7 @@ else
                 $"CitaId={appointment.id_cita}; MedicoId={doctorId}; BloqueoId={blockId}; NuevaFecha={appointment.fecha_cita:yyyy-MM-dd}; NuevaHora={appointment.hora_inicio:HH\\:mm}");
 
             appointment.recordatorio_24hrs = false;
+            appointment.recordatorio_12hrs = false;
             appointment.recordatorio_1hr = false;
             appointment.notificacion_enviada = false;
             await dbContext.SaveChangesAsync();

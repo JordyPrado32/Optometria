@@ -113,17 +113,17 @@
             <span class="eyebrow">Portal paciente</span>
             <h1 style="margin:0.25rem 0 0.6rem;">Seguimiento de pedido de laboratorio</h1>
             <p style="color:var(--color-taupe); margin:0;">
-                Consulta el estado de tu pedido ingresando el numero de orden y tu documento. No necesitas iniciar sesion.
+                Consulta el estado de tu pedido ingresando el número de orden y tu documento. No necesitas iniciar sesión.
             </p>
 
             <div class="tracking-grid" style="margin-top:1.25rem;">
                 <div>
-                    <label class="form-label">Numero de orden</label>
+                    <label class="form-label">Número de orden</label>
                     <input class="form-control" @bind="orderNumber" maxlength="50" placeholder="Ej. RX-000123" />
                 </div>
                 <div>
                     <label class="form-label">Documento del paciente</label>
-                    <input class="form-control" @bind="patientDocument" maxlength="20" placeholder="Cedula o documento" />
+                    <input class="form-control" @bind="patientDocument" maxlength="20" placeholder="Cédula o documento" />
                 </div>
                 <div style="display:flex; align-items:end;">
                     <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@isLoadingResult">Consultar estado</button>
@@ -159,7 +159,7 @@
                         <strong>@result.LaboratoryName</strong>
                     </div>
                     <div class="tracking-kpi">
-                        <span>Ultima actualizacion</span>
+                        <span>Última actualización</span>
                         <strong>@result.LastUpdatedLabel</strong>
                     </div>
                 </div>
@@ -187,17 +187,17 @@
 
             <section class="tracking-card">
                 <div class="management-card-header">
-                    <h2>Detalle logistica</h2>
+                    <h2>Detalle de logística</h2>
                     <span>@result.RxType</span>
                 </div>
 
                 <div class="tracking-grid" style="margin-top:1rem;">
                     <div class="tracking-kpi">
-                        <span>Metodo de entrega</span>
+                        <span>Método de entrega</span>
                         <strong>@result.DeliveryMethod</strong>
                     </div>
                     <div class="tracking-kpi">
-                        <span>Guia</span>
+                        <span>Guía</span>
                         <strong>@result.GuideNumber</strong>
                     </div>
                     <div class="tracking-kpi">
@@ -213,7 +213,7 @@
                 @if (!string.IsNullOrWhiteSpace(result.DeliveryAddress))
                 {
                     <div style="margin-top:1rem;">
-                        <strong style="color:var(--color-ink);">Direccion de entrega</strong>
+                        <strong style="color:var(--color-ink);">Dirección de entrega</strong>
                         <p style="margin:0.35rem 0 0; color:var(--color-taupe);">@result.DeliveryAddress</p>
                     </div>
                 }
@@ -264,7 +264,7 @@
         var normalizedDocument = Normalize(patientDocument);
         if (string.IsNullOrWhiteSpace(normalizedOrder) || string.IsNullOrWhiteSpace(normalizedDocument))
         {
-            errorMessage = "Ingresa el numero de orden y el documento del paciente.";
+            errorMessage = "Ingresa el número de orden y el documento del paciente.";
             return;
         }
 
@@ -286,7 +286,7 @@
 
             if (entity is null)
             {
-                errorMessage = "No encontramos un pedido con esos datos. Verifica numero de orden y documento.";
+                errorMessage = "No encontramos un pedido con esos datos. Verifica el número de orden y documento.";
                 return;
             }
 
@@ -307,10 +307,10 @@
                 PatientName = $"{patient.nombres} {patient.apellidos}".Trim(),
                 LaboratoryName = entity.id_laboratorioNavigation.nombre,
                 CurrentStatus = currentStatus,
-                LastUpdatedLabel = lastUpdated?.ToString("yyyy-MM-dd HH:mm") ?? "Sin actualizacion",
+                LastUpdatedLabel = lastUpdated?.ToString("yyyy-MM-dd HH:mm") ?? "Sin actualización",
                 RxType = string.IsNullOrWhiteSpace(entity.tipo_rx) ? "Lente" : entity.tipo_rx!,
                 DeliveryMethod = string.IsNullOrWhiteSpace(shipment?.metodo_entrega) ? "Pendiente de definir" : shipment!.metodo_entrega!,
-                GuideNumber = string.IsNullOrWhiteSpace(shipment?.numero_guia_remision) ? "Sin guia" : shipment!.numero_guia_remision!,
+                GuideNumber = string.IsNullOrWhiteSpace(shipment?.numero_guia_remision) ? "Sin guía" : shipment!.numero_guia_remision!,
                 CourierLabel = string.IsNullOrWhiteSpace(shipment?.repartidor_nombre) ? "Pendiente" : shipment!.repartidor_nombre!,
                 DeliveryAddress = shipment?.direccion_entrega,
                 TrackingMapUrl = shipment?.url_mapa_seguimiento,
@@ -364,7 +364,7 @@
         var stages = new[]
         {
             new TrackingStageRow(1, "Orden enviada", "La orden fue registrada y enviada al laboratorio."),
-            new TrackingStageRow(2, "Listo para entrega", "El producto ya esta listo para retiro o despacho."),
+            new TrackingStageRow(2, "Listo para entrega", "El producto ya está listo para retiro o despacho."),
             new TrackingStageRow(3, "Entregado", "El pedido fue entregado al paciente o receptor autorizado.")
         };
 

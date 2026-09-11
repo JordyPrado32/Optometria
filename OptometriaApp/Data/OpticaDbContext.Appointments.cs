@@ -108,6 +108,7 @@ public partial class OpticaDbContext
             entity.Property(e => e.notificacion_enviada).HasDefaultValue(false);
             entity.Property(e => e.tipo_notificacion).HasMaxLength(50).IsUnicode(false);
             entity.Property(e => e.recordatorio_24hrs).HasDefaultValue(false);
+            entity.Property(e => e.recordatorio_12hrs).HasDefaultValue(false);
             entity.Property(e => e.recordatorio_1hr).HasDefaultValue(false);
             entity.Property(e => e.notas_medico).IsUnicode(false);
             entity.Property(e => e.fecha_creacion).HasDefaultValueSql("(getdate())");

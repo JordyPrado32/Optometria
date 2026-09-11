@@ -153,12 +153,12 @@ else
                         <label class="form-label" for="issuerTipoPersona">Tipo de persona</label>
                         <select id="issuerTipoPersona" class="form-select" @bind="editor.TipoPersona" disabled="@(!CanModifyEditor)">
                             <option value="N">Natural</option>
-                            <option value="J">Juridica</option>
+                            <option value="J">Jurídica</option>
                         </select>
                     </div>
 
                     <div>
-                        <label class="form-label" for="issuerTipoId">Tipo de identificacion</label>
+                        <label class="form-label" for="issuerTipoId">Tipo de identificación</label>
                         <select id="issuerTipoId" class="form-select" @bind="editor.TipoIdentificacion" disabled="@(!CanModifyEditor)">
                             @foreach (var option in identificationOptions)
                             {
@@ -168,7 +168,7 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="issuerRazon">Razon social</label>
+                        <label class="form-label" for="issuerRazon">Razón social</label>
                         <input id="issuerRazon" class="form-control" @bind="editor.RazonSocial" readonly="@(!CanModifyEditor)" maxlength="300" />
                     </div>
 
@@ -178,17 +178,17 @@ else
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label" for="issuerDireccion">Direccion</label>
+                        <label class="form-label" for="issuerDireccion">Dirección</label>
                         <input id="issuerDireccion" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="500" />
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label" for="issuerDireccionEstablecimiento">Direccion del establecimiento</label>
+                        <label class="form-label" for="issuerDireccionEstablecimiento">Dirección del establecimiento</label>
                         <input id="issuerDireccionEstablecimiento" class="form-control" @bind="editor.DireccionEstablecimiento" readonly="@(!CanModifyEditor)" maxlength="500" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="issuerPhone">Telefono</label>
+                        <label class="form-label" for="issuerPhone">Teléfono</label>
                         <input id="issuerPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
                     </div>
 
@@ -208,7 +208,7 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="issuerPostal">Codigo postal</label>
+                        <label class="form-label" for="issuerPostal">Código postal</label>
                         <input id="issuerPostal" class="form-control" @bind="editor.CodigoPostal" readonly="@(!CanModifyEditor)" maxlength="10" />
                     </div>
 
@@ -218,22 +218,22 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="issuerPuntoEmision">Punto de emision</label>
+                        <label class="form-label" for="issuerPuntoEmision">Punto de emisión</label>
                         <input id="issuerPuntoEmision" class="form-control" @bind="editor.PuntoEmisionCodigo" readonly="@(!CanModifyEditor)" maxlength="3" />
                     </div>
 
                     <div>
                         <label class="form-label" for="issuerSriEnvironment">Ambiente SRI</label>
                         <select id="issuerSriEnvironment" class="form-select" disabled>
-                            <option value="2" selected>2 - Produccion</option>
+                            <option value="2" selected>2 - Producción</option>
                         </select>
                         <small class="form-text">Los comprobantes emitidos en este ambiente tienen validez tributaria.</small>
                     </div>
 
                     <div>
-                        <label class="form-label" for="issuerEmissionType">Tipo de emision</label>
+                        <label class="form-label" for="issuerEmissionType">Tipo de emisión</label>
                         <select id="issuerEmissionType" class="form-select" disabled>
-                            <option value="1" selected>1 - Emision normal</option>
+                            <option value="1" selected>1 - Emisión normal</option>
                         </select>
                     </div>
 
@@ -702,45 +702,45 @@ else
 
         if (editor.Ruc.Length != 13 || !editor.Ruc.All(char.IsDigit))
         {
-            errorMessage = "El RUC debe tener exactamente 13 digitos.";
+            errorMessage = "El RUC debe tener exactamente 13 dígitos.";
             return false;
         }
 
         if (editor.EstablecimientoCodigo.Length != 3 || !editor.EstablecimientoCodigo.All(char.IsDigit) ||
             editor.PuntoEmisionCodigo.Length != 3 || !editor.PuntoEmisionCodigo.All(char.IsDigit))
         {
-            errorMessage = "Establecimiento y punto de emision deben tener exactamente 3 digitos.";
+            errorMessage = "Establecimiento y punto de emisión deben tener exactamente 3 dígitos.";
             return false;
         }
 
         if (!IsValidEmail(editor.Correo))
         {
-            errorMessage = "Ingresa un correo electronico valido.";
+            errorMessage = "Ingresa un correo electrónico válido.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.CedulaRepresentante) &&
             (editor.CedulaRepresentante.Length != 10 || !editor.CedulaRepresentante.All(char.IsDigit)))
         {
-            errorMessage = "La cedula del representante debe tener 10 digitos.";
+            errorMessage = "La cédula del representante debe tener 10 dígitos.";
             return false;
         }
 
         if (editor.TipoPersona == "J" && string.IsNullOrWhiteSpace(editor.NombreRepresentanteLegal))
         {
-            errorMessage = "Para una persona juridica debes registrar el representante legal.";
+            errorMessage = "Para una persona jurídica debes registrar el representante legal.";
             return false;
         }
 
         if (editor.EsContribuyenteEspecial && string.IsNullOrWhiteSpace(editor.NumeroContribuyenteEspecial))
         {
-            errorMessage = "Si marcas contribuyente especial debes indicar el numero correspondiente.";
+            errorMessage = "Si marcas contribuyente especial debes indicar el número correspondiente.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.NumeroContribuyenteEspecial) && !editor.NumeroContribuyenteEspecial.All(char.IsDigit))
         {
-            errorMessage = "El numero de contribuyente especial debe contener solo digitos.";
+            errorMessage = "El número de contribuyente especial debe contener solo dígitos.";
             return false;
         }
 

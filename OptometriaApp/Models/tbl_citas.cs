@@ -45,6 +45,8 @@ public partial class tbl_citas
 
     public bool? recordatorio_24hrs { get; set; }
 
+    public bool? recordatorio_12hrs { get; set; }
+
     public bool? recordatorio_1hr { get; set; }
 
     public int? id_consulta { get; set; }

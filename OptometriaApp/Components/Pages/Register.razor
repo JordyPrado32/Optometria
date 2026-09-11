@@ -69,10 +69,10 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="telefono">Telefono</label>
+                        <label class="form-label" for="telefono">Teléfono</label>
                         <div class="input-with-icon">
                             <i class="bi bi-telephone"></i>
-                            <input id="telefono" name="telefono" class="form-control" placeholder="Telefono opcional" autocomplete="tel" />
+                            <input id="telefono" name="telefono" class="form-control" placeholder="Teléfono opcional" autocomplete="tel" />
                         </div>
                     </div>
                 </div>
@@ -91,7 +91,7 @@
                         <div class="input-with-icon">
                             <i class="bi bi-lock"></i>
                             <div class="password-field">
-                                <input id="password" name="password" type="@(showPassword ? "text" : "password")" class="form-control" placeholder="Minimo 12 caracteres" autocomplete="new-password" required />
+                                <input id="password" name="password" type="@(showPassword ? "text" : "password")" class="form-control" placeholder="Mínimo 12 caracteres" autocomplete="new-password" required />
                                 <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
                                     <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                 </button>
@@ -104,7 +104,7 @@
                         <div class="input-with-icon">
                             <i class="bi bi-shield-check"></i>
                             <div class="password-field">
-                                <input id="confirmPassword" name="confirmPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" placeholder="Repite la contrasena" autocomplete="new-password" required />
+                                <input id="confirmPassword" name="confirmPassword" type="@(showConfirmPassword ? "text" : "password")" class="form-control" placeholder="Repite la contraseña" autocomplete="new-password" required />
                                 <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
                                     <i class="bi @(showConfirmPassword ? "bi-eye-slash" : "bi-eye")"></i>
                                 </button>
@@ -115,14 +115,14 @@
 
                 <label class="auth-check">
                     <input id="acceptedTerms" name="acceptedTerms" type="checkbox" value="true" required />
-                    <span>Acepto los terminos y condiciones de uso del sistema</span>
+                    <span>Acepto los términos y condiciones de uso del sistema</span>
                 </label>
 
                 <button type="submit" class="btn btn-primary auth-submit">Registrar usuario</button>
             </form>
 
             <div class="auth-footer auth-footer-stack">
-                <span>Ya tienes cuenta?</span>
+                <span>¿Ya tienes cuenta?</span>
                 <a href="/">Volver al login</a>
             </div>
         </div>

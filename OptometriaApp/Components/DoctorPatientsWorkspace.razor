@@ -57,14 +57,14 @@ else
 
         <section class="management-card">
             <div class="management-card-header">
-                <h2>Filtros y busqueda</h2>
+                <h2>Filtros y búsqueda</h2>
                 <span>@FilteredPatients.Count resultados</span>
             </div>
 
             <div class="management-form-grid">
                 <div>
                     <label class="form-label" for="doctorPatientSearch">Buscador</label>
-                    <input id="doctorPatientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Codigo, cedula, nombre, correo o telefono" />
+                    <input id="doctorPatientSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Código, cédula, nombre, correo o teléfono" />
                 </div>
 
                 <div>
@@ -77,7 +77,7 @@ else
                 </div>
 
                 <div>
-                    <label class="form-label" for="doctorPatientGender">Genero</label>
+                    <label class="form-label" for="doctorPatientGender">Género</label>
                     <select id="doctorPatientGender" class="form-select" @bind="selectedGenderFilter">
                         <option value="">Todos</option>
                         @foreach (var option in genderOptions)
@@ -221,7 +221,7 @@ else
                 {
                     <div class="user-summary-grid" style="margin-bottom: 1.2rem;">
                         <div class="user-summary-card">
-                            <span class="eyebrow">Identificacion</span>
+                            <span class="eyebrow">Identificación</span>
                             <strong>@editor.FullName</strong>
                             <p>@editor.Cedula</p>
                         </div>
@@ -231,7 +231,7 @@ else
                             <p>@GetAgeSummary()</p>
                         </div>
                         <div class="user-summary-card">
-                            <span class="eyebrow">Asignacion</span>
+                            <span class="eyebrow">Asignación</span>
                             <strong>@editor.TotalConsultas</strong>
                             <p>@GetConsultationSummary()</p>
                         </div>
@@ -240,11 +240,11 @@ else
 
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="modalDoctorPatientCode">Codigo paciente</label>
+                        <label class="form-label" for="modalDoctorPatientCode">Código paciente</label>
                         <input id="modalDoctorPatientCode" class="form-control" @bind="editor.CodigoPaciente" readonly="@(!CanModifyEditor)" maxlength="30" />
                     </div>
                     <div>
-                        <label class="form-label" for="modalDoctorPatientDocument">Cedula</label>
+                        <label class="form-label" for="modalDoctorPatientDocument">Cédula</label>
                         <input id="modalDoctorPatientDocument" class="form-control" @bind="editor.Cedula" readonly="@(!CanModifyEditor)" maxlength="20" />
                     </div>
                     <div>
@@ -264,7 +264,7 @@ else
                         <input id="modalDoctorPatientAge" class="form-control" value="@GetCalculatedAgeText()" readonly />
                     </div>
                     <div>
-                        <label class="form-label" for="modalDoctorPatientGenderField">Genero</label>
+                        <label class="form-label" for="modalDoctorPatientGenderField">Género</label>
                         <select id="modalDoctorPatientGenderField" class="form-select" @bind="editor.Genero" disabled="@(!CanModifyEditor)">
                             <option value="">Selecciona</option>
                             @foreach (var option in genderOptions)
@@ -284,11 +284,11 @@ else
                         </select>
                     </div>
                     <div>
-                        <label class="form-label" for="modalDoctorPatientOccupation">Ocupacion</label>
+                        <label class="form-label" for="modalDoctorPatientOccupation">Ocupación</label>
                         <input id="modalDoctorPatientOccupation" class="form-control" @bind="editor.Ocupacion" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
                     <div>
-                        <label class="form-label" for="modalDoctorPatientPhone">Telefono</label>
+                        <label class="form-label" for="modalDoctorPatientPhone">Teléfono</label>
                         <input id="modalDoctorPatientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="20" />
                     </div>
                     <div>
@@ -299,7 +299,7 @@ else
 
                 <div class="management-form-grid patient-form-block" style="margin-top: 1rem;">
                     <div class="patient-form-span">
-                        <label class="form-label" for="modalDoctorPatientAddress">Direccion</label>
+                        <label class="form-label" for="modalDoctorPatientAddress">Dirección</label>
                         <input id="modalDoctorPatientAddress" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="255" />
                     </div>
                     <div class="patient-form-span">
@@ -324,7 +324,7 @@ else
                             <input class="form-control" value="@editor.TotalConsultas" readonly />
                         </div>
                         <div>
-                            <label class="form-label">Ultima consulta</label>
+                            <label class="form-label">Última consulta</label>
                             <input class="form-control" value="@editor.UltimaConsulta" readonly />
                         </div>
                     </div>
@@ -338,7 +338,7 @@ else
                 }
                 @if (!isCreatingNewPatient && editor.IdPaciente > 0)
                 {
-                    <a class="btn btn-outline-primary" href="@BuildClinicalHistoryUrl(editor.IdPaciente)">Historia clinica</a>
+                    <a class="btn btn-outline-primary" href="@BuildClinicalHistoryUrl(editor.IdPaciente)">Historia clínica</a>
                 }
                 <button type="button" class="btn btn-outline-primary" @onclick="ClosePatientModal">Cerrar</button>
             </footer>
@@ -371,7 +371,7 @@ else
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
     private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
-    private static readonly string[] civilStatusOptions = ["Soltero(a)", "Casado(a)", "Union libre", "Divorciado(a)", "Viudo(a)"];
+    private static readonly string[] civilStatusOptions = ["Soltero(a)", "Casado(a)", "Unión libre", "Divorciado(a)", "Viudo(a)"];
 
     private bool IsEntryMode => string.Equals(Mode, "entry", StringComparison.OrdinalIgnoreCase);
     private string CurrentRoute => IsEntryMode ? "/doctor/ingresar-pacientes" : "/doctor/mis-pacientes";
@@ -379,14 +379,14 @@ else
     private string ExportRoute => IsEntryMode ? "/exports/doctor-patient-entry.csv" : "/exports/doctor-my-patients.csv";
     private string PageTitleText => IsEntryMode ? "Ingresar pacientes" : "Ver mis pacientes";
     private string PageDescription => IsEntryMode
-        ? "Registra pacientes nuevos y busca o actualiza sus datos base en todo el catalogo."
-        : "Consulta tu cartera de pacientes asignados con filtros, busqueda rapida y exportacion controlada.";
+        ? "Registra pacientes nuevos y busca o actualiza sus datos base en todo el catálogo."
+        : "Consulta tu cartera de pacientes asignados con filtros, búsqueda rápida y exportación controlada.";
     private string ListTitle => IsEntryMode ? "Todos los pacientes" : "Mis pacientes";
     private string EditorTitle => isCreatingNewPatient ? "Nuevo paciente" : "Detalle del paciente";
-    private string EditorSubtitle => isCreatingNewPatient ? "Alta medica" : (selectedPatientId > 0 ? $"Paciente #{selectedPatientId}" : "Vista");
+    private string EditorSubtitle => isCreatingNewPatient ? "Alta médica" : (selectedPatientId > 0 ? $"Paciente #{selectedPatientId}" : "Vista");
     private string EmptySelectionMessage => IsEntryMode
         ? "Selecciona un paciente asignado o crea uno nuevo."
-        : "Selecciona un paciente para revisar su informacion.";
+        : "Selecciona un paciente para revisar su información.";
     private bool CanModifyEditor => IsEntryMode && (isCreatingNewPatient ? permissions.CanCreate : permissions.CanEdit);
     private static string BuildClinicalHistoryUrl(int patientId) => $"/doctor/historia-clinica?patientId={patientId}";
 
@@ -887,13 +887,13 @@ else
             string.IsNullOrWhiteSpace(editor.Nombres) ||
             string.IsNullOrWhiteSpace(editor.Apellidos))
         {
-            errorMessage = "Completa cedula, nombres y apellidos.";
+            errorMessage = "Completa cédula, nombres y apellidos.";
             return false;
         }
 
         if (editor.Cedula.Length > 20 || editor.Nombres.Length > 100 || editor.Apellidos.Length > 100)
         {
-            errorMessage = "Verifica las longitudes maximas de cedula, nombres y apellidos.";
+            errorMessage = "Verifica las longitudes máximas de cédula, nombres y apellidos.";
             return false;
         }
 
@@ -909,13 +909,13 @@ else
 
         if (!string.IsNullOrWhiteSpace(editor.Email) && !IsValidEmail(editor.Email))
         {
-            errorMessage = "Ingresa un correo electronico valido.";
+            errorMessage = "Ingresa un correo electrónico válido.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.FechaNacimiento) && !DateOnly.TryParse(editor.FechaNacimiento, out _))
         {
-            errorMessage = "La fecha de nacimiento no es valida.";
+            errorMessage = "La fecha de nacimiento no es válida.";
             return false;
         }
 

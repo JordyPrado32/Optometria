@@ -242,7 +242,7 @@ else
                     </div>
 
                     <div class="patient-form-span">
-                        <label class="form-label" for="clientDireccion">Direccion</label>
+                        <label class="form-label" for="clientDireccion">Dirección</label>
                         <input id="clientDireccion" class="form-control" @bind="editor.Direccion" readonly="@(!CanModifyEditor)" maxlength="500" />
                     </div>
 
@@ -257,17 +257,17 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientPostal">Codigo postal</label>
+                        <label class="form-label" for="clientPostal">Código postal</label>
                         <input id="clientPostal" class="form-control" @bind="editor.CodigoPostal" readonly="@(!CanModifyEditor)" maxlength="10" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientPhone">Telefono</label>
+                        <label class="form-label" for="clientPhone">Teléfono</label>
                         <input id="clientPhone" class="form-control" @bind="editor.Telefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientEmail">Correo electronico</label>
+                        <label class="form-label" for="clientEmail">Correo electrónico</label>
                         <input id="clientEmail" type="email" class="form-control" @bind="editor.CorreoElectronico" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
                         </div>
@@ -277,12 +277,12 @@ else
                         <summary><span><i class="bi bi-wallet2"></i> Crédito y cobranza</span></summary>
                         <div class="additional-details-body">
                     <div>
-                        <label class="form-label" for="clientCountry">Pais codigo</label>
+                        <label class="form-label" for="clientCountry">Código de país</label>
                         <input id="clientCountry" class="form-control" @bind="editor.PaisCodigo" readonly="@(!CanModifyEditor)" maxlength="2" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientPayment">Condicion de pago</label>
+                        <label class="form-label" for="clientPayment">Condición de pago</label>
                         <select id="clientPayment" class="form-select" @bind="editor.CondicionPago" disabled="@(!CanModifyEditor)">
                             @foreach (var option in paymentConditionOptions)
                             {
@@ -292,12 +292,12 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientDays">Dias de plazo</label>
+                        <label class="form-label" for="clientDays">Días de plazo</label>
                         <input id="clientDays" type="number" class="form-control" @bind="editor.DiasPlazo" readonly="@(!CanModifyEditor)" min="0" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientLimit">Limite de credito</label>
+                        <label class="form-label" for="clientLimit">Límite de crédito</label>
                         <input id="clientLimit" type="number" step="0.01" class="form-control" @bind="editor.LimiteCredito" readonly="@(!CanModifyEditor)" min="0" />
                     </div>
 
@@ -317,12 +317,12 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientContactoTelefono">Contacto telefono</label>
+                        <label class="form-label" for="clientContactoTelefono">Teléfono de contacto</label>
                         <input id="clientContactoTelefono" class="form-control" @bind="editor.ContactoTelefono" readonly="@(!CanModifyEditor)" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" />
                     </div>
 
                     <div>
-                        <label class="form-label" for="clientContactoCorreo">Contacto correo</label>
+                        <label class="form-label" for="clientContactoCorreo">Correo de contacto</label>
                         <input id="clientContactoCorreo" type="email" class="form-control" @bind="editor.ContactoCorreo" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
                         </div>
@@ -841,7 +841,7 @@ else
             string.IsNullOrWhiteSpace(editor.Direccion) ||
             string.IsNullOrWhiteSpace(editor.Telefono))
         {
-            errorMessage = "Correo electronico, direccion y telefono son obligatorios.";
+            errorMessage = "Correo electrónico, dirección y teléfono son obligatorios.";
             return false;
         }
 
@@ -849,7 +849,7 @@ else
         {
             if (string.IsNullOrWhiteSpace(editor.RazonSocial) || string.IsNullOrWhiteSpace(editor.NombreComercial))
             {
-                errorMessage = "Para empresas, razon social y nombre comercial son obligatorios.";
+                errorMessage = "Para empresas, razón social y nombre comercial son obligatorios.";
                 return false;
             }
         }
@@ -882,7 +882,7 @@ else
 
         if (editor.NumeroIdentificacion.Length > 20 || editor.RazonSocial.Length > 300 || editor.PaisCodigo.Length != 2)
         {
-            errorMessage = "Revisa la longitud de identificacion, razon social o codigo de pais.";
+            errorMessage = "Revisa la longitud de identificación, razón social o código de país.";
             return false;
         }
 
@@ -900,19 +900,19 @@ else
 
         if (!string.IsNullOrWhiteSpace(editor.CorreoElectronico) && !IsValidEmail(editor.CorreoElectronico))
         {
-            errorMessage = "Ingresa un correo electronico valido para el cliente.";
+            errorMessage = "Ingresa un correo electrónico válido para el cliente.";
             return false;
         }
 
         if (!string.IsNullOrWhiteSpace(editor.ContactoCorreo) && !IsValidEmail(editor.ContactoCorreo))
         {
-            errorMessage = "Ingresa un correo electronico valido para el contacto.";
+            errorMessage = "Ingresa un correo electrónico válido para el contacto.";
             return false;
         }
 
         if (editor.DiasPlazo < 0 || editor.LimiteCredito < 0 || editor.SaldoDeudor < 0)
         {
-            errorMessage = "Los campos numericos no pueden ser negativos.";
+            errorMessage = "Los campos numéricos no pueden ser negativos.";
             return false;
         }
 
