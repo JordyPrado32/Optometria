@@ -944,7 +944,7 @@ else
 
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "El menu se guardo correctamente.";
+        statusMessage = "El menú se guardó correctamente.";
         await LoadAsync(menuEntity.id_menu);
         await MenuAccessService.NotifyMenusChangedAsync();
         showFormModal = false;
@@ -1157,14 +1157,14 @@ else
         var menuEntity = await dbContext.tbl_menu_apps.FirstOrDefaultAsync(m => m.id_menu == menu.id_menu);
         if (menuEntity is null)
         {
-            errorMessage = "No se encontro el menu seleccionado.";
+            errorMessage = "No se encontró el menú seleccionado.";
             return;
         }
 
         menuEntity.activo = !menuEntity.activo;
         await dbContext.SaveChangesAsync();
 
-        statusMessage = menuEntity.activo ? "El menu se activo correctamente." : "El menu se desactivo correctamente.";
+        statusMessage = menuEntity.activo ? "El menú se activó correctamente." : "El menú se desactivó correctamente.";
         await LoadAsync(menuEntity.id_menu);
         await MenuAccessService.NotifyMenusChangedAsync();
     }

@@ -84,7 +84,7 @@ else
             <div>
                 <span class="eyebrow">Documentos emitidos</span>
                 <h1>Mis facturas</h1>
-                <p>Consulta tus facturas emitidas, revisa totales, saldos, lineas y acceso rapido a notas de credito.</p>
+                <p>Consulta tus facturas emitidas, revisa totales, saldos, líneas y acceso rápido a notas de crédito.</p>
             </div>
         </div>
 
@@ -101,7 +101,7 @@ else
         <section class="management-card">
             <div class="workspace-actions" style="margin-bottom: 1rem;">
                 <a class="btn btn-outline-primary" href="/invoices">Nueva factura</a>
-                <a class="btn btn-outline-primary" href="/my-credit-notes">Mis notas de credito</a>
+                <a class="btn btn-outline-primary" href="/my-credit-notes">Mis notas de crédito</a>
             </div>
 
             <div class="documents-grid">
@@ -112,7 +112,7 @@ else
                     </div>
 
                     <div style="margin-top: 1rem;">
-                        <input class="form-control" @bind="invoiceSearchTerm" @bind:event="oninput" placeholder="Buscar por factura, cliente, paciente, cedula o identificacion" />
+                        <input class="form-control" @bind="invoiceSearchTerm" @bind:event="oninput" placeholder="Buscar por factura, cliente, paciente, cédula o identificación" />
                     </div>
 
                     @if (FilteredIssuedInvoices.Count == 0)
@@ -206,17 +206,17 @@ else
                 </div>
 
                         <div class="workspace-actions" style="margin-top: 1rem;">
-                            <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de credito desde esta factura</a>
+                            <a class="btn btn-primary" href="@($"/my-credit-notes?invoice={selectedInvoice.ComprobanteId}")">Crear nota de crédito desde esta factura</a>
                             @if (!string.Equals(selectedInvoice.SriStatus, "AUTORIZADO", StringComparison.OrdinalIgnoreCase))
                             {
                                 <button type="button" class="btn btn-outline-primary" disabled="@isRetryingSri" @onclick="RetrySriAsync">
-                                    @(isRetryingSri ? "Consultando SRI..." : "Reintentar autorizacion SRI")
+                                    @(isRetryingSri ? "Consultando SRI..." : "Reintentar autorización SRI")
                                 </button>
                             }
                         </div>
 
                         <div class="documents-card" style="margin-top: 1rem;">
-                            <div class="documents-label">Facturacion electronica SRI</div>
+                            <div class="documents-label">Facturación electrónica SRI</div>
                             <strong>@selectedInvoice.SriStatus</strong>
                             @if (!string.IsNullOrWhiteSpace(selectedInvoice.AuthorizationNumber))
                             {

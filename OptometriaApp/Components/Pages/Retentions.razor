@@ -15,8 +15,8 @@
     <div class="management-hero">
         <div>
             <span class="eyebrow">Compras</span>
-            <h1>Retencion de compra</h1>
-            <p>Continua la retencion desde la liquidacion seleccionada.</p>
+            <h1>Retención de compra</h1>
+            <p>Continúa la retención desde la liquidación seleccionada.</p>
         </div>
         <div class="workspace-actions">
             <button class="btn btn-outline-primary" @onclick='() => NavigationManager.NavigateTo("/liquidaciones-de-compra")'>
@@ -28,11 +28,11 @@
     <section class="management-card">
         @if (isLoading)
         {
-            <p>Cargando liquidacion...</p>
+            <p>Cargando liquidación...</p>
         }
         else if (liquidation is null)
         {
-            <div class="alert alert-warning">No se encontro una liquidacion para generar retencion.</div>
+            <div class="alert alert-warning">No se encontró una liquidación para generar retención.</div>
         }
         else
         {
@@ -43,7 +43,7 @@
 
             <div class="management-form-grid" style="margin-top:1rem;">
                 <div>
-                    <label class="form-label">Liquidacion</label>
+                    <label class="form-label">Liquidación</label>
                     <input class="form-control" value="@liquidation.numero_liquidacion" readonly />
                 </div>
                 <div>
@@ -63,13 +63,13 @@
                     <input class="form-control" value="@(liquidation.estado_liquidacion ?? "Pendiente")" readonly />
                 </div>
                 <div>
-                    <label class="form-label">Autorizacion</label>
+                    <label class="form-label">Autorización</label>
                     <input class="form-control" value="@(liquidation.numero_autorizacion ?? "-")" readonly />
                 </div>
             </div>
 
             <div class="alert alert-success" style="margin-top:1rem;">
-                Documento listo para retencion. Cuando tengas definida la tabla fiscal, aqui se puede completar el formulario de retencion.
+                Documento listo para retención. Cuando tengas definida la tabla fiscal, aquí se puede completar el formulario de retención.
             </div>
         }
     </section>

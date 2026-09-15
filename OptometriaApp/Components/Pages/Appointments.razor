@@ -1462,7 +1462,7 @@ else
             </header>
             <div class="custom-modal-body">
                 <p style="color: var(--color-taupe);">
-                    Este boton ya deja listo el contrato de integracion. Cuando definan el proveedor o webhook, solo hay que enviar este payload al endpoint configurado.
+                    Este botón ya deja listo el contrato de integración. Cuando definan el proveedor o webhook, solo hay que enviar este payload al endpoint configurado.
                 </p>
 
                 <div class="management-form-grid">
@@ -1564,7 +1564,7 @@ else
     private string selectedPatientHistoryLabel = string.Empty;
     private string TodayDateIso => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
 
-    private static readonly string[] appointmentTypeOptions = ["Presencial", "Telefonica", "Virtual"];
+    private static readonly string[] appointmentTypeOptions = ["Presencial", "Telefónica", "Virtual"];
     private static readonly string[] CalendarWeekDays = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
     private static readonly string[] genderOptions = ["Femenino", "Masculino", "No binario", "Prefiero no decirlo"];
     private static readonly string[] blockTypeOptions = ["Vacaciones", "Enfermedad", "Permiso parcial", "Almuerzo", "Mantenimiento", "Otro"];
@@ -1572,10 +1572,10 @@ else
     [
         new((byte)1, "Lunes"),
         new((byte)2, "Martes"),
-        new((byte)3, "Miercoles"),
+        new((byte)3, "Miércoles"),
         new((byte)4, "Jueves"),
         new((byte)5, "Viernes"),
-        new((byte)6, "Sabado"),
+        new((byte)6, "Sábado"),
         new((byte)7, "Domingo")
     ];
 
@@ -1591,8 +1591,8 @@ else
     private bool CanWriteMedicalNotes => appointmentEditor is not null && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_historia_clinica != false)) && permissions.CanEdit;
     private bool CanChangeDoctor => CanEditAppointments && (isAdmin || isReceptionist || (isDoctor && currentDoctorId == appointmentEditor!.IdMedico));
     private bool ShowCancellationReasonInForm => appointmentEditor is not null && (showFormCancellationReason || IsCanceledState(appointmentEditor.Estado));
-    private string CurrentEditorLabel => isCreatingAppointment ? "Nuevo registro" : (selectedAppointmentId > 0 ? $"Cita #{selectedAppointmentId}" : "Sin seleccion");
-    private string CurrentEditorModeLabel => appointmentEditor is null ? "Sin seleccion" : isCreatingAppointment ? "Creacion" : CanEditAppointments ? "Edicion" : "Consulta";
+    private string CurrentEditorLabel => isCreatingAppointment ? "Nuevo registro" : (selectedAppointmentId > 0 ? $"Cita #{selectedAppointmentId}" : "Sin selección");
+    private string CurrentEditorModeLabel => appointmentEditor is null ? "Sin selección" : isCreatingAppointment ? "Creación" : CanEditAppointments ? "Edición" : "Consulta";
     private string CurrentPatientLabel => appointmentEditor is null
         ? linkedPatient is null ? "Sin paciente" : GetPatientDisplayName(linkedPatient)
         : GetCurrentAppointmentPatientLabel();
@@ -1603,19 +1603,19 @@ else
             : selectedAppointmentId > 0
                 ? "Editar cita"
                 : "Detalle de la cita";
-    private string EditorStatusLabel => appointmentEditor is null ? "Sin datos" : CanEditAppointments ? "Edicion habilitada" : "Solo lectura";
+    private string EditorStatusLabel => appointmentEditor is null ? "Sin datos" : CanEditAppointments ? "Edición habilitada" : "Solo lectura";
     private string EditorDescription => appointmentEditor is null
         ? "Selecciona una cita o crea una nueva."
         : isCreatingAppointment
-            ? "Completa medico, paciente, fecha y horario para registrar una nueva cita sin perder el contexto de la agenda."
+            ? "Completa médico, paciente, fecha y horario para registrar una nueva cita sin perder el contexto de la agenda."
             : CanEditAppointments
-                ? "Estas trabajando sobre una cita existente. Cualquier ajuste que guardes actualizara su agenda, estado o detalle."
-                : "Estas revisando una cita existente en modo consulta.";
-    private string HeroTitle => (isAdmin || isReceptionist) ? "Control total de citas y turnos" : isDoctor ? "Mi agenda medica" : "Mis citas y recordatorios";
+                ? "Estás trabajando sobre una cita existente. Cualquier ajuste que guardes actualizará su agenda, estado o detalle."
+                : "Estás revisando una cita existente en modo consulta.";
+    private string HeroTitle => (isAdmin || isReceptionist) ? "Control total de citas y turnos" : isDoctor ? "Mi agenda médica" : "Mis citas y recordatorios";
     private string HeroDescription => (isAdmin || isReceptionist)
-        ? "Consulta todas las citas del sistema, controla estados, agenda por cualquier paciente y exporta la operacion filtrada."
+        ? "Consulta todas las citas del sistema, controla estados, agenda por cualquier paciente y exporta la operación filtrada."
         : isDoctor
-            ? "Revisa todas tus citas asignadas, su motivo, su estado y mantien tu agenda diaria bajo control."
+            ? "Revisa todas tus citas asignadas, su motivo, su estado y mantén tu agenda diaria bajo control."
             : "Agenda para ti o para un familiar, revisa tus estados, filtra citas anteriores y reprograma o cancela cuando lo necesites.";
     private string AppointmentMonthLabel => CultureInfo.GetCultureInfo("es-ES").TextInfo.ToTitleCase(appointmentCalendarMonth.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("es-ES")));
     private string SelectedAppointmentDateLabel => DateOnly.TryParse(appointmentEditor?.FechaCita, out var selectedDate)
@@ -2239,7 +2239,7 @@ else
 
         if (string.IsNullOrWhiteSpace(selfPatientEditor.Cedula))
         {
-            errorMessage = "La cedula es obligatoria para vincular tu ficha de paciente.";
+            errorMessage = "La cédula es obligatoria para vincular tu ficha de paciente.";
             return;
         }
 
@@ -2248,7 +2248,7 @@ else
         var user = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == currentUserId);
         if (user is null)
         {
-            errorMessage = "No se encontro el usuario autenticado.";
+            errorMessage = "No se encontró el usuario autenticado.";
             return;
         }
 
@@ -2256,7 +2256,7 @@ else
         var existingPatient = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.cedula.ToLower() == normalizedCedula);
         if (existingPatient is not null && existingPatient.id_usuario.HasValue && existingPatient.id_usuario != currentUserId)
         {
-            errorMessage = "La cedula ya esta vinculada a otro usuario.";
+            errorMessage = "La cédula ya está vinculada a otro usuario.";
             return;
         }
 
@@ -2320,7 +2320,7 @@ else
         WriteAudit(dbContext, "Vincular paciente", $"PacienteId={existingPatient.id_paciente}; UsuarioId={currentUserId}; Cedula={existingPatient.cedula}");
         await dbContext.SaveChangesAsync();
 
-        statusMessage = "Tu perfil ya quedo vinculado como paciente.";
+        statusMessage = "Tu perfil ya quedó vinculado como paciente.";
         await LoadAsync();
     }
 
@@ -2336,7 +2336,7 @@ else
         }
         catch (DbUpdateException)
         {
-            errorMessage = "La agenda cambio durante la operacion. Recarga y comprueba la cita antes de volver a guardar.";
+            errorMessage = "La agenda cambió durante la operación. Recarga y comprueba la cita antes de volver a guardar.";
         }
     }
 
@@ -2359,7 +2359,7 @@ else
         var doctor = await dbContext.tbl_medico.Include(m => m.id_usuarioNavigation).FirstOrDefaultAsync(m => m.id_medico == appointmentEditor.IdMedico && m.activo == true);
         if (doctor is null)
         {
-            errorMessage = "Selecciona un medico valido.";
+            errorMessage = "Selecciona un médico válido.";
             return;
         }
 
@@ -2383,7 +2383,7 @@ else
 
         if (!TryParseSlot(appointmentEditor.SelectedSlotKey, out var startTime, out var endTime))
         {
-            errorMessage = "Selecciona un horario valido.";
+            errorMessage = "Selecciona un horario válido.";
             return;
         }
 
@@ -2406,13 +2406,13 @@ else
             SlotOverlapsAnyBlock(blocks, appointmentDate, startTime, endTime);
         if (invalidSlot)
         {
-            errorMessage = "El horario ya no es valido: revisa la disponibilidad, descansos y bloqueos del medico.";
+            errorMessage = "El horario ya no es válido: revisa la disponibilidad, descansos y bloqueos del médico.";
             return;
         }
         var conflictExists = await AppointmentConflictExistsAsync(dbContext, doctor.id_medico, patient.id_paciente, appointmentDate, startTime, endTime, isCreatingAppointment ? null : appointmentEditor.IdCita);
         if (conflictExists)
         {
-            errorMessage = "Ese horario ya no esta disponible. Recarga los horarios e intenta otra vez.";
+            errorMessage = "Ese horario ya no está disponible. Recarga los horarios e intenta otra vez.";
             await RebuildAvailableSlotsAsync();
             return;
         }
@@ -2483,7 +2483,7 @@ else
         var appointmentEntity = await dbContext.tbl_citas.FirstOrDefaultAsync(c => c.id_cita == appointmentEditor.IdCita);
         if (appointmentEntity is null || !CanAccessAppointment(appointmentEntity))
         {
-            errorMessage = "No se encontro la cita seleccionada.";
+            errorMessage = "No se encontró la cita seleccionada.";
             return;
         }
 
@@ -2533,7 +2533,7 @@ else
                 GetDoctorDisplayName(doctor),
                 appointmentEntity.fecha_cita,
                 appointmentEntity.hora_inicio,
-                isClient ? "el paciente" : isDoctor ? "el medico" : "administracion");
+                isClient ? "el paciente" : isDoctor ? "el médico" : "administración");
         }
 
         statusMessage = scheduleChanged ? "La cita fue reprogramada correctamente." : "La cita fue actualizada correctamente.";
@@ -2552,7 +2552,7 @@ else
 
         if (newState == "Cancelada" && string.IsNullOrWhiteSpace(appointmentEditor.RazonCancelacion))
         {
-            errorMessage = "Escribe una razon de cancelacion antes de continuar.";
+            errorMessage = "Escribe una razón de cancelación antes de continuar.";
             return;
         }
 
@@ -2560,7 +2560,7 @@ else
         var entity = await dbContext.tbl_citas.FirstOrDefaultAsync(c => c.id_cita == appointmentEditor.IdCita);
         if (entity is null || !CanAccessAppointment(entity))
         {
-            errorMessage = "No se encontro la cita seleccionada.";
+            errorMessage = "No se encontró la cita seleccionada.";
             return;
         }
 
@@ -2586,7 +2586,7 @@ else
                 id_paciente = entity.id_paciente,
                 fecha_cancelacion = DateTime.Now,
                 razon_cancelacion = entity.razon_cancelacion,
-                quien_cancelo = isClient ? "Paciente" : isDoctor ? "Medico" : "Administrador",
+                quien_cancelo = isClient ? "Paciente" : isDoctor ? "Médico" : "Administrador",
                 usuario_cancelacion = GetCurrentActorLabel()
             });
         }
@@ -2605,7 +2605,7 @@ else
 
         statusMessage = newState == "Cancelada"
             ? "La cita fue cancelada correctamente."
-            : $"La cita paso a estado {newState.ToLowerInvariant()}.";
+            : $"La cita pasó a estado {newState.ToLowerInvariant()}.";
 
         await LoadAsync(entity.id_cita);
     }
@@ -2630,7 +2630,7 @@ else
         TimeOnly? breakEnd = TimeOnly.TryParse(availabilityEditor.BreakEnd, out var parsedBreakEnd) ? parsedBreakEnd : null;
         if (breakStart.HasValue != breakEnd.HasValue)
         {
-            errorMessage = "Completa ambas horas del descanso o deja ambas vacias.";
+            errorMessage = "Completa ambas horas del descanso o deja ambas vacías.";
             return;
         }
 
@@ -2702,7 +2702,7 @@ else
         try { await SaveBlockCoreAsync(); }
         catch (InvalidOperationException ex) { errorMessage = ex.Message; }
         catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException)
-        { errorMessage = "La agenda cambio durante el bloqueo. Recarga antes de volver a intentarlo."; }
+        { errorMessage = "La agenda cambió durante el bloqueo. Recarga antes de volver a intentarlo."; }
     }
 
     private async Task SaveBlockCoreAsync()
@@ -2894,7 +2894,7 @@ else
         {
             for (var day = 1; day <= daysInMonth; day++)
             {
-                appointmentCalendarDays.Add(CalendarDayOption.Unavailable(new DateOnly(firstDay.Year, firstDay.Month, day), "Selecciona un medico"));
+                appointmentCalendarDays.Add(CalendarDayOption.Unavailable(new DateOnly(firstDay.Year, firstDay.Month, day), "Selecciona un médico"));
             }
 
             return;
@@ -3241,7 +3241,7 @@ else
     {
         if (appointmentEditor is null)
         {
-            errorMessage = "No hay una cita activa en edicion.";
+            errorMessage = "No hay una cita activa en edición.";
             return false;
         }
 
@@ -3252,7 +3252,7 @@ else
 
         if (appointmentEditor.IdMedico <= 0)
         {
-            errorMessage = "Selecciona un medico.";
+            errorMessage = "Selecciona un médico.";
             return false;
         }
 
@@ -3287,7 +3287,7 @@ else
                     string.IsNullOrWhiteSpace(appointmentEditor.FamilyNames) ||
                     string.IsNullOrWhiteSpace(appointmentEditor.FamilyLastNames))
                 {
-                    errorMessage = "Completa cedula, nombres y apellidos del familiar.";
+                    errorMessage = "Completa cédula, nombres y apellidos del familiar.";
                     return false;
                 }
             }
@@ -3296,7 +3296,7 @@ else
             {
                 if (!DateOnly.TryParse(appointmentEditor.FamilyBirthDate, out var familyBirthDate))
                 {
-                    errorMessage = "La fecha de nacimiento del familiar no es valida.";
+                    errorMessage = "La fecha de nacimiento del familiar no es válida.";
                     return false;
                 }
 
@@ -3310,7 +3310,7 @@ else
 
         if (!DateOnly.TryParse(appointmentEditor.FechaCita, out var appointmentDate))
         {
-            errorMessage = "La fecha de la cita no es valida.";
+            errorMessage = "La fecha de la cita no es válida.";
             return false;
         }
 
@@ -3371,7 +3371,7 @@ else
         }
 
         return linkedPatient is null
-            ? "Se generara tu ficha rapida de paciente"
+            ? "Se generará tu ficha rápida de paciente"
             : GetPatientDisplayName(linkedPatient);
     }
 
@@ -3410,7 +3410,7 @@ else
         var currentUser = await dbContext.tbl_usuarios.FirstOrDefaultAsync(u => u.id_usuario == currentUserId);
         if (currentUser is null)
         {
-            errorMessage = "No se encontro el usuario autenticado.";
+            errorMessage = "No se encontró el usuario autenticado.";
             return null;
         }
 
@@ -3427,7 +3427,7 @@ else
             fecha_registro = DateTime.Now,
             id_usuario_registro = currentUserId,
             id_usuario = currentUserId,
-            observaciones = "Ficha rapida creada desde agenda de citas."
+            observaciones = "Ficha rápida creada desde agenda de citas."
         };
 
         dbContext.tbl_pacientes.Add(generatedPatient);
@@ -3485,7 +3485,7 @@ else
 
         var patientName = GetPatientDisplayName(appointment.id_pacienteNavigation);
         var doctorName = GetDoctorDisplayName(appointment.id_medicoNavigation);
-        var message = $"Hola {patientName}, te recordamos tu cita de optometria el {appointment.fecha_cita:yyyy-MM-dd} a las {appointment.hora_inicio:HH\\:mm} con {doctorName}. Estado actual: {appointment.id_estadoNavigation?.nombre_estado ?? "Programada"}.";
+        var message = $"Hola {patientName}, te recordamos tu cita de optometría el {appointment.fecha_cita:yyyy-MM-dd} a las {appointment.hora_inicio:HH\\:mm} con {doctorName}. Estado actual: {appointment.id_estadoNavigation?.nombre_estado ?? "Programada"}.";
         return $"https://wa.me/{phone}?text={Uri.EscapeDataString(message)}";
     }
 
@@ -3816,7 +3816,7 @@ else
             var nextSlot = await FindNextAvailableSlotForBlockAsync(dbContext, doctorId, block.fecha_fin.AddDays(1), durationMinutes, appointment.id_cita, appointment.id_paciente);
             if (nextSlot is null)
             {
-                throw new InvalidOperationException("No hay horarios para reprogramar todas las citas. El bloqueo no se guardo; reorganiza la agenda y vuelve a intentarlo.");
+                throw new InvalidOperationException("No hay horarios para reprogramar todas las citas. El bloqueo no se guardó; reorganiza la agenda y vuelve a intentarlo.");
             }
 
             appointment.fecha_cita = nextSlot.Value.Date;
@@ -3909,7 +3909,7 @@ else
 
     private static string GetDayLabel(int dayOfWeek)
     {
-        return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Dia {dayOfWeek}";
+        return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Día {dayOfWeek}";
     }
 
     private static string GetBreakLabel(tbl_disponibilidad_medico row)
@@ -4064,7 +4064,7 @@ else
     private string GetCalendarViewLabel()
         => selectedCalendarView switch
         {
-            "day" => $"dia {GetCalendarFocusDate():yyyy-MM-dd}",
+            "day" => $"día {GetCalendarFocusDate():yyyy-MM-dd}",
             "week" => $"semana de {GetStartOfWeek(GetCalendarFocusDate().ToDateTime(TimeOnly.MinValue)):yyyy-MM-dd}",
             _ => $"{GetCalendarFocusDate():yyyy-MM}"
         };

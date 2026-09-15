@@ -94,7 +94,7 @@
         if (busy) return; busy = true;
         try { await action(); }
         catch (InvalidOperationException ex) { message = ex.Message; }
-        catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException) { message = "No se pudo completar la operacion. Recarga los documentos para comprobar su estado."; }
+        catch (Exception ex) when (ex is DbUpdateException or Microsoft.Data.SqlClient.SqlException) { message = "No se pudo completar la operación. Recarga los documentos para comprobar su estado."; }
         finally { busy = false; }
     }
 }

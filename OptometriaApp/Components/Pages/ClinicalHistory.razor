@@ -10,7 +10,7 @@
 @inject NavigationManager NavigationManager
 @using OptometriaApp.Services
 
-<PageTitle>Historia clinica</PageTitle>
+<PageTitle>Historia clínica</PageTitle>
 
 <style>
     /* ══════════════════════════════════════════════════════════════
@@ -488,7 +488,7 @@
 {
     <section class="management-shell">
         <div class="management-card">
-            <h1>Cargando historia clinica...</h1>
+            <h1>Cargando historia clínica...</h1>
         </div>
     </section>
 }
@@ -497,7 +497,7 @@ else if (!canViewModule)
     <section class="management-shell">
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
-            <h1>Historia clinica</h1>
+            <h1>Historia clínica</h1>
             <p>Tu rol no tiene permiso para usar este módulo.</p>
         </div>
     </section>
@@ -714,7 +714,7 @@ else
             <div class="clinical-grid-2" style="margin-top: 1rem;">
                 <div>
                     <label class="form-label" for="clinicalPatientSearch">Buscar paciente</label>
-                    <input id="clinicalPatientSearch" class="form-control" @bind="patientSearchTerm" @bind:event="oninput" placeholder="Nombre, cedula o codigo" />
+                    <input id="clinicalPatientSearch" class="form-control" @bind="patientSearchTerm" @bind:event="oninput" placeholder="Nombre, cédula o código" />
                 </div>
                 <div>
                     <label class="form-label" for="clinicalPatientPicker">Selecciona el paciente</label>
@@ -902,11 +902,11 @@ else
                             <input class="form-control" value="@(history?.fecha_apertura?.ToString("yyyy-MM-dd HH:mm") ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm"))" readonly />
                         </div>
                         <div>
-                            <label class="form-label">Ultima actualizacion</label>
-                            <input class="form-control" value="@(selectedEncounterSummary?.UpdatedAt.ToString("yyyy-MM-dd HH:mm") ?? history?.fecha_ultima_actualizacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin actualizacion")" readonly />
+                            <label class="form-label">Última actualización</label>
+                            <input class="form-control" value="@(selectedEncounterSummary?.UpdatedAt.ToString("yyyy-MM-dd HH:mm") ?? history?.fecha_ultima_actualizacion?.ToString("yyyy-MM-dd HH:mm") ?? "Sin actualización")" readonly />
                         </div>
                         <div>
-                            <label class="form-label">Historia clinica N.</label>
+                            <label class="form-label">Historia clínica N.°</label>
                             <input class="form-control" @bind="editor.NumeroHistoria" />
                         </div>
                         <div>
@@ -926,7 +926,7 @@ else
                             <input class="form-control" @bind="editor.Procedencia" />
                         </div>
                         <div>
-                            <label class="form-label">Ultimo control</label>
+                            <label class="form-label">Último control</label>
                             <input class="form-control" @bind="editor.UltimoControl" />
                         </div>
                     </div>
@@ -939,13 +939,13 @@ else
                         <div><label class="form-label">Apellidos</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Apellidos, patient?.apellidos))" readonly /></div>
                         <div><label class="form-label">Nombres</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Nombres, patient?.nombres))" readonly /></div>
                         <div><label class="form-label">CI</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Cedula, patient?.cedula))" readonly /></div>
-                        <div><label class="form-label">Genero</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Genero, patient?.genero))" readonly /></div>
+                        <div><label class="form-label">Género</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Genero, patient?.genero))" readonly /></div>
                         <div><label class="form-label">Fecha nacimiento</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.FechaNacimiento, patient?.fecha_nacimiento?.ToString("yyyy-MM-dd")))" readonly /></div>
                         <div><label class="form-label">Edad</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Edad, patient?.edad?.ToString()))" readonly /></div>
-                        <div><label class="form-label">Ocupacion</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Ocupacion, patient?.ocupacion))" readonly /></div>
+                        <div><label class="form-label">Ocupación</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Ocupacion, patient?.ocupacion))" readonly /></div>
                         <div><label class="form-label">Email</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Email, patient?.email))" readonly /></div>
-                        <div class="clinical-span-2"><label class="form-label">Direccion</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Direccion, patient?.direccion))" readonly /></div>
-                        <div><label class="form-label">Telefono</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Telefono, patient?.telefono))" readonly /></div>
+                        <div class="clinical-span-2"><label class="form-label">Dirección</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Direccion, patient?.direccion))" readonly /></div>
+                        <div><label class="form-label">Teléfono</label><input class="form-control" value="@(GetSnapshotValue(openingSnapshot?.Telefono, patient?.telefono))" readonly /></div>
                     </div>
                 </section>
             }
@@ -955,9 +955,9 @@ else
                 <section class="management-card clinical-card">
                     <div class="management-card-header">
                         <h2>Motivo, anamnesis y antecedentes</h2>
-                        <span>Contexto clinico inicial</span>
+                        <span>Contexto clínico inicial</span>
                     </div>
-                    <p class="clinical-helper-text">Este paso ya no solo orienta: tambien valida el flujo clinico minimo para que la evolucion quede clara y reutilizable.</p>
+                    <p class="clinical-helper-text">Este paso ya no solo orienta: también valida el flujo clínico mínimo para que la evolución quede clara y reutilizable.</p>
                     <div class="clinical-tutorial-grid" style="margin-top: 1rem;">
                         <div class="clinical-tutorial-card">
                             <span class="eyebrow">Tutorial 1</span>
@@ -967,18 +967,18 @@ else
                         <div class="clinical-tutorial-card">
                             <span class="eyebrow">Tutorial 2</span>
                             <strong>Mide el cuadro</strong>
-                            <p>Usa duracion numerica real, intensidad y por lo menos un sintoma. Si hay riesgo, marca una alerta.</p>
+                            <p>Usa duración numérica real, intensidad y por lo menos un síntoma. Si hay riesgo, marca una alerta.</p>
                         </div>
                         <div class="clinical-tutorial-card">
                             <span class="eyebrow">Tutorial 3</span>
-                            <strong>Agrega solo contexto util</strong>
-                            <p>Completa desencadenantes, aliviantes y notas solo cuando aporten informacion clinica verificable.</p>
+                            <strong>Agrega solo contexto útil</strong>
+                            <p>Completa desencadenantes, aliviantes y notas solo cuando aporten información clínica verificable.</p>
                         </div>
                     </div>
                     <div class="clinical-tutorial-warning">
-                        <strong>No escribir:</strong> “revision”, “molestia”, “me duele un poco”.
+                        <strong>No escribir:</strong> “revisión”, “molestia”, “me duele un poco”.
                         <br />
-                        <strong>Mejor:</strong> “Vision borrosa AO de inicio gradual desde hace 3 semanas, peor en pantalla, mejora con reposo”.
+                        <strong>Mejor:</strong> “Visión borrosa AO de inicio gradual desde hace 3 semanas, peor en pantalla, mejora con reposo”.
                     </div>
                     <div class="clinical-grid-4" style="margin-top: 1rem;">
                         <div>
@@ -1002,7 +1002,7 @@ else
                             </select>
                         </div>
                         <div>
-                            <label class="form-label">Duracion</label>
+                            <label class="form-label">Duración</label>
                             <input class="form-control" @bind="editor.AnamnesisGuiada.DuracionValor" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ej. 3" />
                         </div>
                         <div>
@@ -1046,7 +1046,7 @@ else
 
                     <div class="clinical-grid-2" style="margin-top: 1rem;">
                         <div>
-                            <label class="form-label">Sintomas frecuentes</label>
+                            <label class="form-label">Síntomas frecuentes</label>
                             <div class="clinical-chip-wrap">
                                 @foreach (var option in SymptomOptions)
                                 {
@@ -1093,7 +1093,7 @@ else
                         </div>
                         <div>
                             <label class="form-label">Anamnesis</label>
-                            <textarea class="form-control" rows="5" maxlength="1200" @bind="editor.Anamnesis" placeholder="Agrega solo datos clinicos verificables si necesitas ampliar"></textarea>
+                            <textarea class="form-control" rows="5" maxlength="1200" @bind="editor.Anamnesis" placeholder="Agrega solo datos clínicos verificables si necesitas ampliar"></textarea>
                         </div>
                         <div>
                             <label class="form-label">Notas adicionales de anamnesis guiada</label>
@@ -1131,10 +1131,10 @@ else
 
         <section class="management-card clinical-card">
             <div class="management-card-header">
-                <h2>Lensometria y agudeza visual</h2>
-                <span>Lectura base y vision</span>
+                <h2>Lensometría y agudeza visual</h2>
+                <span>Lectura base y visión</span>
             </div>
-            <p class="clinical-helper-text">Este bloque sirve para registrar con que llega el paciente y como esta viendo antes de la refraccion final.</p>
+            <p class="clinical-helper-text">Este bloque sirve para registrar con qué llega el paciente y cómo está viendo antes de la refracción final.</p>
             <div class="clinical-grid-4" style="margin-top: 1rem;">
                 <div><label class="form-label">Usa lentes</label><input type="checkbox" class="form-check-input" style="margin-left:0.2rem;" @bind="editor.UsaLentes" /></div>
                 <div><label class="form-label">ADD</label><input class="form-control" @bind="editor.Lentes.Addicion" /></div>
@@ -1150,13 +1150,13 @@ else
                 <div class="clinical-span-4"><label class="form-label">Observaciones del lente</label><textarea class="form-control" rows="3" @bind="editor.Lentes.Observaciones"></textarea></div>
             </div>
             <div class="clinical-grid-4" style="margin-top: 1rem;">
-                <div><label class="form-label">Agudeza visual lejos sin correccion - ojo derecho</label><input class="form-control" @bind="editor.Visual.OdVlSc" /></div>
-                <div><label class="form-label">Agudeza visual lejos sin correccion - ojo izquierdo</label><input class="form-control" @bind="editor.Visual.OiVlSc" /></div>
-                <div><label class="form-label">Agudeza visual lejos sin correccion - ambos ojos</label><input class="form-control" @bind="editor.Visual.AoVlSc" /></div>
+                <div><label class="form-label">Agudeza visual lejos sin corrección - ojo derecho</label><input class="form-control" @bind="editor.Visual.OdVlSc" /></div>
+                <div><label class="form-label">Agudeza visual lejos sin corrección - ojo izquierdo</label><input class="form-control" @bind="editor.Visual.OiVlSc" /></div>
+                <div><label class="form-label">Agudeza visual lejos sin corrección - ambos ojos</label><input class="form-control" @bind="editor.Visual.AoVlSc" /></div>
                 <div><label class="form-label">PH</label><input class="form-control" @bind="editor.Visual.Ph" /></div>
-                <div><label class="form-label">Agudeza visual cerca sin correccion - ojo derecho</label><input class="form-control" @bind="editor.Visual.OdVpSc" /></div>
-                <div><label class="form-label">Agudeza visual cerca sin correccion - ojo izquierdo</label><input class="form-control" @bind="editor.Visual.OiVpSc" /></div>
-                <div><label class="form-label">Agudeza visual cerca sin correccion - ambos ojos</label><input class="form-control" @bind="editor.Visual.AoVpSc" /></div>
+                <div><label class="form-label">Agudeza visual cerca sin corrección - ojo derecho</label><input class="form-control" @bind="editor.Visual.OdVpSc" /></div>
+                <div><label class="form-label">Agudeza visual cerca sin corrección - ojo izquierdo</label><input class="form-control" @bind="editor.Visual.OiVpSc" /></div>
+                <div><label class="form-label">Agudeza visual cerca sin corrección - ambos ojos</label><input class="form-control" @bind="editor.Visual.AoVpSc" /></div>
                 <div><label class="form-label">Dominancia</label><input class="form-control" @bind="editor.Visual.Dominancia" /></div>
                 <div><label class="form-label">Optotipo</label><input class="form-control" @bind="editor.Visual.Optotipo" /></div>
                 <div><label class="form-label">Distancia VL</label><input class="form-control" @bind="editor.Visual.DistanciaVl" /></div>
@@ -1169,8 +1169,8 @@ else
             {
                 <section class="management-card clinical-card">
                     <div class="management-card-header">
-                        <h2>Examen externo / biomicroscopia</h2>
-                        <span>Grafico ocular y hallazgos</span>
+                        <h2>Examen externo / biomicroscopía</h2>
+                        <span>Gráfico ocular y hallazgos</span>
                     </div>
                     <div class="clinical-grid-2" style="margin-top: 1rem;">
                         <EyeDiagramEditor Label="OD" @bind-Value="editor.Biomicroscopia.GraphicOd" />
@@ -1180,10 +1180,10 @@ else
                         <div class="clinical-odoi-head">Hallazgo</div>
                         <div class="clinical-odoi-head">OD</div>
                         <div class="clinical-odoi-head">OI</div>
-                        <div class="clinical-odoi-label">Orbita / cejas</div>
+                        <div class="clinical-odoi-label">Órbita / cejas</div>
                         <input class="form-control" @bind="editor.Biomicroscopia.OrbitaOd" />
                         <input class="form-control" @bind="editor.Biomicroscopia.OrbitaOi" />
-                        <div class="clinical-odoi-label">Parpados / pestanas</div>
+                        <div class="clinical-odoi-label">Párpados / pestañas</div>
                         <input class="form-control" @bind="editor.Biomicroscopia.ParpadosOd" />
                         <input class="form-control" @bind="editor.Biomicroscopia.ParpadosOi" />
                         <div class="clinical-odoi-label">Sistema lagrimal</div>
@@ -1192,7 +1192,7 @@ else
                         <div class="clinical-odoi-label">Conjuntiva / esclera</div>
                         <input class="form-control" @bind="editor.Biomicroscopia.ConjuntivaOd" />
                         <input class="form-control" @bind="editor.Biomicroscopia.ConjuntivaOi" />
-                        <div class="clinical-odoi-label">Cornea / camara anterior</div>
+                        <div class="clinical-odoi-label">Córnea / cámara anterior</div>
                         <input class="form-control" @bind="editor.Biomicroscopia.CorneaOd" />
                         <input class="form-control" @bind="editor.Biomicroscopia.CorneaOi" />
                         <div class="clinical-odoi-label">Iris / pupila</div>
@@ -1209,7 +1209,7 @@ else
 
                 <section class="management-card clinical-card">
                     <div class="management-card-header">
-                        <h2>Oftalmoscopia</h2>
+                        <h2>Oftalmoscopía</h2>
                         <span>Fondo de ojo y hallazgos</span>
                     </div>
                     <div class="clinical-grid-2" style="margin-top: 1rem;">
@@ -1220,13 +1220,13 @@ else
                         <div class="clinical-odoi-head">Hallazgo</div>
                         <div class="clinical-odoi-head">OD</div>
                         <div class="clinical-odoi-head">OI</div>
-                        <div class="clinical-odoi-label">Papila / excavacion</div>
+                        <div class="clinical-odoi-label">Papila / excavación</div>
                         <input class="form-control" @bind="editor.Oftalmoscopia.PapilaOd" />
                         <input class="form-control" @bind="editor.Oftalmoscopia.PapilaOi" />
                         <div class="clinical-odoi-label">Vasos / arteria / vena</div>
                         <input class="form-control" @bind="editor.Oftalmoscopia.VasosOd" />
                         <input class="form-control" @bind="editor.Oftalmoscopia.VasosOi" />
-                        <div class="clinical-odoi-label">Macula / fijacion</div>
+                        <div class="clinical-odoi-label">Mácula / fijación</div>
                         <input class="form-control" @bind="editor.Oftalmoscopia.MaculaOd" />
                         <input class="form-control" @bind="editor.Oftalmoscopia.MaculaOi" />
                         <div class="clinical-odoi-label">Tapete / regularidad y color</div>
@@ -1237,8 +1237,8 @@ else
 
                 <section class="management-card clinical-card">
                     <div class="management-card-header">
-                        <h2>Examen motor y refraccion</h2>
-                        <span>Bloques tecnicos</span>
+                        <h2>Examen motor y refracción</h2>
+                        <span>Bloques técnicos</span>
                     </div>
                     <div class="clinical-grid-2" style="margin-top: 1rem;">
                         <div>
@@ -1250,7 +1250,7 @@ else
                             <textarea class="form-control" rows="8" @bind="editor.Motor.HallazgosComplementarios"></textarea>
                         </div>
                         <div>
-                            <label class="form-label">Queratometria y miras</label>
+                            <label class="form-label">Queratometría y miras</label>
                             <textarea class="form-control" rows="6" @bind="editor.Keratometria.Resumen"></textarea>
                         </div>
                         <div>
@@ -1261,11 +1261,11 @@ else
 
                     <div class="clinical-grid-2" style="margin-top: 1rem;">
                         <div>
-                            <label class="form-label">RX estatica y dinamica</label>
+                            <label class="form-label">RX estática y dinámica</label>
                             <textarea class="form-control" rows="8" @bind="editor.Refraction.RxEstaticaDinamica"></textarea>
                         </div>
                         <div>
-                            <label class="form-label">Subjetivo, afinacion y balance binocular</label>
+                            <label class="form-label">Subjetivo, afinación y balance binocular</label>
                             <textarea class="form-control" rows="8" @bind="editor.Refraction.SubjetivoAfinacionBalance"></textarea>
                         </div>
                         <div>
@@ -1273,7 +1273,7 @@ else
                             <textarea class="form-control" rows="8" @bind="editor.Refraction.PruebaAmbulatoriaRxFinal"></textarea>
                         </div>
                         <div>
-                            <label class="form-label">Observaciones tecnicas</label>
+                            <label class="form-label">Observaciones técnicas</label>
                             <textarea class="form-control" rows="8" @bind="editor.Refraction.Observaciones"></textarea>
                         </div>
                     </div>
@@ -1281,10 +1281,10 @@ else
 
                 <section class="management-card clinical-card">
                     <div class="management-card-header">
-                        <h2>Registro longitudinal de examenes</h2>
+                        <h2>Registro longitudinal de exámenes</h2>
                         <span>@editor.ExamenesClinicos.Count en este encuentro</span>
                     </div>
-                    <p class="clinical-helper-text">Usa esta seccion cuando en una misma historia se agregan varios examenes en consultas o fechas distintas. Tambien puedes completarlos luego desde el modulo de examenes.</p>
+                    <p class="clinical-helper-text">Usa esta sección cuando en una misma historia se agregan varios exámenes en consultas o fechas distintas. También puedes completarlos luego desde el módulo de exámenes.</p>
                     <div class="clinical-stack" style="margin-top: 1rem;">
                         @foreach (var exam in editor.ExamenesClinicos.Select((value, index) => new { value, index }))
                         {
@@ -1306,8 +1306,8 @@ else
                                 <div>
                                     <label class="form-label">Origen</label>
                                     <select class="form-select" @bind="exam.value.ModuloOrigen">
-                                        <option value="Historia clinica">Historia clinica</option>
-                                        <option value="Modulo de examenes">Modulo de examenes</option>
+                                        <option value="Historia clinica">Historia clínica</option>
+                                        <option value="Modulo de examenes">Módulo de exámenes</option>
                                         <option value="Externo">Externo</option>
                                     </select>
                                 </div>
@@ -1324,7 +1324,7 @@ else
                                     <input class="form-control" @bind="exam.value.ResultadoResumen" maxlength="220" />
                                 </div>
                                 <div class="clinical-span-3">
-                                    <label class="form-label">Detalle / interpretacion</label>
+                                    <label class="form-label">Detalle / interpretación</label>
                                     <textarea class="form-control" rows="3" @bind="exam.value.DetalleResultados"></textarea>
                                 </div>
                                 <div>
@@ -1334,7 +1334,7 @@ else
                                     </div>
                                 </div>
                                 <div class="clinical-span-3">
-                                    <label class="form-label">Notas de alarma / accion</label>
+                                    <label class="form-label">Notas de alarma / acción</label>
                                     <input class="form-control" @bind="exam.value.NotasAlarma" maxlength="220" />
                                 </div>
                                 <div>
@@ -1351,7 +1351,7 @@ else
                     </div>
                     <div class="workspace-actions" style="margin-top: 0.85rem;">
                         <button type="button" class="btn btn-outline-primary" @onclick="AddClinicalExamRecord">Agregar examen al encuentro</button>
-                        <a class="btn btn-outline-primary" href="@GetExamModuleUrl()">Abrir modulo separado</a>
+                        <a class="btn btn-outline-primary" href="@GetExamModuleUrl()">Abrir módulo separado</a>
                     </div>
                 </section>
             }
@@ -1374,10 +1374,10 @@ else
                         <div class="clinical-span-4"><label class="form-label">Medicamentos recetados para facturación</label><textarea class="form-control" rows="3" @bind="editor.Diagnostico.MedicamentosRecetados"></textarea></div>
                         <div class="clinical-span-4" style="padding: 1rem; border: 1px solid rgba(127,105,81,0.12); border-radius: 1rem; background: rgba(255,255,255,0.68);">
                             <div class="management-card-header" style="margin-bottom: 0.75rem;">
-                                <h2>Receta medica estructurada</h2>
-                                <span>Se guarda como receta y cruza stock para facturacion</span>
+                                <h2>Receta médica estructurada</h2>
+                                <span>Se guarda como receta y cruza stock para facturación</span>
                             </div>
-                            <p class="clinical-helper-text">Agrega aqui lo realmente prescrito. Si eliges un producto existente y activas facturacion, el sistema solo lo llevara a factura cuando sea facturable y, si es un bien, tenga stock suficiente.</p>
+                            <p class="clinical-helper-text">Agrega aquí lo realmente prescrito. Si eliges un producto existente y activas facturación, el sistema solo lo llevará a factura cuando sea facturable y, si es un bien, tenga stock suficiente.</p>
                             <div class="clinical-stack">
                                 @foreach (var item in editor.Diagnostico.PrescripcionItems.Select((value, index) => new { value, index }))
                                 {
@@ -1421,7 +1421,7 @@ else
                                         </div>
                                         <div class="clinical-span-3">
                                             <label class="form-label">Indicaciones</label>
-                                            <input class="form-control" @bind="item.value.Indicaciones" maxlength="500" placeholder="Dosis, frecuencia, observaciones de uso o preparacion" />
+                                            <input class="form-control" @bind="item.value.Indicaciones" maxlength="500" placeholder="Dosis, frecuencia, observaciones de uso o preparación" />
                                         </div>
                                         <div>
                                             <label class="form-label">Quitar</label>
@@ -1431,7 +1431,7 @@ else
                                 }
                             </div>
                             <div class="workspace-actions" style="margin-top: 0.85rem;">
-                                <button type="button" class="btn btn-outline-primary" @onclick="AddPrescriptionItem">Agregar item a receta</button>
+                                <button type="button" class="btn btn-outline-primary" @onclick="AddPrescriptionItem">Agregar ítem a receta</button>
                             </div>
                         </div>
                         <div class="clinical-span-4"><label class="form-label">Observaciones generales</label><textarea class="form-control" rows="4" @bind="editor.ObservacionesGenerales"></textarea></div>
@@ -1462,11 +1462,11 @@ else
                             </select>
                         </div>
                         <div>
-                            <label class="form-label">Dias sugeridos</label>
+                            <label class="form-label">Días sugeridos</label>
                             <input type="number" min="1" max="365" class="form-control" @bind="editor.Seguimiento.DiasSugeridos" />
                         </div>
                         <div>
-                            <label class="form-label">Accion</label>
+                            <label class="form-label">Acción</label>
                             <a class="btn btn-outline-primary" style="width:100%;" href="@GetAppointmentPrefillUrl()">Agendar control</a>
                         </div>
                         <div class="clinical-span-2">
@@ -1804,7 +1804,7 @@ else
         if (patient is null)
         {
             ResetPatientContext();
-            errorMessage = "No se encontro el paciente seleccionado.";
+            errorMessage = "No se encontró el paciente seleccionado.";
             isLoading = false;
             return;
         }

@@ -626,7 +626,7 @@ else
                 laboratoryEntity = await dbContext.tbl_laboratorios.FirstOrDefaultAsync(l => l.id_laboratorio == editor!.IdLaboratorio);
                 if (laboratoryEntity is null)
                 {
-                    errorMessage = "No se encontro el laboratorio seleccionado.";
+                    errorMessage = "No se encontró el laboratorio seleccionado.";
                     return;
                 }
             }
@@ -647,8 +647,8 @@ else
             await dbContext.SaveChangesAsync();
 
             ShowAlert(isCreatingNewLaboratory
-                ? "El laboratorio se creo correctamente."
-                : "La informacion del laboratorio se guardo correctamente.", false);
+                ? "El laboratorio se creó correctamente."
+                : "La información del laboratorio se guardó correctamente.", false);
 
             showFormModal = false;
             isCreatingNewLaboratory = false;

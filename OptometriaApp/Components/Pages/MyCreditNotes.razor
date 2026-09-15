@@ -15,7 +15,7 @@
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
 
-<PageTitle>Mis notas de credito</PageTitle>
+<PageTitle>Mis notas de crédito</PageTitle>
 
 <style>
     .credit-grid,
@@ -198,6 +198,28 @@
 
     @@media (max-width: 992px) {
         .credit-grid {
+
+    @@media print {
+        .workspace-actions,
+        .app-nav-shell,
+        .top-row,
+        .credit-list-shell,
+        .management-hero {
+            display: none !important;
+        }
+
+        .management-shell,
+        .management-card,
+        .credit-card {
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: #fff !important;
+        }
+    }
+
+    @@media (max-width: 992px) {
+        .credit-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -207,7 +229,7 @@
 {
     <section class="management-shell">
         <div class="management-card">
-            <h1>Cargando notas de credito...</h1>
+            <h1>Cargando notas de crédito...</h1>
         </div>
     </section>
 }
@@ -216,8 +238,8 @@ else if (!canViewModule)
     <section class="management-shell">
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
-            <h1>Mis notas de credito</h1>
-            <p>Tu rol no tiene permiso para entrar a este modulo.</p>
+            <h1>Mis notas de crédito</h1>
+            <p>Tu rol no tiene permiso para entrar a este módulo.</p>
         </div>
     </section>
 }
@@ -227,8 +249,8 @@ else
         <div class="management-hero">
             <div>
                 <span class="eyebrow">Ajustes comerciales</span>
-                <h1>Mis notas de credito</h1>
-                <p>Consulta el historial, busca facturas emitidas y genera notas de credito totales o parciales con validacion de negocio.</p>
+                <h1>Mis notas de crédito</h1>
+                <p>Consulta el historial, busca facturas emitidas y genera notas de crédito totales o parciales con validación de negocio.</p>
             </div>
         </div>
 
@@ -244,13 +266,13 @@ else
 
         <section class="management-card" style="margin-bottom: 1rem;">
             <div class="management-card-header">
-                <h2>Notas de credito emitidas</h2>
+                <h2>Notas de crédito emitidas</h2>
                 <span>@recentCreditNotes.Count registros</span>
             </div>
 
             @if (recentCreditNotes.Count == 0)
             {
-                <p style="margin: 1rem 0 0;">No hay notas de credito registradas.</p>
+                <p style="margin: 1rem 0 0;">No hay notas de crédito registradas.</p>
             }
             else
             {
@@ -266,7 +288,7 @@ else
                                 <th>Total</th>
                                 <th>Saldo</th>
                                 <th>Estado</th>
-                                <th style="text-align:right;">Accion</th>
+                                <th style="text-align:right;">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -301,7 +323,7 @@ else
 
             <div class="credit-filter-grid" style="margin-bottom: 1rem;">
                 <div>
-                    <label class="form-label">Numero de factura</label>
+                    <label class="form-label">Número de factura</label>
                     <input class="form-control" @bind="searchInvoiceNumber" />
                 </div>
                 <div>
@@ -313,7 +335,7 @@ else
                     <input class="form-control" @bind="searchIdentifier" />
                 </div>
                 <div>
-                    <label class="form-label">Fecha emision</label>
+                    <label class="form-label">Fecha emisión</label>
                     <input type="date" class="form-control" @bind="searchIssueDate" />
                 </div>
             </div>
@@ -346,7 +368,7 @@ else
                                         <th>Total</th>
                                         <th>Acreditado</th>
                                         <th>Estado</th>
-                                        <th style="text-align:right;">Accion</th>
+                                        <th style="text-align:right;">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -382,8 +404,8 @@ else
                 <section class="credit-card">
                     @if (selectedIssuedInvoice is null)
                     {
-                        <div class="credit-label">Nota de credito</div>
-                        <p style="margin: 0;">Selecciona una factura para revisar su detalle y generar una nota de credito.</p>
+                        <div class="credit-label">Nota de crédito</div>
+                        <p style="margin: 0;">Selecciona una factura para revisar su detalle y generar una nota de crédito.</p>
                     }
                     else
                     {
@@ -405,7 +427,7 @@ else
 
                             <div class="credit-document-meta">
                                 <div>
-                                    <label>Nota de credito</label>
+                                    <label>Nota de crédito</label>
                                     <strong>@CreditNoteNumberPreview</strong>
                                     <span>Serie y secuencia del emisor activo</span>
                                 </div>
@@ -427,7 +449,7 @@ else
                                 <div>
                                     <label>Total vigente</label>
                                     <strong>@selectedIssuedInvoice.CurrentTotal.ToString("0.00")</strong>
-                                    <span>Acreditado historico @selectedIssuedInvoice.TotalCredited.ToString("0.00")</span>
+                                    <span>Acreditado histórico @selectedIssuedInvoice.TotalCredited.ToString("0.00")</span>
                                 </div>
                             </div>
                         </div>
@@ -458,7 +480,7 @@ else
                         <div class="credit-label" style="margin-top: 1rem;">Productos o servicios facturados</div>
                         @if (selectedInvoiceLines.Count == 0)
                         {
-                            <p style="margin: 0;">La factura seleccionada no tiene lineas disponibles.</p>
+                            <p style="margin: 0;">La factura seleccionada no tiene líneas disponibles.</p>
                         }
                         else
                         {
@@ -466,7 +488,7 @@ else
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th>Codigo</th>
+                                            <th>Código</th>
                                             <th>Concepto</th>
                                             <th>IVA</th>
                                             <th>Cant. facturada</th>
@@ -515,7 +537,7 @@ else
                         }
 
                         <section class="credit-card credit-totals-card" style="margin-top: 1rem;">
-                            <div class="credit-label">Totales de emision</div>
+                            <div class="credit-label">Totales de emisión</div>
                             <span style="display:block; color: var(--color-taupe);">Total final de la nota</span>
                             <strong class="credit-grand-total">@draftSummary.Total.ToString("0.00")</strong>
                             <span style="display:block; color: var(--color-taupe); margin-top: 0.35rem;">Documento listo para confirmar</span>
@@ -533,14 +555,14 @@ else
                         </section>
 
                         <div class="workspace-actions" style="margin-top: 1rem;">
-                            <button type="button" class="btn btn-primary" @onclick="SaveCreditNoteAsync" disabled="@(!CanEditSelectedInvoice)">Emitir nota de credito</button>
+                            <button type="button" class="btn btn-primary" @onclick="SaveCreditNoteAsync" disabled="@(!CanEditSelectedInvoice)">Emitir nota de crédito</button>
                             <a class="btn btn-outline-primary" href="@($"/my-invoices")">Volver a mis facturas</a>
                         </div>
 
                         <div class="credit-label" style="margin-top: 1rem;">Historial de la factura</div>
                         @if (selectedCreditNotes.Count == 0)
                         {
-                            <p style="margin: 0;">Esta factura no tiene notas de credito registradas.</p>
+                            <p style="margin: 0;">Esta factura no tiene notas de crédito registradas.</p>
                         }
                         else
                         {
@@ -555,7 +577,7 @@ else
                                         <th>Saldo</th>
                                         <th>Estado</th>
                                         <th>Motivo</th>
-                                        <th style="text-align:right;">Accion</th>
+                                        <th style="text-align:right;">Acción</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -591,7 +613,7 @@ else
     <div class="custom-modal-overlay" @onclick="CloseCreditNoteDetailModal">
         <div class="custom-modal-card credit-detail-modal" @onclick:stopPropagation="true">
             <header class="custom-modal-header apricot-header">
-                <h2>Nota de credito #@selectedCreditNoteDetail.NoteNumber</h2>
+                <h2>Nota de crédito #@selectedCreditNoteDetail.NoteNumber</h2>
                 <button type="button" class="btn-close-modal" @onclick="CloseCreditNoteDetailModal">×</button>
             </header>
             <div class="custom-modal-body">
@@ -629,7 +651,7 @@ else
                 <div class="credit-label" style="margin-top: 1rem;">Detalle acreditado</div>
                 @if (selectedCreditNoteDetail.Details.Count == 0)
                 {
-                    <p style="margin: 0;">Esta nota no tiene detalle por item registrado.</p>
+                    <p style="margin: 0;">Esta nota no tiene detalle por ítem registrado.</p>
                 }
                 else
                 {
@@ -637,7 +659,7 @@ else
                         <table class="table table-hover" style="margin-bottom: 0;">
                             <thead>
                                 <tr>
-                                    <th>Codigo</th>
+                                    <th>Código</th>
                                     <th>Concepto</th>
                                     <th>IVA</th>
                                     <th>Cantidad</th>

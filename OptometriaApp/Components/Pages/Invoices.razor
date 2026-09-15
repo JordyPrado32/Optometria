@@ -716,9 +716,9 @@ else
         <section class="management-card invoice-workspace">
             <div class="invoice-sheet-header">
                 <div class="invoice-sheet-header-copy">
-                    <span class="eyebrow">Emision comercial</span>
+                    <span class="eyebrow">Emisión comercial</span>
                     <h2 style="margin: 0.35rem 0 0.45rem;">Factura #@DisplayInvoiceNumber</h2>
-                    <p class="invoice-header-supporting">Organiza la informacion fiscal, revisa el detalle con mas espacio horizontal y abre la vista previa solo cuando el documento ya tiene la base obligatoria.</p>
+                    <p class="invoice-header-supporting">Organiza la información fiscal, revisa el detalle con más espacio horizontal y abre la vista previa solo cuando el documento ya tiene la base obligatoria.</p>
                 </div>
 
                 <div class="invoice-kpi">
@@ -740,7 +740,7 @@ else
                                         @((currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "FC").Trim().Substring(0, Math.Min(2, (currentIssuer?.nombre_comercial ?? currentIssuer?.razon_social ?? "FC").Trim().Length)).ToUpperInvariant())
                                     </div>
                                     <div>
-                                        <span class="invoice-doc-badge">Factura en emision</span>
+                                        <span class="invoice-doc-badge">Factura en emisión</span>
                                         <h3 class="invoice-doc-number">@DisplayInvoiceNumber</h3>
                                         <div style="color: var(--color-taupe); margin-top: 0.35rem;">
                                             @(currentIssuer?.razon_social ?? currentIssuer?.nombre_comercial ?? "Emisor sin configurar")
@@ -763,13 +763,13 @@ else
                                 </div>
                                 <div class="invoice-meta-card">
                                     <label>Contacto emisor</label>
-                                    <strong>@(currentIssuer?.telefono ?? "Sin telefono")</strong>
+                                    <strong>@(currentIssuer?.telefono ?? "Sin teléfono")</strong>
                                     <span>@(currentIssuer?.correo ?? "Sin correo")</span>
                                 </div>
                             </div>
 
                             <div class="invoice-pill-row">
-                                <span class="invoice-pill">@draftLines.Count lineas</span>
+                                <span class="invoice-pill">@draftLines.Count líneas</span>
                                 <span class="invoice-pill">IVA promedio @taxRate.ToString("0.##")%</span>
                                 <span class="invoice-pill">Total @totalPreview.ToString("0.00")</span>
                                 <span class="invoice-pill">Saldo @balancePreview.ToString("0.00")</span>
@@ -789,7 +789,7 @@ else
                                     <div class="invoice-toolbar-grid">
                                         <div>
                                             <label class="form-label" for="invoicePatientSearch">Paciente</label>
-                                            <input id="invoicePatientSearch" class="form-control" @bind="patientSearchTerm" @bind:event="oninput" placeholder="Escribe nombre o cedula" disabled="@(!canEditModule)" />
+                                            <input id="invoicePatientSearch" class="form-control" @bind="patientSearchTerm" @bind:event="oninput" placeholder="Escribe nombre o cédula" disabled="@(!canEditModule)" />
                                             <div class="invoice-search-results" style="margin-top: 0.5rem;">
                                                 <button type="button" class="invoice-search-option @(selectedPatientId == 0 ? "active" : null)" @onclick="ClearPatientSelection" disabled="@(!canEditModule)">Sin paciente fijo</button>
                                                 @foreach (var patient in FilteredPatients)
@@ -804,7 +804,7 @@ else
 
                                         <div>
                                             <label class="form-label" for="invoiceClientSearch">Cliente</label>
-                                            <input id="invoiceClientSearch" class="form-control" @bind="clientSearchTerm" @bind:event="oninput" placeholder="Escribe nombre o identificacion" disabled="@(!canEditModule)" />
+                                            <input id="invoiceClientSearch" class="form-control" @bind="clientSearchTerm" @bind:event="oninput" placeholder="Escribe nombre o identificación" disabled="@(!canEditModule)" />
                                             <div class="invoice-search-results" style="margin-top: 0.5rem;">
                                                 <button type="button" class="invoice-search-option @(selectedClientId == 0 ? "active" : null)" @onclick="ClearClientSelection" disabled="@(!canEditModule)">Sin cliente fijo</button>
                                                 @foreach (var client in FilteredClients)
@@ -826,30 +826,30 @@ else
                                     {
                                         <div class="invoice-client-summary-grid" style="margin-top: 1rem;">
                                             <div>
-                                                <div class="invoice-party-card-title">Cliente de facturacion</div>
+                                                <div class="invoice-party-card-title">Cliente de facturación</div>
                                                 <div class="invoice-readonly-grid">
                                                     <div class="invoice-readonly-item">
                                                         <label>Nombre fiscal</label>
                                                         <strong>@GetClientDisplayName(billingClient)</strong>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Identificacion</label>
+                                                        <label>Identificación</label>
                                                         <strong>@GetClientIdentification(billingClient)</strong>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Direccion</label>
-                                                        <span>@(billingClient?.direccion ?? "Sin direccion")</span>
+                                                        <label>Dirección</label>
+                                                        <span>@(billingClient?.direccion ?? "Sin dirección")</span>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Telefono</label>
-                                                        <span>@(billingClient?.telefono ?? "Sin telefono")</span>
+                                                        <label>Teléfono</label>
+                                                        <span>@(billingClient?.telefono ?? "Sin teléfono")</span>
                                                     </div>
                                                     <div class="invoice-readonly-item">
                                                         <label>Correo</label>
                                                         <span>@(billingClient?.correo_electronico ?? "Sin correo")</span>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Condicion</label>
+                                                        <label>Condición</label>
                                                         <span>@(billingClient?.condicion_pago ?? "Contado")</span>
                                                     </div>
                                                 </div>
@@ -862,16 +862,16 @@ else
                                                         <strong>@(selectedPatient is null ? "Sin paciente fijo" : GetPatientFullName(selectedPatient))</strong>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Cedula</label>
-                                                        <strong>@(selectedPatient?.cedula ?? "Sin cedula")</strong>
+                                                        <label>Cédula</label>
+                                                        <strong>@(selectedPatient?.cedula ?? "Sin cédula")</strong>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Direccion</label>
-                                                        <span>@(selectedPatient?.direccion ?? "Sin direccion")</span>
+                                                        <label>Dirección</label>
+                                                        <span>@(selectedPatient?.direccion ?? "Sin dirección")</span>
                                                     </div>
                                                     <div class="invoice-readonly-item">
-                                                        <label>Telefono</label>
-                                                        <span>@(selectedPatient?.telefono ?? "Sin telefono")</span>
+                                                        <label>Teléfono</label>
+                                                        <span>@(selectedPatient?.telefono ?? "Sin teléfono")</span>
                                                     </div>
                                                     <div class="invoice-readonly-item">
                                                         <label>Correo</label>
@@ -1229,9 +1229,9 @@ else
 
                         <div class="invoice-preview-mini-grid">
                             <div><strong>Cliente</strong><br />@GetClientDisplayName(billingClient)</div>
-                            <div><strong>Identificacion</strong><br />@GetClientIdentification(billingClient)</div>
+                            <div><strong>Identificación</strong><br />@GetClientIdentification(billingClient)</div>
                             <div><strong>Paciente</strong><br />@(selectedPatient is null ? "Sin paciente fijo" : GetPatientFullName(selectedPatient))</div>
-                            <div><strong>Cedula paciente</strong><br />@(selectedPatient?.cedula ?? "Sin cedula")</div>
+                            <div><strong>Cédula paciente</strong><br />@(selectedPatient?.cedula ?? "Sin cédula")</div>
                             <div><strong>Fecha</strong><br />@InvoiceDateLabel</div>
                             <div><strong>Pago</strong><br />@paymentForm</div>
                         </div>
@@ -1754,13 +1754,13 @@ else
         var product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == requestedProductId && x.activo == true);
         if (sale is null || product is null)
         {
-            errorMessage = "No se encontro el borrador o el producto seleccionado.";
+            errorMessage = "No se encontró el borrador o el producto seleccionado.";
             return;
         }
 
         if (!CanInvoiceProduct(product))
         {
-            errorMessage = "Ese producto no esta disponible para facturacion.";
+            errorMessage = "Ese producto no está disponible para facturación.";
             return;
         }
 
@@ -1790,7 +1790,7 @@ else
             var existingLine = sale.tbl_detalle_venta.FirstOrDefault(x => x.id_detalle_venta == requestedLineId);
             if (existingLine is null)
             {
-                errorMessage = "No se encontro la linea seleccionada para editar.";
+                errorMessage = "No se encontró la línea seleccionada para editar.";
                 return;
             }
 
@@ -1827,7 +1827,7 @@ else
         await dbContext.SaveChangesAsync();
 
         ResetLineEditor();
-        statusMessage = isEditing ? "La linea fue actualizada correctamente." : "La linea fue agregada al borrador de factura.";
+        statusMessage = isEditing ? "La línea fue actualizada correctamente." : "La línea fue agregada al borrador de factura.";
         await LoadAsync(selectedPatientId > 0 ? selectedPatientId : null);
     }
 
@@ -1855,7 +1855,7 @@ else
             ResetLineEditor();
         }
 
-        statusMessage = "La linea fue retirada del borrador.";
+        statusMessage = "La línea fue retirada del borrador.";
         await LoadAsync(selectedPatientId);
     }
 
@@ -1923,7 +1923,7 @@ else
 
             if (creditDays < 0)
             {
-                errorMessage = "Los dias de credito no pueden ser negativos.";
+                errorMessage = "Los días de crédito no pueden ser negativos.";
                 return;
             }
 
@@ -1939,13 +1939,13 @@ else
 
             if (sale is null)
             {
-                errorMessage = "No se encontro el borrador de factura.";
+                errorMessage = "No se encontró el borrador de factura.";
                 return;
             }
 
             if (!sale.tbl_detalle_venta.Any())
             {
-                errorMessage = "Agrega al menos una linea antes de emitir la factura.";
+                errorMessage = "Agrega al menos una línea antes de emitir la factura.";
                 return;
             }
 
@@ -1962,13 +1962,13 @@ else
             {
                 if (!invoiceProducts.TryGetValue(groupedLine.ProductId, out var invoiceProduct))
                 {
-                    errorMessage = "Una de las lineas referencia un producto inexistente.";
+                    errorMessage = "Una de las líneas referencia un producto inexistente.";
                     return;
                 }
 
                 if (!CanInvoiceProduct(invoiceProduct))
                 {
-                    errorMessage = $"El producto '{invoiceProduct.nombre_producto}' ya no esta disponible para facturacion.";
+                    errorMessage = $"El producto '{invoiceProduct.nombre_producto}' ya no está disponible para facturación.";
                     return;
                 }
 
@@ -1982,7 +1982,7 @@ else
             var client = await dbContext.clients.FirstOrDefaultAsync(x => x.cliente_id == billingClient.cliente_id);
             if (client is null)
             {
-                errorMessage = "No se encontro el cliente de facturacion.";
+                errorMessage = "No se encontró el cliente de facturación.";
                 return;
             }
 
@@ -2356,7 +2356,7 @@ else
             product = await dbContext.tbl_productos.FirstOrDefaultAsync(x => x.id_producto == productUpsertEditor.IdProducto);
             if (product is null)
             {
-                errorMessage = "No se encontro el producto seleccionado.";
+                errorMessage = "No se encontró el producto seleccionado.";
                 return;
             }
         }

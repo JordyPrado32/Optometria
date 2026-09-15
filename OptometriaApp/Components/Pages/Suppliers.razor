@@ -454,7 +454,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validación" : "Operación exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
@@ -655,7 +655,7 @@ else
 
         if (!ValidateEditor())
         {
-            ShowAlert(errorMessage ?? "Error de validacion.", true);
+            ShowAlert(errorMessage ?? "Error de validación.", true);
             return;
         }
 
@@ -686,7 +686,7 @@ else
             }
 
             supplierEntity = await dbContext.tbl_proveedors.FirstOrDefaultAsync(s => s.id_proveedor == editor!.IdProveedor)
-                ?? throw new InvalidOperationException("No se encontro el proveedor seleccionado.");
+                ?? throw new InvalidOperationException("No se encontró el proveedor seleccionado.");
         }
 
         supplierEntity.nombre = editor!.Nombre.Trim();
@@ -727,8 +727,8 @@ else
         await dbContext.SaveChangesAsync();
 
         ShowAlert(isCreatingNewSupplier
-            ? "El proveedor se creo correctamente."
-            : "La informacion del proveedor se guardo correctamente.", false);
+            ? "El proveedor se creó correctamente."
+            : "La información del proveedor se guardó correctamente.", false);
 
         showFormModal = false;
         isCreatingNewSupplier = false;
@@ -775,7 +775,7 @@ else
                 supplierEntity = await dbContext.tbl_proveedors.FirstOrDefaultAsync(s => s.id_proveedor == editor!.IdProveedor);
                 if (supplierEntity is null)
                 {
-                    errorMessage = "No se encontro el proveedor seleccionado.";
+                    errorMessage = "No se encontró el proveedor seleccionado.";
                     return;
                 }
             }
@@ -818,8 +818,8 @@ else
             await dbContext.SaveChangesAsync();
 
             ShowAlert(isCreatingNewSupplier
-                ? "El proveedor se creo correctamente."
-                : "La informacion del proveedor se guardo correctamente.", false);
+                ? "El proveedor se creó correctamente."
+                : "La información del proveedor se guardó correctamente.", false);
 
             showFormModal = false;
             isCreatingNewSupplier = false;
@@ -847,7 +847,7 @@ else
 
         if (supplierEntity is null)
         {
-            ShowAlert("No se encontro el proveedor seleccionado.", true);
+            ShowAlert("No se encontró el proveedor seleccionado.", true);
             return;
         }
 

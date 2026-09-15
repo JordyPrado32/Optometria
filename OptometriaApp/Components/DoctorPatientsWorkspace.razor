@@ -586,7 +586,7 @@ else
 
         if (cedulaExists)
         {
-            errorMessage = "La cedula ya esta registrada para otro paciente.";
+            errorMessage = "La cédula ya está registrada para otro paciente.";
             return;
         }
 
@@ -597,7 +597,7 @@ else
 
             if (emailExists)
             {
-                errorMessage = "El correo ya esta registrado para otro paciente.";
+                errorMessage = "El correo ya está registrado para otro paciente.";
                 return;
             }
         }
@@ -609,7 +609,7 @@ else
 
             if (codeExists)
             {
-                errorMessage = "El codigo del paciente ya existe.";
+                errorMessage = "El código del paciente ya existe.";
                 return;
             }
         }
@@ -621,7 +621,7 @@ else
         {
             if (!permissions.CanCreate)
             {
-                errorMessage = "Tu rol no tiene permiso para crear pacientes en este modulo.";
+                errorMessage = "Tu rol no tiene permiso para crear pacientes en este módulo.";
                 return;
             }
 
@@ -662,7 +662,7 @@ else
                 $"PacienteId={newPatient.id_paciente}; Cedula={newPatient.cedula}; Nombre={newPatient.nombres} {newPatient.apellidos}; Codigo={newPatient.codigo_paciente}; DoctorId={currentUserId}");
 
             await dbContext.SaveChangesAsync();
-            statusMessage = "El paciente se registro y quedo asignado a tu cuenta.";
+            statusMessage = "El paciente se registró y quedó asignado a tu cuenta.";
             isCreatingNewPatient = false;
             await LoadAsync(newPatient.id_paciente);
             return;
@@ -670,7 +670,7 @@ else
 
         if (!permissions.CanEdit)
         {
-            errorMessage = "Tu rol no tiene permiso para editar pacientes en este modulo.";
+            errorMessage = "Tu rol no tiene permiso para editar pacientes en este módulo.";
             return;
         }
 
@@ -686,7 +686,7 @@ else
         var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
         if (patientEntity is null)
         {
-            errorMessage = "No se encontro el paciente seleccionado.";
+            errorMessage = "No se encontró el paciente seleccionado.";
             return;
         }
 
@@ -710,7 +710,7 @@ else
             $"PacienteId={patientEntity.id_paciente}; Cedula={patientEntity.cedula}; Nombre={patientEntity.nombres} {patientEntity.apellidos}; DoctorId={currentUserId}");
 
         await dbContext.SaveChangesAsync();
-        statusMessage = "La informacion del paciente se guardo correctamente.";
+        statusMessage = "La información del paciente se guardó correctamente.";
         await LoadAsync(patientEntity.id_paciente);
     }
 
@@ -737,7 +737,7 @@ else
         var patientEntity = await dbContext.tbl_pacientes.FirstOrDefaultAsync(p => p.id_paciente == editor.IdPaciente);
         if (patientEntity is null)
         {
-            errorMessage = "No se encontro el paciente seleccionado.";
+            errorMessage = "No se encontró el paciente seleccionado.";
             return;
         }
 

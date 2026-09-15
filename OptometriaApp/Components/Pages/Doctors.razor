@@ -443,7 +443,7 @@
 {
     <section class="management-shell">
         <div class="management-card">
-            <h1>Cargando medicos...</h1>
+            <h1>Cargando médicos...</h1>
         </div>
     </section>
 }
@@ -452,8 +452,8 @@ else if (!canViewDoctors)
     <section class="management-shell">
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
-            <h1>Gestion de medicos</h1>
-            <p>Tu rol no tiene permiso para ver este modulo.</p>
+            <h1>Gestión de médicos</h1>
+            <p>Tu rol no tiene permiso para ver este módulo.</p>
         </div>
     </section>
 }
@@ -1129,7 +1129,7 @@ else
                 }
                 else if (auditEntries.Count == 0)
                 {
-                    <p>No hay eventos registrados para este medico.</p>
+                    <p>No hay eventos registrados para este médico.</p>
                 }
                 else
                 {
@@ -1149,7 +1149,7 @@ else
                 }
             </div>
             <footer class="custom-modal-footer">
-                <button type="button" class="btn btn-primary" @onclick="CloseAuditModal">Cerrar</button>
+                <button type="button" class="btn btn-outline-primary" @onclick="CloseAuditModal">Cerrar</button>
             </footer>
         </div>
     </div>
@@ -1160,7 +1160,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validación" : "Operación exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">

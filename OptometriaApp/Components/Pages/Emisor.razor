@@ -349,7 +349,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validación" : "Operación exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
@@ -544,7 +544,7 @@ else
             issuerEntity = await dbContext.emisor.FirstOrDefaultAsync(e =>
                     e.emisor_id == editor!.EmisorId &&
                     e.id_usuario_creacion == currentUserId)
-                ?? throw new InvalidOperationException("No se encontro el emisor seleccionado.");
+                ?? throw new InvalidOperationException("No se encontró el emisor seleccionado.");
         }
 
         issuerEntity.ruc = editor!.Ruc.Trim();
@@ -591,8 +591,8 @@ else
 
         ShowAlert(
             isCreatingNewIssuer
-                ? "El emisor se creo correctamente."
-                : "La informacion del emisor se guardo correctamente.",
+                ? "El emisor se creó correctamente."
+                : "La información del emisor se guardó correctamente.",
             false);
 
         showFormModal = false;
@@ -626,7 +626,7 @@ else
 
         if (issuerEntity is null)
         {
-            ShowAlert("No se encontro el emisor seleccionado.", true);
+            ShowAlert("No se encontró el emisor seleccionado.", true);
             return;
         }
 

@@ -96,12 +96,12 @@ else
                 </div>
 
                 <p style="margin-bottom: 1rem; color: var(--color-taupe); font-size: 0.9rem;">
-                    Filtra solo lo que ya esta cargado para el medico activo. El cambio de medico se hace aparte para no mezclar contexto con filtros.
+                    Filtra solo lo que ya está cargado para el médico activo. El cambio de médico se hace aparte para no mezclar contexto con filtros.
                 </p>
 
                 <div class="availability-filters-grid">
                     <div>
-                        <label class="form-label" for="dayFilter">Dia</label>
+                        <label class="form-label" for="dayFilter">Día</label>
                         <select id="dayFilter" class="form-select" @bind="selectedDayFilter">
                             <option value="0">Todos</option>
                             @foreach (var option in dayOptions)
@@ -131,7 +131,7 @@ else
                 @if (!doctors.Any())
                 {
                     <div class="alert alert-warning" role="alert" style="margin-top: 1rem;">
-                        No hay medicos disponibles para gestionar disponibilidad.
+                        No hay médicos disponibles para gestionar disponibilidad.
                     </div>
                 }
             </section>
@@ -147,7 +147,7 @@ else
                 <div class="user-summary-card">
                     <span class="eyebrow">Disponibilidad</span>
                     <strong>@FilteredAvailabilityRows.Count</strong>
-                    <p>Bloques activos de horario para el medico en contexto.</p>
+                    <p>Bloques activos de horario para el médico en contexto.</p>
                 </div>
 
                 <div class="user-summary-card">
@@ -158,8 +158,8 @@ else
 
                 <div class="user-summary-card">
                     <span class="eyebrow">Contexto</span>
-                    <strong>@(SelectedDoctor is null ? "Sin medico" : GetDoctorShortName(SelectedDoctor))</strong>
-                    <p>@(SelectedDoctor?.especialidad ?? "Selecciona o verifica el medico activo para trabajar con claridad.")</p>
+                    <strong>@(SelectedDoctor is null ? "Sin médico" : GetDoctorShortName(SelectedDoctor))</strong>
+                    <p>@(SelectedDoctor?.especialidad ?? "Selecciona o verifica el médico activo para trabajar con claridad.")</p>
                 </div>
             </div>
 
@@ -173,7 +173,7 @@ else
                         <div class="management-list">
                             @if (FilteredAvailabilityRows.Count == 0)
                             {
-                                <p>No hay disponibilidad registrada para el medico y filtros seleccionados.</p>
+                                <p>No hay disponibilidad registrada para el médico y filtros seleccionados.</p>
                             }
                             else
                             {
@@ -204,7 +204,7 @@ else
 
                         <div class="table-pager availability-pager">
                             <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousAvailabilityPage" disabled="@(CurrentAvailabilityPage <= 1)">Anterior</button>
-                            <span>Pagina @CurrentAvailabilityPage de @TotalAvailabilityPages</span>
+                            <span>Página @CurrentAvailabilityPage de @TotalAvailabilityPages</span>
                             <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextAvailabilityPage" disabled="@(CurrentAvailabilityPage >= TotalAvailabilityPages)">Siguiente</button>
                         </div>
                 </section>
@@ -218,7 +218,7 @@ else
                         <div class="management-list">
                             @if (FilteredBlocks.Count == 0)
                             {
-                                <p>No hay bloqueos registrados para el medico y filtros seleccionados.</p>
+                                <p>No hay bloqueos registrados para el médico y filtros seleccionados.</p>
                             }
                             else
                             {
@@ -229,7 +229,7 @@ else
                                             <strong>@block.tipo_bloqueo</strong>
                                             <span>@($"{block.fecha_inicio:yyyy-MM-dd} al {block.fecha_fin:yyyy-MM-dd}")</span>
                                             <span>@GetBlockTimeLabel(block)</span>
-                                            <span>@(string.IsNullOrWhiteSpace(block.razon_bloqueo) ? "Sin razon" : block.razon_bloqueo)</span>
+                                            <span>@(string.IsNullOrWhiteSpace(block.razon_bloqueo) ? "Sin razón" : block.razon_bloqueo)</span>
                                         </div>
                                         @if (CanManageAvailability)
                                         {
@@ -249,7 +249,7 @@ else
 
                         <div class="table-pager availability-pager">
                             <button type="button" class="btn btn-outline-primary compact-action" @onclick="PreviousBlockPage" disabled="@(CurrentBlockPage <= 1)">Anterior</button>
-                            <span>Pagina @CurrentBlockPage de @TotalBlockPages</span>
+                            <span>Página @CurrentBlockPage de @TotalBlockPages</span>
                             <button type="button" class="btn btn-outline-primary compact-action" @onclick="NextBlockPage" disabled="@(CurrentBlockPage >= TotalBlockPages)">Siguiente</button>
                         </div>
                 </section>
@@ -279,7 +279,7 @@ else
 
                 <div class="management-form-grid">
                     <div>
-                        <label class="form-label" for="availabilityDay">Dia</label>
+                        <label class="form-label" for="availabilityDay">Día</label>
                         <select id="availabilityDay" class="form-select" @bind="availabilityEditor.DayOfWeek" disabled="@(!CanManageAvailability)">
                             @foreach (var option in dayOptions)
                             {
@@ -384,7 +384,7 @@ else
                     </div>
 
                     <div>
-                        <label class="form-label" for="blockReason">Razon</label>
+                        <label class="form-label" for="blockReason">Razón</label>
                         <input id="blockReason" class="form-control" @bind="blockEditor.Razon" maxlength="300" readonly="@(!CanManageAvailability)" />
                     </div>
                 </div>
@@ -413,7 +413,7 @@ else
             <footer class="custom-modal-footer" style="justify-content: center;">
                 @if (actionModalKind == ActionModalKind.Confirm)
                 {
-                    <button type="button" class="btn btn-primary" @onclick="ConfirmPendingDeleteAsync">Si, eliminar</button>
+                    <button type="button" class="btn btn-primary" @onclick="ConfirmPendingDeleteAsync">Sí, eliminar</button>
                     <button type="button" class="btn btn-outline-primary" @onclick="CloseActionModal">Cancelar</button>
                 }
                 else
@@ -464,20 +464,20 @@ else
     [
         new((byte)1, "Lunes"),
         new((byte)2, "Martes"),
-        new((byte)3, "Miercoles"),
+        new((byte)3, "Miércoles"),
         new((byte)4, "Jueves"),
         new((byte)5, "Viernes"),
-        new((byte)6, "Sabado"),
+        new((byte)6, "Sábado"),
         new((byte)7, "Domingo")
     ];
 
     private bool CanManageAvailability => permissions.CanEdit && (isAdmin || (isDoctor && currentDoctorProfile?.puede_gestionar_disponibilidad != false));
     private tbl_medico? SelectedDoctor => doctors.FirstOrDefault(d => d.id_medico == availabilityDoctorId);
     private bool IsBlockTimeDisabled => !CanManageAvailability || string.Equals(blockEditor.AlcanceBloqueo, "Completo", StringComparison.OrdinalIgnoreCase);
-    private string HeroTitle => isAdmin ? "Disponibilidad y bloqueos de todos los medicos" : "Mi disponibilidad y ausencias";
+    private string HeroTitle => isAdmin ? "Disponibilidad y bloqueos de todos los médicos" : "Mi disponibilidad y ausencias";
     private string HeroDescription => isAdmin
-        ? "Administra horarios semanales, descansos y bloqueos de todo el equipo medico en una sola vista operativa."
-        : "Mantiene tus horarios de atencion y tus ausencias fuera del flujo de citas para trabajar con mas claridad.";
+        ? "Administra horarios semanales, descansos y bloqueos de todo el equipo médico en una sola vista operativa."
+        : "Mantiene tus horarios de atención y tus ausencias fuera del flujo de citas para trabajar con más claridad.";
 
     private List<tbl_disponibilidad_medico> FilteredAvailabilityRows => currentAvailabilityRows
         .Where(x => selectedDayFilter == 0 || x.dia_semana == selectedDayFilter)
@@ -502,28 +502,23 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        PrepareNewAvailability();
-        PrepareNewBlock();
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
-    {
-        isLoading = true;
-        errorMessage = null;
-
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        currentUserId = int.TryParse(authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
-        currentRoleId = int.TryParse(authState.User.FindFirst("RoleId")?.Value, out var parsedRoleId) ? parsedRoleId : 0;
-        currentRoleName = authState.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
-        isAdmin = currentRoleId == 1 || currentRoleName.Contains("admin", StringComparison.OrdinalIgnoreCase);
-        isDoctor = currentRoleName.Contains("doctor", StringComparison.OrdinalIgnoreCase)
-            || currentRoleName.Contains("medic", StringComparison.OrdinalIgnoreCase)
-            || currentRoleName.Contains("optomet", StringComparison.OrdinalIgnoreCase);
+        var user = authState.User;
+
+        if (user.Identity is not { IsAuthenticated: true })
+        {
+            isLoading = false;
+            return;
+        }
+
+        currentUserId = int.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedUserId) ? parsedUserId : 0;
+        currentRoleId = int.TryParse(user.FindFirst(ClaimTypes.Role)?.Value, out var parsedRoleId) ? parsedRoleId : 0;
+        isAdmin = currentRoleId == 1;
+        isDoctor = currentRoleId == 3;
 
         await using var dbContext = await DbContextFactory.CreateDbContextAsync();
         permissions = await GetModulePermissionsAsync(dbContext, currentRoleId);
-        canViewModule = permissions.CanView;
+        canViewModule = permissions.CanView || isAdmin;
 
         if (!canViewModule)
         {
@@ -531,24 +526,54 @@ else
             return;
         }
 
-        doctors.Clear();
-        doctors.AddRange(await dbContext.tbl_medico
-            .AsNoTracking()
-            .Include(m => m.id_usuarioNavigation)
-            .Where(m => m.activo == true && m.id_usuarioNavigation.activo == true)
-            .OrderBy(m => m.id_usuarioNavigation.apellidos)
-            .ThenBy(m => m.id_usuarioNavigation.nombres)
-            .ToListAsync());
-
         if (isDoctor)
         {
-            currentDoctorProfile = doctors.FirstOrDefault(d => d.id_usuario == currentUserId);
+            currentDoctorProfile = await dbContext.tbl_medico
+                .AsNoTracking()
+                .Include(m => m.id_usuarioNavigation)
+                .FirstOrDefaultAsync(m => m.id_usuario == currentUserId && m.activo == true);
             currentDoctorId = currentDoctorProfile?.id_medico ?? 0;
         }
 
-        availabilityDoctorId = currentDoctorId > 0 ? currentDoctorId : availabilityDoctorId > 0 ? availabilityDoctorId : doctors.FirstOrDefault()?.id_medico ?? 0;
-        await LoadAvailabilityAsync(dbContext);
+        await LoadDoctorsAsync(dbContext);
+
+        if (isDoctor && currentDoctorId > 0)
+        {
+            availabilityDoctorId = currentDoctorId;
+        }
+        else if (doctors.Count > 0 && availabilityDoctorId <= 0)
+        {
+            availabilityDoctorId = doctors.First().id_medico;
+        }
+
+        PrepareNewAvailability();
+        PrepareNewBlock();
+
+        if (availabilityDoctorId > 0)
+        {
+            await LoadAvailabilityAsync(dbContext);
+        }
+
         isLoading = false;
+    }
+
+    private async Task LoadDoctorsAsync(OpticaDbContext dbContext)
+    {
+        doctors.Clear();
+
+        if (isDoctor && currentDoctorProfile is not null)
+        {
+            doctors.Add(currentDoctorProfile);
+            return;
+        }
+
+        doctors.AddRange(await dbContext.tbl_medico
+            .AsNoTracking()
+            .Include(m => m.id_usuarioNavigation)
+            .Where(m => m.activo == true)
+            .OrderBy(m => m.id_usuarioNavigation.apellidos)
+            .ThenBy(m => m.id_usuarioNavigation.nombres)
+            .ToListAsync());
     }
 
     private async Task LoadAvailabilityAsync(OpticaDbContext dbContext)
@@ -573,6 +598,9 @@ else
             .Where(x => x.id_medico == availabilityDoctorId && x.activo == true)
             .OrderByDescending(x => x.fecha_inicio)
             .ToListAsync());
+
+        availabilityPage = Math.Clamp(availabilityPage, 1, TotalAvailabilityPages);
+        blockPage = Math.Clamp(blockPage, 1, TotalBlockPages);
     }
 
     private async Task SaveAvailabilityAsync()
@@ -586,7 +614,7 @@ else
 
         if (availabilityEditor.DayOfWeek is < 1 or > 7)
         {
-            errorMessage = "Selecciona un dia valido para la disponibilidad.";
+            errorMessage = "Selecciona un día válido para la disponibilidad.";
             return;
         }
 
@@ -600,7 +628,7 @@ else
         TimeOnly? breakEnd = TimeOnly.TryParse(availabilityEditor.BreakEnd, out var parsedBreakEnd) ? parsedBreakEnd : null;
         if (breakStart.HasValue != breakEnd.HasValue)
         {
-            errorMessage = "Completa ambas horas del descanso o deja ambas vacias.";
+            errorMessage = "Completa ambas horas del descanso o deja ambas vacías.";
             return;
         }
 
@@ -626,7 +654,7 @@ else
 
         if (duplicateExists)
         {
-            errorMessage = "Ya existe una disponibilidad exactamente igual para este medico.";
+            errorMessage = "Ya existe una disponibilidad exactamente igual para este médico.";
             return;
         }
 
@@ -678,7 +706,7 @@ else
         var entity = await dbContext.tbl_disponibilidad_medico.FirstOrDefaultAsync(x => x.id_disponibilidad == availabilityId && x.id_medico == availabilityDoctorId);
         if (entity is null)
         {
-            ShowActionResult("Error", "No se encontro la disponibilidad seleccionada.", true);
+            ShowActionResult("Error", "No se encontró la disponibilidad seleccionada.", true);
             return;
         }
 
@@ -719,7 +747,7 @@ else
         {
             if (!TimeOnly.TryParse(blockEditor.HoraInicio, out var parsedBlockStart) || !TimeOnly.TryParse(blockEditor.HoraFin, out var parsedBlockEnd) || parsedBlockStart >= parsedBlockEnd)
             {
-                errorMessage = "Para un permiso parcial o un almuerzo debes indicar una hora valida de inicio y fin.";
+                errorMessage = "Para un permiso parcial o un almuerzo debes indicar una hora válida de inicio y fin.";
                 return;
             }
 
@@ -772,7 +800,7 @@ else
 
         if (automaticRescheduleResult.UnresolvedAppointmentIds.Count > 0)
         {
-            actionMessage += $" Quedaron {automaticRescheduleResult.UnresolvedAppointmentIds.Count} cita(s) sin cupo automatico: {string.Join(", ", automaticRescheduleResult.UnresolvedAppointmentIds)}.";
+            actionMessage += $" Quedaron {automaticRescheduleResult.UnresolvedAppointmentIds.Count} cita(s) sin cupo automático: {string.Join(", ", automaticRescheduleResult.UnresolvedAppointmentIds)}.";
         }
 
         ShowActionResult("Guardado", actionMessage, automaticRescheduleResult.UnresolvedAppointmentIds.Count > 0);
@@ -790,7 +818,7 @@ else
         var entity = await dbContext.tbl_bloqueo_horarios.FirstOrDefaultAsync(x => x.id_bloqueo == blockId && x.id_medico == availabilityDoctorId);
         if (entity is null)
         {
-            ShowActionResult("Error", "No se encontro el bloqueo seleccionado.", true);
+            ShowActionResult("Error", "No se encontró el bloqueo seleccionado.", true);
             return;
         }
 
@@ -838,14 +866,14 @@ else
     {
         pendingDeleteKind = PendingDeleteKind.Availability;
         pendingDeleteId = availabilityId;
-        ShowActionConfirm("Esta seguro?", "Esta accion eliminara la disponibilidad seleccionada.");
+        ShowActionConfirm("¿Está seguro?", "Esta acción eliminará la disponibilidad seleccionada.");
     }
 
     private void AskDeleteBlock(int blockId)
     {
         pendingDeleteKind = PendingDeleteKind.Block;
         pendingDeleteId = blockId;
-        ShowActionConfirm("Esta seguro?", "Esta accion eliminara el bloqueo seleccionado.");
+        ShowActionConfirm("¿Está seguro?", "Esta acción eliminará el bloqueo seleccionado.");
     }
 
     private async Task ConfirmPendingDeleteAsync()
@@ -1074,7 +1102,7 @@ else
 
     private static string GetDayLabel(int dayOfWeek)
     {
-        return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Dia {dayOfWeek}";
+        return dayOptions.FirstOrDefault(x => x.Value == dayOfWeek)?.Label ?? $"Día {dayOfWeek}";
     }
 
     private static string GetBreakLabel(tbl_disponibilidad_medico row)
@@ -1144,7 +1172,7 @@ else
                 result.UnresolvedAppointmentIds.Add(appointment.id_cita);
                 WriteAudit(
                     dbContext,
-                    "Reprogramacion automatica pendiente",
+                    "Reprogramación automática pendiente",
                     $"CitaId={appointment.id_cita}; MedicoId={doctorId}; BloqueoId={blockId}; Motivo=SinCupoAutomatico");
                 continue;
             }
@@ -1281,7 +1309,7 @@ else
         {
             id_usuario = currentUserId > 0 ? currentUserId : null,
             accion = action,
-            modulo = "Disponibilidad medica",
+            modulo = "Disponibilidad médica",
             fecha = DateTime.Now,
             detalle = detail
         });

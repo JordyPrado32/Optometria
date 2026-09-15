@@ -106,7 +106,7 @@ else if (!canViewModule)
         <div class="management-card">
             <span class="eyebrow">Restringido</span>
             <h1>Tienda online</h1>
-            <p>Tu rol no tiene permiso para ver este modulo.</p>
+            <p>Tu rol no tiene permiso para ver este módulo.</p>
         </div>
     </section>
 }
@@ -115,7 +115,7 @@ else
     <section class="management-shell shop-shell">
         <div class="shop-top-note">@storeSettings.BannerText</div>
 
-        <nav class="shop-nav" aria-label="Navegacion de tienda">
+        <nav class="shop-nav" aria-label="Navegación de tienda">
             <div class="shop-category-nav">
                 @foreach (var category in categories)
                 {
@@ -198,7 +198,7 @@ else
             <div>
                 <div class="shop-section-title">
                     <div>
-                        <h2>Catalogo</h2>
+                        <h2>Catálogo</h2>
                         <p>@FilteredProducts.Count productos listos para comprar</p>
                     </div>
                 </div>
@@ -209,7 +209,7 @@ else
                         <div class="management-card store-empty">
                             <div>
                                 <i class="bi bi-search" style="font-size:2rem; color:var(--color-sage);"></i>
-                                <p style="margin:0.6rem 0 0;">No hay productos que coincidan con la busqueda.</p>
+                                <p style="margin:0.6rem 0 0;">No hay productos que coincidan con la búsqueda.</p>
                             </div>
                         </div>
                     }
@@ -270,7 +270,7 @@ else
                     <div class="shop-cart-empty">
                         <div>
                             <i class="bi bi-bag" style="font-size:2rem; color:var(--color-sage);"></i>
-                            <p style="margin:0.55rem 0 0;">Aun no agregas productos.</p>
+                            <p style="margin:0.55rem 0 0;">Aún no agregas productos.</p>
                         </div>
                     </div>
                 }
@@ -296,20 +296,20 @@ else
                     </div>
                     <div style="display:grid; gap:0.75rem;">
                         <div>
-                            <label class="form-label">Metodo de pago</label>
+                            <label class="form-label">Método de pago</label>
                             <input class="form-control" value="Transferencia bancaria" readonly />
                         </div>
                         <div>
-                            <label class="form-label">N. comprobante de transferencia *</label>
-                            <input class="form-control" maxlength="120" @bind="checkoutTransferVoucherNumber" placeholder="Ingresa el numero del comprobante" />
+                            <label class="form-label">N.° comprobante de transferencia *</label>
+                            <input class="form-control" maxlength="120" @bind="checkoutTransferVoucherNumber" placeholder="Ingresa el número del comprobante" />
                         </div>
                         <div>
                             <label class="form-label">Banco *</label>
                             <input class="form-control" maxlength="120" @bind="checkoutTransferBank" placeholder="Banco desde donde hiciste la transferencia" />
                         </div>
                         <div>
-                            <label class="form-label">N. cedula del titular *</label>
-                            <input class="form-control" maxlength="40" @bind="checkoutTransferOwnerDocument" placeholder="Cedula del titular de la cuenta" />
+                            <label class="form-label">N.° cédula del titular *</label>
+                            <input class="form-control" maxlength="40" @bind="checkoutTransferOwnerDocument" placeholder="Cédula del titular de la cuenta" />
                         </div>
                         <div>
                             <label class="form-label">Nombre del titular *</label>
@@ -357,7 +357,7 @@ else
                 <button type="button" class="btn-close-modal" @onclick="CloseStoreEditor">x</button>
             </header>
             <div class="custom-modal-body">
-                <p style="margin-bottom:1rem; color:var(--color-taupe);">Estos cambios se muestran a los usuarios de la tienda. Solo el administrador ve esta edicion.</p>
+                <p style="margin-bottom:1rem; color:var(--color-taupe);">Estos cambios se muestran a los usuarios de la tienda. Solo el administrador ve esta edición.</p>
                 <div class="shop-config-grid">
                     <div class="shop-config-preview">
                         @if (!string.IsNullOrWhiteSpace(StoreHeroPreviewUrl))
@@ -375,7 +375,7 @@ else
                             <input class="form-control" @bind="storeEditor.BannerText" maxlength="180" />
                         </div>
                         <div>
-                            <label class="form-label">Titulo principal</label>
+                            <label class="form-label">Título principal</label>
                             <input class="form-control" @bind="storeEditor.HeroTitle" maxlength="180" />
                         </div>
                         <div>
@@ -383,7 +383,7 @@ else
                             <textarea class="form-control" rows="3" @bind="storeEditor.HeroSubtitle" maxlength="300"></textarea>
                         </div>
                         <div>
-                            <label class="form-label">Texto del boton</label>
+                            <label class="form-label">Texto del botón</label>
                             <input class="form-control" @bind="storeEditor.HeroButton" maxlength="80" />
                         </div>
                         <div>
@@ -392,11 +392,11 @@ else
                             <InputFile OnChange="OnStoreHeroImageSelected" class="form-control" accept="image/png,image/jpeg,image/webp" />
                         </div>
                         <div>
-                            <label class="form-label">Titulo productos basicos</label>
+                            <label class="form-label">Título productos básicos</label>
                             <input class="form-control" @bind="storeEditor.FeatureTitle" maxlength="120" />
                         </div>
                         <div>
-                            <label class="form-label">Subtitulo productos basicos</label>
+                            <label class="form-label">Subtítulo productos básicos</label>
                             <input class="form-control" @bind="storeEditor.FeatureSubtitle" maxlength="240" />
                         </div>
                     </div>
@@ -683,7 +683,7 @@ else
 
         if (string.IsNullOrWhiteSpace(checkoutTransferVoucherNumber))
         {
-            ShowCheckoutAlert("No se pudo completar la compra.", "Ingresa el numero del comprobante de la transferencia.", true);
+            ShowCheckoutAlert("No se pudo completar la compra.", "Ingresa el número del comprobante de la transferencia.", true);
             return;
         }
 
@@ -691,7 +691,7 @@ else
             string.IsNullOrWhiteSpace(checkoutTransferOwnerDocument) ||
             string.IsNullOrWhiteSpace(checkoutTransferOwnerName))
         {
-            ShowCheckoutAlert("No se pudo completar la compra.", "Completa banco, cedula y nombre del titular antes de continuar.", true);
+            ShowCheckoutAlert("No se pudo completar la compra.", "Completa banco, cédula y nombre del titular antes de continuar.", true);
             return;
         }
 
@@ -707,7 +707,7 @@ else
         var currentUser = await dbContext.tbl_usuarios.FirstOrDefaultAsync(x => x.id_usuario == currentUserId && x.activo == true);
         if (currentUser is null)
         {
-            ShowCheckoutAlert("No se pudo completar la compra.", "No se encontro el usuario autenticado.", true);
+            ShowCheckoutAlert("No se pudo completar la compra.", "No se encontró el usuario autenticado.", true);
             return;
         }
 
@@ -720,7 +720,7 @@ else
         {
             if (!dbProducts.TryGetValue(item.ProductId, out var product))
             {
-                ShowCheckoutAlert("No se pudo completar la compra.", $"El producto '{item.Name}' ya no esta disponible.", true);
+                ShowCheckoutAlert("No se pudo completar la compra.", $"El producto '{item.Name}' ya no está disponible.", true);
                 return;
             }
 
@@ -792,13 +792,13 @@ else
         var file = args.File;
         if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            ShowCheckoutAlert("Comprobante no valido", "Sube una foto del comprobante en formato imagen.", true);
+            ShowCheckoutAlert("Comprobante no válido", "Sube una foto del comprobante en formato imagen.", true);
             return;
         }
 
         if (file.Size > MaxTransferProofSize)
         {
-            ShowCheckoutAlert("Comprobante no valido", "La foto del comprobante no debe superar 4 MB.", true);
+            ShowCheckoutAlert("Comprobante no válido", "La foto del comprobante no debe superar 4 MB.", true);
             return;
         }
 
@@ -911,7 +911,7 @@ else
         var file = args.File;
         if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            errorMessage = "Selecciona una imagen valida.";
+            errorMessage = "Selecciona una imagen válida.";
             return;
         }
 
@@ -1036,14 +1036,14 @@ else
 
     private sealed class StorefrontSettings
     {
-        public string BrandName { get; set; } = "Optica Lux";
-        public string BannerText { get; set; } = "Compra tus lentes, monturas y accesorios con atencion personalizada.";
+        public string BrandName { get; set; } = "Óptica Lux";
+        public string BannerText { get; set; } = "Compra tus lentes, monturas y accesorios con atención personalizada.";
         public string HeroTitle { get; set; } = "Lentes que se ven bien y se sienten mejor";
-        public string HeroSubtitle { get; set; } = "Explora productos seleccionados para cuidar tu vision con estilo, comodidad y disponibilidad real.";
+        public string HeroSubtitle { get; set; } = "Explora productos seleccionados para cuidar tu visión con estilo, comodidad y disponibilidad real.";
         public string HeroButton { get; set; } = "Comprar ahora";
         public string HeroImage { get; set; } = string.Empty;
-        public string FeatureTitle { get; set; } = "Productos basicos";
-        public string FeatureSubtitle { get; set; } = "Entra rapido a las categorias principales del catalogo.";
+        public string FeatureTitle { get; set; } = "Productos básicos";
+        public string FeatureSubtitle { get; set; } = "Entra rápido a las categorías principales del catálogo.";
 
         public static StorefrontSettings Default() => new();
 

@@ -77,7 +77,7 @@ else
             <div class="filters-row-2">
                 <div>
                     <label class="form-label" for="shipmentSearch">Paciente</label>
-                    <input id="shipmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre del paciente, cedula u orden" />
+                    <input id="shipmentSearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre del paciente, cédula u orden" />
                 </div>
                 <div>
                     <label class="form-label" for="shipmentStatus">Estado</label>
@@ -97,7 +97,7 @@ else
 
         <section class="management-card" style="margin-top:1.25rem;">
             <div class="management-card-header">
-                <h2>Bandeja de envios</h2>
+                <h2>Bandeja de envíos</h2>
                 <span>@FilteredShipments.Count registrados</span>
             </div>
 
@@ -111,9 +111,9 @@ else
                             <th>Estado</th>
                             <th>Entrega</th>
                             <th>Tarifa</th>
-                            <th>Guia</th>
+                            <th>Guía</th>
                             <th>Repartidor</th>
-                            <th style="text-align:right;">Accion</th>
+                            <th style="text-align:right;">Acción</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -121,7 +121,7 @@ else
                         {
                             <tr>
                                 <td colspan="9" style="text-align:center; padding:2rem; color:var(--color-taupe);">
-                                    No hay envios que coincidan con los filtros aplicados.
+                                    No hay envíos que coincidan con los filtros aplicados.
                                 </td>
                             </tr>
                         }
@@ -181,7 +181,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card form-modal-card">
             <header class="custom-modal-header rose-header">
-                <h2>Gestionar envio #@editor.IdEnvio</h2>
+                <h2>Gestionar envío #@editor.IdEnvio</h2>
                 <button type="button" class="btn-close-modal" @onclick="CloseEditor">×</button>
             </header>
             <div class="custom-modal-body">
@@ -338,7 +338,7 @@ else
                 var patientName = patient is null
                     ? "Paciente no asociado"
                     : $"{patient.nombres} {patient.apellidos}".Trim();
-                var patientIdentifier = patient?.cedula ?? "Sin cedula";
+                var patientIdentifier = patient?.cedula ?? "Sin cédula";
                 var orderNumber = order?.numero_orden ?? $"RX-{x.id_orden_rx}";
                 var laboratoryName = order?.id_laboratorioNavigation?.nombre ?? "Laboratorio no asociado";
                 return new ShipmentRow
@@ -399,7 +399,7 @@ else
         var entity = await dbContext.tbl_envio_laboratorios.FirstOrDefaultAsync(x => x.id_envio_laboratorio == shipmentId);
         if (entity is null)
         {
-            errorMessage = "No se encontro el envio seleccionado.";
+            errorMessage = "No se encontró el envío seleccionado.";
             return;
         }
 
@@ -436,7 +436,7 @@ else
         var entity = await dbContext.tbl_envio_laboratorios.FirstOrDefaultAsync(x => x.id_envio_laboratorio == editor.IdEnvio);
         if (entity is null)
         {
-            errorMessage = "No se encontro el envio seleccionado.";
+            errorMessage = "No se encontró el envío seleccionado.";
             return;
         }
 
@@ -483,14 +483,14 @@ else
         dbContext.tbl_log_auditoria.Add(new tbl_log_auditoria
         {
             id_usuario = currentUserId > 0 ? currentUserId : null,
-            accion = "Gestionar envio laboratorio",
+            accion = "Gestionar envío laboratorio",
             modulo = "EnviosLaboratorio",
             fecha = DateTime.Now,
             detalle = $"EnvioId={entity.id_envio_laboratorio}; Estado={entity.estado}; Metodo={entity.metodo_entrega}; Guia={entity.numero_guia_remision}; Repartidor={entity.repartidor_nombre}; EntregadoPor={currentUserName}"
         });
 
         await dbContext.SaveChangesAsync();
-        statusMessage = "El envio se actualizo correctamente.";
+        statusMessage = "El envío se actualizó correctamente.";
         errorMessage = null;
         showDeliveryConfirmation = false;
         deliveryConfirmationApproved = false;

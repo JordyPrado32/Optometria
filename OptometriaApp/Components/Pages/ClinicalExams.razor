@@ -11,13 +11,13 @@
 @inject IDbContextFactory<OpticaDbContext> DbContextFactory
 @inject NavigationManager NavigationManager
 
-<PageTitle>Modulo de examenes</PageTitle>
+<PageTitle>Módulo de exámenes</PageTitle>
 
 @if (isLoading)
 {
     <section class="management-shell">
         <div class="management-card">
-            <h1>Cargando modulo de examenes...</h1>
+            <h1>Cargando módulo de exámenes...</h1>
         </div>
     </section>
 }
@@ -60,7 +60,7 @@ else
             <div class="clinical-grid-2" style="margin-top: 1rem;">
                 <div>
                     <label class="form-label">Buscar paciente</label>
-                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, cedula o codigo" />
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre, cédula o código" />
                 </div>
                 <div>
                     <label class="form-label">Selecciona el paciente</label>
@@ -100,8 +100,8 @@ else
                     <div>
                         <label class="form-label">Origen</label>
                         <select class="form-select" @bind="examRecord.ModuloOrigen">
-                            <option value="Modulo de examenes">Modulo de examenes</option>
-                            <option value="Historia clinica">Historia clinica</option>
+                            <option value="Modulo de examenes">Módulo de exámenes</option>
+                            <option value="Historia clinica">Historia clínica</option>
                             <option value="Externo">Externo</option>
                         </select>
                     </div>
@@ -122,7 +122,7 @@ else
                         <textarea class="form-control" rows="4" @bind="examRecord.DetalleResultados"></textarea>
                     </div>
                     <div class="clinical-span-2">
-                        <label class="form-label">Interpretacion clinica</label>
+                        <label class="form-label">Interpretación clínica</label>
                         <textarea class="form-control" rows="4" @bind="examRecord.InterpretacionClinica"></textarea>
                     </div>
                     <div>
@@ -151,7 +151,7 @@ else
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Dias sugeridos</label>
+                        <label class="form-label">Días sugeridos</label>
                         <input type="number" min="1" max="365" class="form-control" @bind="followUp.DiasSugeridos" />
                     </div>
                     <div class="clinical-span-2">
@@ -171,12 +171,12 @@ else
 
             <section class="management-card" style="margin-top: 1.25rem;">
                 <div class="management-card-header">
-                    <h2>Linea de tiempo del paciente</h2>
+                    <h2>Línea de tiempo del paciente</h2>
                     <span>@(historyLoad?.AlertSummaries.Count ?? 0) alertas</span>
                 </div>
                 @if (historyLoad is null || historyLoad.ExamTimeline.Count == 0)
                 {
-                    <p style="margin-top: 1rem;">No hay examenes previos registrados.</p>
+                    <p style="margin-top: 1rem;">No hay exámenes previos registrados.</p>
                 }
                 else
                 {
@@ -206,7 +206,7 @@ else
     public int? PatientId { get; set; }
 
     private readonly List<tbl_paciente> patients = [];
-    private static readonly string[] ExamTypeOptions = ["Tonometria", "Campimetria", "Topografia corneal", "Retinografia", "OCT", "Paquimetria", "Biometria", "Prueba de color", "Test lagrimal", "Otro"];
+    private static readonly string[] ExamTypeOptions = ["Tonometría", "Campimetría", "Topografía corneal", "Retinografía", "OCT", "Paquimetría", "Biometría", "Prueba de color", "Test lagrimal", "Otro"];
     private static readonly string[] FollowUpPriorityOptions = ["Control", "Preferente", "Urgente"];
 
     private tbl_paciente? patient;

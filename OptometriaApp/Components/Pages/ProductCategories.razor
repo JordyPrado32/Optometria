@@ -49,14 +49,14 @@ else
 
         <section class="management-card compact-filter-card">
             <div class="management-card-header">
-                <h2>Filtros y busqueda</h2>
+                <h2>Filtros y búsqueda</h2>
                 <span>@FilteredCategories.Count resultados</span>
             </div>
 
             <div class="management-form-grid">
                 <div>
                     <label class="form-label" for="categorySearch">Buscador</label>
-                    <input id="categorySearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre o descripcion" />
+                    <input id="categorySearch" class="form-control" @bind="searchTerm" @bind:event="oninput" placeholder="Nombre o descripción" />
                 </div>
 
                 <div>
@@ -248,7 +248,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validación" : "Operación exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
@@ -428,12 +428,12 @@ else
         {
             if (!permissions.CanEdit)
             {
-                ShowAlert("Tu rol no tiene permiso para editar categorias.", true);
+                ShowAlert("Tu rol no tiene permiso para editar categorías.", true);
                 return;
             }
 
             categoryEntity = await dbContext.tbl_categoria_productos.FirstOrDefaultAsync(c => c.id_categoria == editor.IdCategoria)
-                ?? throw new InvalidOperationException("No se encontro la categoria seleccionada.");
+                ?? throw new InvalidOperationException("No se encontró la categoría seleccionada.");
         }
 
         categoryEntity.nombre = editor.Nombre.Trim();
@@ -450,7 +450,7 @@ else
         await dbContext.SaveChangesAsync();
 
         ShowAlert(
-            isCreatingNewCategory ? "La categoria se creo correctamente." : "La categoria se guardo correctamente.",
+            isCreatingNewCategory ? "La categoría se creó correctamente." : "La categoría se guardó correctamente.",
             false);
 
         showFormModal = false;
@@ -474,7 +474,7 @@ else
     {
         if (!permissions.CanDelete)
         {
-            ShowAlert("Tu rol no tiene permiso para activar o inactivar categorias.", true);
+            ShowAlert("Tu rol no tiene permiso para activar o inactivar categorías.", true);
             return;
         }
 
@@ -485,13 +485,13 @@ else
 
         if (categoryEntity is null)
         {
-            ShowAlert("No se encontro la categoria seleccionada.", true);
+            ShowAlert("No se encontró la categoría seleccionada.", true);
             return;
         }
 
         if (categoryEntity.activo != false && categoryEntity.tbl_productos.Any(p => p.activo == true))
         {
-            ShowAlert("No puedes inactivar una categoria con productos activos asociados.", true);
+            ShowAlert("No puedes inactivar una categoría con productos activos asociados.", true);
             return;
         }
 

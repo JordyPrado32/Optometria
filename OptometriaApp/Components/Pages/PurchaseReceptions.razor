@@ -317,7 +317,7 @@ else
                     .FirstOrDefaultAsync(x => x.id_producto == line.id_producto);
                 if (product is null)
                 {
-                    ShowAlert("No se pudo guardar la recepcion.", "Se encontro un item no inventariable en la recepcion. El proceso fue cancelado para proteger el stock.", true);
+                    ShowAlert("No se pudo guardar la recepción.", "Se encontró un ítem no inventariable en la recepción. El proceso fue cancelado para proteger el stock.", true);
                     return;
                 }
                 var previousStock = product.stock_actual ?? 0;

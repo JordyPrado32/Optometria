@@ -430,7 +430,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validación" : "Operación exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
@@ -684,8 +684,8 @@ else
 
         ShowAlert(
             isCreatingNewClient
-                ? "El cliente se creo correctamente."
-                : "La informacion del cliente se guardo correctamente.",
+                ? "El cliente se creó correctamente."
+                : "La información del cliente se guardó correctamente.",
             false);
 
         showFormModal = false;
@@ -719,7 +719,7 @@ else
 
         if (clientEntity is null)
         {
-            ShowAlert("No se encontro el cliente seleccionado.", true);
+            ShowAlert("No se encontró el cliente seleccionado.", true);
             return;
         }
 
@@ -1115,7 +1115,7 @@ else
 
         if (!patientId.HasValue)
         {
-            ShowAlert("Este cliente aun no tiene ficha vinculada. Guarda el registro para crearla.", true);
+            ShowAlert("Este cliente aún no tiene ficha vinculada. Guarda el registro para crearla.", true);
             return;
         }
 

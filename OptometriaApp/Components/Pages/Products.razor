@@ -1023,15 +1023,15 @@ else
                         <input class="form-control" @bind="editor.ProveedorPreferente" readonly="@(!CanModifyEditor)" maxlength="100" />
                     </div>
                     <div>
-                        <label class="form-label">Tiempo entrega dias</label>
+                        <label class="form-label">Tiempo entrega días</label>
                         <input type="number" class="form-control" @bind="editor.TiempoEntregaDias" readonly="@(!CanModifyEditor)" />
                     </div>
                     <div>
-                        <label class="form-label">Cantidad pedido optima</label>
+                        <label class="form-label">Cantidad pedido óptima</label>
                         <input type="number" class="form-control" @bind="editor.CantidadPedidoOptima" readonly="@(!CanModifyEditor)" />
                     </div>
                     <div>
-                        <label class="form-label">Usuario creacion</label>
+                        <label class="form-label">Usuario creación</label>
                         <input class="form-control" @bind="editor.UsuarioCreacion" readonly="true" />
                     </div>
                     <div>
@@ -1120,7 +1120,7 @@ else
     <div class="custom-modal-overlay">
         <div class="custom-modal-card alert-modal-card">
             <header class="custom-modal-header @(alertIsError ? "error-header" : "success-header")">
-                <h2>@(alertIsError ? "Error de validacion" : "Operacion exitosa")</h2>
+                <h2>@(alertIsError ? "Error de validación" : "Operación exitosa")</h2>
             </header>
             <div class="custom-modal-body" style="padding: 2rem 1.5rem; text-align: center;">
                 <div style="font-size: 3rem; margin-bottom: 1rem; color: @(alertIsError ? "#7F6951" : "#5DA181")">
@@ -1399,7 +1399,7 @@ else
             }
 
             productEntity = await dbContext.tbl_productos.FirstOrDefaultAsync(p => p.id_producto == editor.IdProducto)
-                ?? throw new InvalidOperationException("No se encontro el producto seleccionado.");
+                ?? throw new InvalidOperationException("No se encontró el producto seleccionado.");
         }
 
         NormalizeEditorForCurrentNature();
@@ -1444,8 +1444,8 @@ else
 
         ShowAlert(
             isCreatingNewProduct
-                ? "El producto se creo correctamente."
-                : "La informacion del producto se guardo correctamente.",
+                ? "El producto se creó correctamente."
+                : "La información del producto se guardó correctamente.",
             false);
 
         showFormModal = false;
@@ -1474,7 +1474,7 @@ else
 
             if (codeExists)
             {
-                errorMessage = "Ya existe un producto con el mismo codigo.";
+                errorMessage = "Ya existe un producto con el mismo código.";
                 return;
             }
 
@@ -1485,7 +1485,7 @@ else
 
                 if (barcodeExists)
                 {
-                    errorMessage = "El codigo de barras ya existe.";
+                    errorMessage = "El código de barras ya existe.";
                     return;
                 }
             }
@@ -1517,7 +1517,7 @@ else
                 productEntity = await dbContext.tbl_productos.FirstOrDefaultAsync(p => p.id_producto == editor.IdProducto);
                 if (productEntity is null)
                 {
-                    errorMessage = "No se encontro el producto seleccionado.";
+                    errorMessage = "No se encontró el producto seleccionado.";
                     return;
                 }
             }
@@ -1564,8 +1564,8 @@ else
 
             ShowAlert(
                 isCreatingNewProduct
-                    ? "El producto se creo correctamente."
-                    : "La informacion del producto se guardo correctamente.",
+                    ? "El producto se creó correctamente."
+                    : "La información del producto se guardó correctamente.",
                 false);
 
             showFormModal = false;
@@ -1598,7 +1598,7 @@ else
 
         if (productEntity is null)
         {
-            ShowAlert("No se encontro el producto seleccionado.", true);
+            ShowAlert("No se encontró el producto seleccionado.", true);
             return;
         }
 

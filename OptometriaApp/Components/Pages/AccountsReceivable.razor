@@ -454,11 +454,11 @@ else
                             <span>@selectedAccount.PatientName</span>
                         </div>
                         <div>
-                            <label>Dias de credito</label>
+                            <label>Días de crédito</label>
                             <span>@selectedAccount.CreditDays</span>
                         </div>
                         <div>
-                            <label>Emision</label>
+                            <label>Emisión</label>
                             <span>@selectedAccount.IssueDate.ToString("yyyy-MM-dd HH:mm")</span>
                         </div>
                         <div>
@@ -516,13 +516,13 @@ else
 
                 <div class="receivable-detail-block">
                     <div class="management-card-header" style="margin-bottom: 1rem;">
-                        <h2 style="font-size: 1rem;">Notas de credito disponibles</h2>
+                        <h2 style="font-size: 1rem;">Notas de crédito disponibles</h2>
                         <span>@availableCreditNotes.Count vigentes</span>
                     </div>
 
                     @if (availableCreditNotes.Count == 0)
                     {
-                        <p style="margin: 0; color: var(--color-taupe);">Este cliente no tiene notas de credito disponibles para aplicar.</p>
+                        <p style="margin: 0; color: var(--color-taupe);">Este cliente no tiene notas de crédito disponibles para aplicar.</p>
                     }
                     else
                     {
@@ -540,13 +540,10 @@ else
                                     @foreach (var note in availableCreditNotes)
                                     {
                                         <tr>
-                                            <td>
-                                                <strong>@note.NoteNumber</strong>
-                                                <div style="font-size: 0.75rem; color: var(--color-taupe);">@note.InvoiceNumber</div>
-                                            </td>
+                                            <td><strong>@note.NoteNumber</strong></td>
                                             <td>@note.ExpirationDateLabel</td>
                                             <td>@note.AvailableBalance.ToString("0.00")</td>
-                                            <td>@note.State</td>
+                                            <td>@note.StatusLabel</td>
                                         </tr>
                                     }
                                 </tbody>
@@ -615,25 +612,25 @@ else
                     <TablePager TotalItems="@abonos.Count" CurrentPage="@paymentPage" CurrentPageChanged="SetPaymentPage" />
                 </div>
 
-                @if (canEditModule && selectedAccount.Balance > 0)
+                @if (selectedAccount.CanReceivePayment)
                 {
                     <div class="receivable-detail-block">
                         <div class="management-card-header" style="margin-bottom: 1rem;">
                             <h2 style="font-size: 1rem;">Registrar abono</h2>
-                            <span>Actualiza saldo en linea</span>
+                            <span>Afecta saldo y caja comercial</span>
                         </div>
 
                         <div class="management-form-grid">
                             <div>
-                                <label class="form-label" for="abonoMonto">Monto</label>
+                                <label class="form-label" for="abonoMonto">Monto *</label>
                                 <input id="abonoMonto" type="number" step="0.01" min="0.01" max="@selectedAccount.Balance" class="form-control" @bind="abonoEditor.Monto" />
                             </div>
                             <div>
-                                <label class="form-label" for="abonoMetodo">Metodo de pago</label>
+                                <label class="form-label" for="abonoMetodo">Método de pago</label>
                                 <select id="abonoMetodo" class="form-select" @bind="abonoEditor.MetodoPagoId">
                                     @if (availableCreditNotes.Count > 0)
                                     {
-                                        <option value="-1">Nota de credito</option>
+                                        <option value="-1">Nota de crédito</option>
                                     }
                                     @foreach (var method in paymentMethods)
                                     {
@@ -644,7 +641,7 @@ else
                             @if (abonoEditor.MetodoPagoId == -1)
                             {
                                 <div style="grid-column: 1 / -1;">
-                                    <label class="form-label" for="abonoNotaCredito">Nota de credito disponible</label>
+                                    <label class="form-label" for="abonoNotaCredito">Nota de crédito disponible</label>
                                     <select id="abonoNotaCredito" class="form-select" @bind="abonoEditor.CreditNoteId">
                                         <option value="0">Selecciona una nota</option>
                                         @foreach (var note in availableCreditNotes)
@@ -684,7 +681,7 @@ else
                                 <strong>@statementDocument.OriginalInvoiceAmount.ToString("0.00")</strong>
                             </div>
                             <div>
-                                <label>Notas de credito</label>
+                                <label>Notas de crédito</label>
                                 <strong>@statementDocument.TotalCredited.ToString("0.00")</strong>
                             </div>
                             <div>
@@ -1161,17 +1158,17 @@ else
 
         if (abonoEditor.MetodoPagoId == -1 && abonoEditor.CreditNoteId <= 0)
         {
-            errorMessage = "Selecciona la nota de credito que deseas aplicar.";
+            errorMessage = "Selecciona la nota de crédito que deseas aplicar.";
             return;
         }
 
         if (IsReferenceRequired(abonoEditor.MetodoPagoId) && string.IsNullOrWhiteSpace(abonoEditor.Referencia))
         {
-            errorMessage = "La referencia es obligatoria para este metodo de pago.";
+            errorMessage = "La referencia es obligatoria para este método de pago.";
             return;
         }
 
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Se registrara un abono por {abonoEditor.Monto:0.00} en la cuenta seleccionada. Deseas continuar?");
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Se registrará un abono por {abonoEditor.Monto:0.00} en la cuenta seleccionada. ¿Deseas continuar?");
         if (!confirmed)
         {
             return;
@@ -1198,7 +1195,7 @@ else
                 creditNote = await ResolveApplicableCreditNoteAsync(dbContext, selectedAccount.ClientId, abonoEditor.CreditNoteId);
                 if (creditNote is null)
                 {
-                    errorMessage = "La nota de credito seleccionada ya no esta disponible.";
+                    errorMessage = "La nota de crédito seleccionada ya no está disponible.";
                     return;
                 }
 
@@ -1779,6 +1776,7 @@ else
         public decimal Balance { get; set; }
         public decimal PaidAmount { get; set; }
         public int CreditDays { get; set; }
+        public bool CanReceivePayment => Balance > 0 && !string.Equals(State, "Anulada", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class AbonoRow
@@ -1810,6 +1808,7 @@ else
         public decimal AvailableBalance { get; set; }
         public DateTime? ExpirationDate { get; set; }
         public string State { get; set; } = "Disponible";
+        public string StatusLabel => State;
         public string ExpirationDateLabel => ExpirationDate?.ToString("yyyy-MM-dd") ?? "Sin vencimiento";
     }
 
